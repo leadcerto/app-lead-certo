@@ -130,44 +130,34 @@ class MediaProcessorService
 
     private function processarAudio(array $msg, string $instanceToken): string
     {
-        $audioUrl = $this->extrairUrl($msg) ?? $this->baixarUrlViaUazapi($instanceToken, $msg);
+        if (! $this->groqKey) {
+            return '[Áudio recebido — transcrição não configurada]';
+        }
 
-        if (! $audioUrl) {
-            Log::warning('MediaProcessor: não encontrou URL de áudio', ['msg' => array_keys($msg)]);
+        // Áudio do WhatsApp vem criptografado (.enc) — deve ser baixado pelo Uazapi
+        $midia = $this->baixarMidiaDoUazapi($instanceToken, $msg);
+
+        if (! $midia) {
+            Log::warning('MediaProcessor: não conseguiu baixar áudio', ['messageid' => $msg['messageid'] ?? null]);
             return '[Áudio recebido — não foi possível transcrever]';
         }
 
-        $transcricao = $this->transcreverAudio($audioUrl);
+        $transcricao = $this->transcreverAudioBase64($midia['base64'], $midia['mime']);
 
-        if (! $transcricao) {
-            return '[Áudio recebido — não foi possível transcrever]';
-        }
-
-        return "[Áudio transcrito: {$transcricao}]";
+        return $transcricao
+            ? "[Áudio transcrito: {$transcricao}]"
+            : '[Áudio recebido — não foi possível transcrever]';
     }
 
-    private function transcreverAudio(string $audioUrl): ?string
+    private function transcreverAudioBase64(string $base64, string $mime): ?string
     {
-        if (! $this->groqKey) {
-            Log::warning('MediaProcessor: GROQ_KEY não configurada');
-            return null;
-        }
-
         try {
-            // Baixa o arquivo de áudio
-            $audioResponse = Http::timeout(30)->get($audioUrl);
-            if (! $audioResponse->successful()) {
-                Log::warning('MediaProcessor: falha ao baixar áudio', ['url' => $audioUrl]);
-                return null;
-            }
+            $audioContent = base64_decode($base64);
+            $extensao     = str_contains($mime, 'ogg') ? 'ogg'
+                          : (str_contains($mime, 'mp4') ? 'mp4'
+                          : (str_contains($mime, 'mpeg') ? 'mp3'
+                          : (str_contains($mime, 'webm') ? 'webm' : 'ogg')));
 
-            $audioContent  = $audioResponse->body();
-            $contentType   = $audioResponse->header('Content-Type') ?: 'audio/ogg';
-            $extensao      = str_contains($contentType, 'ogg') ? 'ogg'
-                           : (str_contains($contentType, 'mp4') ? 'mp4'
-                           : (str_contains($contentType, 'mpeg') ? 'mp3' : 'ogg'));
-
-            // Transcreve com Groq Whisper
             $response = Http::withHeaders(['Authorization' => "Bearer {$this->groqKey}"])
                 ->timeout(60)
                 ->attach('file', $audioContent, "audio.{$extensao}")
@@ -177,10 +167,15 @@ class MediaProcessorService
                 ]);
 
             if ($response->successful()) {
-                return trim($response->json('text') ?? '');
+                $texto = trim($response->json('text') ?? '');
+                Log::debug('MediaProcessor Whisper OK', ['chars' => strlen($texto)]);
+                return $texto ?: null;
             }
 
-            Log::warning('MediaProcessor Groq Whisper falhou', ['status' => $response->status(), 'body' => substr($response->body(), 0, 300)]);
+            Log::warning('MediaProcessor Groq Whisper falhou', [
+                'status' => $response->status(),
+                'body'   => substr($response->body(), 0, 300),
+            ]);
         } catch (\Exception $e) {
             Log::error('MediaProcessor transcrição exception', ['erro' => $e->getMessage()]);
         }
@@ -221,31 +216,46 @@ class MediaProcessorService
     // -------------------------------------------------------------------------
 
     /**
-     * Tenta extrair URL de mídia diretamente do payload da Uazapi.
-     * A Uazapi pode enviar a URL nos campos: fileUrl, mediaUrl, url, ou no content (se for string http).
+     * Tenta extrair URL de mídia do payload Uazapi.
+     * A URL vem dentro do campo `content` como JSON: {"URL":"https://mmg.whatsapp.net/...","mimetype":"..."}
+     * Arquivos de áudio têm URL com extensão .enc (criptografados) — devem ir via baixarMidiaDoUazapi.
      */
     private function extrairUrl(array $msg): ?string
     {
-        // Campos comuns onde a Uazapi pode colocar a URL
+        // Campos diretos (raramente preenchidos pela Uazapi)
         foreach (['fileUrl', 'mediaUrl', 'url', 'imageUrl', 'audioUrl'] as $campo) {
             if (! empty($msg[$campo]) && str_starts_with($msg[$campo], 'http')) {
                 return $msg[$campo];
             }
         }
 
-        // content às vezes vem como URL direto
         $content = $msg['content'] ?? null;
-        if (is_string($content) && str_starts_with($content, 'http')) {
-            return $content;
+
+        if (is_string($content)) {
+            // content como URL direta
+            if (str_starts_with($content, 'http')) {
+                return $content;
+            }
+
+            // content como JSON: {"URL":"https://...","mimetype":"..."}
+            $decoded = json_decode($content, true);
+            if (is_array($decoded)) {
+                foreach (['URL', 'url', 'directPath', 'mediaUrl'] as $key) {
+                    if (! empty($decoded[$key]) && str_starts_with($decoded[$key], 'http')) {
+                        return $decoded[$key];
+                    }
+                }
+            }
         }
 
         return null;
     }
 
     /**
-     * Usa a API da Uazapi para obter URL de download da mídia pelo messageId.
+     * Baixa mídia via endpoint Uazapi — necessário para arquivos criptografados (.enc).
+     * Retorna ['base64' => '...', 'mime' => 'audio/ogg'] ou null.
      */
-    private function baixarUrlViaUazapi(string $instanceToken, array $msg): ?string
+    private function baixarMidiaDoUazapi(string $instanceToken, array $msg): ?array
     {
         if (! $instanceToken || ! $this->uazapiBaseUrl) {
             return null;
@@ -258,37 +268,56 @@ class MediaProcessorService
             return null;
         }
 
-        try {
-            // Tenta endpoint de download da Uazapi
-            $response = Http::withHeaders(['token' => $instanceToken])
-                ->timeout(15)
-                ->post("{$this->uazapiBaseUrl}/message/download", [
-                    'messageId' => $messageId,
-                    'chatId'    => $chatId,
-                ]);
-
-            if ($response->successful()) {
-                $url = $response->json('url') ?? $response->json('fileUrl') ?? $response->json('mediaUrl');
-                if ($url && str_starts_with($url, 'http')) {
-                    return $url;
-                }
-
-                // Se veio base64, converte para data URI
-                $base64 = $response->json('base64') ?? $response->json('data');
-                $mime   = $response->json('mimetype') ?? $response->json('mimeType') ?? 'application/octet-stream';
-                if ($base64) {
-                    return "data:{$mime};base64,{$base64}";
-                }
-            }
-
-            Log::debug('MediaProcessor baixarUrlViaUazapi falhou', [
-                'status' => $response->status(),
-                'body'   => substr($response->body(), 0, 200),
-            ]);
-        } catch (\Exception $e) {
-            Log::error('MediaProcessor baixarUrlViaUazapi exception', ['erro' => $e->getMessage()]);
+        // Mime type do content JSON para usar como fallback
+        $mimeDefault = 'application/octet-stream';
+        $contentJson = json_decode($msg['content'] ?? '{}', true);
+        if (is_array($contentJson) && ! empty($contentJson['mimetype'])) {
+            $mimeDefault = $contentJson['mimetype'];
         }
 
+        // Tenta múltiplos endpoints de download da Uazapi
+        $endpoints = [
+            ['method' => 'post', 'path' => '/message/download', 'body' => ['messageId' => $messageId, 'chatId' => $chatId]],
+            ['method' => 'post', 'path' => '/download',         'body' => ['messageId' => $messageId, 'chatId' => $chatId]],
+            ['method' => 'get',  'path' => "/download/{$messageId}", 'body' => []],
+        ];
+
+        foreach ($endpoints as $ep) {
+            try {
+                $req = Http::withHeaders(['token' => $instanceToken])->timeout(20);
+                $response = $ep['method'] === 'get'
+                    ? $req->get("{$this->uazapiBaseUrl}{$ep['path']}")
+                    : $req->post("{$this->uazapiBaseUrl}{$ep['path']}", $ep['body']);
+
+                if ($response->successful()) {
+                    $base64 = $response->json('base64') ?? $response->json('data') ?? $response->json('file');
+                    $mime   = $response->json('mimetype') ?? $response->json('mimeType') ?? $mimeDefault;
+
+                    if ($base64) {
+                        return ['base64' => $base64, 'mime' => $mime];
+                    }
+
+                    // Resposta pode ser o binário direto
+                    if (strlen($response->body()) > 100) {
+                        return [
+                            'base64' => base64_encode($response->body()),
+                            'mime'   => $response->header('Content-Type') ?: $mimeDefault,
+                        ];
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::debug('MediaProcessor endpoint falhou', ['endpoint' => $ep['path'], 'erro' => $e->getMessage()]);
+            }
+        }
+
+        Log::warning('MediaProcessor: não conseguiu baixar mídia do Uazapi', ['messageId' => $messageId]);
         return null;
+    }
+
+    private function baixarUrlViaUazapi(string $instanceToken, array $msg): ?string
+    {
+        $midia = $this->baixarMidiaDoUazapi($instanceToken, $msg);
+        if (! $midia) return null;
+        return "data:{$midia['mime']};base64,{$midia['base64']}";
     }
 }
