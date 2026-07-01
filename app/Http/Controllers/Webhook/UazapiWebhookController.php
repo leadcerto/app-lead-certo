@@ -28,9 +28,9 @@ class UazapiWebhookController extends Controller
 
         $payload = $request->all();
 
-        Log::debug('Uazapi webhook recebido', ['tenant' => $tenant->id, 'EventType' => $payload['EventType'] ?? 'unknown', 'message_keys' => array_keys((array)($payload['message'] ?? [])), 'message' => json_encode($payload['message'] ?? []), 'chat_phone' => $payload['chat']['phone'] ?? ($payload['chat']['jid'] ?? ($payload['chat']['id'] ?? null))]);
+        $tipo = $payload['EventType'] ?? null;
 
-        $tipo = $payload['type'] ?? null;
+        Log::debug('Uazapi webhook recebido', ['tenant' => $tenant->id, 'EventType' => $tipo]);
 
         match ($tipo) {
             'messages'   => $this->handleMensagem($payload, $tenant),
@@ -47,47 +47,36 @@ class UazapiWebhookController extends Controller
 
     private function handleMensagem(array $payload, Tenant $tenant): void
     {
-        $key       = $payload['data']['key'] ?? [];
-        $fromMe    = $key['fromMe'] ?? false;
-        $remoteJid = $key['remoteJid'] ?? null;
+        $msg = $payload['message'] ?? [];
 
-        if (! $remoteJid) {
+        $fromMe   = $msg['fromMe'] ?? false;
+        $isGroup  = $msg['isGroup'] ?? false;
+        $chatId   = $msg['chatid'] ?? null; // ex: "5521997797960@s.whatsapp.net"
+        $viaApi   = $msg['wasSentByApi'] ?? false;
+
+        if (! $chatId || $isGroup) {
             return;
         }
 
-        // Ignora mensagens de grupos
-        if (str_contains($remoteJid, '@g.us')) {
-            return;
-        }
-
-        // Número no formato 5521999999999 (sem @s.whatsapp.net)
-        $telefone = preg_replace('/@.+$/', '', $remoteJid);
-
-        $conteudo = $payload['data']['message']['conversation']
-            ?? $payload['data']['message']['extendedTextMessage']['text']
-            ?? null;
+        // Número limpo: "5521997797960"
+        $telefone = preg_replace('/@.+$/', '', $chatId);
+        $conteudo = $msg['text'] ?? null;
+        $pushName = $msg['senderName'] ?? null;
 
         if ($fromMe) {
-            // Mensagem saiu do dispositivo — franqueado respondeu pelo celular físico
-            // Mensagens enviadas via API têm key.id começando com "leadcerto-" (convenção)
-            $enviadoViaApi = isset($payload['data']['key']['id'])
-                && str_starts_with($payload['data']['key']['id'], 'leadcerto-');
-
-            if (! $enviadoViaApi) {
+            // Franqueado respondeu pelo celular físico — passa para humano
+            if (! $viaApi) {
                 $this->transferirParaHumano($tenant, $telefone, $conteudo);
             }
             return;
         }
 
         // Mensagem recebida do lead
-        $this->processarMensagemLead($tenant, $telefone, $conteudo, $payload);
+        $this->processarMensagemLead($tenant, $telefone, $conteudo, $pushName);
     }
 
-    private function processarMensagemLead(Tenant $tenant, string $telefone, ?string $conteudo, array $payload): void
+    private function processarMensagemLead(Tenant $tenant, string $telefone, ?string $conteudo, ?string $pushName): void
     {
-        // pushName = nome do perfil WhatsApp da pessoa (o que ela colocou no próprio app)
-        $pushName = $payload['data']['pushName'] ?? null;
-
         // Busca ou cria contato — usa pushName como nome inicial se não tiver cadastro
         $novoContato = false;
         $contato = Contato::firstOrCreate(
