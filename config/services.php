@@ -39,6 +39,10 @@ return [
         'modelo_complexo' => env('OPENROUTER_MODELO_COMPLEXO', 'anthropic/claude-3.5-haiku-20241022'),
     ],
 
+    'groq' => [
+        'key' => env('GROQ_KEY'),
+    ],
+
     'google' => [
         'client_id'     => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),

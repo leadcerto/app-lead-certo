@@ -10,6 +10,7 @@ use App\Models\Mensagem;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
+use App\Services\MediaProcessorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -59,9 +60,21 @@ class UazapiWebhookController extends Controller
         }
 
         // Número limpo: "5521997797960"
-        $telefone = preg_replace('/@.+$/', '', $chatId);
-        $conteudo = $msg['text'] ?? null;
-        $pushName = $msg['senderName'] ?? null;
+        $telefone  = preg_replace('/@.+$/', '', $chatId);
+        $conteudo  = $msg['text'] ?? null;
+        $pushName  = $msg['senderName'] ?? null;
+        $mediaType = $msg['mediaType'] ?? null; // 'image','audio','video','document' ou null
+
+        // Loga payload completo de mídia para mapeamento
+        if ($mediaType) {
+            Log::debug('Uazapi media recebida', [
+                'mediaType'   => $mediaType,
+                'messageType' => $msg['messageType'] ?? null,
+                'content'     => substr(json_encode($msg['content'] ?? null), 0, 300),
+                'fileUrl'     => $msg['fileUrl'] ?? ($msg['mediaUrl'] ?? ($msg['url'] ?? null)),
+                'messageid'   => $msg['messageid'] ?? null,
+            ]);
+        }
 
         if ($fromMe) {
             // Franqueado respondeu pelo celular físico — passa para humano
@@ -72,10 +85,10 @@ class UazapiWebhookController extends Controller
         }
 
         // Mensagem recebida do lead
-        $this->processarMensagemLead($tenant, $telefone, $conteudo, $pushName);
+        $this->processarMensagemLead($tenant, $telefone, $conteudo, $pushName, $msg, $tenant->uazapi_instance_token);
     }
 
-    private function processarMensagemLead(Tenant $tenant, string $telefone, ?string $conteudo, ?string $pushName): void
+    private function processarMensagemLead(Tenant $tenant, string $telefone, ?string $conteudo, ?string $pushName, array $msg = [], string $instanceToken = ''): void
     {
         // Busca ou cria contato — usa pushName como nome inicial se não tiver cadastro
         $novoContato = false;
@@ -116,13 +129,24 @@ class UazapiWebhookController extends Controller
             ]);
         }
 
+        // Processa mídia se houver (imagem → visão IA / áudio → transcrição / etc)
+        $mediaType = $msg['mediaType'] ?? null;
+        $tipoMensagem = 'texto';
+        if ($mediaType && $instanceToken) {
+            $processado = app(MediaProcessorService::class)->processar($msg, $instanceToken);
+            if ($processado !== null) {
+                $conteudo     = $processado;
+                $tipoMensagem = in_array($mediaType, ['image','video']) ? 'imagem' : ($mediaType === 'audio' ? 'audio' : 'texto');
+            }
+        }
+
         // Salva a mensagem
         if ($conteudo) {
             Mensagem::create([
                 'ticket_id'  => $ticket->id,
                 'tenant_id'  => $tenant->id,
                 'remetente'  => 'lead',
-                'tipo'       => 'texto',
+                'tipo'       => $tipoMensagem,
                 'conteudo'   => $conteudo,
                 'enviado_em' => now(),
             ]);
