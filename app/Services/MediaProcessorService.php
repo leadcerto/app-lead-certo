@@ -60,6 +60,22 @@ class MediaProcessorService
         return $prefixo . $descricao;
     }
 
+    /**
+     * Ordem de tentativa para visão:
+     * 1-6: modelos gratuitos (OpenRouter free tier, rate-limited mas sem custo)
+     * 7:   fallback pago de baixo custo (~$0.01 por 100 imagens)
+     */
+    private const MODELOS_VISAO = [
+        'google/gemini-2.0-flash-001:free',
+        'google/gemini-flash-1.5:free',
+        'meta-llama/llama-3.2-90b-vision-instruct:free',
+        'meta-llama/llama-3.2-11b-vision-instruct:free',
+        'qwen/qwen2.5-vl-72b-instruct:free',
+        'microsoft/phi-4-multimodal-instruct:free',
+        // Fallback pago — custo mínimo, só acionado se todos os gratuitos falharem
+        'google/gemini-flash-1.5-8b',
+    ];
+
     private function descreverImagemComVisao(string $imageUrl, string $caption = ''): string
     {
         if (! $this->openRouterKey) {
@@ -76,12 +92,14 @@ class MediaProcessorService
         }
 
         try {
+            // OpenRouter route=fallback tenta cada modelo em ordem até um responder
             $response = Http::withHeaders([
                 'Authorization' => "Bearer {$this->openRouterKey}",
                 'HTTP-Referer'  => config('app.url', 'https://app.leadcerto.app.br'),
                 'X-Title'       => 'Lead Certo',
-            ])->timeout(30)->post('https://openrouter.ai/api/v1/chat/completions', [
-                'model'    => 'google/gemini-flash-1.5',
+            ])->timeout(45)->post('https://openrouter.ai/api/v1/chat/completions', [
+                'models' => self::MODELOS_VISAO,
+                'route'  => 'fallback',
                 'messages' => [[
                     'role'    => 'user',
                     'content' => [
@@ -93,6 +111,8 @@ class MediaProcessorService
             ]);
 
             if ($response->successful()) {
+                $modeloUsado = $response->json('model') ?? 'desconhecido';
+                Log::debug('MediaProcessor visão OK', ['modelo' => $modeloUsado]);
                 return trim($response->json('choices.0.message.content') ?? '[Imagem recebida]');
             }
 
