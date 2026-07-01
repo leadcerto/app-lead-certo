@@ -28,7 +28,7 @@ class UazapiWebhookController extends Controller
 
         $payload = $request->all();
 
-        Log::debug('Uazapi webhook recebido', ['tenant' => $tenant->id, 'type' => $payload['type'] ?? 'unknown']);
+        Log::debug('Uazapi webhook recebido', ['tenant' => $tenant->id, 'type' => $payload['type'] ?? 'unknown', 'keys' => array_keys($payload), 'payload' => substr(json_encode($payload), 0, 500)]);
 
         $tipo = $payload['type'] ?? null;
 
