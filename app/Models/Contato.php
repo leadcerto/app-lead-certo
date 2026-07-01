@@ -35,7 +35,7 @@ class Contato extends Model
         // Extra
         'observacoes',
         // Controle
-        'origem', 'opt_out',
+        'origem', 'opt_out', 'bloqueado', 'tipo_contato',
         // Classificação
         'tipo_pessoa', 'status_validacao',
         // Lead Certo
@@ -47,7 +47,8 @@ class Contato extends Model
     protected function casts(): array
     {
         return [
-            'opt_out'    => 'boolean',
+            'opt_out'     => 'boolean',
+            'bloqueado'   => 'boolean',
             'aniversario' => 'date',
             'tags'        => 'array',
         ];

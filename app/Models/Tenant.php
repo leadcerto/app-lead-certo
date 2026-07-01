@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Tenant extends Model
@@ -11,9 +12,15 @@ class Tenant extends Model
         'nome',
         'nicho',
         'status',
+        'email',
+        'dominio',
+        'telefone',
         'whatsapp_status',
         'whatsapp_phone',
         'whatsapp_connected_since',
+        'uazapi_instance_name',
+        'uazapi_instance_token',
+        'uazapi_webhook_token',
     ];
 
     public function users(): HasMany
@@ -24,5 +31,10 @@ class Tenant extends Model
     public function tickets(): HasMany
     {
         return $this->hasMany(TicketAtendimento::class);
+    }
+
+    public function personas(): HasMany
+    {
+        return $this->hasMany(SdrPersona::class);
     }
 }

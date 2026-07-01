@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Contato;
 use App\Models\GoogleToken;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -136,6 +137,55 @@ class GoogleService
 
     // ── Contacts API ─────────────────────────────────────────────────────────
 
+    /**
+     * Cria um novo contato no Google Contacts.
+     * Retorna o resourceName (ex: "people/c123456789") ou null em caso de erro.
+     */
+    /**
+     * Cria um contato no Google com dados mínimos.
+     * Sobrenome = ID do CRM → permite cruzamento sem depender de telefone.
+     * Retorna o resourceName ("people/c123456789") ou null em caso de erro.
+     */
+    public function criarContato(GoogleToken $token, Contato $contato): ?string
+    {
+        $token = $this->tokenValido($token);
+        if (! $token) return null;
+
+        $body = [
+            'names' => [[
+                'givenName'  => $contato->nome,
+                'familyName' => (string) $contato->id,  // ID do CRM como identificador
+            ]],
+            'phoneNumbers' => [[
+                'value' => '+55' . ltrim($contato->telefone, '55'),
+                'type'  => 'mobile',
+            ]],
+        ];
+
+        if ($contato->email) {
+            $body['emailAddresses'] = [['value' => $contato->email, 'type' => 'work']];
+        }
+
+        try {
+            $res = Http::withToken($token->access_token)
+                ->post('https://people.googleapis.com/v1/people:createContact', $body);
+
+            if ($res->successful()) {
+                return $res->json('resourceName');
+            }
+
+            Log::error('Google criarContato falhou', [
+                'contato_id' => $contato->id,
+                'status'     => $res->status(),
+                'body'       => $res->body(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Google criarContato exception', ['erro' => $e->getMessage()]);
+        }
+
+        return null;
+    }
+
     public function atualizarNomeContato(
         GoogleToken $token,
         string $resourceName,
@@ -238,6 +288,65 @@ class GoogleService
             'deletados'     => $deletados,
             'nextSyncToken' => $nextSyncToken,
         ];
+    }
+
+    // ── Contact Groups API ────────────────────────────────────────────────────
+
+    /**
+     * Cria um grupo de contatos (etiqueta) no Google.
+     * Retorna o resourceName ("contactGroups/abc123") ou null em caso de erro.
+     */
+    public function criarGrupoContato(GoogleToken $token, string $nome): ?string
+    {
+        $token = $this->tokenValido($token);
+        if (! $token) return null;
+
+        try {
+            $res = Http::withToken($token->access_token)
+                ->post('https://people.googleapis.com/v1/contactGroups', [
+                    'contactGroup' => ['name' => $nome],
+                ]);
+
+            if ($res->successful()) {
+                return $res->json('resourceName');
+            }
+
+            Log::error('Google criarGrupoContato falhou', ['nome' => $nome, 'status' => $res->status(), 'body' => $res->body()]);
+        } catch (\Exception $e) {
+            Log::error('Google criarGrupoContato exception', ['erro' => $e->getMessage()]);
+        }
+
+        return null;
+    }
+
+    /**
+     * Adiciona/remove contatos de um grupo.
+     * $resourceNamesToAdd e $resourceNamesToRemove são arrays de "people/cXXX".
+     */
+    public function modificarMembrosGrupo(
+        GoogleToken $token,
+        string $groupResourceName,
+        array $resourceNamesToAdd = [],
+        array $resourceNamesToRemove = []
+    ): bool {
+        $token = $this->tokenValido($token);
+        if (! $token) return false;
+
+        $body = [];
+        if ($resourceNamesToAdd)    $body['resourceNamesToAdd']    = $resourceNamesToAdd;
+        if ($resourceNamesToRemove) $body['resourceNamesToRemove'] = $resourceNamesToRemove;
+
+        if (empty($body)) return true;
+
+        try {
+            $res = Http::withToken($token->access_token)
+                ->post("https://people.googleapis.com/v1/{$groupResourceName}/members:modify", $body);
+
+            return $res->successful();
+        } catch (\Exception $e) {
+            Log::error('Google modificarMembrosGrupo exception', ['grupo' => $groupResourceName, 'erro' => $e->getMessage()]);
+            return false;
+        }
     }
 
     // ── Calendar API ─────────────────────────────────────────────────────────

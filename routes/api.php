@@ -10,6 +10,7 @@ use App\Http\Controllers\Internal\MidiaController;
 use App\Http\Controllers\Painel\KanbanController;
 use App\Http\Controllers\Painel\DashboardController;
 use App\Http\Controllers\Painel\WhatsAppController;
+use App\Http\Controllers\Webhook\UazapiWebhookController;
 
 // Auth
 Route::post('/auth/login', [AuthController::class, 'login']);
@@ -31,5 +32,8 @@ Route::prefix('minerador')->middleware('minerador')->group(function () {
     Route::post('/contato',   [MineradorController::class, 'gravarContato']);
     Route::get('/campanha',   [MineradorController::class, 'consultarCampanha']);
 });
+
+// Webhook Uazapi — token por tenant na URL (sem sessão, validado no controller)
+Route::post('/webhook/uazapi/{webhookToken}', [UazapiWebhookController::class, 'handle']);
 
 // Painel — rotas movidas para routes/web.php (auth via sessão)

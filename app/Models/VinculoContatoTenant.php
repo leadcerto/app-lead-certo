@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class VinculoContatoTenant extends Model
 {
@@ -29,5 +30,11 @@ class VinculoContatoTenant extends Model
     public function contato(): BelongsTo
     {
         return $this->belongsTo(Contato::class, 'contato_id');
+    }
+
+    public function etiquetas(): BelongsToMany
+    {
+        return $this->belongsToMany(Etiqueta::class, 'vinculo_etiqueta', 'vinculo_id', 'etiqueta_id')
+            ->withPivot('created_at');
     }
 }
