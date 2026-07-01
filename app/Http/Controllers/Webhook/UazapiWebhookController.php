@@ -121,7 +121,7 @@ class UazapiWebhookController extends Controller
             Mensagem::create([
                 'ticket_id'  => $ticket->id,
                 'tenant_id'  => $tenant->id,
-                'remetente'  => 'contato',
+                'remetente'  => 'lead',
                 'tipo'       => 'texto',
                 'conteudo'   => $conteudo,
                 'enviado_em' => now(),
@@ -173,7 +173,7 @@ class UazapiWebhookController extends Controller
             Mensagem::create([
                 'ticket_id'  => $ticket->id,
                 'tenant_id'  => $tenant->id,
-                'remetente'  => 'agente',
+                'remetente'  => 'humano',
                 'tipo'       => 'texto',
                 'conteudo'   => $conteudo,
                 'enviado_em' => now(),
