@@ -108,7 +108,7 @@ class UazapiWebhookController extends Controller
             $ticket = TicketAtendimento::create([
                 'tenant_id'          => $tenant->id,
                 'contato_id'         => $contato->id,
-                'coluna_kanban'      => 'entrada',
+                'coluna_kanban'      => 'lead_novo',
                 'agente_responsavel' => 'bot',
                 'sdr_persona_id'     => $persona?->id,
                 'status'             => 'aberto',
