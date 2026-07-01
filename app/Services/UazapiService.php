@@ -216,8 +216,8 @@ class UazapiService
                     'url'                  => $url,
                     'events'               => $eventos,
                     'enabled'              => true,
-                    'addUrlEvents'         => true,
-                    'addUrlTypesMessages'  => true,
+                    'addUrlEvents'         => false,
+                    'addUrlTypesMessages'  => false,
                     'excludeMessages'      => [],
                 ]);
 
