@@ -32,9 +32,9 @@ class GoogleService
 
     public function __construct()
     {
-        $this->clientId     = config('services.google.client_id', '');
-        $this->clientSecret = config('services.google.client_secret', '');
-        $this->redirectUri  = config('services.google.redirect_uri', '');
+        $this->clientId     = (string) config('services.google.client_id', '');
+        $this->clientSecret = (string) config('services.google.client_secret', '');
+        $this->redirectUri  = (string) config('services.google.redirect_uri', '');
     }
 
     public function urlAutorizacao(string $state): string

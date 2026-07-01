@@ -127,7 +127,7 @@ class SdrResponderService
         ]];
 
         // Últimas 30 mensagens do histórico
-        $historico = $ticket->mensagens->takeLast(30);
+        $historico = $ticket->mensagens->reverse()->take(30)->reverse();
 
         foreach ($historico as $mensagem) {
             // 'contato' e 'lead' → 'user' / 'bot' e 'agente' → 'assistant'
