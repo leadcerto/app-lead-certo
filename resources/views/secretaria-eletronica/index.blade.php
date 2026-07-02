@@ -1,0 +1,159 @@
+@extends('layouts.app')
+
+@section('title', 'Secretária Eletrônica — Lead Certo')
+
+@section('content')
+<div class="max-w-4xl" x-data="secretaria()" x-init="carregar()">
+
+    <div class="mb-6">
+        <h1 class="text-xl font-bold text-gray-800">Secretária Eletrônica</h1>
+        <p class="text-sm text-gray-500 mt-1">Captura automaticamente leads que ligaram e não foram atendidos.</p>
+    </div>
+
+    {{-- Configuração --}}
+    <div class="bg-white rounded-2xl shadow-sm p-6 mb-6">
+        <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">Configuração do App Android</h2>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Token da Secretária</label>
+                <div class="flex gap-2">
+                    <input type="text" :value="token" readonly
+                           class="flex-1 font-mono text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-800 select-all">
+                    <button @click="copiarToken()"
+                            class="px-4 py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors">
+                        <span x-text="copiado ? 'Copiado!' : 'Copiar'"></span>
+                    </button>
+                    <button @click="rotacionarToken()"
+                            class="px-4 py-2 text-sm border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors">
+                        Gerar novo
+                    </button>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">Cole este token na tela de configuração do app Android.</p>
+            </div>
+
+            <div class="flex items-center gap-2 pt-2 border-t border-gray-100">
+                <span class="text-sm text-gray-600">Dispositivos conectados:</span>
+                <span class="font-semibold text-gray-800" x-text="dispositivosAtivos"></span>
+            </div>
+        </div>
+    </div>
+
+    {{-- Métricas --}}
+    <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="bg-white rounded-2xl shadow-sm p-5">
+            <div class="text-sm text-gray-500">Chamadas capturadas este mês</div>
+            <div class="text-3xl font-bold text-gray-800 mt-1" x-text="totalMes"></div>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm p-5">
+            <div class="text-sm text-gray-500">Mensagens enviadas este mês</div>
+            <div class="text-3xl font-bold text-green-600 mt-1"
+                 x-text="chamadas.filter(c => c.mensagem_enviada).length"></div>
+        </div>
+    </div>
+
+    {{-- Chamadas recentes --}}
+    <div class="bg-white rounded-2xl shadow-sm p-6">
+        <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">Chamadas Recentes</h2>
+
+        <template x-if="chamadas.length === 0">
+            <div class="text-center py-10 text-gray-400">
+                <svg class="w-10 h-10 mx-auto mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                </svg>
+                <p class="text-sm">Nenhuma chamada capturada ainda.</p>
+                <p class="text-xs mt-1">Instale o app Android e configure com o token acima.</p>
+            </div>
+        </template>
+
+        <template x-if="chamadas.length > 0">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-xs text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                            <th class="pb-3 pr-4">Número</th>
+                            <th class="pb-3 pr-4">Contato</th>
+                            <th class="pb-3 pr-4">Quando ligou</th>
+                            <th class="pb-3 pr-4">Status</th>
+                            <th class="pb-3">Ticket</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50">
+                        <template x-for="chamada in chamadas" :key="chamada.id">
+                            <tr class="hover:bg-gray-50">
+                                <td class="py-3 pr-4 font-mono text-gray-700" x-text="chamada.numero_chamador"></td>
+                                <td class="py-3 pr-4 text-gray-600" x-text="chamada.contato_nome || '—'"></td>
+                                <td class="py-3 pr-4 text-gray-500" x-text="chamada.chamou_em"></td>
+                                <td class="py-3 pr-4">
+                                    <template x-if="chamada.mensagem_enviada">
+                                        <span class="inline-flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                            Mensagem enviada
+                                        </span>
+                                    </template>
+                                    <template x-if="!chamada.mensagem_enviada">
+                                        <span class="inline-flex items-center gap-1 text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                                            Cooldown / pendente
+                                        </span>
+                                    </template>
+                                </td>
+                                <td class="py-3">
+                                    <template x-if="chamada.ticket_id">
+                                        <a :href="'/kanban'" class="text-xs text-blue-600 hover:underline"
+                                           x-text="'#' + chamada.ticket_id"></a>
+                                    </template>
+                                    <template x-if="!chamada.ticket_id">
+                                        <span class="text-gray-300">—</span>
+                                    </template>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </template>
+    </div>
+
+</div>
+@endsection
+
+@push('scripts')
+<script>
+function secretaria() {
+    return {
+        token: '',
+        chamadas: [],
+        totalMes: 0,
+        dispositivosAtivos: 0,
+        copiado: false,
+
+        async carregar() {
+            const res = await fetch('/api/painel/secretaria-eletronica/dados');
+            if (! res.ok) return;
+            const d = await res.json();
+            this.token            = d.secretaria_token ?? '';
+            this.chamadas         = d.chamadas ?? [];
+            this.totalMes         = d.total_mes ?? 0;
+            this.dispositivosAtivos = d.dispositivos_ativos ?? 0;
+        },
+
+        async copiarToken() {
+            await navigator.clipboard.writeText(this.token);
+            this.copiado = true;
+            setTimeout(() => this.copiado = false, 2000);
+        },
+
+        async rotacionarToken() {
+            if (! confirm('Gerar novo token invalida o token atual no app Android. Continuar?')) return;
+            const res = await fetch('/api/painel/secretaria-eletronica/token', {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+            });
+            const d = await res.json();
+            if (d.ok) this.token = d.secretaria_token;
+        },
+    }
+}
+</script>
+@endpush

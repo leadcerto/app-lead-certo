@@ -11,6 +11,8 @@ use App\Http\Controllers\Painel\KanbanController;
 use App\Http\Controllers\Painel\DashboardController;
 use App\Http\Controllers\Painel\WhatsAppController;
 use App\Http\Controllers\Webhook\UazapiWebhookController;
+use App\Http\Controllers\Api\SecretariaEletronicaController;
+use App\Http\Controllers\Api\FormularioPublicoController;
 
 // Auth
 Route::post('/auth/login', [AuthController::class, 'login']);
@@ -35,5 +37,17 @@ Route::prefix('minerador')->middleware('minerador')->group(function () {
 
 // Webhook Uazapi — token por tenant na URL (sem sessão, validado no controller)
 Route::post('/webhook/uazapi/{webhookToken}', [UazapiWebhookController::class, 'handle']);
+
+// Secretária Eletrônica — token por tenant na URL (sem sessão, validado no controller)
+Route::post('/secretaria/{secretariaToken}', [SecretariaEletronicaController::class, 'receber']);
+
+// Secretária — rotas autenticadas (device registration, painel)
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/secretaria/device/registrar', [SecretariaEletronicaController::class, 'registrarDevice']);
+});
+
+// Formulário público — UUID na URL, sem credenciais no cliente
+Route::get('/formulario/{uuid}/campos',  [FormularioPublicoController::class, 'campos']);
+Route::post('/formulario/{uuid}/submit', [FormularioPublicoController::class, 'submit']);
 
 // Painel — rotas movidas para routes/web.php (auth via sessão)

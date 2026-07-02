@@ -14,6 +14,18 @@ use App\Http\Controllers\Painel\RespostaProntaController;
 use App\Http\Controllers\Painel\NotaContatoController;
 use App\Http\Controllers\Painel\AgendaImediataController;
 use App\Http\Controllers\Painel\AgenteController;
+use App\Http\Controllers\Api\SecretariaEletronicaController;
+use App\Http\Controllers\Painel\FormulariosController;
+
+// ── Formulário público (iframe) — sem auth ────────────────────────────────
+Route::get('/f/{uuid}', function (string $uuid) {
+    $formulario = \App\Models\Formulario::with('campos')
+        ->where('uuid', $uuid)
+        ->where('ativo', true)
+        ->firstOrFail();
+
+    return view('formularios.render', compact('formulario'));
+});
 
 // ── Convite público (sem auth) ─────────────────────────────────────────────
 Route::get('/convite/{token}', [AgenteController::class, 'aceitarForm'])->name('convite.aceitar');
@@ -80,6 +92,16 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/campanhas', [CampanhasController::class, 'view'])
         ->name('campanhas')
         ->middleware('role:admin,dono,diretor,growth_manager');
+
+    // Secretária Eletrônica — dono e admin
+    Route::get('/secretaria-eletronica', fn () => view('secretaria-eletronica.index'))
+        ->name('secretaria-eletronica')
+        ->middleware('role:admin,dono');
+
+    // Formulários — dono e admin
+    Route::get('/formularios', [FormulariosController::class, 'view'])
+        ->name('formularios')
+        ->middleware('role:admin,dono');
 });
 
 // ── Painel — API JSON (protegida por sessão) ──────────────────────────────
@@ -157,6 +179,21 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::delete('/agentes/{id}',          [AgenteController::class, 'destroy']);
         Route::delete('/agentes/convite/{id}',  [AgenteController::class, 'destroyConvite']);
     });
+
+    // Secretária Eletrônica — dono e admin
+    Route::middleware('role:admin,dono')->group(function () {
+        Route::get('/secretaria-eletronica/dados',  [SecretariaEletronicaController::class, 'dadosPainel']);
+        Route::post('/secretaria-eletronica/token', [SecretariaEletronicaController::class, 'rotacionarToken']);
+    });
+
+    // Formulários — dono e admin
+    Route::middleware('role:admin,dono')->group(function () {
+        Route::get('/formularios',           [FormulariosController::class, 'index']);
+        Route::post('/formularios',          [FormulariosController::class, 'store']);
+        Route::put('/formularios/{formulario}',    [FormulariosController::class, 'update']);
+        Route::delete('/formularios/{formulario}', [FormulariosController::class, 'destroy']);
+    });
+
 
     // Notas por Contato — todos os perfis de atendimento
     Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda')->group(function () {

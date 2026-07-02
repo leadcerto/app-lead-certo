@@ -19,7 +19,7 @@ class SdrResponderService
      * Seleciona persona, gera resposta via OpenRouter, envia com humanização, persiste.
      * Retorna o texto da resposta ou null se falhar.
      */
-    public function responder(TicketAtendimento $ticket): ?string
+    public function responder(TicketAtendimento $ticket, bool $origemLigacao = false): ?string
     {
         $ticket->loadMissing(['contato', 'persona', 'mensagens', 'tenant']);
 
@@ -38,7 +38,7 @@ class SdrResponderService
         }
 
         // ── 2. Montar histórico para o OpenRouter ────────────────────────────
-        $messages = $this->montarHistorico($persona, $ticket);
+        $messages = $this->montarHistorico($persona, $ticket, $origemLigacao);
 
         // ── 3. Chamar o OpenRouter ───────────────────────────────────────────
         $tier    = $ticket->etapa_ia === 'etapa_2' ? 'complexo' : 'simples';
@@ -96,7 +96,7 @@ class SdrResponderService
         return $tags;
     }
 
-    private function montarHistorico(SdrPersona $persona, TicketAtendimento $ticket): array
+    private function montarHistorico(SdrPersona $persona, TicketAtendimento $ticket, bool $origemLigacao = false): array
     {
         $etapaInstrucao = match ($ticket->etapa_ia) {
             'etapa_1' => '[ETAPA: qualificação inicial do lead]',
@@ -116,6 +116,11 @@ class SdrResponderService
         $jaRespondeu = $ticket->mensagens->contains('remetente', 'bot');
         $primeiroContato = $jaRespondeu ? '' : '[PRIMEIRO CONTATO: apresente-se de forma natural e dê boas-vindas]';
 
+        // Contexto especial: lead que ligou e não foi atendido
+        $contextoLigacao = $origemLigacao
+            ? "[CONTEXTO ESPECIAL: Este lead LIGOU para o número da empresa e não foi atendido.\nO sistema detectou a chamada perdida e iniciou contato automaticamente.\nInicie a conversa reconhecendo que viu a ligação perdida, seja natural e acolhedor.\nExemplo: \"Oi! Vi que você ligou aqui pra gente e não consegui atender na hora. Aqui é o João — tô disponível agora no WhatsApp, pode falar! 😊\"\nNÃO mencione bots, sistemas automáticos ou que foi detectado pelo aplicativo.]"
+            : '';
+
         $messages = [[
             'role'    => 'system',
             'content' => implode("\n\n", array_filter([
@@ -123,6 +128,7 @@ class SdrResponderService
                 $etapaInstrucao,
                 $contextoContato,
                 $primeiroContato,
+                $contextoLigacao,
             ])),
         ]];
 

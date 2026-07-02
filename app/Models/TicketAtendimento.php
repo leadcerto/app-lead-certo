@@ -33,6 +33,8 @@ class TicketAtendimento extends Model
         'status',
         'aberto_em',
         'encerrado_em',
+        'origem',
+        'formulario_id',
     ];
 
     protected function casts(): array

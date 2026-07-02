@@ -21,6 +21,7 @@ class Tenant extends Model
         'uazapi_instance_name',
         'uazapi_instance_token',
         'uazapi_webhook_token',
+        'secretaria_token',
     ];
 
     public function users(): HasMany

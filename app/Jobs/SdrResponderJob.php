@@ -17,7 +17,8 @@ class SdrResponderJob implements ShouldQueue
 
     public function __construct(
         private int    $ticketId,
-        private string $ultimaMensagem = ''
+        private string $ultimaMensagem = '',
+        private bool   $origemLigacao  = false,
     ) {}
 
     public function handle(SdrResponderService $service): void
@@ -37,6 +38,6 @@ class SdrResponderJob implements ShouldQueue
             return;
         }
 
-        $service->responder($ticket);
+        $service->responder($ticket, $this->origemLigacao);
     }
 }
