@@ -48,19 +48,33 @@
                 <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">3</div>
                 <div>
                     <p class="font-semibold">Configure a requisição HTTP assim:</p>
-                    <div class="mt-2 bg-gray-50 rounded-lg p-3 font-mono text-xs space-y-1">
-                        <div><span class="text-gray-400">URL:</span> <span class="text-gray-800">https://app.leadcerto.app.br/api/secretaria/<span class="text-blue-600">[SEU TOKEN]</span></span></div>
-                        <div><span class="text-gray-400">Método:</span> <span class="text-gray-800">POST</span></div>
-                        <div><span class="text-gray-400">Content-Type:</span> <span class="text-gray-800">application/json</span></div>
-                        <div><span class="text-gray-400">Body:</span></div>
-                        <div class="pl-3 text-gray-700">&#123;<br>
-                        &nbsp;&nbsp;"numero_chamador": "[número_chamador]",<br>
-                        &nbsp;&nbsp;"numero_receptor": "[meu_número]",<br>
-                        &nbsp;&nbsp;"chamou_em": "[data_hora]",<br>
-                        &nbsp;&nbsp;"duracao_segundos": 0<br>
-                        &#125;</div>
+                    <div class="mt-2 space-y-2">
+                        <div class="bg-gray-50 rounded-lg p-3 font-mono text-xs space-y-1">
+                            <div><span class="text-gray-400">Método:</span> <span class="text-gray-800">POST</span></div>
+                            <div><span class="text-gray-400">Content-Type:</span> <span class="text-gray-800">application/json</span></div>
+                            <div><span class="text-gray-400">Body:</span></div>
+                            <div class="pl-3 text-gray-700">&#123;<br>
+                            &nbsp;&nbsp;"numero_chamador": "[número_chamador]",<br>
+                            &nbsp;&nbsp;"numero_receptor": "[meu_número]",<br>
+                            &nbsp;&nbsp;"chamou_em": "[data_hora]",<br>
+                            &nbsp;&nbsp;"duracao_segundos": 0<br>
+                            &#125;</div>
+                        </div>
+
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">URL da requisição (com seu token já preenchido):</p>
+                            <div class="flex gap-2 items-center">
+                                <input type="text" readonly
+                                       :value="'https://app.leadcerto.app.br/api/secretaria/' + token"
+                                       class="flex-1 font-mono text-xs bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-800 select-all">
+                                <button @click="copiarUrlMacro()"
+                                        class="px-3 py-2 text-xs bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors whitespace-nowrap">
+                                    <span x-text="copiadoUrl ? 'Copiado!' : 'Copiar URL'"></span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <p class="text-gray-500 mt-2">Substitua <strong>[SEU TOKEN]</strong> pelo token exibido abaixo. Os campos entre colchetes são variáveis do MacroDroid.</p>
+                    <p class="text-gray-500 mt-2">Os campos entre colchetes no body são variáveis do MacroDroid — o app preenche automaticamente.</p>
                 </div>
             </div>
             <div class="flex gap-3">
@@ -213,6 +227,7 @@ function secretaria() {
         totalMes: 0,
         dispositivosAtivos: 0,
         copiado: false,
+        copiadoUrl: false,
         salvando: false,
         salvoOk: false,
 
@@ -247,6 +262,12 @@ function secretaria() {
             await navigator.clipboard.writeText(this.token);
             this.copiado = true;
             setTimeout(() => this.copiado = false, 2000);
+        },
+
+        async copiarUrlMacro() {
+            await navigator.clipboard.writeText('https://app.leadcerto.app.br/api/secretaria/' + this.token);
+            this.copiadoUrl = true;
+            setTimeout(() => this.copiadoUrl = false, 2000);
         },
 
         async rotacionarToken() {
