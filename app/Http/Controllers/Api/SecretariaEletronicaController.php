@@ -203,10 +203,25 @@ class SecretariaEletronicaController extends Controller
 
         return response()->json([
             'secretaria_token'    => $tenant->secretaria_token,
+            'mensagem_inicial'    => $tenant->secretaria_mensagem_inicial ?? '',
             'chamadas'            => $chamadas,
             'total_mes'           => $totalMes,
             'dispositivos_ativos' => $dispositivosAtivos,
         ]);
+    }
+
+    // ─── Salvar mensagem inicial personalizada ────────────────────────────────
+
+    public function salvarMensagem(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'mensagem' => 'nullable|string|max:1000',
+        ]);
+
+        $tenant = Tenant::find($request->user()->tenant_id);
+        $tenant->update(['secretaria_mensagem_inicial' => $validated['mensagem'] ?? null]);
+
+        return response()->json(['ok' => true]);
     }
 
     // ─── Gerar/rotacionar token ───────────────────────────────────────────────

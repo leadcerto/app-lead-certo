@@ -182,8 +182,9 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
 
     // Secretária Eletrônica — dono e admin
     Route::middleware('role:admin,dono')->group(function () {
-        Route::get('/secretaria-eletronica/dados',  [SecretariaEletronicaController::class, 'dadosPainel']);
-        Route::post('/secretaria-eletronica/token', [SecretariaEletronicaController::class, 'rotacionarToken']);
+        Route::get('/secretaria-eletronica/dados',       [SecretariaEletronicaController::class, 'dadosPainel']);
+        Route::post('/secretaria-eletronica/token',      [SecretariaEletronicaController::class, 'rotacionarToken']);
+        Route::post('/secretaria-eletronica/mensagem',   [SecretariaEletronicaController::class, 'salvarMensagem']);
     });
 
     // Formulários — dono e admin

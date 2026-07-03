@@ -39,6 +39,25 @@
         </div>
     </div>
 
+    {{-- Mensagem de abertura --}}
+    <div class="bg-white rounded-2xl shadow-sm p-6 mb-6">
+        <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-1">Mensagem de Abertura</h2>
+        <p class="text-xs text-gray-400 mb-4">Texto que o João vai usar ao entrar em contato com quem ligou e não foi atendido. Deixe em branco para usar o padrão do sistema.</p>
+
+        <textarea x-model="mensagemInicial" rows="3"
+                  placeholder="Ex: Oi! Vi que você ligou aqui pra gente e não consegui atender na hora. Tô disponível agora no WhatsApp, pode falar!"
+                  class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 resize-none"></textarea>
+
+        <div class="flex items-center justify-between mt-3">
+            <p class="text-xs text-gray-400">O João vai usar esta mensagem exatamente como você escreveu.</p>
+            <button @click="salvarMensagem()"
+                    class="px-4 py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2">
+                <template x-if="salvando"><span>Salvando…</span></template>
+                <template x-if="!salvando"><span x-text="salvoOk ? 'Salvo ✓' : 'Salvar mensagem'"></span></template>
+            </button>
+        </div>
+    </div>
+
     {{-- Métricas --}}
     <div class="grid grid-cols-2 gap-4 mb-6">
         <div class="bg-white rounded-2xl shadow-sm p-5">
@@ -123,19 +142,39 @@
 function secretaria() {
     return {
         token: '',
+        mensagemInicial: '',
         chamadas: [],
         totalMes: 0,
         dispositivosAtivos: 0,
         copiado: false,
+        salvando: false,
+        salvoOk: false,
 
         async carregar() {
             const res = await fetch('/api/painel/secretaria-eletronica/dados');
             if (! res.ok) return;
             const d = await res.json();
-            this.token            = d.secretaria_token ?? '';
-            this.chamadas         = d.chamadas ?? [];
-            this.totalMes         = d.total_mes ?? 0;
+            this.token              = d.secretaria_token ?? '';
+            this.mensagemInicial    = d.mensagem_inicial ?? '';
+            this.chamadas           = d.chamadas ?? [];
+            this.totalMes           = d.total_mes ?? 0;
             this.dispositivosAtivos = d.dispositivos_ativos ?? 0;
+        },
+
+        async salvarMensagem() {
+            this.salvando = true;
+            this.salvoOk  = false;
+            await fetch('/api/painel/secretaria-eletronica/mensagem', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                },
+                body: JSON.stringify({ mensagem: this.mensagemInicial }),
+            });
+            this.salvando = false;
+            this.salvoOk  = true;
+            setTimeout(() => this.salvoOk = false, 3000);
         },
 
         async copiarToken() {

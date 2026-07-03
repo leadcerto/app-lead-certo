@@ -117,9 +117,16 @@ class SdrResponderService
         $primeiroContato = $jaRespondeu ? '' : '[PRIMEIRO CONTATO: apresente-se de forma natural e dê boas-vindas]';
 
         // Contexto especial: lead que ligou e não foi atendido
-        $contextoLigacao = $origemLigacao
-            ? "[CONTEXTO ESPECIAL: Este lead LIGOU para o número da empresa e não foi atendido.\nO sistema detectou a chamada perdida e iniciou contato automaticamente.\nInicie a conversa reconhecendo que viu a ligação perdida, seja natural e acolhedor.\nExemplo: \"Oi! Vi que você ligou aqui pra gente e não consegui atender na hora. Aqui é o João — tô disponível agora no WhatsApp, pode falar! 😊\"\nNÃO mencione bots, sistemas automáticos ou que foi detectado pelo aplicativo.]"
-            : '';
+        if ($origemLigacao) {
+            $mensagemPersonalizada = $ticket->tenant?->secretaria_mensagem_inicial;
+            $exemploMensagem = $mensagemPersonalizada
+                ? "Use EXATAMENTE esta mensagem de abertura configurada pelo franqueado:\n\"{$mensagemPersonalizada}\""
+                : "Exemplo de abertura natural: \"Oi! Vi que você ligou aqui pra gente e não consegui atender na hora. Aqui é o João — tô disponível agora no WhatsApp, pode falar! 😊\"";
+
+            $contextoLigacao = "[CONTEXTO ESPECIAL: Este lead LIGOU para o número da empresa e não foi atendido.\nO sistema detectou a chamada perdida e iniciou contato automaticamente.\nInicie a conversa reconhecendo que viu a ligação perdida, seja natural e acolhedor.\n{$exemploMensagem}\nNÃO mencione bots, sistemas automáticos ou que foi detectado pelo aplicativo.]";
+        } else {
+            $contextoLigacao = '';
+        }
 
         $messages = [[
             'role'    => 'system',
