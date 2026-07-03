@@ -26,43 +26,66 @@
             </svg>
         </button>
 
-        <div x-show="aberto" x-transition class="bg-white border border-blue-100 border-t-0 rounded-b-2xl px-6 py-5 space-y-4 text-sm text-gray-700">
+        <div x-show="aberto" x-transition class="bg-white border border-blue-100 border-t-0 rounded-b-2xl px-6 py-5 space-y-5 text-sm text-gray-700">
+
+            {{-- Passo 1 --}}
             <div class="flex gap-3">
-                <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">1</div>
+                <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">1</div>
                 <div>
-                    <p class="font-semibold">Instale o MacroDroid no seu celular Android</p>
-                    <p class="text-gray-500 mt-0.5">Baixe gratuitamente na Play Store. Não precisa de root.</p>
+                    <p class="font-semibold">Baixe o MacroDroid na Play Store</p>
+                    <p class="text-gray-500 mt-0.5">Busque por <strong>MacroDroid</strong> e instale. É gratuito e não precisa de root.</p>
                 </div>
             </div>
+
+            {{-- Passo 2 --}}
             <div class="flex gap-3">
-                <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">2</div>
+                <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">2</div>
                 <div>
-                    <p class="font-semibold">Crie uma nova Macro no MacroDroid</p>
-                    <p class="text-gray-500 mt-0.5">
-                        <strong>Gatilho:</strong> Chamada Telefônica → Chamada Perdida<br>
-                        <strong>Ação:</strong> Conectividade → Requisição HTTP
-                    </p>
+                    <p class="font-semibold">Crie uma nova macro</p>
+                    <p class="text-gray-500 mt-0.5">Abra o MacroDroid e toque no botão <strong>"+"</strong>. Quando pedir nome, coloque <strong>Lead Certo - Chamada Perdida</strong>.</p>
                 </div>
             </div>
+
+            {{-- Passo 3 --}}
             <div class="flex gap-3">
-                <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">3</div>
+                <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">3</div>
                 <div>
-                    <p class="font-semibold">Configure a requisição HTTP assim:</p>
-                    <div class="mt-2 space-y-2">
-                        <div class="bg-gray-50 rounded-lg p-3 font-mono text-xs space-y-1">
-                            <div><span class="text-gray-400">Método:</span> <span class="text-gray-800">POST</span></div>
-                            <div><span class="text-gray-400">Content-Type:</span> <span class="text-gray-800">application/json</span></div>
-                            <div><span class="text-gray-400">Body:</span></div>
-                            <div class="pl-3 text-gray-700">&#123;<br>
-                            &nbsp;&nbsp;"numero_chamador": "[número_chamador]",<br>
-                            &nbsp;&nbsp;"numero_receptor": "[meu_número]",<br>
-                            &nbsp;&nbsp;"chamou_em": "[data_hora]",<br>
-                            &nbsp;&nbsp;"duracao_segundos": 0<br>
-                            &#125;</div>
+                    <p class="font-semibold">Configure o Gatilho</p>
+                    <p class="text-gray-500 mt-1">Na seção <strong>Gatilhos</strong>, toque em <strong>"+"</strong> e siga o caminho:</p>
+                    <div class="mt-2 bg-gray-50 rounded-lg px-4 py-3 text-xs space-y-1">
+                        <p>1. Selecione <strong>Chamadas SMS</strong></p>
+                        <p>2. Selecione <strong>Chamada Perdida</strong></p>
+                        <p>3. Selecione <strong>Qualquer número</strong> e confirme</p>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Passo 4 --}}
+            <div class="flex gap-3">
+                <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">4</div>
+                <div>
+                    <p class="font-semibold">Configure a Ação</p>
+                    <p class="text-gray-500 mt-1">Na seção <strong>Ações</strong>, toque em <strong>"+"</strong> e siga o caminho:</p>
+                    <div class="mt-2 bg-gray-50 rounded-lg px-4 py-3 text-xs space-y-1">
+                        <p>1. Selecione <strong>Integração Web</strong> (não é Conectividade)</p>
+                        <p>2. Selecione <strong>Requisição HTTP</strong></p>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Passo 5 --}}
+            <div class="flex gap-3">
+                <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">5</div>
+                <div class="w-full">
+                    <p class="font-semibold">Preencha a Requisição HTTP</p>
+                    <div class="mt-2 space-y-3">
+
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1"><strong>Método:</strong> mude de GET para <strong>POST</strong></p>
                         </div>
 
                         <div>
-                            <p class="text-xs text-gray-500 mb-1">URL da requisição (com seu token já preenchido):</p>
+                            <p class="text-xs text-gray-500 mb-1"><strong>URL</strong> — copie e cole o campo abaixo:</p>
                             <div class="flex gap-2 items-center">
                                 <input type="text" readonly
                                        :value="'https://app.leadcerto.app.br/api/secretaria/' + token"
@@ -73,19 +96,42 @@
                                 </button>
                             </div>
                         </div>
+
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1"><strong>Tipo do corpo:</strong> selecione <strong>application/json</strong></p>
+                        </div>
+
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1"><strong>Corpo da requisição</strong> — copie, cole e substitua o número:</p>
+                            <div class="relative">
+                                <pre class="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-xs text-gray-800 overflow-x-auto">{
+  "numero_chamador": "{call_number}",
+  "numero_receptor": "55DDDSEUNUMERO",
+  "duracao_segundos": 0
+}</pre>
+                                <button @click="copiarBodyMacro()"
+                                        class="absolute top-2 right-2 px-2 py-1 text-xs bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors">
+                                    <span x-text="copiadoBody ? 'Copiado!' : 'Copiar'"></span>
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-1">Substitua <strong>55DDDSEUNUMERO</strong> pelo seu número com 55 na frente. Ex: <code>5521981813106</code></p>
+                            <p class="text-xs text-gray-400 mt-1">O <strong>&#123;call_number&#125;</strong> é preenchido automaticamente pelo MacroDroid com o número de quem ligou.</p>
+                        </div>
                     </div>
-                    <p class="text-gray-500 mt-2">Os campos entre colchetes no body são variáveis do MacroDroid — o app preenche automaticamente.</p>
                 </div>
             </div>
+
+            {{-- Passo 6 --}}
             <div class="flex gap-3">
-                <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">4</div>
+                <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">6</div>
                 <div>
-                    <p class="font-semibold">Salve e teste!</p>
-                    <p class="text-gray-500 mt-0.5">Peça pra alguém ligar e não atenda. Em segundos o Lead Certo detecta a chamada e o João entra em contato pelo WhatsApp com quem ligou.</p>
+                    <p class="font-semibold">Salve e teste</p>
+                    <p class="text-gray-500 mt-0.5">Confirme a ação, confirme a macro e salve. Para testar sem ligar de verdade, toque no ícone <strong>▶ play</strong> ao lado da macro na lista. Se aparecer uma nova linha na tabela abaixo, está funcionando.</p>
                 </div>
             </div>
+
             <div class="bg-yellow-50 border border-yellow-100 rounded-lg p-3 text-xs text-yellow-800">
-                <strong>Importante:</strong> o celular precisa estar com internet (Wi-Fi ou dados) e a tela não precisa estar desbloqueada — o MacroDroid roda em segundo plano.
+                <strong>Importante:</strong> o celular precisa estar com internet (Wi-Fi ou dados móveis). O MacroDroid roda em segundo plano — não precisa deixar a tela ligada.
             </div>
         </div>
     </div>
@@ -228,6 +274,7 @@ function secretaria() {
         dispositivosAtivos: 0,
         copiado: false,
         copiadoUrl: false,
+        copiadoBody: false,
         salvando: false,
         salvoOk: false,
 
@@ -268,6 +315,13 @@ function secretaria() {
             await navigator.clipboard.writeText('https://app.leadcerto.app.br/api/secretaria/' + this.token);
             this.copiadoUrl = true;
             setTimeout(() => this.copiadoUrl = false, 2000);
+        },
+
+        async copiarBodyMacro() {
+            const body = `{\n  "numero_chamador": "{call_number}",\n  "numero_receptor": "55DDDSEUNUMERO",\n  "duracao_segundos": 0\n}`;
+            await navigator.clipboard.writeText(body);
+            this.copiadoBody = true;
+            setTimeout(() => this.copiadoBody = false, 2000);
         },
 
         async rotacionarToken() {
