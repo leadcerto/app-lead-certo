@@ -29,14 +29,15 @@ class SecretariaEletronicaController extends Controller
 
         $validated = $request->validate([
             'numero_chamador'   => 'required|string|max:20',
-            'numero_receptor'   => 'required|string|max:20',
-            'chamou_em'         => 'required|date',
+            'numero_receptor'   => 'nullable|string|max:20',
+            'chamou_em'         => 'nullable|date',
             'duracao_segundos'  => 'integer|min:0',
         ]);
 
         $numeroChamador  = preg_replace('/\D/', '', $validated['numero_chamador']);
-        $numeroReceptor  = preg_replace('/\D/', '', $validated['numero_receptor']);
+        $numeroReceptor  = preg_replace('/\D/', '', $validated['numero_receptor'] ?? '');
         $duracao         = $validated['duracao_segundos'] ?? 0;
+        $chamouEm        = isset($validated['chamou_em']) ? Carbon::parse($validated['chamou_em']) : now();
 
         // Número BR deve ter 11 dígitos (com DDD) ou 13 (com 55)
         if (strlen($numeroChamador) < 10 || strlen($numeroChamador) > 13) {
@@ -66,7 +67,7 @@ class SecretariaEletronicaController extends Controller
                 'tenant_id'       => $tenant->id,
                 'numero_chamador' => $numeroChamador,
                 'numero_receptor' => $numeroReceptor,
-                'chamou_em'       => $validated['chamou_em'],
+                'chamou_em'       => $chamouEm,
                 'duracao_segundos'=> $duracao,
                 'mensagem_enviada'=> false,
             ]);
