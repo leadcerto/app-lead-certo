@@ -63,12 +63,21 @@ class FormularioPublicoController extends Controller
         $origin  = $request->header('Origin');
         $referer = $request->header('Referer');
 
-        // Permite acesso direto apenas quando em preview (sem Origin nem Referer)
-        // Mas exige whitelist para requisições de sites externos
         $dominioOrigem = parse_url($origin ?? $referer ?? '', PHP_URL_HOST) ?? 'direto';
 
-        if (($origin || $referer) && ! $this->service->dominioAutorizado($formulario, $origin, $referer)) {
-            return response()->json(['erro' => 'Domínio não autorizado'], 403);
+        // Requisições vindas do nosso próprio servidor (iframe) são sempre permitidas
+        $appHost    = parse_url(config('app.url', ''), PHP_URL_HOST) ?? '';
+        $deNossoApp = $dominioOrigem === $appHost;
+
+        // Se o formulário tem whitelist configurada, valida rigorosamente
+        if ($formulario->dominios->isNotEmpty() && ! $deNossoApp) {
+            // Sem Origin nem Referer = requisição direta (bot/curl) — bloqueia
+            if (! $origin && ! $referer) {
+                return response()->json(['erro' => 'Domínio não autorizado'], 403);
+            }
+            if (! $this->service->dominioAutorizado($formulario, $origin, $referer)) {
+                return response()->json(['erro' => 'Domínio não autorizado'], 403);
+            }
         }
 
         $dados = $request->all();
