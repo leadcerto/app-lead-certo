@@ -10,6 +10,72 @@
         <p class="text-sm text-gray-500 mt-1">Captura automaticamente leads que ligaram e não foram atendidos.</p>
     </div>
 
+    {{-- Sanfona de instruções --}}
+    <div class="mb-6" x-data="{ aberto: false }">
+        <button @click="aberto = !aberto"
+                class="w-full flex items-center justify-between bg-blue-50 border border-blue-100 rounded-2xl px-5 py-4 text-left hover:bg-blue-100 transition-colors">
+            <div class="flex items-center gap-3">
+                <svg class="w-5 h-5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span class="text-sm font-semibold text-blue-700">Como usar a Secretária Eletrônica</span>
+            </div>
+            <svg class="w-4 h-4 text-blue-400 transition-transform" :class="aberto ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+        </button>
+
+        <div x-show="aberto" x-transition class="bg-white border border-blue-100 border-t-0 rounded-b-2xl px-6 py-5 space-y-4 text-sm text-gray-700">
+            <div class="flex gap-3">
+                <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">1</div>
+                <div>
+                    <p class="font-semibold">Instale o MacroDroid no seu celular Android</p>
+                    <p class="text-gray-500 mt-0.5">Baixe gratuitamente na Play Store. Não precisa de root.</p>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">2</div>
+                <div>
+                    <p class="font-semibold">Crie uma nova Macro no MacroDroid</p>
+                    <p class="text-gray-500 mt-0.5">
+                        <strong>Gatilho:</strong> Chamada Telefônica → Chamada Perdida<br>
+                        <strong>Ação:</strong> Conectividade → Requisição HTTP
+                    </p>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">3</div>
+                <div>
+                    <p class="font-semibold">Configure a requisição HTTP assim:</p>
+                    <div class="mt-2 bg-gray-50 rounded-lg p-3 font-mono text-xs space-y-1">
+                        <div><span class="text-gray-400">URL:</span> <span class="text-gray-800">https://app.leadcerto.app.br/api/secretaria/<span class="text-blue-600">[SEU TOKEN]</span></span></div>
+                        <div><span class="text-gray-400">Método:</span> <span class="text-gray-800">POST</span></div>
+                        <div><span class="text-gray-400">Content-Type:</span> <span class="text-gray-800">application/json</span></div>
+                        <div><span class="text-gray-400">Body:</span></div>
+                        <div class="pl-3 text-gray-700">&#123;<br>
+                        &nbsp;&nbsp;"numero_chamador": "[número_chamador]",<br>
+                        &nbsp;&nbsp;"numero_receptor": "[meu_número]",<br>
+                        &nbsp;&nbsp;"chamou_em": "[data_hora]",<br>
+                        &nbsp;&nbsp;"duracao_segundos": 0<br>
+                        &#125;</div>
+                    </div>
+                    <p class="text-gray-500 mt-2">Substitua <strong>[SEU TOKEN]</strong> pelo token exibido abaixo. Os campos entre colchetes são variáveis do MacroDroid.</p>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">4</div>
+                <div>
+                    <p class="font-semibold">Salve e teste!</p>
+                    <p class="text-gray-500 mt-0.5">Peça pra alguém ligar e não atenda. Em segundos o Lead Certo detecta a chamada e o João entra em contato pelo WhatsApp com quem ligou.</p>
+                </div>
+            </div>
+            <div class="bg-yellow-50 border border-yellow-100 rounded-lg p-3 text-xs text-yellow-800">
+                <strong>Importante:</strong> o celular precisa estar com internet (Wi-Fi ou dados) e a tela não precisa estar desbloqueada — o MacroDroid roda em segundo plano.
+            </div>
+        </div>
+    </div>
+
     {{-- Configuração --}}
     <div class="bg-white rounded-2xl shadow-sm p-6 mb-6">
         <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">Configuração do App Android</h2>
