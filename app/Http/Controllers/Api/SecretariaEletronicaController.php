@@ -54,26 +54,6 @@ class SecretariaEletronicaController extends Controller
             $numeroChamador = '55' . $numeroChamador;
         }
 
-        // Cooldown: 1 mensagem por número por dia
-        $jaMandou = ChamadaPerdida::where('tenant_id', $tenant->id)
-            ->where('numero_chamador', $numeroChamador)
-            ->whereDate('chamou_em', Carbon::today())
-            ->where('mensagem_enviada', true)
-            ->exists();
-
-        if ($jaMandou) {
-            // Registra a chamada mas não envia nova mensagem
-            ChamadaPerdida::create([
-                'tenant_id'       => $tenant->id,
-                'numero_chamador' => $numeroChamador,
-                'numero_receptor' => $numeroReceptor,
-                'chamou_em'       => $chamouEm,
-                'duracao_segundos'=> $duracao,
-                'mensagem_enviada'=> false,
-            ]);
-
-            return response()->json(['ok' => true, 'acao' => 'cooldown']);
-        }
 
         // Registra chamada
         $chamada = ChamadaPerdida::create([
