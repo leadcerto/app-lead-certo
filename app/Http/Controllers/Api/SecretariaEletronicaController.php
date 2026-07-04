@@ -60,7 +60,7 @@ class SecretariaEletronicaController extends Controller
             'tenant_id'        => $tenant->id,
             'numero_chamador'  => $numeroChamador,
             'numero_receptor'  => $numeroReceptor,
-            'chamou_em'        => $validated['chamou_em'],
+            'chamou_em'        => $chamouEm,
             'duracao_segundos' => $duracao,
             'mensagem_enviada' => false,
         ]);
