@@ -49,6 +49,11 @@ class SecretariaEletronicaController extends Controller
             return response()->json(['ok' => true, 'acao' => 'atendida']);
         }
 
+        // Remove zero de discagem brasileiro (021... → 21...)
+        if (str_starts_with($numeroChamador, '0') && !str_starts_with($numeroChamador, '00')) {
+            $numeroChamador = substr($numeroChamador, 1);
+        }
+
         // Garante formato 55DDDNNNNNNNNN
         if (strlen($numeroChamador) <= 11) {
             $numeroChamador = '55' . $numeroChamador;
