@@ -16,6 +16,7 @@ use App\Http\Controllers\Painel\AgendaImediataController;
 use App\Http\Controllers\Painel\AgenteController;
 use App\Http\Controllers\Api\SecretariaEletronicaController;
 use App\Http\Controllers\Painel\FormulariosController;
+use App\Http\Controllers\Painel\SequenciaController;
 
 // ── Formulário público (iframe) — sem auth ────────────────────────────────
 Route::get('/f/{uuid}', function (string $uuid) {
@@ -92,6 +93,11 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/campanhas', [CampanhasController::class, 'view'])
         ->name('campanhas')
         ->middleware('role:admin,dono,diretor,growth_manager');
+
+    // Sequência de mensagens — dono e admin
+    Route::get('/sequencia', fn () => view('sequencia.index'))
+        ->name('sequencia')
+        ->middleware('role:admin,dono');
 
     // Secretária Eletrônica — dono e admin
     Route::get('/secretaria-eletronica', fn () => view('secretaria-eletronica.index'))
@@ -185,6 +191,14 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::get('/secretaria-eletronica/dados',       [SecretariaEletronicaController::class, 'dadosPainel']);
         Route::post('/secretaria-eletronica/token',      [SecretariaEletronicaController::class, 'rotacionarToken']);
         Route::post('/secretaria-eletronica/mensagem',   [SecretariaEletronicaController::class, 'salvarMensagem']);
+    });
+
+    // Sequência de mensagens — dono e admin
+    Route::middleware('role:admin,dono')->group(function () {
+        Route::get('/sequencia/mensagens',          [SequenciaController::class, 'index']);
+        Route::post('/sequencia/mensagens',         [SequenciaController::class, 'store']);
+        Route::put('/sequencia/mensagens/{id}',     [SequenciaController::class, 'update']);
+        Route::delete('/sequencia/mensagens/{id}',  [SequenciaController::class, 'destroy']);
     });
 
     // Formulários — dono e admin

@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
 use App\Services\MediaProcessorService;
+use App\Services\SequenciaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -114,6 +115,7 @@ class UazapiWebhookController extends Controller
             ->latest()
             ->first();
 
+        $ticketNovo = false;
         if (! $ticket) {
             // Abre novo ticket
             $persona = $tenant->personas()->where('is_default', true)->where('ativo', true)->first();
@@ -127,6 +129,7 @@ class UazapiWebhookController extends Controller
                 'status'             => 'aberto',
                 'aberto_em'          => now(),
             ]);
+            $ticketNovo = true;
         }
 
         // Processa mídia se houver (imagem → visão IA / áudio → transcrição / etc)
@@ -162,8 +165,11 @@ class UazapiWebhookController extends Controller
             dispatch(new PushContatoParaGoogleJob($contato->id, $tenant->id));
         }
 
-        // Se o bot está responsável, dispara resposta IA
-        if ($ticket->agente_responsavel === 'bot' && $conteudo) {
+        // Novo ticket: inicia sequência automática (sem IA)
+        // Ticket existente: IA responde se o bot ainda é responsável
+        if ($ticketNovo) {
+            app(SequenciaService::class)->iniciarParaTicket($ticket);
+        } elseif ($ticket->agente_responsavel === 'bot' && $conteudo) {
             dispatch(new SdrResponderJob($ticket->id, $conteudo));
         }
     }

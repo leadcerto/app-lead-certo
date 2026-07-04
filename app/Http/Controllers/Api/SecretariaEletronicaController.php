@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Jobs\SdrResponderJob;
 use App\Models\ChamadaPerdida;
+use App\Services\SequenciaService;
 use App\Models\Contato;
 use App\Models\DispositivoRegistrado;
 use App\Models\Tenant;
@@ -122,8 +122,8 @@ class SecretariaEletronicaController extends Controller
             'mensagem_enviada_em' => now(),
         ]);
 
-        // Dispara o João com contexto de ligação perdida
-        SdrResponderJob::dispatch($ticket->id, '', true)->onQueue('default');
+        // Inicia sequência de mensagens automáticas
+        app(SequenciaService::class)->iniciarParaTicket($ticket);
 
         Log::info('Secretária Eletrônica: chamada processada', [
             'tenant'  => $tenant->id,
