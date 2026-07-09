@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Uazapi API — endpoints verificados em 2026-07-01 contra https://app-leadcerto.uazapi.com
+ * Uazapi API (uazapiGO V2) — endpoints verificados em 2026-07-09 contra https://docs.uazapi.com
  *
  * Autenticação:
  *   - Operações de admin (criar/listar/deletar instâncias): header "AdminToken: <UAZAPI_KEY>"
@@ -14,6 +14,10 @@ use Illuminate\Support\Facades\Log;
  *
  * O instance_token é único por instância e é devolvido ao criar a instância.
  * Deve ser armazenado na tabela tenants (campo uazapi_instance_token).
+ *
+ * Envio de mídia: endpoint único POST /send/media, body em JSON com
+ * {number, type, file, ...}. Os antigos /send/image, /send/audio, /send/ptt,
+ * /send/document, /send/buttons, /send/list etc. não existem mais na API atual.
  */
 class UazapiService
 {
@@ -183,179 +187,60 @@ class UazapiService
     }
 
     /**
-     * Envia mensagem com imagem. Tenta /send/image (URL) e, se falhar (405 = API mudou),
-     * baixa o arquivo e envia via /send/media como upload binário.
+     * Envia mídia via /send/media (endpoint único desde a atualização de 2026-07).
+     * Body em JSON: number, type, file (URL ou base64) + campos opcionais.
+     * type válidos: image, video, videoplay, document, audio, myaudio, ptt, ptv, sticker.
+     */
+    private function enviarMedia(string $instanceToken, string $numero, string $type, string $file, array $extra = []): bool
+    {
+        try {
+            $body = array_merge(['number' => $numero, 'type' => $type, 'file' => $file], $extra);
+
+            $response = Http::withHeaders(['token' => $instanceToken])
+                ->post("{$this->baseUrl}/send/media", $body);
+
+            if (!$response->successful()) {
+                Log::warning("Uazapi enviarMedia ({$type}) falhou", [
+                    'numero' => $numero,
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ]);
+            }
+
+            return $response->successful();
+        } catch (\Exception $e) {
+            Log::error('Uazapi enviarMedia exception', ['tipo' => $type, 'erro' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Envia mensagem com imagem. url deve ser uma URL pública acessível (ou base64).
      */
     public function enviarImagem(string $instanceToken, string $numero, string $url, string $caption = ''): bool
     {
-        try {
-            // Tentativa 1: endpoint original com URL em JSON
-            $body = ['number' => $numero, 'url' => $url];
-            if ($caption !== '') {
-                $body['caption'] = $caption;
-            }
-
-            $response = Http::withHeaders(['token' => $instanceToken])
-                ->post("{$this->baseUrl}/send/image", $body);
-
-            if ($response->successful()) {
-                return true;
-            }
-
-            // Tentativa 2: /send/media com upload binário (API atualizada)
-            if ($response->status() === 405 || $response->status() === 404) {
-                Log::info('Uazapi /send/image retornou ' . $response->status() . ', tentando /send/media com upload', [
-                    'numero' => $numero,
-                ]);
-
-                $conteudo = Http::timeout(15)->get($url)->body();
-                if (empty($conteudo)) {
-                    Log::warning('Uazapi enviarImagem: falha ao baixar imagem', ['url' => $url]);
-                    return false;
-                }
-
-                $ext      = pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'jpg';
-                $mime     = match(strtolower($ext)) {
-                    'png'  => 'image/png',
-                    'gif'  => 'image/gif',
-                    'webp' => 'image/webp',
-                    default => 'image/jpeg',
-                };
-
-                $req = Http::withHeaders(['token' => $instanceToken])
-                    ->attach('file', $conteudo, "image.{$ext}", ['Content-Type' => $mime]);
-
-                if ($caption !== '') {
-                    $req = $req->attach('caption', $caption, null);
-                }
-
-                // Alguns endpoints leem o number de um JSON anexo, outros de query string
-                $mediaRes = $req->post("{$this->baseUrl}/send/media", ['number' => $numero]);
-
-                if (!$mediaRes->successful()) {
-                    // Última tentativa: number via query param
-                    $mediaRes = $req->post(
-                        "{$this->baseUrl}/send/media?" . http_build_query(['number' => $numero])
-                    );
-                }
-
-                if (!$mediaRes->successful()) {
-                    Log::warning('Uazapi enviarImagem /send/media falhou', [
-                        'numero' => $numero,
-                        'status' => $mediaRes->status(),
-                        'body'   => $mediaRes->body(),
-                    ]);
-                }
-
-                return $mediaRes->successful();
-            }
-
-            Log::warning('Uazapi enviarImagem /send/image falhou', [
-                'numero' => $numero,
-                'status' => $response->status(),
-                'body'   => $response->body(),
-            ]);
-            return false;
-
-        } catch (\Exception $e) {
-            Log::error('Uazapi enviarImagem exception', ['erro' => $e->getMessage()]);
-            return false;
-        }
+        $extra = $caption !== '' ? ['text' => $caption] : [];
+        return $this->enviarMedia($instanceToken, $numero, 'image', $url, $extra);
     }
 
     /**
-     * Envia documento/arquivo. url deve ser uma URL pública acessível.
+     * Envia documento/arquivo. url deve ser uma URL pública acessível (ou base64).
      */
     public function enviarDocumento(string $instanceToken, string $numero, string $url, string $filename = '', string $caption = ''): bool
     {
-        try {
-            $body = ['number' => $numero, 'url' => $url];
-            if ($filename !== '') $body['filename'] = $filename;
-            if ($caption  !== '') $body['caption']  = $caption;
+        $extra = [];
+        if ($filename !== '') $extra['docName'] = $filename;
+        if ($caption  !== '') $extra['text']    = $caption;
 
-            $response = Http::withHeaders(['token' => $instanceToken])
-                ->post("{$this->baseUrl}/send/document", $body);
-
-            if (!$response->successful()) {
-                Log::warning('Uazapi enviarDocumento falhou', [
-                    'numero' => $numero, 'status' => $response->status(), 'body' => $response->body(),
-                ]);
-            }
-            return $response->successful();
-        } catch (\Exception $e) {
-            Log::error('Uazapi enviarDocumento exception', ['erro' => $e->getMessage()]);
-            return false;
-        }
+        return $this->enviarMedia($instanceToken, $numero, 'document', $url, $extra);
     }
 
     /**
-     * Envia mensagem de voz (PTT) ou áudio. url deve ser URL pública de arquivo de áudio.
+     * Envia mensagem de voz (PTT) ou áudio. url deve ser URL pública de arquivo de áudio (ou base64).
      */
     public function enviarAudio(string $instanceToken, string $numero, string $url, bool $ptt = true): bool
     {
-        try {
-            $endpoint = $ptt ? '/send/ptt' : '/send/audio';
-            $response = Http::withHeaders(['token' => $instanceToken])
-                ->post("{$this->baseUrl}{$endpoint}", [
-                    'number' => $numero,
-                    'url'    => $url,
-                ]);
-
-            if ($response->successful()) {
-                return true;
-            }
-
-            // Fallback: upload binário via /send/media (API atualizada após 2026-07-01)
-            if ($response->status() === 405 || $response->status() === 404) {
-                Log::info("Uazapi {$endpoint} retornou {$response->status()}, tentando /send/media com upload binário", [
-                    'numero' => $numero,
-                ]);
-
-                $conteudo = Http::timeout(15)->get($url)->body();
-                if (empty($conteudo)) {
-                    Log::warning('Uazapi enviarAudio: falha ao baixar áudio', ['url' => $url]);
-                    return false;
-                }
-
-                $ext  = pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'ogg';
-                $mime = match(strtolower($ext)) {
-                    'mp3'  => 'audio/mpeg',
-                    'mp4'  => 'audio/mp4',
-                    'webm' => 'audio/webm',
-                    'wav'  => 'audio/wav',
-                    default => 'audio/ogg',
-                };
-
-                $req      = Http::withHeaders(['token' => $instanceToken])
-                    ->attach('file', $conteudo, "audio.{$ext}", ['Content-Type' => $mime]);
-                $mediaRes = $req->post("{$this->baseUrl}/send/media", ['number' => $numero]);
-
-                if (!$mediaRes->successful()) {
-                    $mediaRes = $req->post(
-                        "{$this->baseUrl}/send/media?" . http_build_query(['number' => $numero])
-                    );
-                }
-
-                if (!$mediaRes->successful()) {
-                    Log::warning('Uazapi enviarAudio /send/media falhou', [
-                        'numero' => $numero,
-                        'status' => $mediaRes->status(),
-                        'body'   => $mediaRes->body(),
-                    ]);
-                }
-
-                return $mediaRes->successful();
-            }
-
-            Log::warning("Uazapi enviarAudio {$endpoint} falhou", [
-                'numero' => $numero, 'status' => $response->status(), 'body' => $response->body(),
-            ]);
-            return false;
-
-        } catch (\Exception $e) {
-            Log::error('Uazapi enviarAudio exception', ['erro' => $e->getMessage()]);
-            return false;
-        }
+        return $this->enviarMedia($instanceToken, $numero, $ptt ? 'ptt' : 'audio', $url);
     }
 
     /**
