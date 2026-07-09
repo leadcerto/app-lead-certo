@@ -27,23 +27,54 @@ class KanbanController extends Controller
         return view('kanban.index');
     }
 
+    private const LIMITE_PADRAO_COLUNA = 15;
+    private const LIMITE_MAXIMO_COLUNA = 500;
+
+    /**
+     * Lista tickets agrupados por coluna, paginado por coluna (evita coluna com
+     * centenas de cards travando a altura da página). `limites` é um JSON
+     * {coluna: N} opcional — colunas ausentes usam LIMITE_PADRAO_COLUNA. O
+     * front-end reenvia o limite já expandido a cada poll (5s) pra não perder
+     * o "carregar mais" que o usuário já tinha feito naquela coluna.
+     */
     public function index(Request $request): JsonResponse
     {
         $colunas  = ['lead_novo', 'em_atendimento', 'aguardando_orcamento', 'aguardando_lead', 'pagamento', 'servico_agendado', 'encerrado', 'outros'];
         $tenantId = $request->user()->tenant_id;
 
-        $tickets = TicketAtendimento::with(['contato', 'vendedor'])
-            ->withCount(['mensagens as count_midias' => fn ($q) => $q->where('tipo', '!=', 'texto')])
-            ->get();
+        $limites = $request->input('limites', []);
+        if (is_string($limites)) {
+            $limites = json_decode($limites, true) ?: [];
+        }
+
+        $todosTickets = collect();
+        $totais       = [];
+
+        foreach ($colunas as $coluna) {
+            $limite = (int) ($limites[$coluna] ?? self::LIMITE_PADRAO_COLUNA);
+            $limite = min(max($limite, self::LIMITE_PADRAO_COLUNA), self::LIMITE_MAXIMO_COLUNA);
+
+            $query = TicketAtendimento::where('coluna_kanban', $coluna);
+
+            $totais[$coluna] = (clone $query)->count();
+
+            $ticketsColuna = $query->with(['contato', 'vendedor'])
+                ->withCount(['mensagens as count_midias' => fn ($q) => $q->where('tipo', '!=', 'texto')])
+                ->orderByDesc('aberto_em')
+                ->limit($limite)
+                ->get();
+
+            $todosTickets = $todosTickets->concat($ticketsColuna);
+        }
 
         // Enriquecer contatos com o nome local do parceiro (nome_sugerido pendente de auditoria)
-        $contatoIds = $tickets->pluck('contato_id')->filter()->unique();
+        $contatoIds = $todosTickets->pluck('contato_id')->filter()->unique();
         $vinculos   = VinculoContatoTenant::whereIn('contato_id', $contatoIds)
             ->where('tenant_id', $tenantId)
             ->get()
             ->keyBy('contato_id');
 
-        $tickets->each(function ($ticket) use ($vinculos) {
+        $todosTickets->each(function ($ticket) use ($vinculos) {
             if ($ticket->contato && $vinculos->has($ticket->contato_id)) {
                 $v = $vinculos[$ticket->contato_id];
                 $ticket->contato->nome_local        = $v->nome_sugerido;
@@ -51,9 +82,13 @@ class KanbanController extends Controller
             }
         });
 
+        $agrupado  = $todosTickets->groupBy('coluna_kanban');
         $resultado = [];
         foreach ($colunas as $coluna) {
-            $resultado[$coluna] = $tickets->groupBy('coluna_kanban')->get($coluna, collect())->values();
+            $resultado[$coluna] = [
+                'tickets' => $agrupado->get($coluna, collect())->values(),
+                'total'   => $totais[$coluna],
+            ];
         }
 
         return response()->json($resultado);
