@@ -30,11 +30,13 @@ class TicketAtendimento extends Model
         'followup_enviado',
         'tag_desfecho',
         'followup_agendado_em',
+        'retorno_agendado_em',
         'status',
         'aberto_em',
         'encerrado_em',
         'origem',
         'formulario_id',
+        'resumo_ia',
     ];
 
     protected function casts(): array
@@ -43,7 +45,8 @@ class TicketAtendimento extends Model
             'followup_enviado' => 'boolean',
             'aberto_em' => 'datetime',
             'encerrado_em' => 'datetime',
-            'followup_agendado_em' => 'datetime',
+            'followup_agendado_em'  => 'datetime',
+            'retorno_agendado_em'   => 'datetime',
         ];
     }
 

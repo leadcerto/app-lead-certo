@@ -270,6 +270,30 @@
                     </div>
                 </template>
 
+                {{-- Resumo IA --}}
+                <template x-if="ticketAtivo.resumo_ia">
+                    <div class="border-b">
+                        <button @click="resumoAberto = !resumoAberto"
+                                class="w-full flex items-center justify-between px-5 py-2 text-xs text-gray-500 hover:bg-gray-50 transition-colors">
+                            <span class="flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                                </svg>
+                                Resumo IA
+                            </span>
+                            <svg class="w-3.5 h-3.5 transition-transform duration-200" :class="resumoAberto ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <template x-if="resumoAberto">
+                            <div class="px-5 pb-3">
+                                <p class="text-xs text-gray-600 leading-relaxed bg-purple-50 border border-purple-100 rounded-lg px-3 py-2"
+                                   x-text="ticketAtivo.resumo_ia"></p>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
                 {{-- Mensagens --}}
                 <div class="flex-1 overflow-y-auto px-5 py-4 space-y-2" x-ref="msgBox">
                     <template x-for="msg in mensagens" :key="msg.id">
@@ -514,6 +538,7 @@ function kanban() {
         sugestaoSelecionada: 0,
         notas:             [],
         notasAberto:       false,
+        resumoAberto:      false,
         novaNota:          '',
         salvandoNota:      false,
         dragCard:          null,

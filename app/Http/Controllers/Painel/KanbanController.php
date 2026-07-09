@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Painel;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\ConversationQAJob;
+use App\Jobs\GerarResumoTicketJob;
 use App\Models\Mensagem;
 use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
@@ -128,6 +129,7 @@ class KanbanController extends Controller
         ]);
 
         ConversationQAJob::dispatch($model->id);
+        GerarResumoTicketJob::dispatch($model->id)->delay(now()->addSeconds(5));
 
         return response()->json(['ticket_id' => $ticket, 'encerrado' => true]);
     }
@@ -178,6 +180,7 @@ class KanbanController extends Controller
         ]);
 
         ConversationQAJob::dispatch($model->id);
+        GerarResumoTicketJob::dispatch($model->id)->delay(now()->addSeconds(5));
 
         return response()->json(['ticket_id' => $ticket, 'status' => 'resolvido']);
     }
