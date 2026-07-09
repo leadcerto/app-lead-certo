@@ -171,6 +171,7 @@
         <p class="text-xs text-gray-400 mb-4">Texto que o João vai usar ao entrar em contato com quem ligou e não foi atendido. Deixe em branco para usar o padrão do sistema.</p>
 
         <textarea x-model="mensagemInicial" rows="3"
+                  @input="salvoOk = false"
                   placeholder="Ex: Oi! Vi que você ligou aqui pra gente e não consegui atender na hora. Tô disponível agora no WhatsApp, pode falar!"
                   class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 resize-none"></textarea>
 
@@ -228,7 +229,45 @@
                         <template x-for="chamada in chamadas" :key="chamada.id">
                             <tr class="hover:bg-gray-50">
                                 <td class="py-3 pr-4 font-mono text-gray-700" x-text="chamada.numero_chamador"></td>
-                                <td class="py-3 pr-4 text-gray-600" x-text="chamada.contato_nome || '—'"></td>
+                                <td class="py-3 pr-4 text-gray-600">
+                                <template x-if="editandoId === chamada.id">
+                                    <div class="flex items-center gap-1">
+                                        <input type="text" x-model="editandoNome"
+                                               class="border border-gray-300 rounded px-2 py-0.5 text-sm w-36 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                               @keydown.enter="salvarNome(chamada)"
+                                               @keydown.escape="editandoId = null"
+                                               x-ref="inputNome"
+                                               x-init="$nextTick(() => { if (editandoId === chamada.id) $el.focus() })">
+                                        <button @click="salvarNome(chamada)" title="Salvar"
+                                                class="text-green-600 hover:text-green-800 p-0.5">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                            </svg>
+                                        </button>
+                                        <button @click="editandoId = null" title="Cancelar"
+                                                class="text-gray-400 hover:text-gray-600 p-0.5">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </template>
+                                <template x-if="editandoId !== chamada.id">
+                                    <div class="flex items-center gap-1.5 group">
+                                        <span :class="(!chamada.contato_nome || chamada.contato_nome === 'Sem Nome' || chamada.contato_nome === chamada.numero_chamador) ? 'text-gray-400 italic' : ''"
+                                              x-text="(chamada.contato_nome && chamada.contato_nome !== chamada.numero_chamador) ? chamada.contato_nome : 'Sem nome'"></span>
+                                        <template x-if="chamada.contato_id">
+                                            <button @click="editandoId = chamada.id; editandoNome = (chamada.contato_nome && chamada.contato_nome !== chamada.numero_chamador && chamada.contato_nome !== 'Sem Nome') ? chamada.contato_nome : ''"
+                                                    title="Editar nome do contato"
+                                                    class="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-gray-700 p-0.5">
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                                                </svg>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </template>
+                            </td>
                                 <td class="py-3 pr-4 text-gray-500" x-text="chamada.chamou_em"></td>
                                 <td class="py-3 pr-4">
                                     <template x-if="chamada.mensagem_enviada">
@@ -277,6 +316,8 @@ function secretaria() {
         copiadoBody: false,
         salvando: false,
         salvoOk: false,
+        editandoId: null,
+        editandoNome: '',
 
         async carregar() {
             const res = await fetch('/api/painel/secretaria-eletronica/dados');
@@ -302,7 +343,6 @@ function secretaria() {
             });
             this.salvando = false;
             this.salvoOk  = true;
-            setTimeout(() => this.salvoOk = false, 3000);
         },
 
         async copiarToken() {
@@ -322,6 +362,23 @@ function secretaria() {
             await navigator.clipboard.writeText(body);
             this.copiadoBody = true;
             setTimeout(() => this.copiadoBody = false, 2000);
+        },
+
+        async salvarNome(chamada) {
+            const nome = this.editandoNome.trim();
+            if (! nome || ! chamada.contato_id) return;
+
+            const csrf = document.querySelector('meta[name="csrf-token"]').content;
+            const res  = await fetch(`/api/painel/contato/${chamada.contato_id}`, {
+                method:  'PATCH',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+                body:    JSON.stringify({ nome }),
+            });
+
+            if (res.ok) {
+                chamada.contato_nome = nome;
+                this.editandoId      = null;
+            }
         },
 
         async rotacionarToken() {

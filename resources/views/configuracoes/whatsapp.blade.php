@@ -20,6 +20,99 @@
         </a>
     </div>
 
+    {{-- Toggle IA SDR --}}
+    <div class="mb-6 bg-white rounded-2xl shadow-sm p-5"
+         x-data="{ sdrAtivo: {{ $sdrAtivo ? 'true' : 'false' }}, salvando: false }"
+         @change.stop>
+        <div class="flex items-center justify-between gap-4">
+            <div>
+                <p class="text-sm font-semibold text-gray-800">Agente IA (SDR)</p>
+                <p class="text-xs text-gray-500 mt-0.5">
+                    Quando ativado, a IA responde automaticamente após o cliente enviar mensagem.
+                    Desativado, apenas as mensagens de sequência são enviadas.
+                </p>
+            </div>
+            <button
+                @click="sdrAtivo = !sdrAtivo; toggleIa(sdrAtivo)"
+                :class="sdrAtivo ? 'bg-green-600' : 'bg-gray-300'"
+                class="relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 focus:outline-none"
+                :disabled="salvando">
+                <span
+                    :class="sdrAtivo ? 'translate-x-5' : 'translate-x-1'"
+                    class="inline-block h-5 w-5 mt-1 transform rounded-full bg-white shadow transition-transform duration-200">
+                </span>
+            </button>
+        </div>
+        <p class="mt-2 text-xs font-medium" :class="sdrAtivo ? 'text-green-600' : 'text-gray-400'"
+           x-text="sdrAtivo ? '✓ IA ativa — respondendo automaticamente' : '✗ IA pausada — apenas sequência automática'">
+        </p>
+    </div>
+
+    <script>
+    async function toggleIa(valor) {
+        await fetch('/api/painel/ia/sdr-ativo', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            },
+            body: JSON.stringify({ sdr_ativo: valor }),
+        });
+    }
+    </script>
+
+    {{-- Retenção de conversas --}}
+    <div class="mb-6 bg-white rounded-2xl shadow-sm p-5"
+         x-data="{
+             dias: {{ $retencaoDias ?? 'null' }},
+             salvando: false,
+             mensagem: null,
+             async salvar() {
+                 this.salvando = true;
+                 this.mensagem = null;
+                 const res = await fetch('/api/painel/whatsapp/retencao', {
+                     method: 'PUT',
+                     headers: {
+                         'Content-Type': 'application/json',
+                         'X-CSRF-TOKEN': document.querySelector('meta[name=\'csrf-token\']').content,
+                     },
+                     body: JSON.stringify({ dias: this.dias ? parseInt(this.dias) : null }),
+                 });
+                 this.salvando = false;
+                 this.mensagem = res.ok ? 'Salvo!' : 'Erro ao salvar.';
+                 setTimeout(() => this.mensagem = null, 3000);
+             }
+         }">
+        <p class="text-sm font-semibold text-gray-800 mb-1">Retenção de conversas</p>
+        <p class="text-xs text-gray-500 mb-3">
+            Conversas mais antigas que o prazo definido são apagadas automaticamente toda madrugada.
+            Deixe em branco para nunca apagar.
+        </p>
+        <div class="flex items-center gap-3">
+            <input
+                type="number"
+                x-model="dias"
+                min="1"
+                max="3650"
+                placeholder="Ex: 90"
+                class="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none">
+            <span class="text-sm text-gray-500">dias</span>
+            <button
+                @click="salvar()"
+                :disabled="salvando"
+                class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors disabled:opacity-50">
+                <span x-show="!salvando">Salvar</span>
+                <span x-show="salvando">Salvando...</span>
+            </button>
+            <span x-show="mensagem" x-text="mensagem"
+                  :class="mensagem === 'Salvo!' ? 'text-green-600' : 'text-red-500'"
+                  class="text-sm font-medium"></span>
+        </div>
+        <p x-show="dias" class="mt-2 text-xs text-amber-600">
+            ⚠ Conversas com mais de <span x-text="dias"></span> dias serão apagadas permanentemente.
+        </p>
+    </div>
+
     <div x-data="whatsapp()" x-init="verificarStatus()">
 
     <h1 class="text-xl font-bold text-gray-800 mb-6">Conexão WhatsApp</h1>

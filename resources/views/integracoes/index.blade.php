@@ -147,7 +147,7 @@
                         <p>Adicione as credenciais do Google Cloud no arquivo <code class="bg-yellow-100 px-1 rounded">.env</code>:</p>
                         <pre class="mt-2 text-xs bg-yellow-100 rounded p-2 overflow-x-auto">GOOGLE_CLIENT_ID=seu_client_id
 GOOGLE_CLIENT_SECRET=seu_client_secret
-GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/google/callback</pre>
+GOOGLE_REDIRECT_URI={{ config('app.url') }}/google/callback</pre>
                     </div>
                 @endif
             @endif
