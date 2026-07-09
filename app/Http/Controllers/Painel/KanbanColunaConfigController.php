@@ -34,7 +34,7 @@ class KanbanColunaConfigController extends Controller
             'ia_objetivo'         => 'nullable|string|max:1000',
             'ia_contexto'         => 'nullable|string|max:50000',
             'ia_ativo'            => 'sometimes|boolean',
-            'sdr_delay_segundos'  => 'sometimes|integer|min:5|max:3600',
+            'sdr_delay_segundos'  => 'sometimes|integer|min:5|max:86400',
         ]);
 
         $update = array_filter($validated, fn($v) => $v !== null);

@@ -484,14 +484,21 @@
                                            class="w-3.5 h-3.5 accent-purple-600">
                                     <span class="text-xs text-gray-500">Agente ativo nesta coluna</span>
                                 </label>
-                                <label class="flex items-center gap-1.5">
+                                <div class="flex items-center gap-1.5">
                                     <span class="text-xs text-gray-500">Aguardar</span>
-                                    <input type="number" min="5" max="3600"
+                                    <input type="number" min="0"
                                            :value="iaDelay[col.key] ?? 45"
-                                           @input="iaDelay[col.key] = parseInt($event.target.value) || 45; iaAlterado[col.key] = true"
-                                           class="w-16 text-xs border border-gray-200 rounded-lg px-2 py-1 text-center focus:outline-none focus:ring-1 focus:ring-purple-400">
-                                    <span class="text-xs text-gray-500">seg antes de responder</span>
-                                </label>
+                                           @input="iaDelay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true"
+                                           class="w-16 text-xs border border-gray-300 rounded px-2 py-1">
+                                    <select :value="iaDelayUnidade[col.key] || 'seg'"
+                                            @change="iaDelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                            class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
+                                        <option value="seg">seg</option>
+                                        <option value="min">min</option>
+                                        <option value="hora">hora</option>
+                                    </select>
+                                    <span class="text-xs text-gray-500">antes de responder</span>
+                                </div>
                             </div>
                             <div class="flex items-center gap-2">
                                 <span x-show="iaSalvando[col.key]" class="text-xs text-gray-400">Salvando...</span>
@@ -871,6 +878,7 @@ function kanbanConfig() {
         iaContexto: {},
         iaAtivo: {},
         iaDelay: {},
+        iaDelayUnidade: {},
         iaAlterado: {},
         iaSalvando: {},
         iaSalvo: {},
@@ -1078,7 +1086,9 @@ function kanbanConfig() {
                 this.iaObjetivo[key]    = json.ia_objetivo    ?? '';
                 this.iaContexto[key]    = json.ia_contexto        ?? '';
                 this.iaAtivo[key]       = json.ia_ativo           ?? false;
-                this.iaDelay[key]       = json.sdr_delay_segundos ?? 45;
+                const delay             = this.segundosParaDisplay(json.sdr_delay_segundos ?? 45);
+                this.iaDelay[key]       = delay.valor;
+                this.iaDelayUnidade[key] = delay.unidade;
             }
         },
 
@@ -1121,7 +1131,7 @@ function kanbanConfig() {
             const res = await this.api(`/api/painel/kanban/coluna-config/${key}`, 'PUT', {
                 ia_contexto:         this.iaContexto[key] ?? '',
                 ia_ativo:            this.iaAtivo[key]    ?? false,
-                sdr_delay_segundos:  this.iaDelay[key]    ?? 45,
+                sdr_delay_segundos:  this.delayParaSegundos(this.iaDelay[key] ?? 45, this.iaDelayUnidade[key] || 'seg'),
             });
             this.iaSalvando[key] = false;
             if (res.ok) {
