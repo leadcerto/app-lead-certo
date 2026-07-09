@@ -264,7 +264,7 @@
     </aside>
 
     {{-- Conteúdo principal --}}
-    <main class="flex-1 overflow-y-auto flex flex-col">
+    <main class="flex-1 min-w-0 overflow-y-auto flex flex-col">
 
         {{-- Barra de topo com sino --}}
         @if($verKanban || $verDashboard)
