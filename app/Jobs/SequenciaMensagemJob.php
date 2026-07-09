@@ -32,7 +32,11 @@ class SequenciaMensagemJob implements ShouldQueue
         }
 
         // Se a sequência foi vinculada a uma coluna específica, cancelar se o lead saiu dela.
-        if ($this->colunaKanban && $ticket->coluna_kanban !== $this->colunaKanban) {
+        // Acesso via ?? por segurança: jobs enfileirados antes desta propriedade existir
+        // não têm colunaKanban no payload serializado, e o unserialize não roda o construtor
+        // (então o default do parâmetro nunca é aplicado nesses jobs antigos).
+        $colunaKanban = $this->colunaKanban ?? null;
+        if ($colunaKanban && $ticket->coluna_kanban !== $colunaKanban) {
             return;
         }
 
