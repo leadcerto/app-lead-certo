@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\KanbanColunaConfig;
 use App\Models\Mensagem;
 use App\Models\SdrPersona;
 use App\Models\TicketAtendimento;
@@ -19,7 +20,7 @@ class SdrResponderService
      * Seleciona persona, gera resposta via OpenRouter, envia com humanização, persiste.
      * Retorna o texto da resposta ou null se falhar.
      */
-    public function responder(TicketAtendimento $ticket, bool $origemLigacao = false): ?string
+    public function responder(TicketAtendimento $ticket, bool $origemLigacao = false, ?string $gatilho = null): ?string
     {
         $ticket->loadMissing(['contato', 'persona', 'mensagens', 'tenant']);
 
@@ -38,7 +39,7 @@ class SdrResponderService
         }
 
         // ── 2. Montar histórico para o OpenRouter ────────────────────────────
-        $messages = $this->montarHistorico($persona, $ticket, $origemLigacao);
+        $messages = $this->montarHistorico($persona, $ticket, $origemLigacao, $gatilho);
 
         // ── 3. Chamar o OpenRouter ───────────────────────────────────────────
         $tier    = $ticket->etapa_ia === 'etapa_2' ? 'complexo' : 'simples';
@@ -49,7 +50,17 @@ class SdrResponderService
             return null;
         }
 
-        // ── 4. Enviar via WhatsApp com humanização ───────────────────────────
+        // ── 4. Detectar handoff por token e limpar antes de enviar ──────────
+        if (str_contains($resposta, '[AGUARDANDO_ORCAMENTO]')) {
+            $ticket->update(['coluna_kanban' => 'aguardando_orcamento', 'etapa_ia' => 'handoff']);
+            Log::info('SdrResponder: → aguardando_orcamento', ['ticket_id' => $ticket->id]);
+        } elseif (str_contains($resposta, '[SERVICO_AGENDADO]')) {
+            $ticket->update(['coluna_kanban' => 'servico_agendado', 'etapa_ia' => 'handoff']);
+            Log::info('SdrResponder: → servico_agendado', ['ticket_id' => $ticket->id]);
+        }
+        $resposta = trim(str_replace(['[AGUARDANDO_ORCAMENTO]', '[SERVICO_AGENDADO]'], '', $resposta));
+
+        // ── 5. Enviar via WhatsApp com humanização ───────────────────────────
         $tenant   = $ticket->tenant;
         $telefone = $ticket->contato?->telefone;
 
@@ -67,7 +78,7 @@ class SdrResponderService
             ]);
         }
 
-        // ── 5. Persistir resposta ────────────────────────────────────────────
+        // ── 6. Persistir resposta ────────────────────────────────────────────
         Mensagem::create([
             'ticket_id'  => $ticket->id,
             'tenant_id'  => $ticket->tenant_id,
@@ -77,10 +88,44 @@ class SdrResponderService
             'enviado_em' => now(),
         ]);
 
+        // ── 7. Se o Guardião respondeu sem mover de coluna, fechar ticket de volta ──
+        // Ticket encerrado foi reativado temporariamente no webhook; fecha aqui se nenhum
+        // token de movimento ([AGUARDANDO_ORCAMENTO] / [SERVICO_AGENDADO]) foi emitido.
+        if ($ticket->coluna_kanban === 'encerrado') {
+            $ticket->update(['status' => 'encerrado']);
+            Log::info('SdrResponder: Guardião classificou como pós-encerramento, ticket fechado de volta', ['ticket_id' => $ticket->id]);
+        }
+
         return $resposta;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private function contextoHistoricoCliente(TicketAtendimento $ticket): string
+    {
+        $anteriores = TicketAtendimento::withoutGlobalScopes()
+            ->where('tenant_id', $ticket->tenant_id)
+            ->where('contato_id', $ticket->contato_id)
+            ->where('id', '!=', $ticket->id)
+            ->orderByDesc('aberto_em')
+            ->get(['id', 'status', 'tag_desfecho', 'aberto_em']);
+
+        if ($anteriores->isEmpty()) {
+            return '[HISTÓRICO DO CLIENTE: Lead novo — primeiro contato com a empresa]';
+        }
+
+        $fechados = $anteriores->whereIn('status', ['encerrado', 'fechado', 'concluido'])->count();
+
+        if ($fechados > 0) {
+            return "[HISTÓRICO DO CLIENTE: Cliente recorrente — já fez {$fechados} frete(s) conosco. Trate como cliente conhecido. Se o nome já constar no cadastro, não precise perguntar de novo.]";
+        }
+
+        $ultimo   = $anteriores->first();
+        $diasAtras = $ultimo->aberto_em ? now()->diffInDays($ultimo->aberto_em) : null;
+        $periodo   = $diasAtras !== null ? " há {$diasAtras} dia(s)" : '';
+
+        return "[HISTÓRICO DO CLIENTE: Retorno de orçamento — este contato já conversou com a empresa{$periodo} mas não fechou serviço. Pode mencionar sutilmente que já conversaram antes: \"Vi aqui que a gente já teve contato antes...\"]";
+    }
 
     private function tagsDoContato(TicketAtendimento $ticket): array
     {
@@ -96,7 +141,53 @@ class SdrResponderService
         return $tags;
     }
 
-    private function montarHistorico(SdrPersona $persona, TicketAtendimento $ticket, bool $origemLigacao = false): array
+    private function derivarChecklist(TicketAtendimento $ticket): string
+    {
+        $mensagensLead = $ticket->mensagens
+            ->where('remetente', 'lead')
+            ->pluck('conteudo')
+            ->filter()
+            ->implode(' ');
+
+        $ok  = fn(string $s) => "✅ {$s}";
+        $nok = fn(string $s) => "❌ {$s}: pendente";
+
+        $items = [];
+
+        // Endereços (salvos no ticket após handoff ou por n8n)
+        $items[] = $ticket->endereco_saida
+            ? $ok("Endereço de embarque: {$ticket->endereco_saida}")
+            : (preg_match('/\b(rua|av\.|avenida|estrada|travessa|praça)\b/i', $mensagensLead)
+                ? "⚠️ Endereço de embarque: mencionado parcialmente — confirmar"
+                : $nok("Endereço de embarque"));
+
+        $items[] = $ticket->endereco_destino
+            ? $ok("Endereço de destino: {$ticket->endereco_destino}")
+            : $nok("Endereço de destino");
+
+        // Lista de itens
+        $items[] = $ticket->lista_itens
+            ? $ok("Lista de itens: coletada")
+            : (preg_match('/\b(geladeira|sofá|cama|mesa|armário|guarda.roupa|fogão|máquina|tv|freezer|buffet)\b/i', $mensagensLead)
+                ? "⚠️ Lista de itens: parcialmente mencionada — auditar com fotos"
+                : $nok("Lista de itens"));
+
+        // Data
+        $temData = preg_match('/\b\d{1,2}[\/\-]\d{1,2}|\b(segunda|terça|quarta|quinta|sexta|sábado|domingo|amanhã|hoje|semana que vem)\b/i', $mensagensLead);
+        $items[] = $temData ? "⚠️ Data: mencionada — confirmar dia e horário exatos" : $nok("Data e horário");
+
+        // Escadas (detectar menção)
+        $temEscada = preg_match('/\b(escada|lance|andar|elevador|sem elevador|com elevador)\b/i', $mensagensLead);
+        $items[] = $temEscada ? "⚠️ Escadas: mencionado — confirmar lances reais" : $nok("Escadas (lances reais)");
+
+        // Serviços extras
+        $temExtra = preg_match('/\b(desmont|mont|embala|plástico|papelão|caixa)\b/i', $mensagensLead);
+        $items[] = $temExtra ? "⚠️ Serviços extras: mencionados — detalhar" : $nok("Desmontagem / Embalagem");
+
+        return "[STATUS_CHECKLIST]\n" . implode("\n", $items);
+    }
+
+    private function montarHistorico(SdrPersona $persona, TicketAtendimento $ticket, bool $origemLigacao = false, ?string $gatilho = null): array
     {
         $etapaInstrucao = match ($ticket->etapa_ia) {
             'etapa_1' => '[ETAPA: qualificação inicial do lead]',
@@ -128,14 +219,49 @@ class SdrResponderService
             $contextoLigacao = '';
         }
 
+        $iaContexto = '';
+        if ($ticket->tenant?->ia_contexto) {
+            $iaContexto .= "=== INFORMAÇÕES DO NEGÓCIO ===\n" . $ticket->tenant->ia_contexto . "\n===";
+        }
+        if ($ticket->tenant?->tabela_precos_texto) {
+            $iaContexto .= ($iaContexto ? "\n\n" : '') . "=== TABELA DE PREÇOS ===\n" . $ticket->tenant->tabela_precos_texto . "\n===";
+        }
+
+        // Contexto específico da coluna atual (ex: em_atendimento)
+        $colunaConfig = KanbanColunaConfig::withoutGlobalScopes()
+            ->where('tenant_id', $ticket->tenant_id)
+            ->where('coluna_kanban', $ticket->coluna_kanban)
+            ->first();
+
+        if ($colunaConfig?->ia_contexto) {
+            $iaContexto .= ($iaContexto ? "\n\n" : '') . "=== INSTRUÇÕES DESTA ETAPA ===\n" . $colunaConfig->ia_contexto . "\n===";
+        }
+
+        // Instrução de handoff: quando checklist estiver completo, emite o token
+        $iaContexto .= "\n\n=== HANDOFF ===\nQuando você avaliar que o checklist está completo e o lead está pronto para receber o orçamento, inclua EXATAMENTE o token [AGUARDANDO_ORCAMENTO] em algum lugar da sua resposta (pode ser no final). O sistema irá mover o atendimento automaticamente. Não explique isso ao lead.===";
+
+        $contextoHistorico = $this->contextoHistoricoCliente($ticket);
+        $checklistState    = $this->derivarChecklist($ticket);
+
+        // Gatilho de follow-up injetado no contexto
+        $contextoGatilho = match ($gatilho) {
+            'vacuo_10m' => "[GATILHO: VACUO_10M — O cliente parou de responder há ~10 minutos. Mande uma mensagem curta e natural para reaquecer. Ex: 'Opa, conseguiu ver a questão lá?' ou 'Tô por aqui, pode falar!']",
+            'vacuo_12h' => "[GATILHO: VACUO_12H — Passaram mais de 12 horas sem resposta. Em horário comercial, reengaje de forma leve: 'E aí, vamos seguir com o agendamento?' Se o cliente disser que já fechou com outro ou desistiu, apenas agradeça e encerre.]",
+            default     => null,
+        };
+
         $messages = [[
             'role'    => 'system',
             'content' => implode("\n\n", array_filter([
                 $persona->system_prompt,
+                $iaContexto,
                 $etapaInstrucao,
                 $contextoContato,
+                $contextoHistorico,
+                $checklistState,
                 $primeiroContato,
                 $contextoLigacao,
+                $contextoGatilho,
             ])),
         ]];
 
