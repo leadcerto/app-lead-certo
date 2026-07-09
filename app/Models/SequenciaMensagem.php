@@ -7,11 +7,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SequenciaMensagem extends Model
 {
+    protected $table = 'sequencia_mensagens';
+
     protected $fillable = [
+        'sequencia_id',
         'tenant_id',
         'ordem',
         'conteudo',
-        'delay_minutos',
+        'imagem_url',
+        'delay_segundos',
         'ativo',
     ];
 

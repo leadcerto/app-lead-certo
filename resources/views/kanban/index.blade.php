@@ -10,7 +10,7 @@
         <div class="flex items-center gap-3">
             <span class="text-xs text-gray-400">Atualiza a cada 5s</span>
             @if(auth()->user()->isDono())
-            <a href="{{ route('kanban.config') }}"
+            <a href="{{ route('sequencia') }}"
                title="Configurações do Kanban"
                class="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
