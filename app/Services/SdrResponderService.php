@@ -50,15 +50,33 @@ class SdrResponderService
             return null;
         }
 
-        // ── 4. Detectar handoff por token e limpar antes de enviar ──────────
-        if (str_contains($resposta, '[AGUARDANDO_ORCAMENTO]')) {
-            $ticket->update(['coluna_kanban' => 'aguardando_orcamento', 'etapa_ia' => 'handoff']);
-            Log::info('SdrResponder: → aguardando_orcamento', ['ticket_id' => $ticket->id]);
-        } elseif (str_contains($resposta, '[SERVICO_AGENDADO]')) {
-            $ticket->update(['coluna_kanban' => 'servico_agendado', 'etapa_ia' => 'handoff']);
-            Log::info('SdrResponder: → servico_agendado', ['ticket_id' => $ticket->id]);
+        // ── 4. Detectar token de movimento de coluna e aplicar ──────────────
+        // Token = nome da coluna em maiúsculas entre colchetes.
+        // A IA pode mover o lead para qualquer coluna a partir de qualquer etapa.
+        $tokenColunas = [
+            '[LEAD_NOVO]'            => ['coluna' => 'lead_novo',            'etapa' => 'etapa_1'],
+            '[EM_ATENDIMENTO]'       => ['coluna' => 'em_atendimento',       'etapa' => 'etapa_1'],
+            '[AGUARDANDO_ORCAMENTO]' => ['coluna' => 'aguardando_orcamento', 'etapa' => 'handoff'],
+            '[AGUARDANDO_LEAD]'      => ['coluna' => 'aguardando_lead',      'etapa' => 'etapa_1'],
+            '[PAGAMENTO]'            => ['coluna' => 'pagamento',            'etapa' => 'etapa_1'],
+            '[SERVICO_AGENDADO]'     => ['coluna' => 'servico_agendado',     'etapa' => 'handoff'],
+            '[ENCERRADO]'            => ['coluna' => 'encerrado',            'etapa' => 'handoff'],
+        ];
+
+        $moveu = false;
+        foreach ($tokenColunas as $token => $cfg) {
+            if (str_contains($resposta, $token)) {
+                $updates = ['coluna_kanban' => $cfg['coluna'], 'etapa_ia' => $cfg['etapa']];
+                if ($cfg['coluna'] === 'encerrado') {
+                    $updates['status'] = 'encerrado';
+                }
+                $ticket->update($updates);
+                Log::info("SdrResponder: → {$cfg['coluna']} via token {$token}", ['ticket_id' => $ticket->id]);
+                $moveu = true;
+                break;
+            }
         }
-        $resposta = trim(str_replace(['[AGUARDANDO_ORCAMENTO]', '[SERVICO_AGENDADO]'], '', $resposta));
+        $resposta = trim(str_replace(array_keys($tokenColunas), '', $resposta));
 
         // ── 5. Enviar via WhatsApp com humanização ───────────────────────────
         $tenant   = $ticket->tenant;
@@ -89,11 +107,11 @@ class SdrResponderService
         ]);
 
         // ── 7. Se o Guardião respondeu sem mover de coluna, fechar ticket de volta ──
-        // Ticket encerrado foi reativado temporariamente no webhook; fecha aqui se nenhum
-        // token de movimento ([AGUARDANDO_ORCAMENTO] / [SERVICO_AGENDADO]) foi emitido.
-        if ($ticket->coluna_kanban === 'encerrado') {
+        // Ticket encerrado foi reativado temporariamente no webhook para o Guardião avaliar.
+        // Se nenhum token de movimento foi emitido, fecha o ticket de volta.
+        if (! $moveu && $ticket->coluna_kanban === 'encerrado') {
             $ticket->update(['status' => 'encerrado']);
-            Log::info('SdrResponder: Guardião classificou como pós-encerramento, ticket fechado de volta', ['ticket_id' => $ticket->id]);
+            Log::info('SdrResponder: Guardião sem token de movimento, ticket fechado de volta', ['ticket_id' => $ticket->id]);
         }
 
         return $resposta;
@@ -237,8 +255,20 @@ class SdrResponderService
             $iaContexto .= ($iaContexto ? "\n\n" : '') . "=== INSTRUÇÕES DESTA ETAPA ===\n" . $colunaConfig->ia_contexto . "\n===";
         }
 
-        // Instrução de handoff: quando checklist estiver completo, emite o token
-        $iaContexto .= "\n\n=== HANDOFF ===\nQuando você avaliar que o checklist está completo e o lead está pronto para receber o orçamento, inclua EXATAMENTE o token [AGUARDANDO_ORCAMENTO] em algum lugar da sua resposta (pode ser no final). O sistema irá mover o atendimento automaticamente. Não explique isso ao lead.===";
+        // Tokens de movimento disponíveis em qualquer coluna
+        $iaContexto .= "\n\n=== TOKENS DE MOVIMENTO (use em qualquer etapa) ===\n"
+            . "Inclua EXATAMENTE UM dos tokens abaixo no final da sua resposta para mover o card para a coluna correspondente. "
+            . "O sistema executa o movimento automaticamente. NUNCA mencione ou explique os tokens ao lead.\n\n"
+            . "Tokens disponíveis:\n"
+            . "• [LEAD_NOVO]            → Volta o card para a fila de novos leads.\n"
+            . "• [EM_ATENDIMENTO]       → Move para Em Atendimento (lead respondeu e está em conversa ativa).\n"
+            . "• [AGUARDANDO_ORCAMENTO] → Move para Aguardando Orçamento (dados coletados, pronto para proposta).\n"
+            . "• [AGUARDANDO_LEAD]      → Move para Aguardando Lead (proposta enviada, aguardando retorno).\n"
+            . "• [PAGAMENTO]            → Move para Pagamento (orçamento aprovado, aguardando sinal).\n"
+            . "• [SERVICO_AGENDADO]     → Move para Serviço Agendado (sinal pago, serviço confirmado).\n"
+            . "• [ENCERRADO]            → Encerra o atendimento (lead desistiu, não responde ou pediu para parar).\n\n"
+            . "Use apenas quando tiver certeza do estado do lead. Se a conversa não mudou de estado, NÃO inclua nenhum token."
+            . "\n===";
 
         $contextoHistorico = $this->contextoHistoricoCliente($ticket);
         $checklistState    = $this->derivarChecklist($ticket);

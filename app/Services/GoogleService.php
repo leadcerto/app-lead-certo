@@ -138,28 +138,33 @@ class GoogleService
     // ── Contacts API ─────────────────────────────────────────────────────────
 
     /**
-     * Cria um novo contato no Google Contacts.
-     * Retorna o resourceName (ex: "people/c123456789") ou null em caso de erro.
-     */
-    /**
-     * Cria um contato no Google com dados mínimos.
-     * Sobrenome = ID do CRM → permite cruzamento sem depender de telefone.
+     * Cria um contato no Google.
+     * Estrutura: givenName=nome limpo · middleName=ID do banco · familyName=descriptor do WhatsApp
      * Retorna o resourceName ("people/c123456789") ou null em caso de erro.
      */
-    public function criarContato(GoogleToken $token, Contato $contato): ?string
+    public function criarContato(GoogleToken $token, Contato $contato, ?string $pushName = null): ?string
     {
         $token = $this->tokenValido($token);
         if (! $token) return null;
 
+        $semNome     = ! $contato->nome || $contato->nome === $contato->telefone;
+        $nomeTratado = $semNome ? 'Sem Nome' : $this->limparNome($contato->nome);
+        $descriptor  = $contato->sobrenome
+            ?: ($pushName ? $this->extrairDescriptor($pushName) : null);
+
+        $nameEntry = ['givenName' => $nomeTratado, 'middleName' => (string) $contato->id];
+        if ($descriptor) {
+            $nameEntry['familyName'] = $this->limparNome($descriptor);
+        }
+
+        $telefone = $contato->telefone;
+        if (! str_starts_with($telefone, '+')) {
+            $telefone = '+' . ltrim($telefone, '0');
+        }
+
         $body = [
-            'names' => [[
-                'givenName'  => $contato->nome,
-                'familyName' => (string) $contato->id,  // ID do CRM como identificador
-            ]],
-            'phoneNumbers' => [[
-                'value' => '+55' . ltrim($contato->telefone, '55'),
-                'type'  => 'mobile',
-            ]],
+            'names'        => [$nameEntry],
+            'phoneNumbers' => [['value' => $telefone, 'type' => 'mobile']],
         ];
 
         if ($contato->email) {
@@ -186,6 +191,10 @@ class GoogleService
         return null;
     }
 
+    /**
+     * Atualiza campos de nome de um contato existente.
+     * Usado para enriquecer contatos já no Google com ID do banco + descriptor.
+     */
     public function atualizarNomeContato(
         GoogleToken $token,
         string $resourceName,
@@ -199,7 +208,7 @@ class GoogleService
         try {
             $res = Http::withToken($token->access_token)
                 ->patch(
-                    "https://people.googleapis.com/v1/{$resourceName}?updatePersonFields=names",
+                    "https://people.googleapis.com/v1/{$resourceName}:updateContact?updatePersonFields=names",
                     [
                         'etag'  => $etag,
                         'names' => [['givenName' => $givenName, 'familyName' => $familyName]],
@@ -213,7 +222,86 @@ class GoogleService
         }
     }
 
-    private const PERSON_FIELDS = 'names,nicknames,phoneNumbers,emailAddresses,organizations,addresses,birthdays,biographies,urls,photos,genders';
+    /**
+     * Atualiza contato existente com dados enriquecidos do WhatsApp.
+     * Nome limpo · middleName=ID · familyName=descriptor · email se disponível.
+     */
+    public function enriquecerContato(
+        GoogleToken $token,
+        string $resourceName,
+        string $etag,
+        Contato $contato,
+        ?string $pushName = null
+    ): bool {
+        $token = $this->tokenValido($token);
+        if (! $token) return false;
+
+        $semNome     = ! $contato->nome || $contato->nome === $contato->telefone;
+        $nomeTratado = $semNome ? 'Sem Nome' : $this->limparNome($contato->nome);
+        $descriptor  = $contato->sobrenome
+            ?: ($pushName ? $this->extrairDescriptor($pushName) : null);
+
+        $nameEntry = ['givenName' => $nomeTratado, 'middleName' => (string) $contato->id];
+        if ($descriptor) {
+            $nameEntry['familyName'] = $this->limparNome($descriptor);
+        }
+
+        $updateFields = 'names';
+        $body = ['etag' => $etag, 'names' => [$nameEntry]];
+
+        if ($contato->email) {
+            $body['emailAddresses'] = [['value' => $contato->email, 'type' => 'work']];
+            $updateFields .= ',emailAddresses';
+        }
+
+        try {
+            $res = Http::withToken($token->access_token)
+                ->patch(
+                    "https://people.googleapis.com/v1/{$resourceName}:updateContact?updatePersonFields={$updateFields}",
+                    $body
+                );
+
+            return $res->successful();
+        } catch (\Exception $e) {
+            Log::error('Google enriquecerContato falhou', ['resource' => $resourceName, 'erro' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Limpa nome removendo caracteres inválidos, espaços extras e aplica title case.
+     */
+    public function limparNome(string $nome): string
+    {
+        // Remove prefixos/sufixos inválidos (traços, pontos, asteriscos, espaços)
+        $nome = trim($nome, ' -._*~+#@!');
+        // Normaliza espaços múltiplos
+        $nome = preg_replace('/\s+/', ' ', $nome);
+        // Title case preservando acentuação UTF-8
+        $nome = mb_convert_case($nome, MB_CASE_TITLE, 'UTF-8');
+        return trim($nome);
+    }
+
+    /**
+     * Extrai descriptor do pushName do WhatsApp.
+     * "Alex - Envelopamento" → "Envelopamento"
+     * "João (Frete Rio)" → "Frete Rio"
+     * "João Silva" → null
+     */
+    public function extrairDescriptor(string $pushName): ?string
+    {
+        // Padrão: " - Algo" ou " | Algo"
+        if (preg_match('/\s[-|]\s+(.+)$/', $pushName, $m)) {
+            return trim($m[1]);
+        }
+        // Padrão: "(Algo)"
+        if (preg_match('/\(([^)]+)\)/', $pushName, $m)) {
+            return trim($m[1]);
+        }
+        return null;
+    }
+
+    private const PERSON_FIELDS = 'names,nicknames,phoneNumbers,emailAddresses,organizations,addresses,birthdays,biographies,urls,photos,genders,memberships';
 
     /**
      * Sync completo (primeira vez) — devolve ['contatos', 'nextSyncToken']

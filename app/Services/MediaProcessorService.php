@@ -60,26 +60,19 @@ class MediaProcessorService
         return $prefixo . $descricao;
     }
 
-    /**
-     * Ordem de tentativa para visão:
-     * 1-6: modelos gratuitos (OpenRouter free tier, rate-limited mas sem custo)
-     * 7:   fallback pago de baixo custo (~$0.01 por 100 imagens)
-     */
-    private const MODELOS_VISAO = [
-        'google/gemini-2.0-flash-001:free',
-        'google/gemini-flash-1.5:free',
-        'meta-llama/llama-3.2-90b-vision-instruct:free',
-        'meta-llama/llama-3.2-11b-vision-instruct:free',
-        'qwen/qwen2.5-vl-72b-instruct:free',
-        'microsoft/phi-4-multimodal-instruct:free',
-        // Fallback pago — custo mínimo, só acionado se todos os gratuitos falharem
-        'google/gemini-flash-1.5-8b',
-    ];
+    // Modelo pago de visão — último recurso se todos os gratuitos falharem
+    private const VISAO_PAGO_FALLBACK = 'google/gemini-flash-1.5-8b';
 
     private function descreverImagemComVisao(string $imageUrl, string $caption = ''): string
     {
         if (! $this->openRouterKey) {
             return '[Imagem recebida — processamento de visão não configurado]';
+        }
+
+        // Modelos gratuitos atualizados diariamente + 1 pago como último recurso (≤ 3 total)
+        $modelosVision = FreeModelsService::vision();
+        if (count($modelosVision) < 3) {
+            $modelosVision[] = self::VISAO_PAGO_FALLBACK;
         }
 
         $promptContexto = 'Você é um assistente de uma empresa de fretes e mudanças. '
@@ -98,7 +91,7 @@ class MediaProcessorService
                 'HTTP-Referer'  => config('app.url', 'https://app.leadcerto.app.br'),
                 'X-Title'       => 'Lead Certo',
             ])->timeout(45)->post('https://openrouter.ai/api/v1/chat/completions', [
-                'models' => self::MODELOS_VISAO,
+                'models' => $modelosVision,
                 'route'  => 'fallback',
                 'messages' => [[
                     'role'    => 'user',
@@ -270,7 +263,8 @@ class MediaProcessorService
 
         // Mime type do content JSON para usar como fallback
         $mimeDefault = 'application/octet-stream';
-        $contentJson = json_decode($msg['content'] ?? '{}', true);
+        $rawContent  = $msg['content'] ?? '{}';
+        $contentJson = is_array($rawContent) ? $rawContent : json_decode($rawContent, true);
         if (is_array($contentJson) && ! empty($contentJson['mimetype'])) {
             $mimeDefault = $contentJson['mimetype'];
         }

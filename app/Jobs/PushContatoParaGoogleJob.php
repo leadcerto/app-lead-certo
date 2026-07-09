@@ -21,7 +21,8 @@ class PushContatoParaGoogleJob implements ShouldQueue
 
     public function __construct(
         private int $contatoId,
-        private int $tenantId
+        private int $tenantId,
+        private ?string $pushName = null
     ) {}
 
     public function handle(GoogleService $google): void
@@ -41,7 +42,7 @@ class PushContatoParaGoogleJob implements ShouldQueue
             return;
         }
 
-        $resourceName = $google->criarContato($token, $contato);
+        $resourceName = $google->criarContato($token, $contato, $this->pushName);
 
         if (! $resourceName || ! $vinculo) {
             return;
@@ -104,7 +105,7 @@ class PushContatoParaGoogleJob implements ShouldQueue
 
         // Categoria primária vem do tipo_contato
         $tipo = $contato->tipo_contato ?? 'lead';
-        $slugs[] = $tipo; // 'lead' | 'cliente' | 'fornecedor' | 'parceiro' | 'pessoal'
+        $slugs[] = $tipo; // 'lead' | 'cliente' | 'fornecedor' | 'parceiro' | 'colaborador' | 'pessoal'
 
         // Sem nome como etiqueta adicional (independente do tipo)
         if (! $contato->nome || $contato->nome === $contato->telefone) {

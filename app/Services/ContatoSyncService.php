@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Contato;
 use App\Models\ContatoPendente;
+use App\Models\EtiquetaGoogleGrupo;
 use App\Models\GoogleToken;
 use App\Models\VinculoContatoTenant;
 use Illuminate\Support\Facades\DB;
@@ -77,11 +78,16 @@ class ContatoSyncService
             return;
         }
 
-        // Limpa o sufixo de 4 dígitos (localizador antigo) apenas em nomes compostos
-        $nome = trim(preg_replace('/^(.+\s.+)\s\d{4}$/', '$1', $nomeRaw));
+        $nome = $this->limparNome($nomeRaw);
         if (! $nome) { $resultado['ignorados']++; return; }
 
         $dados = $this->extrairDados($pessoa, $nome);
+
+        // Detecta tipo_contato a partir dos grupos do Google (fornecedor, parceiro, etc.)
+        $tipoDetectado = $this->detectarTipoContato($pessoa['memberships'] ?? [], $tenantId);
+        if ($tipoDetectado) {
+            $dados['tipo_contato'] = $tipoDetectado;
+        }
 
         $telefones = array_values(array_filter(
             array_map(fn($p) => $this->limparTelefone($p['value'] ?? ''), $pessoa['phoneNumbers'] ?? [])
@@ -91,7 +97,7 @@ class ContatoSyncService
 
         foreach ($telefones as $idx => $telefone) {
             DB::transaction(function () use (
-                $telefone, $idx, $nome, $dados, $tenantId, $pessoa, &$resultado
+                $telefone, $idx, $nome, $dados, $tenantId, $pessoa, $tipoDetectado, &$resultado
             ) {
                 $existente = Contato::where('telefone', $telefone)->first();
 
@@ -120,6 +126,10 @@ class ContatoSyncService
                             if (! in_array($campo, ['origem', 'opt_out']) && empty($existente->$campo) && $valor) {
                                 $atualizar[$campo] = $valor;
                             }
+                        }
+                        // Tipo detectado do Google sempre sobrepõe 'lead' (categoria padrão)
+                        if ($tipoDetectado && ($existente->tipo_contato === 'lead' || ! $existente->tipo_contato)) {
+                            $atualizar['tipo_contato'] = $tipoDetectado;
                         }
                         if ($atualizar) $existente->update($atualizar);
 
@@ -251,15 +261,71 @@ class ContatoSyncService
         return trim($nome);
     }
 
+    private function limparNome(string $nomeRaw): string
+    {
+        // 1. Remove números de 3-6 dígitos isolados que aparecem após letras
+        //    (índices de agenda como " 7631" — não afeta siglas como "3M" no início)
+        $nome = preg_replace('/(?<=[^\d\s])\s+\d{3,6}(?=\s|$)/u', '', $nomeRaw);
+
+        // 2. Remove palavras duplicadas consecutivas (ex: "Kamily Kamily" → "Kamily")
+        $nome = preg_replace('/\b(\w+)\s+\1\b/iu', '$1', $nome ?? $nomeRaw);
+
+        // 3. Title case: primeira letra de cada palavra em maiúsculo
+        $nome = mb_convert_case(trim($nome ?? $nomeRaw), MB_CASE_TITLE, 'UTF-8');
+
+        // 4. Remove espaços múltiplos
+        $nome = trim(preg_replace('/\s{2,}/', ' ', $nome));
+
+        return $nome ?: $nomeRaw;
+    }
+
     private function limparTelefone(string $telefone): string
     {
         $limpo = preg_replace('/\D/', '', $telefone);
 
-        // Remove DDI 55 se o número tiver mais de 12 dígitos
-        if (strlen($limpo) > 12 && str_starts_with($limpo, '55')) {
+        // Números BR: 55 + 2 DDD + 9 dígitos = 13 dígitos (formato correto)
+        // Remove 55 apenas se resultar em > 13 dígitos (improvável, mas previne overflow)
+        if (strlen($limpo) > 13 && str_starts_with($limpo, '55')) {
             $limpo = substr($limpo, 2);
         }
 
+        // 11 dígitos sem prefixo: 2 DDD + 9 celular brasileiro → adiciona 55
+        if (strlen($limpo) === 11 && ! str_starts_with($limpo, '55')) {
+            $limpo = '55' . $limpo;
+        }
+
+        // Rejeita números com menos de 10 dígitos (inválidos — só DDI, campo vazio, etc.)
+        if (strlen($limpo) < 10) {
+            return '';
+        }
+
         return $limpo;
+    }
+
+    /**
+     * Detecta tipo_contato a partir dos grupos Google do contato.
+     * Busca os grupos na tabela etiqueta_google_grupos para o tenant e retorna o slug da etiqueta.
+     * Retorna null quando o contato não pertence a nenhum grupo mapeado (será tratado como 'lead').
+     */
+    private function detectarTipoContato(array $memberships, int $tenantId): ?string
+    {
+        if (empty($memberships)) return null;
+
+        $tiposValidos = ['fornecedor', 'parceiro', 'colaborador', 'pessoal', 'cliente'];
+
+        $groupResourceNames = array_filter(array_map(
+            fn($m) => $m['contactGroupMembership']['contactGroupResourceName'] ?? null,
+            $memberships
+        ));
+
+        if (empty($groupResourceNames)) return null;
+
+        $etiqueta = EtiquetaGoogleGrupo::with('etiqueta')
+            ->where('tenant_id', $tenantId)
+            ->whereIn('google_group_resource_name', array_values($groupResourceNames))
+            ->whereHas('etiqueta', fn($q) => $q->whereIn('slug', $tiposValidos)->where('ativo', true))
+            ->first();
+
+        return $etiqueta?->etiqueta?->slug;
     }
 }
