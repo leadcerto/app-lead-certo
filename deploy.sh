@@ -37,6 +37,9 @@ ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && git pull origin main"
 echo "==> Rodando migrations..."
 ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && php artisan migrate --force"
 
+echo "==> Recompilando assets (Tailwind/Vite)..."
+ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && npm ci --no-audit --no-fund && npm run build"
+
 echo "==> Reconstruindo caches..."
 ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && php artisan config:cache && php artisan route:cache && php artisan view:cache"
 
