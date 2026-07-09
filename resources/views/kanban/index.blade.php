@@ -112,15 +112,6 @@
                             </template>
                         </div>
                     </template>
-
-                    <template x-if="(tickets[coluna.key] || []).length < (totalPorColuna[coluna.key] || 0)">
-                        <button @click="carregarMais(coluna.key)"
-                                :disabled="carregandoMais[coluna.key]"
-                                class="w-full text-xs text-gray-500 hover:text-gray-700 py-2 rounded-lg border border-dashed border-gray-300 hover:border-gray-400 transition-colors disabled:opacity-50">
-                            <span x-show="!carregandoMais[coluna.key]">Carregar mais (<span x-text="totalPorColuna[coluna.key] - (tickets[coluna.key] || []).length"></span> restantes)</span>
-                            <span x-show="carregandoMais[coluna.key]">Carregando...</span>
-                        </button>
-                    </template>
                 </div>
             </div>
         </template>
@@ -133,7 +124,7 @@
             <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
 
                 {{-- Header --}}
-                <div class="flex items-center justify-between px-5 py-4 border-b">
+                <div class="flex items-start justify-between gap-2 flex-wrap px-5 py-4 border-b">
                     <div>
                         {{-- Nome editável --}}
                         <div x-show="!editandoNome" class="flex items-center gap-1.5">
@@ -182,7 +173,7 @@
                             </template>
                         </div>
                     </div>
-                    <div class="flex items-center gap-1.5">
+                    <div class="flex items-center gap-1.5 flex-wrap justify-end">
                         <template x-if="ticketAtivo.coluna_kanban !== 'outros' && !['resolvido','encerrado'].includes(ticketAtivo.status)">
                             <button @click="moverParaOutros(ticketAtivo.id)"
                                     class="text-xs bg-gray-100 text-gray-500 px-2.5 py-1.5 rounded-lg hover:bg-gray-200 transition-colors">
@@ -534,10 +525,8 @@ function kanban() {
             { key: 'encerrado',           label: 'Encerrado' },
             { key: 'outros',              label: 'Outros / Internos' },
         ],
-        tickets:         {},
-        totalPorColuna:  {},
-        limitePorColuna: {},
-        carregandoMais:  {},
+        tickets:        {},
+        totalPorColuna: {},
         ticketAtivo:  null,
         mensagens:    [],
         novaMensagem:      '',
@@ -568,11 +557,7 @@ function kanban() {
         enviandoMidia:     false,
 
         async carregar() {
-            const limites = {};
-            for (const c of this.colunas) {
-                limites[c.key] = this.limitePorColuna[c.key] || 15;
-            }
-            const res = await this.api('/api/painel/kanban/tickets?limites=' + encodeURIComponent(JSON.stringify(limites)));
+            const res = await this.api('/api/painel/kanban/tickets');
             if (!res.ok) return;
 
             const data = await res.json();
@@ -583,14 +568,6 @@ function kanban() {
                 this.totalPorColuna[c.key] = entrada.total;
             }
             this.tickets = novosTickets;
-        },
-
-        async carregarMais(coluna) {
-            if (this.carregandoMais[coluna]) return;
-            this.carregandoMais[coluna] = true;
-            this.limitePorColuna[coluna] = (this.limitePorColuna[coluna] || 15) + 15;
-            await this.carregar();
-            this.carregandoMais[coluna] = false;
         },
 
         iniciarDrag(event, ticket) {

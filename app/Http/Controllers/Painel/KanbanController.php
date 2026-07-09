@@ -27,33 +27,22 @@ class KanbanController extends Controller
         return view('kanban.index');
     }
 
-    private const LIMITE_PADRAO_COLUNA = 15;
-    private const LIMITE_MAXIMO_COLUNA = 500;
-
     /**
-     * Lista tickets agrupados por coluna, paginado por coluna (evita coluna com
-     * centenas de cards travando a altura da página). `limites` é um JSON
-     * {coluna: N} opcional — colunas ausentes usam LIMITE_PADRAO_COLUNA. O
-     * front-end reenvia o limite já expandido a cada poll (5s) pra não perder
-     * o "carregar mais" que o usuário já tinha feito naquela coluna.
+     * Cada coluna do Kanban rola verticalmente dentro da própria altura fixa,
+     * então não precisa de "carregar mais" — só um teto de segurança pra não
+     * transferir uma coluna inteira caso "encerrado" cresça muito ao longo dos anos.
      */
+    private const LIMITE_COLUNA = 500;
+
     public function index(Request $request): JsonResponse
     {
         $colunas  = ['lead_novo', 'em_atendimento', 'aguardando_orcamento', 'aguardando_lead', 'pagamento', 'servico_agendado', 'encerrado', 'outros'];
         $tenantId = $request->user()->tenant_id;
 
-        $limites = $request->input('limites', []);
-        if (is_string($limites)) {
-            $limites = json_decode($limites, true) ?: [];
-        }
-
         $todosTickets = collect();
         $totais       = [];
 
         foreach ($colunas as $coluna) {
-            $limite = (int) ($limites[$coluna] ?? self::LIMITE_PADRAO_COLUNA);
-            $limite = min(max($limite, self::LIMITE_PADRAO_COLUNA), self::LIMITE_MAXIMO_COLUNA);
-
             $query = TicketAtendimento::where('coluna_kanban', $coluna);
 
             $totais[$coluna] = (clone $query)->count();
@@ -61,7 +50,7 @@ class KanbanController extends Controller
             $ticketsColuna = $query->with(['contato', 'vendedor'])
                 ->withCount(['mensagens as count_midias' => fn ($q) => $q->where('tipo', '!=', 'texto')])
                 ->orderByDesc('aberto_em')
-                ->limit($limite)
+                ->limit(self::LIMITE_COLUNA)
                 ->get();
 
             $todosTickets = $todosTickets->concat($ticketsColuna);
