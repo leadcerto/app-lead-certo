@@ -17,6 +17,9 @@ use App\Http\Controllers\Painel\AgenteController;
 use App\Http\Controllers\Api\SecretariaEletronicaController;
 use App\Http\Controllers\Painel\FormulariosController;
 use App\Http\Controllers\Painel\SequenciaController;
+use App\Http\Controllers\Painel\ContextoIaController;
+use App\Http\Controllers\Painel\KanbanColunaConfigController;
+use App\Http\Controllers\Painel\SpintaxVariavelController;
 
 // ── Formulário público (iframe) — sem auth ────────────────────────────────
 Route::get('/f/{uuid}', function (string $uuid) {
@@ -51,6 +54,28 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/contatos/importar', [ContatosController::class, 'view'])
         ->name('contatos.importar')
         ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,growth_manager');
+
+    // Auditoria de contatos (telefones/nomes inválidos)
+    Route::get('/contatos/auditoria', [ContatosController::class, 'auditoriaContatos'])
+        ->name('contatos.auditoria')
+        ->middleware('role:admin,dono,gerente,gestor,growth_manager');
+    Route::post('/contatos/auditoria/{id}/resolver', [ContatosController::class, 'resolverAuditoria'])
+        ->name('contatos.auditoria.resolver')
+        ->middleware('role:admin,dono,gerente,gestor,growth_manager');
+    Route::post('/contatos/auditoria/{id}/ignorar', [ContatosController::class, 'ignorarAuditoria'])
+        ->name('contatos.auditoria.ignorar')
+        ->middleware('role:admin,dono,gerente,gestor,growth_manager');
+    Route::post('/contatos/auditoria/bulk-ignorar', [ContatosController::class, 'bulkIgnorarAuditoria'])
+        ->name('contatos.auditoria.bulk-ignorar')
+        ->middleware('role:admin,dono,gerente,gestor,growth_manager');
+    Route::post('/contatos/auditoria/bulk-resolver', [ContatosController::class, 'bulkResolverAuditoria'])
+        ->name('contatos.auditoria.bulk-resolver')
+        ->middleware('role:admin,dono,gerente,gestor,growth_manager');
+
+    // Marcadores (grupos/labels do Google Contacts)
+    Route::get('/contatos/marcadores', [ContatosController::class, 'marcadores'])
+        ->name('contatos.marcadores')
+        ->middleware('role:admin,dono,gerente,gestor,growth_manager');
 
     // Integrações — apenas dono, admin, growth_manager
     Route::get('/integracoes', [IntegracoesController::class, 'view'])
@@ -94,10 +119,16 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('campanhas')
         ->middleware('role:admin,dono,diretor,growth_manager');
 
-    // Sequência de mensagens — dono e admin
-    Route::get('/sequencia', fn () => view('sequencia.index'))
-        ->name('sequencia')
+    // Configurações do Kanban — dono e admin
+    Route::get('/kanban/config', fn () => view('kanban.config'))
+        ->name('kanban.config')
         ->middleware('role:admin,dono');
+
+    // Variáveis de mensagem — dono e admin
+    Route::get('/kanban/variaveis', fn () => view('kanban.variaveis'))
+        ->name('kanban.variaveis')
+        ->middleware('role:admin,dono');
+
 
     // Secretária Eletrônica — dono e admin
     Route::get('/secretaria-eletronica', fn () => view('secretaria-eletronica.index'))
@@ -119,6 +150,8 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
     // WhatsApp / Config
     Route::get('/whatsapp/status', [WhatsAppController::class, 'status']);
     Route::get('/whatsapp/qrcode', [WhatsAppController::class, 'qrcode']);
+    Route::put('/whatsapp/retencao', [WhatsAppController::class, 'salvarRetencao'])
+        ->middleware('role:admin,dono');
 
     // Kanban
     Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda')->group(function () {
@@ -128,8 +161,13 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::post('/kanban/ticket/{ticket}/mensagem', [KanbanController::class, 'enviarMensagem']);
         Route::post('/kanban/ticket/{ticket}/encerrar', [KanbanController::class, 'encerrar']);
         Route::post('/kanban/ticket/{ticket}/liberar',         [KanbanController::class, 'liberar']);
+        Route::post('/kanban/ticket/{ticket}/liberar-ia',      [KanbanController::class, 'liberarEAcionarIA']);
         Route::post('/kanban/ticket/{ticket}/pendente',        [KanbanController::class, 'marcarPendente']);
         Route::post('/kanban/ticket/{ticket}/resolver',        [KanbanController::class, 'resolver']);
+        Route::post('/kanban/ticket/{ticket}/outros',          [KanbanController::class, 'moverParaOutros']);
+        Route::post('/kanban/ticket/{ticket}/mover',           [KanbanController::class, 'mover']);
+        Route::post('/kanban/ticket/{ticket}/retorno',         [KanbanController::class, 'agendarRetorno']);
+        Route::post('/kanban/ticket/{ticket}/midia',           [KanbanController::class, 'enviarMidia']);
     });
 
     // Contatos
@@ -138,11 +176,35 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::post('/contatos/sincronizar-google', [ContatosController::class, 'sincronizarGoogle']);
         Route::post('/contatos/atualizar-google-sobrenome', [ContatosController::class, 'atualizarGoogleSobrenome']);
         Route::get('/contatos/stats', [ContatosController::class, 'stats']);
+        // Marcadores: criar novo grupo no Google
+        Route::post('/contatos/marcadores', [ContatosController::class, 'criarMarcador']);
     });
 
-    // Contato: editar nome (gerentes para cima)
+    // Contato: ficha completa
+    Route::get('/contato/{contato}', [ContatosController::class, 'showContato'])
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,growth_manager');
+
+    // Contato: histórico de atendimentos
+    Route::get('/contato/{contato}/historico', [ContatosController::class, 'historicoContato'])
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,growth_manager');
+
+    // Contato: cadastro manual
+    Route::post('/contatos/criar', [ContatosController::class, 'criarContato'])
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor');
+
+    // Contato: editar (todos os campos)
     Route::patch('/contato/{contato}', [ContatosController::class, 'atualizarContato'])
         ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor');
+
+    // Contato: desativar vínculo com o tenant (nunca exclui o contato global)
+    Route::post('/contato/{contato}/desativar', [ContatosController::class, 'desativarContato'])
+        ->name('contato.desativar')
+        ->middleware('role:admin,dono,gerente,gestor');
+
+    // Contato: exclusão definitiva — apenas para lixo sem dados (auditoria confirmou)
+    Route::delete('/contato/{contato}/excluir-definitivo', [ContatosController::class, 'excluirContatoDefinitivo'])
+        ->name('contato.excluir-definitivo')
+        ->middleware('role:admin,dono,gerente,gestor');
 
     // Auditor — apenas auditor, diretor, dono, admin
     Route::middleware('role:admin,dono,diretor,auditor')->group(function () {
@@ -191,15 +253,49 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::get('/secretaria-eletronica/dados',       [SecretariaEletronicaController::class, 'dadosPainel']);
         Route::post('/secretaria-eletronica/token',      [SecretariaEletronicaController::class, 'rotacionarToken']);
         Route::post('/secretaria-eletronica/mensagem',   [SecretariaEletronicaController::class, 'salvarMensagem']);
+        Route::put('/ia/sdr-ativo',                      [\App\Http\Controllers\Painel\WhatsAppController::class, 'toggleSdrAtivo']);
     });
 
-    // Sequência de mensagens — dono e admin
+    // Sequências — dono e admin
     Route::middleware('role:admin,dono')->group(function () {
-        Route::get('/sequencia/mensagens',          [SequenciaController::class, 'index']);
-        Route::post('/sequencia/mensagens',         [SequenciaController::class, 'store']);
-        Route::put('/sequencia/mensagens/{id}',     [SequenciaController::class, 'update']);
-        Route::delete('/sequencia/mensagens/{id}',  [SequenciaController::class, 'destroy']);
+        // Sequências (pai)
+        Route::get('/sequencias',              [SequenciaController::class, 'index']);
+        Route::post('/sequencias',             [SequenciaController::class, 'store']);
+        Route::put('/sequencias/{id}',         [SequenciaController::class, 'update']);
+        Route::delete('/sequencias/{id}',      [SequenciaController::class, 'destroy']);
+        // Mensagens dentro de uma sequência
+        Route::get('/sequencias/{seq}/mensagens',              [SequenciaController::class, 'mensagens']);
+        Route::post('/sequencias/{seq}/mensagens',             [SequenciaController::class, 'storeMensagem']);
+        Route::put('/sequencias/{seq}/mensagens/{id}',         [SequenciaController::class, 'updateMensagem']);
+        Route::post('/sequencias/{seq}/mensagens/{id}',        [SequenciaController::class, 'updateMensagem']); // spoofing
+        Route::delete('/sequencias/{seq}/mensagens/{id}',      [SequenciaController::class, 'destroyMensagem']);
+        Route::post('/sequencias/{id}/sugerir-variaveis',     [SequenciaController::class, 'sugerirVariaveis']);
     });
+
+    // Contexto da IA — dono e admin (mantido para retrocompatibilidade)
+    Route::middleware('role:admin,dono')->group(function () {
+        Route::get('/contexto-ia/dados',             [ContextoIaController::class, 'show']);
+        Route::put('/contexto-ia/dados',             [ContextoIaController::class, 'update']);
+        Route::post('/contexto-ia/gerar',            [ContextoIaController::class, 'gerar']);
+        Route::post('/contexto-ia/tabela-precos',    [ContextoIaController::class, 'uploadTabela']);
+        Route::delete('/contexto-ia/tabela-precos',  [ContextoIaController::class, 'removerTabela']);
+    });
+
+    // Configuração por coluna do Kanban (IA contexto) — dono e admin
+    Route::middleware('role:admin,dono')->group(function () {
+        Route::get('/kanban/coluna-config/{coluna}', [KanbanColunaConfigController::class, 'show']);
+        Route::put('/kanban/coluna-config/{coluna}', [KanbanColunaConfigController::class, 'update']);
+        // Variáveis de sorteio (spintax)
+        Route::get('/kanban/variaveis',           [SpintaxVariavelController::class, 'index']);
+        Route::get('/kanban/variaveis/listar',    [SpintaxVariavelController::class, 'listar']);
+        Route::post('/kanban/variaveis',          [SpintaxVariavelController::class, 'store']);
+        Route::put('/kanban/variaveis/{nome}',    [SpintaxVariavelController::class, 'update']);
+        Route::delete('/kanban/variaveis/{nome}', [SpintaxVariavelController::class, 'destroy']);
+    });
+
+    // Variáveis: listagem rápida para card (roles amplos, só leitura)
+    Route::get('/kanban/variaveis/listar', [SpintaxVariavelController::class, 'listar'])
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda');
 
     // Formulários — dono e admin
     Route::middleware('role:admin,dono')->group(function () {
