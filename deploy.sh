@@ -38,7 +38,22 @@ echo "==> Rodando migrations..."
 ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && php artisan migrate --force"
 
 echo "==> Recompilando assets (Tailwind/Vite)..."
-ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && npm ci --no-audit --no-fund && npm run build"
+# O build busca fontes em fonts.bunny.net (plugin laravel-vite-plugin/fonts) — já falhou
+# por timeout de rede transitório na VPS. Tenta até 3x antes de desistir.
+BUILD_OK=0
+for tentativa in 1 2 3; do
+  if ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && npm ci --no-audit --no-fund && npm run build"; then
+    BUILD_OK=1
+    break
+  fi
+  echo "Build de assets falhou (tentativa $tentativa/3), tentando de novo em 5s..." >&2
+  sleep 5
+done
+if [ "$BUILD_OK" -ne 1 ]; then
+  echo "ERRO: build de assets (npm run build) falhou 3x. Deploy abortado ANTES do cache rebuild." >&2
+  echo "O site continua no ar com os assets antigos (build não foi corrompido). Rode ./deploy.sh de novo quando a rede estabilizar." >&2
+  exit 1
+fi
 
 echo "==> Reconstruindo caches..."
 ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && php artisan config:cache && php artisan route:cache && php artisan view:cache"
