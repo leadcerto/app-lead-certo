@@ -24,15 +24,15 @@
     </div>
 
     {{-- Colunas Kanban --}}
-    <div class="flex gap-4 overflow-x-auto pb-4" style="min-height: calc(100vh - 160px)">
+    <div class="flex gap-4 overflow-x-auto pb-4" style="height: calc(100vh - 160px)">
 
         <template x-for="coluna in colunas" :key="coluna.key">
-            <div class="flex-shrink-0 w-72 rounded-xl transition-colors duration-150"
+            <div class="flex-shrink-0 w-72 rounded-xl transition-colors duration-150 flex flex-col h-full"
                  :style="dragOver === coluna.key ? 'background:#f0fdf4;outline:2px dashed #16a34a;outline-offset:4px' : ''"
                  @dragover.prevent="dragOver = coluna.key"
                  @dragleave="if (!$el.contains($event.relatedTarget)) dragOver = null"
                  @drop.prevent="soltar(coluna.key)">
-                <div class="flex items-center justify-between mb-3 px-1">
+                <div class="flex items-center justify-between mb-3 px-1 flex-shrink-0">
                     <span class="text-sm font-semibold"
                           :class="coluna.key === 'outros' ? 'text-gray-400' : 'text-gray-600'"
                           x-text="coluna.label"></span>
@@ -41,7 +41,7 @@
                           x-text="totalPorColuna[coluna.key] ?? (tickets[coluna.key] || []).length"></span>
                 </div>
 
-                <div class="space-y-2"
+                <div class="space-y-2 flex-1 overflow-y-auto pr-1"
                      :class="coluna.key === 'outros' ? 'border-l-2 border-dashed border-gray-200 pl-3' : ''"
                      style="min-height: 5rem">
                     <template x-for="ticket in (tickets[coluna.key] || [])" :key="ticket.id">
