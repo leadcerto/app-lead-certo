@@ -2,8 +2,10 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\PushContatoParaGoogleJob;
 use App\Models\Contato;
 use App\Models\Tenant;
+use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
 use App\Services\UazapiService;
 use Illuminate\Console\Command;
@@ -11,7 +13,7 @@ use Illuminate\Console\Command;
 class SincronizarContatosWhatsApp extends Command
 {
     protected $signature = 'contatos:sincronizar-whatsapp {--tenant= : ID do tenant (padrão: todos com instância ativa)}';
-    protected $description = 'Cruza a agenda do WhatsApp com o CRM e preenche nomes faltantes';
+    protected $description = 'Importa contatos da agenda WhatsApp: salva no CRM, cria ticket e sincroniza com Google';
 
     public function handle(UazapiService $uazapi): int
     {
@@ -47,72 +49,118 @@ class SincronizarContatosWhatsApp extends Command
             return;
         }
 
-        $this->line("  {$tenant->nome}: " . count($contatos) . " contatos no WhatsApp");
+        $this->line("  " . count($contatos) . " contatos encontrados na agenda");
 
+        $personaId = $tenant->personas()
+            ->where('is_default', true)
+            ->where('ativo', true)
+            ->value('id');
+
+        $criados      = 0;
         $atualizados  = 0;
+        $ticketsCriados = 0;
         $semNome      = 0;
-        $naoEncontrados = 0;
 
         foreach ($contatos as $wa) {
             $jid  = $wa['jid'] ?? null;
             $nome = $this->limparNome($wa['contact_name'] ?? '', $wa['contact_FirstName'] ?? '');
 
-            if (! $jid || ! $nome) {
+            if (! $jid || ! str_contains($jid, '@s.whatsapp.net')) {
                 $semNome++;
                 continue;
             }
 
-            // Extrai número do JID: 5521999999999@s.whatsapp.net → 5521999999999
             $telefoneComDdi = preg_replace('/@.+$/', '', $jid);
 
-            // Versão sem DDI 55 (formato interno do CRM)
-            $telefoneSemDdi = (str_starts_with($telefoneComDdi, '55') && strlen($telefoneComDdi) > 12)
-                ? substr($telefoneComDdi, 2)
-                : $telefoneComDdi;
+            // Normaliza para formato 55+DDD+número (12-13 dígitos)
+            $telefone = $telefoneComDdi;
 
             // Busca pelo número com ou sem DDI
-            $contato = Contato::where('telefone', $telefoneSemDdi)
-                ->orWhere('telefone', $telefoneComDdi)
+            $contato = Contato::where('telefone', $telefone)
+                ->orWhere('telefone', ltrim($telefone, '55'))
                 ->first();
 
+            $novoContato = false;
+
             if (! $contato) {
-                // Contato não está no CRM — cria com os dados da agenda do WhatsApp
-                $novo = Contato::create([
-                    'telefone' => $telefoneSemDdi,
-                    'nome'     => $nome,
+                if (! $nome) {
+                    // Sem nome e sem cadastro — pula
+                    $semNome++;
+                    continue;
+                }
+
+                $contato = Contato::create([
+                    'telefone' => $telefone,
+                    'nome'     => $nome ?: 'Sem Nome',
                     'origem'   => 'whatsapp_agenda',
                     'opt_out'  => false,
                 ]);
-                VinculoContatoTenant::firstOrCreate([
-                    'contato_id' => $novo->id,
-                    'tenant_id'  => $tenant->id,
-                ]);
-                $naoEncontrados++;
-                continue;
+                $novoContato = true;
+                $criados++;
+            } elseif ($nome) {
+                $semNomeAtual = ! $contato->nome || $contato->nome === $contato->telefone || strtolower($contato->nome) === 'sem nome';
+                if ($semNomeAtual) {
+                    $contato->update(['nome' => $nome]);
+                }
+                $atualizados++;
             }
 
-            // Só atualiza se o contato está sem nome ou com nome igual ao telefone
-            if (! $contato->nome || $contato->nome === $contato->telefone) {
-                $contato->update(['nome' => $nome]);
-                $atualizados++;
+            // Vincula ao tenant
+            [$vinculo, $vinculoNovo] = [
+                VinculoContatoTenant::firstOrCreate([
+                    'contato_id' => $contato->id,
+                    'tenant_id'  => $tenant->id,
+                ]),
+                false,
+            ];
+            $vinculo = VinculoContatoTenant::where('contato_id', $contato->id)
+                ->where('tenant_id', $tenant->id)
+                ->first();
+            $vinculoNovo = $vinculo->wasRecentlyCreated ?? false;
+
+            // Envia para o Google apenas se for um contato recém-criado
+            if ($novoContato) {
+                PushContatoParaGoogleJob::dispatch($contato->id, $tenant->id);
+            }
+
+            // Cria ticket se não tem um aberto
+            $temTicket = TicketAtendimento::withoutGlobalScopes()
+                ->where('tenant_id', $tenant->id)
+                ->where('contato_id', $contato->id)
+                ->whereIn('status', ['aberto', 'aguardando'])
+                ->exists();
+
+            if (! $temTicket && $novoContato) {
+                TicketAtendimento::withoutGlobalScopes()->create([
+                    'tenant_id'          => $tenant->id,
+                    'contato_id'         => $contato->id,
+                    'coluna_kanban'      => 'lead_novo',
+                    'agente_responsavel' => 'humano',
+                    'sdr_persona_id'     => $personaId,
+                    'status'             => 'aberto',
+                    'aberto_em'          => now(),
+                    'origem'             => 'whatsapp_agenda',
+                ]);
+                $ticketsCriados++;
             }
         }
 
-        $this->info("  ✓ Nomes preenchidos: {$atualizados}");
-        $this->info("  ✓ Criados da agenda WA: {$naoEncontrados}");
-        $this->line("  - Sem nome na agenda WA: {$semNome}");
+        $this->info("  ✓ Contatos criados:  {$criados}");
+        $this->info("  ✓ Nomes atualizados: {$atualizados}");
+        $this->info("  ✓ Tickets criados:   {$ticketsCriados}");
+        $this->info("  ✓ Google: jobs disparados para novos/sem resource");
+        $this->line("  - Sem nome (ignorados): {$semNome}");
     }
 
     private function limparNome(string $contactName, string $firstName): string
     {
-        // Prefere contact_FirstName se disponível e não vazio
         $nome = trim($firstName) ?: trim($contactName);
 
         if (! $nome) {
             return '';
         }
 
-        // Remove sufixo de 4 dígitos quando há 2+ palavras: "João Silva 1234" → "João Silva"
+        // Remove sufixo de 4 dígitos: "João Silva 1234" → "João Silva"
         $nome = trim(preg_replace('/^(.+\s.+)\s\d{4}$/', '$1', $nome));
 
         return $nome;
