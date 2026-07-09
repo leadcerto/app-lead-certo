@@ -7,24 +7,50 @@
 
     <div class="flex items-center justify-between mb-5">
         <h1 class="text-xl font-bold text-gray-800">Atendimentos</h1>
-        <span class="text-xs text-gray-400">Atualiza a cada 5s</span>
+        <div class="flex items-center gap-3">
+            <span class="text-xs text-gray-400">Atualiza a cada 5s</span>
+            @if(auth()->user()->isDono())
+            <a href="{{ route('kanban.config') }}"
+               title="Configurações do Kanban"
+               class="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+            </a>
+            @endif
+        </div>
     </div>
 
     {{-- Colunas Kanban --}}
     <div class="flex gap-4 overflow-x-auto pb-4" style="min-height: calc(100vh - 160px)">
 
         <template x-for="coluna in colunas" :key="coluna.key">
-            <div class="flex-shrink-0 w-72">
+            <div class="flex-shrink-0 w-72 rounded-xl transition-colors duration-150"
+                 :style="dragOver === coluna.key ? 'background:#f0fdf4;outline:2px dashed #16a34a;outline-offset:4px' : ''"
+                 @dragover.prevent="dragOver = coluna.key"
+                 @dragleave="if (!$el.contains($event.relatedTarget)) dragOver = null"
+                 @drop.prevent="soltar(coluna.key)">
                 <div class="flex items-center justify-between mb-3 px-1">
-                    <span class="text-sm font-semibold text-gray-600" x-text="coluna.label"></span>
-                    <span class="bg-gray-200 text-gray-600 text-xs rounded-full px-2 py-0.5"
+                    <span class="text-sm font-semibold"
+                          :class="coluna.key === 'outros' ? 'text-gray-400' : 'text-gray-600'"
+                          x-text="coluna.label"></span>
+                    <span class="text-xs rounded-full px-2 py-0.5"
+                          :class="coluna.key === 'outros' ? 'bg-gray-100 text-gray-400' : 'bg-gray-200 text-gray-600'"
                           x-text="(tickets[coluna.key] || []).length"></span>
                 </div>
 
-                <div class="space-y-2">
+                <div class="space-y-2"
+                     :class="coluna.key === 'outros' ? 'border-l-2 border-dashed border-gray-200 pl-3' : ''"
+                     style="min-height: 5rem">
                     <template x-for="ticket in (tickets[coluna.key] || [])" :key="ticket.id">
-                        <div class="bg-white rounded-xl shadow-sm p-4 cursor-pointer hover:shadow-md transition-shadow"
-                             @click="abrirTicket(ticket)">
+                        <div :class="coluna.key === 'outros' ? 'bg-gray-50 rounded-xl shadow-sm p-4 cursor-grab hover:shadow-md transition-shadow border border-gray-200' : 'bg-white rounded-xl shadow-sm p-4 cursor-grab hover:shadow-md transition-shadow'"
+                             :style="dragCard?.id === ticket.id ? 'opacity:0.4;cursor:grabbing' : ''"
+                             draggable="true"
+                             @dragstart="iniciarDrag($event, ticket)"
+                             @dragend="terminarDrag()"
+                             @click="handleCardClick(ticket)">
 
                             <div class="flex items-start justify-between gap-2">
                                 <div>
@@ -61,6 +87,18 @@
                                     <span class="text-xs text-purple-600">📎 <span x-text="ticket.count_midias"></span></span>
                                 </template>
                             </div>
+
+                            {{-- Badge de retorno agendado --}}
+                            <template x-if="ticket.retorno_agendado_em">
+                                <div class="mt-2 flex items-center gap-1 text-xs px-2 py-1 rounded-lg"
+                                     :style="retornoBadgeStyle(ticket.retorno_agendado_em)">
+                                    <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                    </svg>
+                                    <span x-text="'Retorno ' + formatarData(ticket.retorno_agendado_em)"></span>
+                                </div>
+                            </template>
 
                             <template x-if="!ticket.vendedor_id">
                                 <button @click.stop="assumir(ticket.id)"
@@ -117,8 +155,45 @@
                         </div>
                         <p class="text-xs text-gray-400"
                            x-text="[ticketAtivo.contato?.telefone, ticketAtivo.contato?.id].filter(Boolean).join(' · ')"></p>
+                        {{-- Retorno agendado --}}
+                        <div class="flex items-center gap-1 mt-1">
+                            <svg class="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            <input type="date"
+                                   :value="ticketAtivo.retorno_agendado_em ? ticketAtivo.retorno_agendado_em.substring(0,10) : ''"
+                                   @change="salvarRetorno($event.target.value)"
+                                   class="text-xs text-gray-500 border-0 focus:outline-none focus:ring-0 bg-transparent cursor-pointer p-0"
+                                   title="Agendar data de retorno">
+                            <template x-if="ticketAtivo.retorno_agendado_em">
+                                <button @click="salvarRetorno(null)"
+                                        class="text-gray-300 hover:text-red-400 text-sm leading-none ml-0.5"
+                                        title="Limpar retorno">×</button>
+                            </template>
+                        </div>
                     </div>
                     <div class="flex items-center gap-1.5">
+                        <template x-if="ticketAtivo.coluna_kanban !== 'outros' && !['resolvido','encerrado'].includes(ticketAtivo.status)">
+                            <button @click="moverParaOutros(ticketAtivo.id)"
+                                    class="text-xs bg-gray-100 text-gray-500 px-2.5 py-1.5 rounded-lg hover:bg-gray-200 transition-colors">
+                                Não é lead
+                            </button>
+                        </template>
+                        <template x-if="ticketAtivo.vendedor_id && !['resolvido','encerrado'].includes(ticketAtivo.status)">
+                            <div class="flex gap-1">
+                                <button @click="liberar(ticketAtivo.id)"
+                                        class="text-xs bg-yellow-100 text-yellow-700 px-2.5 py-1.5 rounded-lg hover:bg-yellow-200 transition-colors"
+                                        title="Devolve o controle ao bot (IA responde na próxima mensagem do lead)">
+                                    Devolver
+                                </button>
+                                <button @click="liberarEAcionarIA(ticketAtivo.id)"
+                                        class="text-xs bg-purple-100 text-purple-700 px-2.5 py-1.5 rounded-lg hover:bg-purple-200 transition-colors"
+                                        title="Devolve e aciona a IA agora, sem precisar esperar o lead responder">
+                                    Devolver + IA
+                                </button>
+                            </div>
+                        </template>
                         <template x-if="ticketAtivo.status === 'aberto' && ticketAtivo.agente_responsavel === 'humano'">
                             <button @click="marcarPendente(ticketAtivo.id)"
                                     class="text-xs bg-orange-100 text-orange-600 px-2.5 py-1.5 rounded-lg hover:bg-orange-200 transition-colors">
@@ -129,6 +204,12 @@
                             <button @click="resolver(ticketAtivo.id)"
                                     class="text-xs bg-teal-100 text-teal-600 px-2.5 py-1.5 rounded-lg hover:bg-teal-200 transition-colors">
                                 Resolver
+                            </button>
+                        </template>
+                        <template x-if="ticketAtivo.coluna_kanban === 'aguardando_orcamento' && !['resolvido','encerrado'].includes(ticketAtivo.status)">
+                            <button @click="orcamentoEnviado(ticketAtivo.id)"
+                                    class="text-xs bg-orange-500 hover:bg-orange-600 text-white px-2.5 py-1.5 rounded-lg transition-colors font-medium">
+                                Orçamento Enviado ✓
                             </button>
                         </template>
                         <template x-if="!['resolvido','encerrado'].includes(ticketAtivo.status)">
@@ -197,13 +278,46 @@
                                     ? 'bg-gray-100 text-gray-800 rounded-br-xl rounded-tr-xl rounded-bl-sm'
                                     : 'bg-green-600 text-white rounded-bl-xl rounded-tl-xl rounded-br-sm'"
                                  class="max-w-xs px-3.5 py-2.5 text-sm rounded-2xl">
+
+                                {{-- Texto --}}
                                 <template x-if="msg.tipo === 'texto'">
-                                    <p x-text="msg.conteudo"></p>
+                                    <p x-text="msg.conteudo" class="whitespace-pre-wrap break-words"></p>
                                 </template>
-                                <template x-if="msg.tipo !== 'texto' && msg.midia_url">
+
+                                {{-- Imagem --}}
+                                <template x-if="msg.tipo === 'imagem' && msg.midia_url">
+                                    <div>
+                                        <a :href="msg.midia_url" target="_blank">
+                                            <img :src="msg.midia_url" class="rounded-lg max-w-full max-h-48 object-cover" loading="lazy">
+                                        </a>
+                                        <template x-if="msg.conteudo && msg.conteudo !== '[Imagem]'">
+                                            <p class="text-xs mt-1 opacity-80" x-text="msg.conteudo"></p>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                {{-- Áudio --}}
+                                <template x-if="msg.tipo === 'audio' && msg.midia_url">
+                                    <audio controls class="w-full max-w-[220px] h-8" :src="msg.midia_url"></audio>
+                                </template>
+
+                                {{-- Documento --}}
+                                <template x-if="msg.tipo === 'documento' && msg.midia_url">
                                     <a :href="msg.midia_url" target="_blank"
-                                       class="underline text-xs opacity-80">Ver arquivo</a>
+                                       class="flex items-center gap-2 opacity-90 hover:opacity-100">
+                                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                  d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                        </svg>
+                                        <span class="text-xs underline truncate max-w-[180px]" x-text="msg.conteudo || 'Arquivo'"></span>
+                                    </a>
                                 </template>
+
+                                {{-- Vídeo --}}
+                                <template x-if="msg.tipo === 'video' && msg.midia_url">
+                                    <a :href="msg.midia_url" target="_blank" class="text-xs underline opacity-80">Ver vídeo</a>
+                                </template>
+
                                 <p class="text-xs opacity-50 mt-1 text-right"
                                    x-text="new Date(msg.enviado_em).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})"></p>
                             </div>
@@ -225,6 +339,35 @@
                         </template>
                         <template x-if="ticketAtivo.agente_responsavel === 'humano'">
                             <div>
+                                {{-- Preview de mídia selecionada --}}
+                                <template x-if="midiaPreview || audioPreviewUrl">
+                                    <div class="mb-2 p-2 bg-gray-50 border border-gray-200 rounded-xl flex items-center gap-3">
+                                        {{-- Preview imagem --}}
+                                        <template x-if="midiaTipo === 'imagem' && midiaPreview">
+                                            <img :src="midiaPreview" class="h-12 w-12 object-cover rounded-lg flex-shrink-0">
+                                        </template>
+                                        {{-- Preview documento --}}
+                                        <template x-if="midiaTipo === 'documento' && midiaPreview">
+                                            <div class="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                          d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                                </svg>
+                                            </div>
+                                        </template>
+                                        {{-- Preview áudio gravado --}}
+                                        <template x-if="audioPreviewUrl">
+                                            <audio controls :src="audioPreviewUrl" class="h-8 flex-1"></audio>
+                                        </template>
+                                        {{-- Nome do arquivo --}}
+                                        <template x-if="midiaArquivo && !audioPreviewUrl">
+                                            <span class="text-xs text-gray-600 truncate flex-1" x-text="midiaArquivo.name"></span>
+                                        </template>
+                                        <button @click="limparMidia()"
+                                                class="text-gray-400 hover:text-red-500 text-xl leading-none flex-shrink-0">×</button>
+                                    </div>
+                                </template>
+
                                 {{-- Sugestões de resposta pronta --}}
                                 <template x-if="sugestoes.length > 0">
                                     <div class="mb-2 border border-gray-200 rounded-xl overflow-hidden shadow-sm">
@@ -238,20 +381,71 @@
                                         </template>
                                     </div>
                                 </template>
-                                <form @submit.prevent="enviarMensagem()" class="flex gap-2">
-                                    <input x-model="novaMensagem" type="text"
-                                           placeholder="Digite / para respostas prontas..."
-                                           @input="onInputMensagem()"
-                                           @keydown.escape="sugestoes = []"
-                                           @keydown.arrow-up.prevent="navegarSugestao(-1)"
-                                           @keydown.arrow-down.prevent="navegarSugestao(1)"
-                                           @keydown.enter.prevent="sugestoes.length > 0 ? aplicarResposta(sugestoes[sugestaoSelecionada]) : enviarMensagem()"
-                                           class="flex-1 border border-gray-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
-                                    <button type="button" @click="enviarMensagem()"
-                                            class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-xl text-sm transition-colors">
-                                        Enviar
+
+                                {{-- Barra de input --}}
+                                <div class="flex items-center gap-1.5">
+                                    {{-- Botão Anexo --}}
+                                    <input type="file" x-ref="fileInput"
+                                           accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
+                                           class="hidden"
+                                           @change="selecionarArquivo($event)">
+                                    <button type="button"
+                                            @click="$refs.fileInput.click()"
+                                            title="Anexar imagem ou documento"
+                                            :class="midiaArquivo ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:text-gray-600'"
+                                            class="p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                  d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                                        </svg>
                                     </button>
-                                </form>
+
+                                    {{-- Botão Gravar / Parar --}}
+                                    <button type="button"
+                                            @click="gravandoAudio ? pararGravacao() : iniciarGravacao()"
+                                            :title="gravandoAudio ? 'Parar gravação' : 'Gravar áudio'"
+                                            :class="gravandoAudio ? 'text-red-600 bg-red-50 animate-pulse' : (audioPreviewUrl ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:text-gray-600')"
+                                            class="p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+                                        </svg>
+                                    </button>
+
+                                    {{-- Input de texto (oculto durante gravação) --}}
+                                    <template x-if="!gravandoAudio && !audioPreviewUrl">
+                                        <input x-model="novaMensagem" type="text"
+                                               placeholder="Digite / para respostas prontas..."
+                                               @input="onInputMensagem()"
+                                               @keydown.escape="sugestoes = []"
+                                               @keydown.arrow-up.prevent="navegarSugestao(-1)"
+                                               @keydown.arrow-down.prevent="navegarSugestao(1)"
+                                               @keydown.enter.prevent="sugestoes.length > 0 ? aplicarResposta(sugestoes[sugestaoSelecionada]) : (midiaArquivo ? enviarMidia() : enviarMensagem())"
+                                               class="flex-1 border border-gray-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                                    </template>
+                                    <template x-if="gravandoAudio">
+                                        <div class="flex-1 flex items-center gap-2 px-3 py-2 bg-red-50 rounded-xl">
+                                            <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                            <span class="text-xs text-red-600 font-medium">Gravando… toque no microfone para parar</span>
+                                        </div>
+                                    </template>
+                                    <template x-if="audioPreviewUrl && !gravandoAudio">
+                                        <div class="flex-1 text-xs text-gray-500 px-2">Pronto para enviar</div>
+                                    </template>
+
+                                    {{-- Botão Enviar --}}
+                                    <button type="button"
+                                            @click="midiaArquivo || audioPreviewUrl ? enviarMidia() : enviarMensagem()"
+                                            :disabled="enviandoMidia || gravandoAudio || (!novaMensagem.trim() && !midiaArquivo && !audioPreviewUrl)"
+                                            class="bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white px-4 py-2 rounded-xl text-sm transition-colors flex-shrink-0">
+                                        <template x-if="enviandoMidia">
+                                            <span>Enviando…</span>
+                                        </template>
+                                        <template x-if="!enviandoMidia">
+                                            <span>Enviar</span>
+                                        </template>
+                                    </button>
+                                </div>
                             </div>
                         </template>
                     </div>
@@ -302,7 +496,10 @@ function kanban() {
             { key: 'em_atendimento',      label: 'Em Atendimento' },
             { key: 'aguardando_orcamento',label: 'Aguardando Orçamento' },
             { key: 'aguardando_lead',     label: 'Aguardando Lead' },
+            { key: 'pagamento',           label: 'Pagamento' },
+            { key: 'servico_agendado',    label: 'Serviço Agendado' },
             { key: 'encerrado',           label: 'Encerrado' },
+            { key: 'outros',              label: 'Outros / Internos' },
         ],
         tickets:      {},
         ticketAtivo:  null,
@@ -319,10 +516,81 @@ function kanban() {
         notasAberto:       false,
         novaNota:          '',
         salvandoNota:      false,
+        dragCard:          null,
+        dragOver:          null,
+        dragOccurred:      false,
+        // Mídia
+        midiaArquivo:      null,
+        midiaPreview:      null,
+        midiaTipo:         null,
+        gravandoAudio:     false,
+        mediaRecorder:     null,
+        audioChunks:       [],
+        audioBlob:         null,
+        audioPreviewUrl:   null,
+        enviandoMidia:     false,
 
         async carregar() {
             const res = await this.api('/api/painel/kanban/tickets');
             if (res.ok) this.tickets = await res.json();
+        },
+
+        iniciarDrag(event, ticket) {
+            this.dragCard     = ticket;
+            this.dragOccurred = false;
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', String(ticket.id));
+        },
+
+        terminarDrag() {
+            this.dragOccurred = true;
+            this.dragCard     = null;
+            this.dragOver     = null;
+            setTimeout(() => { this.dragOccurred = false; }, 100);
+        },
+
+        handleCardClick(ticket) {
+            if (this.dragOccurred) return;
+            this.abrirTicket(ticket);
+        },
+
+        async soltar(colunaDestino) {
+            const ticket = this.dragCard;
+            this.dragOver = null;
+
+            if (!ticket || ticket.coluna_kanban === colunaDestino) {
+                this.dragCard = null;
+                return;
+            }
+
+            const origem  = ticket.coluna_kanban;
+            const ticketId = ticket.id;
+
+            // Move otimisticamente no estado local
+            this.tickets[origem]       = (this.tickets[origem]       || []).filter(t => t.id !== ticketId);
+            this.tickets[colunaDestino] = [...(this.tickets[colunaDestino] || []), { ...ticket, coluna_kanban: colunaDestino }];
+            this.dragCard = null;
+
+            const res = await this.api(`/api/painel/kanban/ticket/${ticketId}/mover`, 'POST', { coluna: colunaDestino });
+            if (!res.ok) {
+                // Reverte em caso de erro
+                await this.carregar();
+            }
+        },
+
+        async salvarRetorno(data) {
+            if (!this.ticketAtivo) return;
+            // Ignora datas com ano incompleto (navegador dispara change a cada dígito)
+            if (data && parseInt(String(data).substring(0, 4)) < 2000) return;
+            const res = await this.api(`/api/painel/kanban/ticket/${this.ticketAtivo.id}/retorno`, 'POST', { retorno_em: data || null });
+            if (res.ok) {
+                const json = await res.json();
+                this.ticketAtivo.retorno_agendado_em = json.retorno_agendado_em;
+                // Atualiza também no estado local do kanban
+                const col = this.ticketAtivo.coluna_kanban;
+                const idx = (this.tickets[col] || []).findIndex(t => t.id === this.ticketAtivo.id);
+                if (idx >= 0) this.tickets[col][idx].retorno_agendado_em = json.retorno_agendado_em;
+            }
         },
 
         async salvarNome() {
@@ -353,6 +621,7 @@ function kanban() {
             this.notas        = [];
             this.notasAberto  = false;
             this.novaNota     = '';
+            this.limparMidia();
             await this.carregarMensagens(ticket.id);
             if (ticket.contato?.id) await this.carregarNotas(ticket.contato.id);
             this.$nextTick(() => {
@@ -387,6 +656,24 @@ function kanban() {
             if (res.ok) await this.carregarNotas(this.ticketAtivo.contato.id);
         },
 
+        async liberar(id) {
+            const res = await this.api(`/api/painel/kanban/ticket/${id}/liberar`, 'POST');
+            if (res.ok) {
+                this.ticketAtivo.vendedor_id        = null;
+                this.ticketAtivo.agente_responsavel = 'bot';
+                await this.carregar();
+            }
+        },
+
+        async liberarEAcionarIA(id) {
+            const res = await this.api(`/api/painel/kanban/ticket/${id}/liberar-ia`, 'POST');
+            if (res.ok) {
+                this.ticketAtivo.vendedor_id        = null;
+                this.ticketAtivo.agente_responsavel = 'bot';
+                await this.carregar();
+            }
+        },
+
         async marcarPendente(id) {
             const res = await this.api(`/api/painel/kanban/ticket/${id}/pendente`, 'POST');
             if (res.ok) {
@@ -398,6 +685,15 @@ function kanban() {
         async resolver(id) {
             if (!confirm('Marcar este atendimento como resolvido?')) return;
             const res = await this.api(`/api/painel/kanban/ticket/${id}/resolver`, 'POST');
+            if (res.ok) {
+                this.ticketAtivo = null;
+                await this.carregar();
+            }
+        },
+
+        async moverParaOutros(id) {
+            if (!confirm('Mover para "Outros / Internos"? Este ticket sairá do funil de vendas.')) return;
+            const res = await this.api(`/api/painel/kanban/ticket/${id}/outros`, 'POST');
             if (res.ok) {
                 this.ticketAtivo = null;
                 await this.carregar();
@@ -458,6 +754,104 @@ function kanban() {
             if (res.ok) await this.carregarMensagens(this.ticketAtivo.id);
         },
 
+        selecionarArquivo(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            this.audioBlob      = null;
+            this.audioPreviewUrl = null;
+            this.midiaArquivo   = file;
+            const mime = file.type;
+            if (mime.startsWith('image/')) {
+                this.midiaTipo   = 'imagem';
+                this.midiaPreview = URL.createObjectURL(file);
+            } else {
+                this.midiaTipo   = 'documento';
+                this.midiaPreview = 'doc';
+            }
+            event.target.value = '';
+        },
+
+        async iniciarGravacao() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const opts   = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                    ? { mimeType: 'audio/webm;codecs=opus' }
+                    : {};
+                this.mediaRecorder = new MediaRecorder(stream, opts);
+                this.audioChunks   = [];
+                this.mediaRecorder.ondataavailable = e => { if (e.data.size > 0) this.audioChunks.push(e.data); };
+                this.mediaRecorder.onstop = () => {
+                    const mimeType      = this.mediaRecorder.mimeType || 'audio/webm';
+                    this.audioBlob      = new Blob(this.audioChunks, { type: mimeType });
+                    this.audioPreviewUrl = URL.createObjectURL(this.audioBlob);
+                    this.midiaArquivo   = null;
+                    this.midiaPreview   = null;
+                    this.midiaTipo      = 'audio';
+                    stream.getTracks().forEach(t => t.stop());
+                };
+                this.mediaRecorder.start(100);
+                this.gravandoAudio = true;
+            } catch(e) {
+                alert('Não foi possível acessar o microfone. Verifique as permissões do navegador.');
+            }
+        },
+
+        pararGravacao() {
+            if (this.mediaRecorder && this.gravandoAudio) {
+                this.mediaRecorder.stop();
+                this.gravandoAudio = false;
+            }
+        },
+
+        limparMidia() {
+            if (this.midiaPreview && this.midiaPreview !== 'doc') URL.revokeObjectURL(this.midiaPreview);
+            if (this.audioPreviewUrl) URL.revokeObjectURL(this.audioPreviewUrl);
+            if (this.gravandoAudio && this.mediaRecorder) this.mediaRecorder.stop();
+            this.midiaArquivo    = null;
+            this.midiaPreview    = null;
+            this.midiaTipo       = null;
+            this.audioBlob       = null;
+            this.audioPreviewUrl = null;
+            this.gravandoAudio   = false;
+        },
+
+        async enviarMidia() {
+            if (!this.ticketAtivo) return;
+            const fd = new FormData();
+            const csrf = document.querySelector('meta[name="csrf-token"]').content;
+
+            if (this.audioBlob) {
+                const ext  = this.audioBlob.type.includes('ogg') ? 'ogg' : 'webm';
+                fd.append('arquivo', this.audioBlob, `audio.${ext}`);
+                fd.append('tipo', 'audio');
+            } else if (this.midiaArquivo) {
+                fd.append('arquivo', this.midiaArquivo);
+                fd.append('tipo', this.midiaTipo);
+                if (this.novaMensagem.trim()) fd.append('caption', this.novaMensagem.trim());
+            } else {
+                return;
+            }
+
+            this.enviandoMidia = true;
+            try {
+                const res = await fetch(`/api/painel/kanban/ticket/${this.ticketAtivo.id}/midia`, {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+                    body: fd,
+                });
+                if (res.ok) {
+                    this.novaMensagem = '';
+                    this.limparMidia();
+                    await this.carregarMensagens(this.ticketAtivo.id);
+                } else {
+                    const json = await res.json().catch(() => ({}));
+                    alert(json.message || 'Erro ao enviar arquivo.');
+                }
+            } finally {
+                this.enviandoMidia = false;
+            }
+        },
+
         async encerrar() {
             if (!this.tagDesfecho || !this.ticketAtivo) return;
             const res = await this.api(`/api/painel/kanban/ticket/${this.ticketAtivo.id}/encerrar`, 'POST', { tag_desfecho: this.tagDesfecho });
@@ -468,6 +862,26 @@ function kanban() {
             }
         },
 
+        formatarData(dt) {
+            if (!dt) return '';
+            const s = String(dt).substring(0, 10); // "YYYY-MM-DD"
+            const [y, m, d] = s.split('-');
+            if (!y || !m || !d) return '';
+            return `${d}/${m}`;
+        },
+
+        retornoBadgeStyle(dt) {
+            if (!dt) return '';
+            const s = String(dt).substring(0, 10); // "YYYY-MM-DD"
+            const [y, m, d] = s.split('-').map(Number);
+            if (!y || !m || !d) return 'background:#f3f4f6;color:#9ca3af';
+            const hoje = new Date(); hoje.setHours(0,0,0,0);
+            const data = new Date(y, m - 1, d);
+            if (data < hoje)                         return 'background:#fef2f2;color:#b91c1c';
+            if (data.getTime() === hoje.getTime())   return 'background:#fffbeb;color:#b45309';
+            return 'background:#eff6ff;color:#1d4ed8';
+        },
+
         dataRelativa(dt) {
             if (!dt) return '';
             const diff = Math.floor((Date.now() - new Date(dt)) / 60000);
@@ -475,6 +889,26 @@ function kanban() {
             if (diff < 60) return `${diff}min atrás`;
             if (diff < 1440) return `${Math.floor(diff/60)}h atrás`;
             return `${Math.floor(diff/1440)}d atrás`;
+        },
+
+        async orcamentoEnviado(id) {
+            const res = await this.api(`/api/painel/kanban/ticket/${id}/mover`, 'POST', { coluna: 'aguardando_lead' });
+            if (res.ok) {
+                const col = this.ticketAtivo?.coluna_kanban;
+                if (col && this.tickets[col]) {
+                    const ticket = (this.tickets[col] || []).find(t => t.id === id);
+                    if (ticket) {
+                        this.tickets[col] = this.tickets[col].filter(t => t.id !== id);
+                        this.tickets['aguardando_lead'] = [
+                            ...(this.tickets['aguardando_lead'] || []),
+                            { ...ticket, coluna_kanban: 'aguardando_lead' },
+                        ];
+                    }
+                }
+                if (this.ticketAtivo?.id === id) {
+                    this.ticketAtivo.coluna_kanban = 'aguardando_lead';
+                }
+            }
         },
 
         async api(url, method = 'GET', body = null) {
