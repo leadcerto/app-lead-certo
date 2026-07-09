@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Painel;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuditoriaContato;
 use App\Models\Contato;
 use App\Models\GoogleToken;
 use App\Models\VinculoContatoTenant;
@@ -25,10 +26,33 @@ class ContatosController extends Controller
             ->latest('created_at')
             ->first();
 
+        $busca = trim($request->input('q', ''));
+
         $contatoIds = VinculoContatoTenant::where('tenant_id', $tenantId)->pluck('contato_id');
-        $contatos   = Contato::whereIn('id', $contatoIds)
-            ->orderBy('nome')
-            ->paginate(100);
+
+        $query = Contato::whereIn('id', $contatoIds);
+
+        if ($busca !== '') {
+            // Com busca ativa: mostra qualquer contato que bata, incluindo "Sem Nome"
+            $like           = "%{$busca}%";
+            $somenteDigitos = preg_replace('/\D/', '', $busca);
+            $likeFone       = $somenteDigitos !== '' ? "%{$somenteDigitos}%" : $like;
+
+            $query->where(function ($q) use ($like, $likeFone) {
+                $q->where('nome', 'like', $like)
+                  ->orWhere('telefone', 'like', $likeFone)
+                  ->orWhere('email', 'like', $like)
+                  ->orWhere('cidade', 'like', $like)
+                  ->orWhere('endereco', 'like', $like);
+            });
+        } else {
+            // Sem busca: oculta "Sem Nome" e nomes que são apenas números
+            $query->whereRaw("LOWER(TRIM(COALESCE(nome,''))) NOT IN ('','sem nome','sem_nome')")
+                  ->whereRaw('nome != telefone')
+                  ->whereRaw("nome NOT REGEXP '^[0-9 +()\\\\-]+$'");
+        }
+
+        $contatos = $query->orderByDesc('id')->paginate(100)->withQueryString();
 
         $googleConectado = GoogleToken::where('tenant_id', $tenantId)->exists();
 
@@ -37,7 +61,325 @@ class ContatosController extends Controller
             'ultimo_sync'      => $ultimoVinculo?->created_at?->format('d/m/Y H:i'),
             'contatos'         => $contatos,
             'google_conectado' => $googleConectado,
+            'busca'            => $busca,
         ]);
+    }
+
+    // ── Auditoria de Contatos ──────────────────────────────────────────────────
+
+    public function auditoriaContatos(Request $request): View
+    {
+        $tenantId = $request->user()->tenant_id;
+        $filtro   = $request->input('filtro', 'pendente');
+        $tipoFiltro = $request->input('tipo');
+
+        // IDs de contatos vinculados a este tenant
+        $contatoIds = VinculoContatoTenant::where('tenant_id', $tenantId)->pluck('contato_id');
+
+        $registros = AuditoriaContato::with('contato')
+            ->whereIn('contato_id', $contatoIds)
+            ->when($filtro !== 'todos', fn($q) => $q->where('status', $filtro))
+            ->when($tipoFiltro, fn($q) => $q->where('tipo', $tipoFiltro))
+            ->orderByRaw("FIELD(status,'pendente','ignorado','resolvido')")
+            ->orderBy('id', 'desc')
+            ->paginate(50)
+            ->withQueryString();
+
+        $contagens = AuditoriaContato::whereIn('contato_id', $contatoIds)
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        // Breakdown por tipo (apenas pendentes) — inclui auditoria_id para grupos com 1 registro
+        $breakdown = AuditoriaContato::whereIn('contato_id', $contatoIds)
+            ->where('status', 'pendente')
+            ->selectRaw('tipo, observacao, count(*) as total, MIN(id) as auditoria_id, MIN(contato_id) as primeiro_contato_id')
+            ->groupBy('tipo', 'observacao')
+            ->orderByDesc('total')
+            ->get();
+
+        // Para grupos com 1 registro, carrega o contato para mostrar "Editar" diretamente
+        $breakdown->each(function ($grupo) {
+            if ($grupo->total === 1) {
+                $auditoria = AuditoriaContato::with('contato')->find($grupo->auditoria_id);
+                $grupo->contato        = $auditoria?->contato;
+                $grupo->campo          = $auditoria?->campo;
+                $grupo->valor_sugerido = $auditoria?->valor_sugerido;
+            }
+        });
+
+        return view('contatos.auditoria', [
+            'registros'  => $registros,
+            'filtro'     => $filtro,
+            'tipoFiltro' => $tipoFiltro,
+            'contagens'  => $contagens,
+            'breakdown'  => $breakdown,
+        ]);
+    }
+
+    public function resolverAuditoria(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'valor_novo' => 'required|string|max:255',
+        ]);
+
+        $tenantId   = $request->user()->tenant_id;
+        $contatoIds = VinculoContatoTenant::where('tenant_id', $tenantId)->pluck('contato_id');
+        $auditoria  = AuditoriaContato::whereIn('contato_id', $contatoIds)->findOrFail($id);
+        $contato    = $auditoria->contato;
+
+        if (! $contato) {
+            return response()->json(['erro' => 'Contato não encontrado.'], 404);
+        }
+
+        $campo = $auditoria->campo;
+        $contato->update([$campo => $request->input('valor_novo')]);
+
+        $auditoria->update([
+            'status'       => 'resolvido',
+            'resolvido_em' => now(),
+        ]);
+
+        return response()->json(['ok' => true, 'contato_id' => $contato->id]);
+    }
+
+    public function ignorarAuditoria(Request $request, int $id): JsonResponse
+    {
+        $tenantId   = $request->user()->tenant_id;
+        $contatoIds = VinculoContatoTenant::where('tenant_id', $tenantId)->pluck('contato_id');
+        $auditoria  = AuditoriaContato::whereIn('contato_id', $contatoIds)->findOrFail($id);
+        $auditoria->update(['status' => 'ignorado', 'resolvido_em' => now()]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function bulkIgnorarAuditoria(Request $request): JsonResponse
+    {
+        $tenantId   = $request->user()->tenant_id;
+        $contatoIds = VinculoContatoTenant::where('tenant_id', $tenantId)->pluck('contato_id');
+
+        $query = AuditoriaContato::whereIn('contato_id', $contatoIds)->where('status', 'pendente');
+
+        if ($request->filled('ids')) {
+            $query->whereIn('id', $request->input('ids'));
+        } elseif ($request->filled('tipo')) {
+            $query->where('tipo', $request->input('tipo'));
+            if ($request->filled('observacao')) {
+                $query->where('observacao', $request->input('observacao'));
+            }
+        } else {
+            return response()->json(['erro' => 'Informe ids ou tipo.'], 422);
+        }
+
+        $count = $query->update(['status' => 'ignorado', 'resolvido_em' => now()]);
+
+        return response()->json(['ok' => true, 'ignorados' => $count]);
+    }
+
+    public function bulkResolverAuditoria(Request $request): JsonResponse
+    {
+        $tenantId   = $request->user()->tenant_id;
+        $contatoIds = VinculoContatoTenant::where('tenant_id', $tenantId)->pluck('contato_id');
+
+        $query = AuditoriaContato::with('contato')
+            ->whereIn('contato_id', $contatoIds)
+            ->where('status', 'pendente');
+
+        if ($request->filled('ids')) {
+            $query->whereIn('id', $request->input('ids'));
+        } elseif ($request->filled('tipo')) {
+            $query->where('tipo', $request->input('tipo'));
+            if ($request->filled('observacao')) {
+                $query->where('observacao', $request->input('observacao'));
+            }
+        } else {
+            return response()->json(['erro' => 'Informe ids ou tipo.'], 422);
+        }
+
+        $count = 0;
+        $query->chunk(200, function ($registros) use (&$count) {
+            foreach ($registros as $auditoria) {
+                // Mantém o valor atual do campo como "resolvido" (número internacional válido)
+                $auditoria->update(['status' => 'resolvido', 'resolvido_em' => now()]);
+                $count++;
+            }
+        });
+
+        return response()->json(['ok' => true, 'resolvidos' => $count]);
+    }
+
+    // ── Marcadores ─────────────────────────────────────────────────────────────
+
+    public function marcadores(Request $request): View
+    {
+        $tenantId = $request->user()->tenant_id;
+        $token    = GoogleToken::where('tenant_id', $tenantId)->first();
+
+        // Busca grupos do Google via API se houver token
+        $grupos = [];
+        if ($token) {
+            try {
+                $google     = app(GoogleService::class);
+                $validToken = $google->tokenValido($token);
+                if ($validToken) {
+                    $res = \Illuminate\Support\Facades\Http::withToken($validToken->access_token)
+                        ->get('https://people.googleapis.com/v1/contactGroups', ['pageSize' => 200]);
+                    if ($res->successful()) {
+                        foreach ($res->json('contactGroups') ?? [] as $g) {
+                            if (in_array($g['groupType'] ?? '', ['USER_CONTACT_GROUP'])) {
+                                $grupos[] = [
+                                    'resourceName' => $g['resourceName'],
+                                    'name'         => $g['name'],
+                                    'memberCount'  => $g['memberCount'] ?? 0,
+                                ];
+                            }
+                        }
+                    }
+                }
+            } catch (\Throwable) {
+                // Continua sem grupos
+            }
+        }
+
+        return view('contatos.marcadores', [
+            'grupos'           => $grupos,
+            'google_conectado' => (bool) $token,
+        ]);
+    }
+
+    public function criarMarcador(Request $request): JsonResponse
+    {
+        $request->validate(['nome' => 'required|string|max:100']);
+
+        $tenantId = $request->user()->tenant_id;
+        $token    = GoogleToken::where('tenant_id', $tenantId)->first();
+
+        if (! $token) {
+            return response()->json(['erro' => 'Google não conectado.'], 422);
+        }
+
+        $google     = app(GoogleService::class);
+        $validToken = $google->tokenValido($token);
+        if (! $validToken) {
+            return response()->json(['erro' => 'Token Google inválido. Reconecte em Integrações.'], 422);
+        }
+
+        $resourceName = $google->criarGrupoContato($validToken, $request->input('nome'));
+        if (! $resourceName) {
+            return response()->json(['erro' => 'Não foi possível criar o marcador no Google.'], 500);
+        }
+
+        return response()->json(['ok' => true, 'resourceName' => $resourceName]);
+    }
+
+    public function desativarContato(Request $request, Contato $contato): JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+
+        $vinculo = VinculoContatoTenant::where('contato_id', $contato->id)
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        if (! $vinculo) {
+            return response()->json(['erro' => 'Contato não encontrado.'], 404);
+        }
+
+        $vinculo->update([
+            'ativo'         => false,
+            'desativado_em' => now(),
+        ]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function criarContato(Request $request): JsonResponse
+    {
+        $request->validate([
+            'nome'     => 'required|string|max:200',
+            'telefone' => 'required|string|max:30',
+        ]);
+
+        $tenantId = $request->user()->tenant_id;
+        $telefone = preg_replace('/\D/', '', $request->input('telefone'));
+
+        // Normaliza para E.164 brasileiro: sem prefixo 55 → adiciona
+        if (strlen($telefone) >= 10 && strlen($telefone) <= 11) {
+            $telefone = '55' . $telefone;
+        }
+
+        // Celular antigo sem o 9: 55 + DDD + 8 dígitos começando com 6/7/8
+        if (strlen($telefone) === 12 && preg_match('/^55\d{2}[678]/', $telefone)) {
+            $telefone = substr($telefone, 0, 4) . '9' . substr($telefone, 4);
+        }
+
+        if (strlen($telefone) < 12) {
+            return response()->json(['erro' => 'Telefone inválido.'], 422);
+        }
+
+        // Busca global — mesmo número em outro franqueado não duplica
+        $contato = Contato::withoutGlobalScopes()->where('telefone', $telefone)->first();
+
+        if ($contato) {
+            // Já existe globalmente — verifica se já está vinculado a este tenant
+            $jaVinculado = VinculoContatoTenant::where('tenant_id', $tenantId)
+                ->where('contato_id', $contato->id)
+                ->exists();
+
+            if ($jaVinculado) {
+                return response()->json([
+                    'erro'       => 'Este número já está cadastrado na sua lista.',
+                    'contato_id' => $contato->id,
+                    'existente'  => true,
+                ], 409);
+            }
+
+            // Existe globalmente mas não vinculado — vincula
+            VinculoContatoTenant::create(['tenant_id' => $tenantId, 'contato_id' => $contato->id]);
+
+            return response()->json(['ok' => true, 'contato_id' => $contato->id, 'vinculado' => true]);
+        }
+
+        // Não existe — cria globalmente e vincula
+        $contato = Contato::create([
+            'nome'     => $request->input('nome'),
+            'telefone' => $telefone,
+            'origem'   => 'manual',
+        ]);
+
+        VinculoContatoTenant::create(['tenant_id' => $tenantId, 'contato_id' => $contato->id]);
+
+        return response()->json(['ok' => true, 'contato_id' => $contato->id, 'vinculado' => false]);
+    }
+
+    public function excluirContatoDefinitivo(Request $request, Contato $contato): JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+
+        $vinculoAtual = VinculoContatoTenant::where('contato_id', $contato->id)
+            ->where('tenant_id', $tenantId)
+            ->exists();
+
+        if (! $vinculoAtual) {
+            return response()->json(['erro' => 'Contato não encontrado.'], 404);
+        }
+
+        $outrosVinculos = VinculoContatoTenant::where('contato_id', $contato->id)
+            ->where('tenant_id', '!=', $tenantId)
+            ->exists();
+
+        if ($outrosVinculos) {
+            // Contato compartilhado — remove apenas o vínculo deste tenant
+            VinculoContatoTenant::where('contato_id', $contato->id)
+                ->where('tenant_id', $tenantId)
+                ->delete();
+        } else {
+            // Único tenant — exclui definitivamente
+            DB::table('auditoria_contatos')->where('contato_id', $contato->id)->delete();
+            DB::table('vinculos_contato_tenant')->where('contato_id', $contato->id)->delete();
+            $contato->forceDelete();
+        }
+
+        return response()->json(['ok' => true]);
     }
 
     public function stats(Request $request): JsonResponse
@@ -57,11 +399,16 @@ class ContatosController extends Controller
             return response()->json(['erro' => 'Google não conectado. Vá em Integrações para conectar.'], 422);
         }
 
-        set_time_limit(600);
+        // Processa em background para não atingir timeout do nginx
+        dispatch(function () use ($token, $tenantId) {
+            app(ContatoSyncService::class)->sincronizar($token, $tenantId);
+        })->onQueue('default');
 
-        $resultado = app(ContatoSyncService::class)->sincronizar($token, $tenantId);
-
-        return response()->json($resultado);
+        return response()->json([
+            'importados'    => 0,
+            'ignorados'     => 0,
+            'em_progresso'  => true,
+        ]);
     }
 
     // Método legado mantido para compatibilidade — substitua por sincronizarGoogle() acima
@@ -460,26 +807,104 @@ class ContatosController extends Controller
         ]);
     }
 
+    public function historicoContato(Request $request, Contato $contato): JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+
+        $tickets = \App\Models\TicketAtendimento::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('contato_id', $contato->id)
+            ->withCount(['mensagens as total_msgs', 'mensagens as msgs_lead' => function ($q) {
+                $q->where('remetente', 'lead');
+            }])
+            ->orderByDesc('aberto_em')
+            ->get(['id','coluna_kanban','status','origem','tag_desfecho','aberto_em','encerrado_em','agente_responsavel']);
+
+        $colunaLabel = [
+            'lead_novo'           => 'Novo',
+            'em_atendimento'      => 'Em Atendimento',
+            'aguardando_orcamento'=> 'Ag. Orçamento',
+            'aguardando_lead'     => 'Ag. Lead',
+            'pagamento'           => 'Pagamento',
+            'servico_agendado'    => 'Serv. Agendado',
+            'encerrado'           => 'Encerrado',
+            'outros'              => 'Outros',
+        ];
+
+        $resultado = $tickets->map(fn($t) => [
+            'id'           => $t->id,
+            'coluna'       => $colunaLabel[$t->coluna_kanban] ?? $t->coluna_kanban,
+            'status'       => $t->status,
+            'origem'       => $t->origem,
+            'tag_desfecho' => $t->tag_desfecho,
+            'agente'       => $t->agente_responsavel,
+            'total_msgs'   => $t->total_msgs,
+            'msgs_lead'    => $t->msgs_lead,
+            'aberto_em'    => $t->aberto_em?->format('d/m/Y H:i'),
+            'encerrado_em' => $t->encerrado_em?->format('d/m/Y H:i'),
+        ]);
+
+        return response()->json($resultado);
+    }
+
+    public function showContato(Request $request, Contato $contato): JsonResponse
+    {
+        return response()->json($contato->makeVisible([
+            'cpf','rg','cnpj','razao_social','nome_fantasia','genero','estado_civil',
+            'aniversario','endereco','cep','pais','telefone_2','email_2',
+            'instagram','facebook','linkedin','twitter','tiktok','website',
+            'observacoes','score','tags','origem','tipo_contato','opt_out',
+            'status_validacao','created_at','nome_do_meio','sobrenome',
+            'departamento','empresa','profissao','cidade','estado',
+        ]));
+    }
+
     public function atualizarContato(Request $request, Contato $contato): JsonResponse
     {
         $request->validate([
-            'nome'        => 'sometimes|string|max:200',
-            'email'       => 'sometimes|nullable|email|max:200',
-            'profissao'   => 'sometimes|nullable|string|max:200',
-            'empresa'     => 'sometimes|nullable|string|max:200',
-            'observacoes' => 'sometimes|nullable|string',
-            'cidade'      => 'sometimes|nullable|string|max:100',
-            'estado'      => 'sometimes|nullable|string|max:50',
-            'tipo'        => 'sometimes|nullable|string|max:30',
-            'score'       => 'sometimes|nullable|integer|min:0|max:100',
+            'nome'           => 'sometimes|string|max:200',
+            'email'          => 'sometimes|nullable|email|max:200',
+            'email_2'        => 'sometimes|nullable|email|max:200',
+            'telefone_2'     => 'sometimes|nullable|string|max:20',
+            'profissao'      => 'sometimes|nullable|string|max:200',
+            'empresa'        => 'sometimes|nullable|string|max:200',
+            'departamento'   => 'sometimes|nullable|string|max:200',
+            'observacoes'    => 'sometimes|nullable|string',
+            'endereco'       => 'sometimes|nullable|string|max:300',
+            'cidade'         => 'sometimes|nullable|string|max:100',
+            'estado'         => 'sometimes|nullable|string|max:50',
+            'cep'            => 'sometimes|nullable|string|max:20',
+            'pais'           => 'sometimes|nullable|string|max:50',
+            'tipo'           => 'sometimes|nullable|string|max:30',
+            'tipo_contato'   => 'sometimes|nullable|in:lead,cliente,fornecedor,parceiro,pessoal',
+            'score'          => 'sometimes|nullable|integer|min:0|max:100',
+            'genero'         => 'sometimes|nullable|string|max:30',
+            'estado_civil'   => 'sometimes|nullable|string|max:30',
+            'aniversario'    => 'sometimes|nullable|date',
+            'cpf'            => 'sometimes|nullable|string|max:14',
+            'rg'             => 'sometimes|nullable|string|max:20',
+            'instagram'      => 'sometimes|nullable|string|max:200',
+            'facebook'       => 'sometimes|nullable|string|max:200',
+            'linkedin'       => 'sometimes|nullable|string|max:200',
+            'twitter'        => 'sometimes|nullable|string|max:200',
+            'website'        => 'sometimes|nullable|string|max:300',
+            'opt_out'        => 'sometimes|boolean',
         ]);
 
         $tenantId = $request->user()->tenant_id;
-        $dados    = $request->only(['nome', 'email', 'profissao', 'empresa', 'observacoes', 'cidade', 'estado', 'tipo', 'score']);
+        $campos   = [
+            'nome','email','email_2','telefone_2','profissao','empresa','departamento',
+            'observacoes','endereco','cidade','estado','cep','pais','tipo','tipo_contato',
+            'score','genero','estado_civil','aniversario','cpf','rg',
+            'instagram','facebook','linkedin','twitter','website','opt_out',
+        ];
+        $dados = $request->only($campos);
 
         // Regra de governança: nome editado por parceiro/SDR vai para auditoria
-        // se o master já tiver um nome diferente
+        // se o master já tiver um nome diferente. Dono e admin atualizam direto.
+        $perfilPrivilegiado = in_array($request->user()->perfil ?? '', ['dono', 'admin']);
         if (
+            ! $perfilPrivilegiado &&
             isset($dados['nome']) &&
             $contato->nome &&
             strtolower(trim($dados['nome'])) !== strtolower(trim($contato->nome))
@@ -520,18 +945,6 @@ class ContatosController extends Controller
 
     private function limparTelefone(string $raw): ?string
     {
-        if (! $raw) return null;
-
-        $digits = preg_replace('/\D/', '', $raw);
-
-        if (strlen($digits) < 8) return null;
-
-        if (str_starts_with($digits, '55') && strlen($digits) >= 12) {
-            $digits = substr($digits, 2);
-        }
-
-        if (strlen($digits) < 10 || strlen($digits) > 11) return null;
-
-        return $digits;
+        return \App\Console\Commands\NormalizarTelefones::normalizar($raw);
     }
 }
