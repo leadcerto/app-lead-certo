@@ -47,7 +47,7 @@ class NormalizarTelefonesCommand extends Command
                 if ($resultado['status'] === 'corrigido') {
                     $novo = $resultado['normalizado'];
 
-                    $canonico = Contato::where('telefone', $novo)->where('id', '!=', $contato->id)->first();
+                    $canonico = Contato::withTrashed()->where('telefone', $novo)->where('id', '!=', $contato->id)->first();
 
                     if ($canonico) {
                         // Já existe contato com o número normalizado → MESCLAR
@@ -62,12 +62,23 @@ class NormalizarTelefonesCommand extends Command
                         $this->line("  CORRIGIR [{$contato->telefone}] → [{$novo}]");
 
                         if (! $dryRun) {
-                            $contato->update(['telefone' => $novo]);
+                            try {
+                                $contato->update(['telefone' => $novo]);
 
-                            AuditoriaContato::where('contato_id', $contato->id)
-                                ->where('tipo', 'telefone')
-                                ->where('status', 'pendente')
-                                ->update(['status' => 'resolvido', 'resolvido_em' => now()]);
+                                AuditoriaContato::where('contato_id', $contato->id)
+                                    ->where('tipo', 'telefone')
+                                    ->where('status', 'pendente')
+                                    ->update(['status' => 'resolvido', 'resolvido_em' => now()]);
+                            } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+                                // Dois contatos no mesmo chunk normalizaram para o mesmo número
+                                $conflito = Contato::withTrashed()->where('telefone', $novo)->where('id', '!=', $contato->id)->first();
+                                if ($conflito) {
+                                    $this->warn("  → CONFLITO de chunk, mesclando #{$contato->id} em #{$conflito->id}");
+                                    $this->mesclar($contato, $conflito);
+                                    $mesclados++;
+                                    $corrigidos--;
+                                }
+                            }
                         }
                         $corrigidos++;
                     }
