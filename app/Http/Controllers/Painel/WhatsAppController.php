@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Painel;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SincronizarAgendaWhatsAppJob;
 use App\Services\UazapiService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -15,7 +16,30 @@ class WhatsAppController extends Controller
 
     public function view(): View
     {
-        return view('configuracoes.whatsapp');
+        $tenant = request()->user()->tenant;
+        return view('configuracoes.whatsapp', [
+            'sdrAtivo'      => (bool) $tenant->sdr_ativo,
+            'retencaoDias'  => $tenant->retencao_conversas_dias,
+        ]);
+    }
+
+    public function salvarRetencao(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'dias' => 'nullable|integer|min:1|max:3650',
+        ]);
+
+        $tenant = $request->user()->tenant;
+        $tenant->update(['retencao_conversas_dias' => $validated['dias'] ?? null]);
+
+        return response()->json(['ok' => true, 'dias' => $tenant->fresh()->retencao_conversas_dias]);
+    }
+
+    public function toggleSdrAtivo(Request $request): JsonResponse
+    {
+        $tenant = $request->user()->tenant;
+        $tenant->update(['sdr_ativo' => $request->boolean('sdr_ativo')]);
+        return response()->json(['sdr_ativo' => $tenant->sdr_ativo]);
     }
 
     public function status(Request $request): JsonResponse
@@ -39,6 +63,9 @@ class WhatsAppController extends Controller
                 'whatsapp_phone'            => $data['status']['phone'] ?? null,
                 'whatsapp_connected_since'  => now(),
             ]);
+
+            // Importa agenda do celular automaticamente na primeira conexão
+            SincronizarAgendaWhatsAppJob::dispatch($tenant->id)->delay(now()->addSeconds(10));
         }
 
         return response()->json([

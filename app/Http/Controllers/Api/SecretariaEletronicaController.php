@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SequenciaMensagemJob;
 use App\Models\ChamadaPerdida;
 use App\Services\SequenciaService;
 use App\Models\Contato;
@@ -122,7 +123,15 @@ class SecretariaEletronicaController extends Controller
             'mensagem_enviada_em' => now(),
         ]);
 
-        // Inicia sequência de mensagens automáticas
+        // Envia mensagem de abertura configurada (ou padrão) antes da sequência
+        $mensagemAbertura = $tenant->secretaria_mensagem_inicial
+            ?: "Oi! Vi que você ligou aqui pra gente e não consegui atender na hora. Tô disponível agora no WhatsApp, pode falar! 😊";
+
+        SequenciaMensagemJob::dispatch($ticket->id, $mensagemAbertura)
+            ->onQueue('default')
+            ->delay(now()->addSeconds(5));
+
+        // Inicia sequência de mensagens automáticas (Boas-vindas)
         app(SequenciaService::class)->iniciarParaTicket($ticket);
 
         Log::info('Secretária Eletrônica: chamada processada', [
@@ -176,6 +185,7 @@ class SecretariaEletronicaController extends Controller
                 'chamou_em'        => $c->chamou_em?->format('d/m/Y H:i'),
                 'mensagem_enviada' => $c->mensagem_enviada,
                 'ticket_id'        => $c->ticket_id,
+                'contato_id'       => $c->contato_id,
                 'contato_nome'     => $c->contato?->nome,
             ]);
 

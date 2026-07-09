@@ -13,6 +13,7 @@ use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
 use App\Services\MediaProcessorService;
 use App\Services\SequenciaService;
+use App\Services\TelefoneService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -337,21 +338,37 @@ class UazapiWebhookController extends Controller
     {
         $texto = strip_tags($texto);
 
-        // Padrões em português (case-insensitive)
+        // Padrões em português — sem flag /i nos character classes de nome para exigir capitalização real
         $padroes = [
-            '/(?:meu nome é|me chamo|pode me chamar de|aqui é|aqui fala|fala[ndo]* aqui|aqui[,\s]+(?:é\s)?(?:o|a)\s)\s*([A-ZÀ-Ú][a-zà-ú]+(?:\s[A-ZÀ-Ú][a-zà-ú]+)?)/iu',
-            '/^(?:oi|olá|boa\s\w+)[,\s!]+([A-ZÀ-Ú][a-zà-ú]{2,}(?:\s[A-ZÀ-Ú][a-zà-ú]+)?)\s/iu',
-            '/sou\s+(?:o|a)?\s*([A-ZÀ-Ú][a-zà-ú]{2,}(?:\s[A-ZÀ-Ú][a-zà-ú]+)?)/iu',
-            '/(?:me\s+)?chamo\s+([A-ZÀ-Ú][a-zà-ú]{2,}(?:\s[A-ZÀ-Ú][a-zà-ú]+)?)/iu',
-            '/(?:é|e)\s+(?:o|a)\s+([A-ZÀ-Ú][a-zà-ú]{2,}(?:\s[A-ZÀ-Ú][a-zà-ú]+)?)/iu',
+            // "meu nome é X", "me chamo X", "aqui é X", "aqui fala X"
+            '/(?:meu nome é|me chamo|pode me chamar de|aqui é|aqui fala|falando aqui|aqui[,\s]+(?:é\s)?(?:o|a)\s)\s*([A-ZÀ-Ú][a-zà-ú]+(?:\s[A-ZÀ-Ú][a-zà-ú]+)?)/iu',
+            // "Oi, João" / "Olá, Maria" — sem /i: exige maiúscula real no nome capturado
+            '/^(?:oi|olá|boa\s\w+)[,\s!]+([A-ZÀ-Ú][a-zà-ú]{2,}(?:\s[A-ZÀ-Ú][a-zà-ú]+)?)\s/u',
+            // "sou o João" / "sou a Maria"
+            '/\bsou\s+(?:o|a)?\s*([A-ZÀ-Ú][a-zà-ú]{2,}(?:\s[A-ZÀ-Ú][a-zà-ú]+)?)/u',
+            // "chamo X" / "me chamo X"
+            '/(?:me\s+)?chamo\s+([A-ZÀ-Ú][a-zà-ú]{2,}(?:\s[A-ZÀ-Ú][a-zà-ú]+)?)/u',
+        ];
+
+        // Verbos, saudações e termos de negócio que NUNCA são primeiros nomes
+        $naoNomes = [
+            'frete', 'mudança', 'mudanças', 'orçamento', 'aqui', 'favor',
+            'boa', 'bom', 'tarde', 'manhã', 'noite', 'dia', 'tudo',
+            'estou', 'preciso', 'precisando', 'quero', 'querendo',
+            'gostaria', 'gostando', 'tenho', 'tendo',
+            'vim', 'venho', 'venha', 'busco', 'buscando',
+            'solicito', 'solicitando', 'peço', 'pedindo', 'necessito',
+            'seria', 'posso', 'poderia', 'podendo',
+            'olá', 'oi', 'sim', 'não', 'ok',
         ];
 
         foreach ($padroes as $padrao) {
             if (preg_match($padrao, $texto, $m)) {
                 $nome = trim($m[1]);
-                // Descarta palavras-chave que não são nomes
-                $naoNomes = ['frete', 'mudança', 'orçamento', 'aqui', 'favor', 'boa', 'tarde', 'manhã', 'noite'];
-                if (in_array(mb_strtolower($nome), $naoNomes)) continue;
+                $primeiraWord = mb_strtolower(explode(' ', $nome)[0], 'UTF-8');
+                if (in_array($primeiraWord, $naoNomes) || in_array(mb_strtolower($nome, 'UTF-8'), $naoNomes)) {
+                    continue;
+                }
                 return mb_convert_case($nome, MB_CASE_TITLE, 'UTF-8');
             }
         }
@@ -376,19 +393,18 @@ class UazapiWebhookController extends Controller
 
     private function normalizarTelefone(string $telefone): string
     {
-        $digits = preg_replace('/\D/', '', $telefone);
+        $normalizado = app(TelefoneService::class)->normalizar($telefone);
 
-        // Sem prefixo 55 (10-11 dígitos) → adiciona país
+        if ($normalizado) {
+            return $normalizado;
+        }
+
+        // Fallback: remove não-dígitos e adiciona 55 se necessário
+        $digits = preg_replace('/\D/', '', $telefone);
         if (strlen($digits) >= 10 && strlen($digits) <= 11) {
             $digits = '55' . $digits;
         }
-
-        // Celular brasileiro antigo sem o 9: 12 dígitos onde o dígito após DDD é 6, 7 ou 8
-        // Ex: 5521 8777-8888 → 5521 9 8777-8888
-        if (strlen($digits) === 12 && preg_match('/^55\d{2}[678]/', $digits)) {
-            $digits = substr($digits, 0, 4) . '9' . substr($digits, 4);
-        }
-
+        Log::warning('Webhook: telefone não normalizável', ['raw' => $telefone, 'fallback' => $digits]);
         return $digits;
     }
 
