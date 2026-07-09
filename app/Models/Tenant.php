@@ -23,6 +23,16 @@ class Tenant extends Model
         'uazapi_webhook_token',
         'secretaria_token',
         'secretaria_mensagem_inicial',
+        'ia_contexto',
+        'tabela_precos_pdf_path',
+        'tabela_precos_texto',
+        'sdr_ativo',
+        'retencao_conversas_dias',
+    ];
+
+    protected $casts = [
+        'sdr_ativo'               => 'boolean',
+        'retencao_conversas_dias' => 'integer',
     ];
 
     public function users(): HasMany
