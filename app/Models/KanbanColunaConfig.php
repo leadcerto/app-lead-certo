@@ -22,6 +22,7 @@ class KanbanColunaConfig extends Model
         'ia_objetivo',
         'ia_contexto',
         'ia_ativo',
+        'sdr_delay_segundos',
     ];
 
     protected $casts = [
