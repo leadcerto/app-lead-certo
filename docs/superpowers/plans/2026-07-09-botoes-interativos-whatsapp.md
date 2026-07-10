@@ -1211,6 +1211,362 @@ git commit -m "feat: UI de configuração dos botões interativos por coluna + s
 
 ---
 
+### Task 11: Disparar os botões junto com a última mensagem da sequência
+
+**Achado da revisão final da branch (whole-branch review):** `enviarBotoesDaColuna()` (Task 7/10) não tinha nenhum chamador — a feature inteira era "morta" em produção: dava pra configurar botões, mas nada disparava a mensagem com eles. Decisão do usuário (2026-07-10): os botões saem junto com a **última mensagem da sequência automática** daquela coluna (não ao entrar na coluna, não manual).
+
+Também corrige de passagem o Minor da revisão final: `$botao['target']` sem `?? ''` — a lógica é realocada pra um lugar novo (Step 1) e já sai com o fallback.
+
+**Files:**
+- Modify: `app/Services/KanbanBotaoActionService.php` (novo método público `enviarBotoesDaColuna()`, lógica movida de `UazapiWebhookController`)
+- Modify: `app/Http/Controllers/Webhook/UazapiWebhookController.php` (remove o método privado duplicado, que nunca teve chamador)
+- Modify: `app/Jobs/SequenciaMensagemJob.php` (novo parâmetro `enviarBotoes`)
+- Modify: `app/Services/SequenciaService.php` (marca o último job da sequência)
+- Test: `tests/Feature/KanbanBotaoActionServiceEnviarBotoesTest.php`
+- Test: `tests/Feature/SequenciaServiceUltimaMensagemTest.php`
+- Test: `tests/Feature/SequenciaMensagemJobEnviaBotoesTest.php`
+
+**Interfaces:**
+- Consumes: `UazapiService::enviarMenuBotoes()` (Task 5), `KanbanColunaConfig::$button_settings` (Task 4).
+- Produces: `KanbanBotaoActionService::enviarBotoesDaColuna(TicketAtendimento $ticket): bool` — usado pelo job de sequência e disponível pra qualquer chamador futuro (ex: se um dia quiser expor um botão manual "Enviar menu" na tela do Kanban).
+
+- [ ] **Step 1: Mover `enviarBotoesDaColuna()` pro serviço, com o fallback corrigido**
+
+Escrever o teste primeiro:
+
+```php
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Contato;
+use App\Models\KanbanColunaConfig;
+use App\Models\Tenant;
+use App\Models\TicketAtendimento;
+use App\Services\KanbanBotaoActionService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Tests\TestCase;
+
+class KanbanBotaoActionServiceEnviarBotoesTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_monta_e_envia_o_menu_com_formato_correto_por_tipo_de_botao(): void
+    {
+        Http::fake(['*/send/menu' => Http::response(['id' => 'msg1'], 200)]);
+
+        $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $contato = Contato::factory()->create(['telefone' => '5511999999999']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'aguardando_lead', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+        KanbanColunaConfig::create([
+            'tenant_id' => $tenant->id, 'coluna_kanban' => 'aguardando_lead',
+            'objetivo' => 'Escolha uma opção',
+            'button_settings' => [
+                ['text' => 'Ver Site', 'action' => 'open_url', 'target' => 'https://exemplo.com'],
+                ['text' => 'Falar com Humano', 'action' => 'move_column', 'target' => 'em_atendimento'],
+            ],
+        ]);
+
+        $ok = app(KanbanBotaoActionService::class)->enviarBotoesDaColuna($ticket);
+
+        $this->assertTrue($ok);
+        Http::assertSent(function ($request) {
+            return str_contains($request->url(), '/send/menu')
+                && $request['choices'] === ['Ver Site|https://exemplo.com', 'Falar com Humano|move_column:1'];
+        });
+    }
+
+    public function test_retorna_false_sem_button_settings_configurado(): void
+    {
+        $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $contato = Contato::factory()->create(['telefone' => '5511999999999']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'lead_novo', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $ok = app(KanbanBotaoActionService::class)->enviarBotoesDaColuna($ticket);
+
+        $this->assertFalse($ok);
+    }
+}
+```
+
+Rodar (`php artisan test --filter KanbanBotaoActionServiceEnviarBotoesTest`) e confirmar FAIL (método não existe).
+
+Implementar em `app/Services/KanbanBotaoActionService.php` (adicionar `use App\Services\UazapiService;` no topo se não existir, e o método público — pode ficar antes ou depois de `executar()`):
+
+```php
+/**
+ * Monta e envia o menu de botões configurado pra coluna ATUAL do ticket.
+ * Retorna false sem erro se a coluna não tiver button_settings — chamado
+ * de pontos que nem sempre têm botões configurados (ex: toda sequência).
+ */
+public function enviarBotoesDaColuna(TicketAtendimento $ticket): bool
+{
+    $config = KanbanColunaConfig::where('tenant_id', $ticket->tenant_id)
+        ->where('coluna_kanban', $ticket->coluna_kanban)
+        ->first();
+
+    $botoes = $config?->button_settings ?? [];
+    if (empty($botoes)) {
+        return false;
+    }
+
+    $choices = [];
+    foreach ($botoes as $i => $botao) {
+        $texto  = $botao['text'] ?? '';
+        $target = $botao['target'] ?? '';
+        $choices[] = match ($botao['action'] ?? null) {
+            'open_url' => "{$texto}|{$target}",
+            'call'     => "{$texto}|call:{$target}",
+            default    => "{$texto}|{$botao['action']}:{$i}",
+        };
+    }
+
+    $telefone = $ticket->contato?->telefone;
+    $token    = $ticket->tenant?->uazapi_instance_token;
+    if (! $telefone || ! $token) {
+        return false;
+    }
+
+    return app(UazapiService::class)->enviarMenuBotoes(
+        $token,
+        $telefone,
+        $config->objetivo ?: 'Escolha uma opção:',
+        $choices
+    );
+}
+```
+
+Rodar de novo, confirmar PASS (2 testes).
+
+Em `app/Http/Controllers/Webhook/UazapiWebhookController.php`, remover o método privado `enviarBotoesDaColuna()` inteiro (linhas ~273-301 antes desta task — confira o número exato no arquivo atual) — ele nunca teve chamador, e a lógica agora mora só no serviço. Se algo no arquivo referenciar esse método (não deveria, era código morto), trocar pra `app(\App\Services\KanbanBotaoActionService::class)->enviarBotoesDaColuna($ticket)`.
+
+Rodar a suíte inteira, confirmar que nada quebrou (só o `ExampleTest` pré-existente pode falhar).
+
+Commit:
+```bash
+git add app/Services/KanbanBotaoActionService.php app/Http/Controllers/Webhook/UazapiWebhookController.php tests/Feature/KanbanBotaoActionServiceEnviarBotoesTest.php
+git commit -m "refactor: mover enviarBotoesDaColuna pro KanbanBotaoActionService (com fallback de target corrigido)"
+```
+
+- [ ] **Step 2: `SequenciaService` marca qual é a última mensagem**
+
+Teste primeiro (`Queue::fake()`, verifica a propriedade `enviarBotoes` do job despachado):
+
+```php
+<?php
+
+namespace Tests\Feature;
+
+use App\Jobs\SequenciaMensagemJob;
+use App\Models\Contato;
+use App\Models\Sequencia;
+use App\Models\SequenciaMensagem;
+use App\Models\Tenant;
+use App\Models\TicketAtendimento;
+use App\Services\SequenciaService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
+use Tests\TestCase;
+
+class SequenciaServiceUltimaMensagemTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_so_a_ultima_mensagem_da_sequencia_dispara_com_enviarbotoes(): void
+    {
+        Queue::fake();
+
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'aguardando_lead', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $sequencia = Sequencia::create([
+            'tenant_id' => $tenant->id, 'nome' => 'Follow-up', 'coluna_kanban' => 'aguardando_lead', 'ativo' => true,
+        ]);
+        SequenciaMensagem::create(['tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 1, 'conteudo' => 'Msg 1', 'delay_segundos' => 60, 'ativo' => true]);
+        SequenciaMensagem::create(['tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 2, 'conteudo' => 'Msg 2', 'delay_segundos' => 60, 'ativo' => true]);
+        SequenciaMensagem::create(['tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 3, 'conteudo' => 'Msg 3', 'delay_segundos' => 60, 'ativo' => true]);
+
+        app(SequenciaService::class)->iniciarParaTicket($ticket);
+
+        Queue::assertPushed(SequenciaMensagemJob::class, 3);
+        Queue::assertPushed(SequenciaMensagemJob::class, fn ($job) => $job->conteudo === 'Msg 1' && $job->enviarBotoes === false);
+        Queue::assertPushed(SequenciaMensagemJob::class, fn ($job) => $job->conteudo === 'Msg 2' && $job->enviarBotoes === false);
+        Queue::assertPushed(SequenciaMensagemJob::class, fn ($job) => $job->conteudo === 'Msg 3' && $job->enviarBotoes === true);
+    }
+}
+```
+
+Confira antes de rodar: os nomes exatos dos campos `NOT NULL` de `sequencias`/`sequencia_mensagens` (migrations já vistas nesta sessão: `Sequencia` tem `tenant_id`, `nome`, `descricao` nullable, `coluna_kanban` nullable, `ativo`; `SequenciaMensagem` tem `tenant_id`, `sequencia_id`, `ordem`, `conteudo`, `delay_segundos`, `ativo` — ajuste se o arquivo atual dos models/migrations tiver diferença).
+
+Rodar, confirmar FAIL (hoje nenhum job tem propriedade `enviarBotoes`).
+
+Implementar em `app/Services/SequenciaService.php`:
+
+```php
+public function iniciarParaTicket(TicketAtendimento $ticket): bool
+{
+    $sequencias = Sequencia::withoutGlobalScopes()
+        ->where('tenant_id', $ticket->tenant_id)
+        ->where('coluna_kanban', $ticket->coluna_kanban)
+        ->where('ativo', true)
+        ->with(['mensagens' => fn ($q) => $q->where('ativo', true)->orderBy('ordem')])
+        ->get();
+
+    $totalMensagens = $sequencias->sum(fn ($s) => $s->mensagens->count());
+
+    $disparou       = false;
+    $delayAcumulado = 0;
+    $indice         = 0;
+
+    foreach ($sequencias as $sequencia) {
+        foreach ($sequencia->mensagens as $msg) {
+            $indice++;
+            $delayAcumulado += $msg->delay_segundos;
+            $ultimaMensagem = $indice === $totalMensagens;
+
+            SequenciaMensagemJob::dispatch($ticket->id, $msg->conteudo, $msg->imagem_url, $sequencia->coluna_kanban, $ultimaMensagem)
+                ->onQueue('default')
+                ->delay(now()->addSeconds($delayAcumulado));
+            $disparou = true;
+        }
+    }
+
+    return $disparou;
+}
+```
+
+Rodar de novo, confirmar PASS.
+
+Commit:
+```bash
+git add app/Services/SequenciaService.php tests/Feature/SequenciaServiceUltimaMensagemTest.php
+git commit -m "feat: SequenciaService marca a ultima mensagem pra disparar os botoes"
+```
+
+- [ ] **Step 3: `SequenciaMensagemJob` envia os botões depois da última mensagem**
+
+Teste primeiro:
+
+```php
+<?php
+
+namespace Tests\Feature;
+
+use App\Jobs\SequenciaMensagemJob;
+use App\Models\Contato;
+use App\Models\KanbanColunaConfig;
+use App\Models\Tenant;
+use App\Models\TicketAtendimento;
+use App\Services\HumanizacaoService;
+use App\Services\UazapiService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Tests\TestCase;
+
+class SequenciaMensagemJobEnviaBotoesTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_envia_botoes_depois_da_mensagem_quando_enviarbotoes_e_true(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+
+        $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $contato = Contato::factory()->create(['telefone' => '5511999999999']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'aguardando_lead', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+        KanbanColunaConfig::create([
+            'tenant_id' => $tenant->id, 'coluna_kanban' => 'aguardando_lead',
+            'button_settings' => [
+                ['text' => 'Confirmar', 'action' => 'move_column', 'target' => 'servico_agendado'],
+            ],
+        ]);
+
+        (new SequenciaMensagemJob($ticket->id, 'Última mensagem', null, 'aguardando_lead', true))
+            ->handle(app(HumanizacaoService::class), app(UazapiService::class));
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/send/menu'));
+    }
+
+    public function test_nao_envia_botoes_quando_enviarbotoes_e_false(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+
+        $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $contato = Contato::factory()->create(['telefone' => '5511999999999']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'aguardando_lead', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+        KanbanColunaConfig::create([
+            'tenant_id' => $tenant->id, 'coluna_kanban' => 'aguardando_lead',
+            'button_settings' => [
+                ['text' => 'Confirmar', 'action' => 'move_column', 'target' => 'servico_agendado'],
+            ],
+        ]);
+
+        (new SequenciaMensagemJob($ticket->id, 'Mensagem do meio', null, 'aguardando_lead', false))
+            ->handle(app(HumanizacaoService::class), app(UazapiService::class));
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/send/menu'));
+    }
+}
+```
+
+Rodar, confirmar FAIL (`enviarBotoes` não existe no construtor, `handle()` não envia nada).
+
+Implementar em `app/Jobs/SequenciaMensagemJob.php`:
+
+```php
+// Construtor — adicionar o 5º parâmetro:
+public function __construct(
+    public int     $ticketId,
+    public string  $conteudo,
+    public ?string $imagemUrl = null,
+    public ?string $colunaKanban = null,
+    public bool    $enviarBotoes = false,
+) {}
+```
+
+No fim de `handle()` (depois do `if ($this->imagemUrl) { ... } else { ... }`, mesma indentação, antes do fechamento do método):
+
+```php
+        // Igual ao acesso via ?? já usado pra colunaKanban: jobs serializados antes
+        // desta propriedade existir não têm enviarBotoes no payload, e o unserialize
+        // não roda o construtor.
+        if ($this->enviarBotoes ?? false) {
+            app(\App\Services\KanbanBotaoActionService::class)->enviarBotoesDaColuna($ticket);
+        }
+```
+
+Rodar de novo, confirmar PASS (2 testes). Rodar a suíte inteira, confirmar que nada quebrou.
+
+Commit:
+```bash
+git add app/Jobs/SequenciaMensagemJob.php tests/Feature/SequenciaMensagemJobEnviaBotoesTest.php
+git commit -m "feat: SequenciaMensagemJob envia os botoes da coluna apos a ultima mensagem"
+```
+
+---
+
 ## Fora de escopo deste plano (anotado, não esquecido)
 
 - **Ação "adicionar/remover tag" (`add_tag`/`remove_tag`)**: precisa de desenho próprio — o sistema de Etiquetas atual está acoplado à sincronização de grupos do Google Contacts, não serve como "tag interna do Kanban" sem generalizar primeiro. Fase 2, plano separado (pedido do usuário 2026-07-10).
