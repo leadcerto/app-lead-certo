@@ -283,7 +283,11 @@ class UazapiWebhookController extends Controller
 
         $choices = [];
         foreach ($botoes as $i => $botao) {
-            $choices[] = "{$botao['text']}|{$botao['action']}:{$i}";
+            $choices[] = match ($botao['action'] ?? null) {
+                'open_url' => "{$botao['text']}|{$botao['target']}",
+                'call'     => "{$botao['text']}|call:{$botao['target']}",
+                default    => "{$botao['text']}|{$botao['action']}:{$i}",
+            };
         }
 
         $telefone = $ticket->contato?->telefone;
