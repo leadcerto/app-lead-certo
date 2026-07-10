@@ -140,6 +140,13 @@ class SequenciaMensagemJob implements ShouldQueue
                 'enviado_em' => now(),
             ]);
         }
+
+        // Igual ao acesso via ?? já usado pra colunaKanban: jobs serializados antes
+        // desta propriedade existir não têm enviarBotoes no payload, e o unserialize
+        // não roda o construtor.
+        if ($this->enviarBotoes ?? false) {
+            app(\App\Services\KanbanBotaoActionService::class)->enviarBotoesDaColuna($ticket);
+        }
     }
 
     private function getSaudacao(\Illuminate\Support\Carbon $now): string
