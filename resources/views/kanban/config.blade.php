@@ -316,6 +316,61 @@
                                 </div>
                             </div>
 
+                            {{-- Botões Interativos --}}
+                            <div class="mt-4 pt-4 border-t border-gray-100">
+                                <p class="text-xs font-semibold text-gray-500 mb-2">Botões Interativos (máx. 3)</p>
+
+                                <template x-for="(botao, i) in (botoes[col.key] || [])" :key="i">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <input type="text" maxlength="20"
+                                               :value="botao.text"
+                                               @input="botoes[col.key][i].text = $event.target.value; botoesAlterado[col.key] = true"
+                                               placeholder="Texto do botão (máx. 20)"
+                                               class="flex-1 text-xs border border-gray-300 rounded px-2 py-1">
+                                        <select :value="botao.action"
+                                                @change="botoes[col.key][i].action = $event.target.value; botoes[col.key][i].target = ''; botoesAlterado[col.key] = true"
+                                                class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white">
+                                            <option value="move_column">Mover para coluna</option>
+                                            <option value="trigger_ia">Acionar IA</option>
+                                            <option value="opt_out">Parar mensagens (opt-out)</option>
+                                            <option value="open_url">Abrir link</option>
+                                            <option value="call">Ligar para número</option>
+                                        </select>
+                                        <template x-if="botao.action === 'move_column'">
+                                            <select :value="botao.target"
+                                                    @change="botoes[col.key][i].target = $event.target.value; botoesAlterado[col.key] = true"
+                                                    class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white">
+                                                <template x-for="c in colunas" :key="c.key">
+                                                    <option :value="c.key" x-text="c.label"></option>
+                                                </template>
+                                            </select>
+                                        </template>
+                                        <template x-if="botao.action === 'open_url'">
+                                            <input type="url"
+                                                   :value="botao.target"
+                                                   @input="botoes[col.key][i].target = $event.target.value; botoesAlterado[col.key] = true"
+                                                   placeholder="https://..."
+                                                   class="text-xs border border-gray-300 rounded px-2 py-1 w-40">
+                                        </template>
+                                        <template x-if="botao.action === 'call'">
+                                            <input type="tel"
+                                                   :value="botao.target"
+                                                   @input="botoes[col.key][i].target = $event.target.value; botoesAlterado[col.key] = true"
+                                                   placeholder="+5511999999999"
+                                                   class="text-xs border border-gray-300 rounded px-2 py-1 w-36">
+                                        </template>
+                                        <button @click="botoes[col.key].splice(i, 1); botoesAlterado[col.key] = true"
+                                                class="text-red-300 hover:text-red-500 text-xs">✕</button>
+                                    </div>
+                                </template>
+
+                                <button @click="botoes[col.key] = [...(botoes[col.key] || []), { text: '', action: 'move_column', target: '' }]; botoesAlterado[col.key] = true"
+                                        :disabled="(botoes[col.key] || []).length >= 3"
+                                        class="text-xs text-purple-600 hover:text-purple-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                                    + Adicionar botão
+                                </button>
+                            </div>
+
                             {{-- ✨ Card — Aplicar Variáveis com IA --}}
                             <div x-show="(mensagensPor[seq.id] || []).some(m => m.conteudo)"
                                  style="display:none"
@@ -509,60 +564,6 @@
                                     Salvar
                                 </button>
                             </div>
-                        </div>
-
-                        <div class="mt-4 pt-4 border-t border-gray-100">
-                            <p class="text-xs font-semibold text-gray-500 mb-2">Botões Interativos (máx. 3)</p>
-
-                            <template x-for="(botao, i) in (botoes[col.key] || [])" :key="i">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <input type="text" maxlength="20"
-                                           :value="botao.text"
-                                           @input="botoes[col.key][i].text = $event.target.value; botoesAlterado[col.key] = true"
-                                           placeholder="Texto do botão (máx. 20)"
-                                           class="flex-1 text-xs border border-gray-300 rounded px-2 py-1">
-                                    <select :value="botao.action"
-                                            @change="botoes[col.key][i].action = $event.target.value; botoes[col.key][i].target = ''; botoesAlterado[col.key] = true"
-                                            class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white">
-                                        <option value="move_column">Mover para coluna</option>
-                                        <option value="trigger_ia">Acionar IA</option>
-                                        <option value="opt_out">Parar mensagens (opt-out)</option>
-                                        <option value="open_url">Abrir link</option>
-                                        <option value="call">Ligar para número</option>
-                                    </select>
-                                    <template x-if="botao.action === 'move_column'">
-                                        <select :value="botao.target"
-                                                @change="botoes[col.key][i].target = $event.target.value; botoesAlterado[col.key] = true"
-                                                class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white">
-                                            <template x-for="c in colunas" :key="c.key">
-                                                <option :value="c.key" x-text="c.label"></option>
-                                            </template>
-                                        </select>
-                                    </template>
-                                    <template x-if="botao.action === 'open_url'">
-                                        <input type="url"
-                                               :value="botao.target"
-                                               @input="botoes[col.key][i].target = $event.target.value; botoesAlterado[col.key] = true"
-                                               placeholder="https://..."
-                                               class="text-xs border border-gray-300 rounded px-2 py-1 w-40">
-                                    </template>
-                                    <template x-if="botao.action === 'call'">
-                                        <input type="tel"
-                                               :value="botao.target"
-                                               @input="botoes[col.key][i].target = $event.target.value; botoesAlterado[col.key] = true"
-                                               placeholder="+5511999999999"
-                                               class="text-xs border border-gray-300 rounded px-2 py-1 w-36">
-                                    </template>
-                                    <button @click="botoes[col.key].splice(i, 1); botoesAlterado[col.key] = true"
-                                            class="text-red-300 hover:text-red-500 text-xs">✕</button>
-                                </div>
-                            </template>
-
-                            <button @click="botoes[col.key] = [...(botoes[col.key] || []), { text: '', action: 'move_column', target: '' }]; botoesAlterado[col.key] = true"
-                                    :disabled="(botoes[col.key] || []).length >= 3"
-                                    class="text-xs text-purple-600 hover:text-purple-700 disabled:opacity-40 disabled:cursor-not-allowed">
-                                + Adicionar botão
-                            </button>
                         </div>
                     </div>
                 </div>
