@@ -31,6 +31,18 @@ class SequenciaMensagemJob implements ShouldQueue
             return;
         }
 
+        $bloqueado = \App\Models\VinculoContatoTenant::where('contato_id', $ticket->contato_id)
+            ->where('tenant_id', $ticket->tenant_id)
+            ->whereNotNull('bloqueado_em')
+            ->exists();
+
+        if ($bloqueado) {
+            Log::info('SequenciaMensagemJob: contato bloqueado (opt-out) neste tenant, envio cancelado', [
+                'ticket_id' => $this->ticketId,
+            ]);
+            return;
+        }
+
         // Se a sequência foi vinculada a uma coluna específica, cancelar se o lead saiu dela.
         // Acesso via ?? por segurança: jobs enfileirados antes desta propriedade existir
         // não têm colunaKanban no payload serializado, e o unserialize não roda o construtor
