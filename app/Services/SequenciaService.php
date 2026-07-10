@@ -17,13 +17,19 @@ class SequenciaService
             ->with(['mensagens' => fn ($q) => $q->where('ativo', true)->orderBy('ordem')])
             ->get();
 
-        $disparou        = false;
-        $delayAcumulado  = 0;
+        $totalMensagens = $sequencias->sum(fn ($s) => $s->mensagens->count());
+
+        $disparou       = false;
+        $delayAcumulado = 0;
+        $indice         = 0;
 
         foreach ($sequencias as $sequencia) {
             foreach ($sequencia->mensagens as $msg) {
+                $indice++;
                 $delayAcumulado += $msg->delay_segundos;
-                SequenciaMensagemJob::dispatch($ticket->id, $msg->conteudo, $msg->imagem_url, $sequencia->coluna_kanban)
+                $ultimaMensagem = $indice === $totalMensagens;
+
+                SequenciaMensagemJob::dispatch($ticket->id, $msg->conteudo, $msg->imagem_url, $sequencia->coluna_kanban, $ultimaMensagem)
                     ->onQueue('default')
                     ->delay(now()->addSeconds($delayAcumulado));
                 $disparou = true;

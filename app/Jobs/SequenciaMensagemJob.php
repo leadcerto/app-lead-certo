@@ -21,6 +21,7 @@ class SequenciaMensagemJob implements ShouldQueue
         public string  $conteudo,
         public ?string $imagemUrl = null,
         public ?string $colunaKanban = null,
+        public bool    $enviarBotoes = false,
     ) {}
 
     public function handle(HumanizacaoService $humanizacao, UazapiService $uazapi): void
