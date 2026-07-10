@@ -129,6 +129,11 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('kanban.variaveis')
         ->middleware('role:admin,dono');
 
+    // Documentação/estratégia — dono e admin
+    Route::get('/kanban/documentacao/botoes', fn () => view('kanban.documentacao-botoes'))
+        ->name('kanban.documentacao-botoes')
+        ->middleware('role:admin,dono');
+
 
     // Secretária Eletrônica — dono e admin
     Route::get('/secretaria-eletronica', fn () => view('secretaria-eletronica.index'))
