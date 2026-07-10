@@ -7,6 +7,12 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Sintaxe MODIFY é exclusiva do MySQL/MariaDB; em sqlite (usado nos
+        // testes automatizados) este ALTER não existe e quebraria toda a suite.
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         DB::statement("
             ALTER TABLE tickets_atendimento
             MODIFY coluna_kanban ENUM(
@@ -17,6 +23,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         DB::statement("
             ALTER TABLE tickets_atendimento
             MODIFY coluna_kanban ENUM(

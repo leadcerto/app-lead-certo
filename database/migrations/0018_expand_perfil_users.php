@@ -7,6 +7,12 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Sintaxe MODIFY COLUMN é exclusiva do MySQL/MariaDB; em sqlite (usado nos
+        // testes automatizados) este ALTER não existe e quebraria toda a suite.
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         // MariaDB/MySQL: ALTER ENUM para incluir todos os perfis da arquitetura híbrida
         DB::statement("
             ALTER TABLE users
@@ -27,6 +33,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         DB::statement("
             ALTER TABLE users
             MODIFY COLUMN perfil ENUM('admin', 'gestor', 'vendedor') NOT NULL DEFAULT 'vendedor'
