@@ -364,11 +364,22 @@
                                     </div>
                                 </template>
 
-                                <button @click="botoes[col.key] = [...(botoes[col.key] || []), { text: '', action: 'move_column', target: '' }]; botoesAlterado[col.key] = true"
-                                        :disabled="(botoes[col.key] || []).length >= 3"
-                                        class="text-xs text-purple-600 hover:text-purple-700 disabled:opacity-40 disabled:cursor-not-allowed">
-                                    + Adicionar botão
-                                </button>
+                                <div class="flex items-center justify-between">
+                                    <button @click="botoes[col.key] = [...(botoes[col.key] || []), { text: '', action: 'move_column', target: '' }]; botoesAlterado[col.key] = true"
+                                            :disabled="(botoes[col.key] || []).length >= 3"
+                                            class="text-xs text-purple-600 hover:text-purple-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                                        + Adicionar botão
+                                    </button>
+                                    <div class="flex items-center gap-2">
+                                        <span x-show="botoesSalvando[col.key]" class="text-xs text-gray-400">Salvando...</span>
+                                        <span x-show="botoesSalvo[col.key]" class="text-xs text-green-600">✓ Salvo</span>
+                                        <button @click="salvarBotoes(col.key)"
+                                                :disabled="!botoesAlterado[col.key]"
+                                                class="text-xs bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white px-3 py-1 rounded-lg transition-colors">
+                                            Salvar botões
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
 
                             {{-- ✨ Card — Aplicar Variáveis com IA --}}
@@ -942,6 +953,8 @@ function kanbanConfig() {
         // Botões interativos por coluna
         botoes: {},       // { [coluna.key]: [{text, action, target}, ...] }
         botoesAlterado: {},
+        botoesSalvando: {},
+        botoesSalvo: {},
 
         // ✨ Aplicar Variáveis IA
         analisandoSeqId: null,
@@ -1199,6 +1212,20 @@ function kanbanConfig() {
                 this.iaAlterado[key] = false;
                 this.iaSalvo[key]    = true;
                 setTimeout(() => { this.iaSalvo[key] = false; }, 3000);
+            }
+        },
+
+        async salvarBotoes(key) {
+            this.botoesSalvando[key] = true;
+            this.botoesSalvo[key]    = false;
+            const res = await this.api(`/api/painel/kanban/coluna-config/${key}`, 'PUT', {
+                button_settings: this.botoes[key] ?? [],
+            });
+            this.botoesSalvando[key] = false;
+            if (res.ok) {
+                this.botoesAlterado[key] = false;
+                this.botoesSalvo[key]    = true;
+                setTimeout(() => { this.botoesSalvo[key] = false; }, 3000);
             }
         },
 
