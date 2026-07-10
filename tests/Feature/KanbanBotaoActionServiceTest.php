@@ -91,4 +91,23 @@ class KanbanBotaoActionServiceTest extends TestCase
         $this->assertFalse($executou);
         $this->assertSame('aguardando_lead', $ticket->fresh()->coluna_kanban);
     }
+
+    public function test_trigger_ia_marca_agente_responsavel_como_bot(): void
+    {
+        $tenant = Tenant::factory()->create();
+        KanbanColunaConfig::create([
+            'tenant_id'       => $tenant->id,
+            'coluna_kanban'   => 'aguardando_orcamento',
+            'button_settings' => [
+                ['text' => 'Continuar com IA', 'action' => 'trigger_ia', 'target' => null],
+            ],
+        ]);
+        $ticket = $this->criarTicket($tenant, 'aguardando_orcamento');
+        $ticket->update(['agente_responsavel' => 'humano']);
+
+        $executou = app(KanbanBotaoActionService::class)->executar($ticket, 'trigger_ia:0');
+
+        $this->assertTrue($executou);
+        $this->assertSame('bot', $ticket->fresh()->agente_responsavel);
+    }
 }
