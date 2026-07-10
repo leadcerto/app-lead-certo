@@ -264,46 +264,6 @@ class UazapiWebhookController extends Controller
         }
     }
 
-    /**
-     * Envia os botões configurados para a coluna atual do ticket (KanbanColunaConfig::button_settings).
-     * Chamável de qualquer ponto do controller que precise disparar os botões da coluna
-     * atual (ex: ao criar/mover um ticket) — a integração de ONDE chamar isso fica a
-     * critério de uma task futura de UI.
-     */
-    private function enviarBotoesDaColuna(TicketAtendimento $ticket): void
-    {
-        $config = KanbanColunaConfig::where('tenant_id', $ticket->tenant_id)
-            ->where('coluna_kanban', $ticket->coluna_kanban)
-            ->first();
-
-        $botoes = $config?->button_settings ?? [];
-        if (empty($botoes)) {
-            return;
-        }
-
-        $choices = [];
-        foreach ($botoes as $i => $botao) {
-            $choices[] = match ($botao['action'] ?? null) {
-                'open_url' => "{$botao['text']}|{$botao['target']}",
-                'call'     => "{$botao['text']}|call:{$botao['target']}",
-                default    => "{$botao['text']}|{$botao['action']}:{$i}",
-            };
-        }
-
-        $telefone = $ticket->contato?->telefone;
-        $token    = $ticket->tenant?->uazapi_instance_token;
-        if (! $telefone || ! $token) {
-            return;
-        }
-
-        app(\App\Services\UazapiService::class)->enviarMenuBotoes(
-            $token,
-            $telefone,
-            $config->objetivo ?: 'Escolha uma opção:',
-            $choices
-        );
-    }
-
     private function processarChamadaWhatsApp(Tenant $tenant, string $telefone, ?string $pushName): void
     {
         // Ignora se já há ticket ativo (evita duplicar sequência)

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\TicketAtendimento;
 use App\Models\KanbanColunaConfig;
 use App\Models\VinculoContatoTenant;
+use App\Services\UazapiService;
 use Illuminate\Support\Facades\Log;
 
 class KanbanBotaoActionService
@@ -63,5 +64,46 @@ class KanbanBotaoActionService
         );
 
         return true;
+    }
+
+    /**
+     * Monta e envia o menu de botões configurado pra coluna ATUAL do ticket.
+     * Retorna false sem erro se a coluna não tiver button_settings — chamado
+     * de pontos que nem sempre têm botões configurados (ex: toda sequência).
+     */
+    public function enviarBotoesDaColuna(TicketAtendimento $ticket): bool
+    {
+        $config = KanbanColunaConfig::where('tenant_id', $ticket->tenant_id)
+            ->where('coluna_kanban', $ticket->coluna_kanban)
+            ->first();
+
+        $botoes = $config?->button_settings ?? [];
+        if (empty($botoes)) {
+            return false;
+        }
+
+        $choices = [];
+        foreach ($botoes as $i => $botao) {
+            $texto  = $botao['text'] ?? '';
+            $target = $botao['target'] ?? '';
+            $choices[] = match ($botao['action'] ?? null) {
+                'open_url' => "{$texto}|{$target}",
+                'call'     => "{$texto}|call:{$target}",
+                default    => "{$texto}|{$botao['action']}:{$i}",
+            };
+        }
+
+        $telefone = $ticket->contato?->telefone;
+        $token    = $ticket->tenant?->uazapi_instance_token;
+        if (! $telefone || ! $token) {
+            return false;
+        }
+
+        return app(UazapiService::class)->enviarMenuBotoes(
+            $token,
+            $telefone,
+            $config->objetivo ?: 'Escolha uma opção:',
+            $choices
+        );
     }
 }
