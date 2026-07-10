@@ -57,9 +57,10 @@ class KanbanBotaoActionService
 
     private function optOut(TicketAtendimento $ticket): bool
     {
-        VinculoContatoTenant::where('contato_id', $ticket->contato_id)
-            ->where('tenant_id', $ticket->tenant_id)
-            ->update(['bloqueado_em' => now()]);
+        VinculoContatoTenant::updateOrCreate(
+            ['contato_id' => $ticket->contato_id, 'tenant_id' => $ticket->tenant_id],
+            ['bloqueado_em' => now()]
+        );
 
         return true;
     }

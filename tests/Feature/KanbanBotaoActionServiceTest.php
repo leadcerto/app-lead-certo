@@ -73,6 +73,34 @@ class KanbanBotaoActionServiceTest extends TestCase
         $this->assertNotNull($vinculo->bloqueado_em);
     }
 
+    public function test_opt_out_cria_vinculo_bloqueado_quando_nao_existe_previamente(): void
+    {
+        $tenant = Tenant::factory()->create();
+        KanbanColunaConfig::create([
+            'tenant_id'       => $tenant->id,
+            'coluna_kanban'   => 'lead_novo',
+            'button_settings' => [
+                ['text' => 'Não tenho interesse', 'action' => 'opt_out', 'target' => null],
+            ],
+        ]);
+        $ticket = $this->criarTicket($tenant, 'lead_novo');
+
+        // Propositalmente NÃO criamos um VinculoContatoTenant prévio aqui —
+        // esse é o cenário em que o update() silencioso falhava.
+        $this->assertDatabaseMissing('vinculos_contato_tenant', [
+            'contato_id' => $ticket->contato_id,
+            'tenant_id'  => $tenant->id,
+        ]);
+
+        $executou = app(KanbanBotaoActionService::class)->executar($ticket, 'opt_out:0');
+        $this->assertTrue($executou);
+
+        $vinculo = VinculoContatoTenant::where('contato_id', $ticket->contato_id)
+            ->where('tenant_id', $tenant->id)->first();
+        $this->assertNotNull($vinculo, 'VinculoContatoTenant deveria ter sido criado mesmo sem existir previamente');
+        $this->assertNotNull($vinculo->bloqueado_em);
+    }
+
     public function test_botao_de_outra_coluna_nao_e_executado(): void
     {
         $tenant = Tenant::factory()->create();
