@@ -169,11 +169,18 @@ git commit -m "feat: coluna button_settings em kanban_coluna_configs"
 
 ### Task 3: Migration — coluna `bloqueado_em` em `vinculos_contato_tenant` (opt-out por tenant)
 
+**Achado na checagem pré-voo do plano — três campos parecidos, três significados diferentes, não confundir:**
+1. `contatos.opt_out` (boolean, já existe, GLOBAL — mesma tabela em todos os tenants): contato pediu pra não receber **nenhuma** mensagem de **nenhum** franqueado do ecossistema. Checado hoje em `Internal/ContatoController.php:29` no recebimento de webhook.
+2. `contatos.bloqueado` (boolean, já existe, GLOBAL): "empresa não quer mais atender" — a própria plataforma Lead Certo bloqueou o contato (abuso/spam), não é uma escolha do lead.
+3. `vinculos_contato_tenant.bloqueado_em` (**esta task, tenant-scoped**): o lead clicou "Parar mensagens" no botão de UM franqueado específico. Não afeta os outros dois campos acima nem os outros franqueados.
+
+Nenhum dos dois campos existentes serve pro opt-out do botão — ambos são globais, e a regra de negócio exige que o bloqueio valha só pro franqueado que recebeu o clique.
+
 **Files:**
 - Create: `database/migrations/2026_07_10_000002_add_bloqueado_em_to_vinculos_contato_tenant.php`
 
 **Interfaces:**
-- Produces: coluna `vinculos_contato_tenant.bloqueado_em` (timestamp, nullable). Distinta de `ativo`/`desativado_em` (que já existem nessa tabela e representam merge de duplicatas — `ContatosController.php:289` grava `desativado_em` ao mesclar contatos; **não reutilizar esse par de colunas para opt-out**, são conceitos diferentes).
+- Produces: coluna `vinculos_contato_tenant.bloqueado_em` (timestamp, nullable). Distinta também de `ativo`/`desativado_em` (que já existem nessa tabela e representam merge de duplicatas — `ContatosController.php:289` grava `desativado_em` ao mesclar contatos; **não reutilizar esse par de colunas para opt-out**, são conceitos diferentes).
 
 - [ ] **Step 1: Criar a migration**
 
@@ -552,7 +559,30 @@ class KanbanBotaoActionServiceTest extends TestCase
 }
 ```
 
-Se `Contato` não tiver `database/factories/ContatoFactory.php`, crie-o com os campos `NOT NULL` mínimos da tabela `contatos` (`telefone` é obrigatório — confira a migration de criação da tabela para os demais campos).
+`database/factories/ContatoFactory.php` não existe ainda — criar (schema real confirmado em `database/migrations/0003_create_consumidores_table.php` + `0031_add_tipo_and_bloqueado_to_contatos.php`: `telefone` único obrigatório, `origem` obrigatória sem default, demais campos têm default):
+
+```php
+<?php
+
+namespace Database\Factories;
+
+use App\Models\Contato;
+use Illuminate\Database\Eloquent\Factories\Factory;
+
+class ContatoFactory extends Factory
+{
+    protected $model = Contato::class;
+
+    public function definition(): array
+    {
+        return [
+            'telefone' => '55119' . fake()->unique()->numerify('########'),
+            'nome'     => fake()->name(),
+            'origem'   => 'whatsapp',
+        ];
+    }
+}
+```
 
 - [ ] **Step 2: Rodar e confirmar que falha**
 
@@ -923,15 +953,35 @@ git commit -m "fix: SequenciaMensagemJob respeita opt-out (bloqueado_em) por ten
 
 ### Task 9: Validação + rotas no `KanbanColunaConfigController`
 
+**Achado na checagem pré-voo do plano:** a tabela `users` usa a coluna `perfil` (enum — valores incluem `dono`, ver `database/migrations/0018_expand_perfil_users.php`), **não** `role`, e o campo de nome é `nome`, **não** `name`. `database/factories/UserFactory.php` ainda está no estado padrão do scaffold do Laravel (só seta `name`/`email`/`password`) e vai falhar com erro de coluna `nome` NOT NULL se usado como está — corrigir esse factory faz parte do Step 1 abaixo.
+
 **Files:**
 - Modify: `app/Http/Controllers/Painel/KanbanColunaConfigController.php`
+- Modify: `database/factories/UserFactory.php`
 - Test: `tests/Feature/KanbanColunaConfigButtonValidationTest.php`
 
 **Interfaces:**
 - Consumes: `KanbanColunaConfig` (Task 4).
 - Produces: `show()` agora retorna `button_settings` no JSON; `update()` valida `button_settings` (array, máx. 3, cada item com `text`/`action`/`target`).
 
-- [ ] **Step 1: Escrever o teste de validação**
+- [ ] **Step 1: Corrigir `UserFactory` e escrever o teste de validação**
+
+Primeiro, atualizar `database/factories/UserFactory.php::definition()` para bater com o schema real (coluna `nome`, não `name`; `perfil` tem default `'vendedor'` no banco, então não precisa ser setado aqui):
+
+```php
+public function definition(): array
+{
+    return [
+        'nome' => fake()->name(),
+        'email' => fake()->unique()->safeEmail(),
+        'email_verified_at' => now(),
+        'password' => static::$password ??= Hash::make('password'),
+        'remember_token' => Str::random(10),
+    ];
+}
+```
+
+Depois, o teste:
 
 ```php
 <?php
@@ -950,7 +1000,7 @@ class KanbanColunaConfigButtonValidationTest extends TestCase
     public function test_rejeita_mais_de_3_botoes(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'role' => 'dono']);
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono']);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/lead_novo', [
             'button_settings' => [
@@ -967,7 +1017,7 @@ class KanbanColunaConfigButtonValidationTest extends TestCase
     public function test_aceita_ate_3_botoes_validos(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'role' => 'dono']);
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono']);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/lead_novo', [
             'button_settings' => [
@@ -984,7 +1034,7 @@ class KanbanColunaConfigButtonValidationTest extends TestCase
 }
 ```
 
-Ajuste os campos de criação de `User::factory()` conforme os `NOT NULL` reais de `users` (confira `database/migrations` da tabela) — os middlewares da rota exigem `auth` + `tenant` + `role:admin,dono`.
+Os middlewares da rota exigem `auth` + `tenant` + `role:admin,dono` (o middleware `role:` compara contra `$user->perfil`, ver `app/Http/Middleware/CheckRole.php`).
 
 - [ ] **Step 2: Rodar e confirmar que falha**
 
