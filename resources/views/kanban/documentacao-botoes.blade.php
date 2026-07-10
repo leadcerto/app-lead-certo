@@ -18,7 +18,7 @@
     </div>
 
     <div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-8 text-sm text-amber-800">
-        <strong>Importante:</strong> os botões só são enviados junto com a última mensagem da sequência automática da coluna — se a coluna não tiver sequência ativa, os botões salvam mas nunca são enviados (ver "O que ainda não faz" no fim da página). Plano técnico completo:
+        <strong>Importante:</strong> os botões são configurados em uma mensagem específica da sequência (não mais por coluna) e chegam ao lead junto com o texto daquela mensagem, como uma mensagem só. Se a sequência não estiver ativa, a mensagem — e os botões dela — nunca são enviados (ver "O que ainda não faz" no fim da página). Plano técnico completo:
         <code class="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-amber-200">docs/superpowers/plans/2026-07-09-botoes-interativos-whatsapp.md</code>
     </div>
 
@@ -88,38 +88,36 @@
                 <span class="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
                 <div>
                     <p class="text-sm font-semibold text-gray-800">Abra Kanban → Configurações</p>
-                    <p class="text-xs text-gray-500">Escolha a coluna onde quer que os botões apareçam (ex: "Aguardando Lead", "Encerrado").</p>
+                    <p class="text-xs text-gray-500">Escolha a coluna e abra a sequência de mensagens dela.</p>
                 </div>
             </li>
             <li class="flex gap-3 bg-white border border-gray-200 rounded-xl p-4">
                 <span class="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
                 <div>
-                    <p class="text-sm font-semibold text-gray-800">Role até "Botões Interativos"</p>
-                    <p class="text-xs text-gray-500">Fica dentro do bloco do Agente de IA daquela coluna, junto com o temporizador de resposta.</p>
+                    <p class="text-sm font-semibold text-gray-800">Escreva a mensagem (nova ou já existente)</p>
+                    <p class="text-xs text-gray-500">Em "Adicionar mensagem" pra uma mensagem nova, ou clicando no lápis de uma mensagem já criada. Logo abaixo do campo de texto fica "Botões interativos".</p>
                 </div>
             </li>
             <li class="flex gap-3 bg-white border border-gray-200 rounded-xl p-4">
                 <span class="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">3</span>
                 <div>
                     <p class="text-sm font-semibold text-gray-800">Clique em "+ Adicionar botão"</p>
-                    <p class="text-xs text-gray-500">Digite o texto (até 20 caracteres — limite do próprio WhatsApp) e escolha a ação.</p>
+                    <p class="text-xs text-gray-500">Digite o texto (até 20 caracteres — limite do próprio WhatsApp) e escolha a ação. Pode repetir até 3 vezes — o WhatsApp não exibe um 4º botão de resposta de forma confiável.</p>
                 </div>
             </li>
             <li class="flex gap-3 bg-white border border-gray-200 rounded-xl p-4">
                 <span class="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">4</span>
                 <div>
-                    <p class="text-sm font-semibold text-gray-800">Repita até 3 vezes</p>
-                    <p class="text-xs text-gray-500">O botão de adicionar desativa sozinho no 3º — o WhatsApp não exibe um 4º botão de resposta de forma confiável.</p>
-                </div>
-            </li>
-            <li class="flex gap-3 bg-white border border-gray-200 rounded-xl p-4">
-                <span class="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">5</span>
-                <div>
-                    <p class="text-sm font-semibold text-gray-800">Salve</p>
-                    <p class="text-xs text-gray-500">Os botões passam a ser enviados automaticamente junto com a mensagem daquela coluna.</p>
+                    <p class="text-sm font-semibold text-gray-800">Clique em "Adicionar" (ou "Salvar", se estiver editando)</p>
+                    <p class="text-xs text-gray-500">O texto e os botões dessa mensagem são salvos juntos. Quando a sequência disparar essa mensagem, o lead recebe texto + botões numa única mensagem do WhatsApp.</p>
                 </div>
             </li>
         </ol>
+
+        <div class="bg-red-50 border border-red-200 rounded-xl p-4 mt-4">
+            <p class="text-sm font-semibold text-red-800 mb-1">Checkbox "Envio obrigatório"</p>
+            <p class="text-xs text-red-700">Por padrão, se o lead responder qualquer coisa antes da sua vez de ser enviada, uma mensagem da sequência é cancelada (evita insistir depois que a pessoa já está em conversa). Marcando "Envio obrigatório" nessa mensagem específica, ela é enviada mesmo assim — útil pra informações que precisam chegar de qualquer jeito, mesmo que o lead só tenha mandado um "oi" no meio do caminho.</p>
+        </div>
     </section>
 
     {{-- As 5 ações --}}
@@ -237,7 +235,7 @@
     <section id="limitacoes" class="scroll-mt-6">
         <h2 class="text-lg font-bold text-gray-800 mb-3">O que ainda não faz (nesta primeira versão)</h2>
         <ul class="space-y-2 text-sm text-gray-600">
-            <li class="flex gap-2"><span class="text-red-500 font-bold">!</span><span><strong>Os botões só são enviados junto com a última mensagem da sequência automática daquela coluna.</strong> Se a coluna não tiver nenhuma sequência ativa configurada, os botões salvam normalmente na tela mas nunca chegam pro lead — sem aviso nenhum hoje. Configure uma sequência (mesmo que só com 1 mensagem) na mesma coluna onde configurar botões.</span></li>
+            <li class="flex gap-2"><span class="text-red-500 font-bold">!</span><span><strong>Os botões só são enviados se a mensagem em que foram configurados pertencer a uma sequência ativa.</strong> Se a sequência estiver desativada (ou a mensagem estiver marcada como inativa), os botões salvam normalmente mas nunca chegam pro lead — sem aviso nenhum hoje.</span></li>
             <li class="flex gap-2"><span class="text-amber-500 font-bold">!</span><span><strong>Misturar "Mover coluna/Acionar IA/Parar mensagens" com "Abrir link/Ligar" na mesma coluna</strong> ainda não foi validado contra o WhatsApp de verdade — a Meta historicamente não deixa misturar botão de resposta com botão de link/ligação na mesma mensagem. Até confirmarmos, evite combinar as duas famílias nos 3 slots de uma mesma coluna.</span></li>
             <li class="flex gap-2"><span class="text-amber-500 font-bold">!</span><span><strong>Adicionar etiqueta/tag</strong> pelo clique do botão ainda não existe — só as 5 ações acima.</span></li>
             <li class="flex gap-2"><span class="text-amber-500 font-bold">!</span><span><strong>O bloqueio de "Parar mensagens"</strong> só impede as sequências automáticas por enquanto. Um vendedor humano ainda consegue mandar mensagem manual pro contato bloqueado.</span></li>

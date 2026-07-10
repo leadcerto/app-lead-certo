@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Contato;
-use App\Models\KanbanColunaConfig;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use App\Services\KanbanBotaoActionService;
@@ -26,16 +25,13 @@ class KanbanBotaoActionServiceEnviarBotoesTest extends TestCase
             'coluna_kanban' => 'aguardando_lead', 'agente_responsavel' => 'bot',
             'status' => 'aberto', 'aberto_em' => now(),
         ]);
-        KanbanColunaConfig::create([
-            'tenant_id' => $tenant->id, 'coluna_kanban' => 'aguardando_lead',
-            'objetivo' => 'Escolha uma opção',
-            'button_settings' => [
-                ['text' => 'Ver Site', 'action' => 'open_url', 'target' => 'https://exemplo.com'],
-                ['text' => 'Falar com Humano', 'action' => 'move_column', 'target' => 'em_atendimento'],
-            ],
-        ]);
 
-        $ok = app(KanbanBotaoActionService::class)->enviarBotoesDaColuna($ticket);
+        $botoes = [
+            ['text' => 'Ver Site', 'action' => 'open_url', 'target' => 'https://exemplo.com'],
+            ['text' => 'Falar com Humano', 'action' => 'move_column', 'target' => 'em_atendimento'],
+        ];
+
+        $ok = app(KanbanBotaoActionService::class)->enviarBotoes($ticket, 'Escolha uma opção', $botoes);
 
         $this->assertTrue($ok);
         Http::assertSent(function ($request) {
@@ -44,7 +40,28 @@ class KanbanBotaoActionServiceEnviarBotoesTest extends TestCase
         });
     }
 
-    public function test_retorna_false_sem_button_settings_configurado(): void
+    public function test_grava_botoes_ativos_no_ticket_apos_envio_bem_sucedido(): void
+    {
+        Http::fake(['*/send/menu' => Http::response(['id' => 'msg1'], 200)]);
+
+        $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $contato = Contato::factory()->create(['telefone' => '5511999999999']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'aguardando_lead', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $botoes = [
+            ['text' => 'Falar com Humano', 'action' => 'move_column', 'target' => 'em_atendimento'],
+        ];
+
+        app(KanbanBotaoActionService::class)->enviarBotoes($ticket, 'Escolha uma opção', $botoes);
+
+        $this->assertSame($botoes, $ticket->fresh()->botoes_ativos);
+    }
+
+    public function test_retorna_false_sem_botoes(): void
     {
         $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
         $contato = Contato::factory()->create(['telefone' => '5511999999999']);
@@ -54,7 +71,7 @@ class KanbanBotaoActionServiceEnviarBotoesTest extends TestCase
             'status' => 'aberto', 'aberto_em' => now(),
         ]);
 
-        $ok = app(KanbanBotaoActionService::class)->enviarBotoesDaColuna($ticket);
+        $ok = app(KanbanBotaoActionService::class)->enviarBotoes($ticket, 'Escolha uma opção', []);
 
         $this->assertFalse($ok);
     }

@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\TicketAtendimento;
-use App\Models\KanbanColunaConfig;
 use App\Models\VinculoContatoTenant;
 use App\Services\UazapiService;
 use Illuminate\Support\Facades\Log;
@@ -11,20 +10,18 @@ use Illuminate\Support\Facades\Log;
 class KanbanBotaoActionService
 {
     /**
-     * Executa a ação configurada para $buttonId na coluna ATUAL do ticket.
-     * $buttonId vem no formato "{action}:{indice}" (ver enviarBotoesDaColuna()
-     * em UazapiWebhookController). Retorna false se não há config correspondente
-     * — o chamador deve tratar isso como "não era um clique de botão conhecido".
+     * Executa a ação configurada para $buttonId, validando contra os botões
+     * que foram REALMENTE enviados por último a este ticket ($ticket->botoes_ativos,
+     * preenchido por enviarBotoes()) — não uma config que pode ter mudado desde o envio.
+     * $buttonId vem no formato "{action}:{indice}" (índice dentro desse array).
+     * Retorna false se não há correspondência — o chamador deve tratar isso como
+     * "não era um clique de botão conhecido".
      */
     public function executar(TicketAtendimento $ticket, string $buttonId): bool
     {
         [$action, $indice] = array_pad(explode(':', $buttonId, 2), 2, null);
 
-        $config = KanbanColunaConfig::where('tenant_id', $ticket->tenant_id)
-            ->where('coluna_kanban', $ticket->coluna_kanban)
-            ->first();
-
-        $botoes = $config?->button_settings ?? [];
+        $botoes = $ticket->botoes_ativos ?? [];
         $botao  = $botoes[(int) $indice] ?? null;
 
         if (! $botao || ($botao['action'] ?? null) !== $action) {
@@ -67,29 +64,26 @@ class KanbanBotaoActionService
     }
 
     /**
-     * Monta e envia o menu de botões configurado pra coluna ATUAL do ticket.
-     * Retorna false sem erro se a coluna não tiver button_settings — chamado
-     * de pontos que nem sempre têm botões configurados (ex: toda sequência).
+     * Monta e envia UMA mensagem de texto + até 3 botões (menu interativo) pro
+     * lead. $texto é o corpo da mensagem (o conteúdo da sequência, com variáveis
+     * já resolvidas) e $botoes é o button_settings da mensagem específica que
+     * está sendo enviada. Em caso de sucesso, grava os botões enviados em
+     * $ticket->botoes_ativos pra o clique poder ser validado depois.
      */
-    public function enviarBotoesDaColuna(TicketAtendimento $ticket): bool
+    public function enviarBotoes(TicketAtendimento $ticket, string $texto, array $botoes): bool
     {
-        $config = KanbanColunaConfig::where('tenant_id', $ticket->tenant_id)
-            ->where('coluna_kanban', $ticket->coluna_kanban)
-            ->first();
-
-        $botoes = $config?->button_settings ?? [];
         if (empty($botoes)) {
             return false;
         }
 
         $choices = [];
         foreach ($botoes as $i => $botao) {
-            $texto  = $botao['text'] ?? '';
-            $target = $botao['target'] ?? '';
+            $textoBotao = $botao['text'] ?? '';
+            $target     = $botao['target'] ?? '';
             $choices[] = match ($botao['action'] ?? null) {
-                'open_url' => "{$texto}|{$target}",
-                'call'     => "{$texto}|call:{$target}",
-                default    => "{$texto}|{$botao['action']}:{$i}",
+                'open_url' => "{$textoBotao}|{$target}",
+                'call'     => "{$textoBotao}|call:{$target}",
+                default    => "{$textoBotao}|{$botao['action']}:{$i}",
             };
         }
 
@@ -99,11 +93,17 @@ class KanbanBotaoActionService
             return false;
         }
 
-        return app(UazapiService::class)->enviarMenuBotoes(
+        $enviado = app(UazapiService::class)->enviarMenuBotoes(
             $token,
             $telefone,
-            $config->objetivo ?: 'Escolha uma opção:',
+            $texto ?: 'Escolha uma opção:',
             $choices
         );
+
+        if ($enviado) {
+            $ticket->update(['botoes_ativos' => $botoes]);
+        }
+
+        return $enviado;
     }
 }

@@ -79,8 +79,21 @@ class SequenciaController extends Controller
             ->firstOrFail();
 
         return response()->json(
-            $sequencia->mensagens()->get(['id', 'ordem', 'conteudo', 'imagem_url', 'delay_segundos', 'ativo'])
+            $sequencia->mensagens()->get(['id', 'ordem', 'conteudo', 'imagem_url', 'button_settings', 'obrigatorio', 'delay_segundos', 'ativo'])
         );
+    }
+
+    /**
+     * button_settings chega como string JSON (o formulário é multipart por
+     * causa do upload de imagem, então não dá pra mandar array aninhado direto).
+     */
+    private function decodeButtonSettings(Request $request): void
+    {
+        if ($request->has('button_settings') && is_string($request->input('button_settings'))) {
+            $request->merge([
+                'button_settings' => json_decode($request->input('button_settings'), true) ?? [],
+            ]);
+        }
     }
 
     public function storeMensagem(Request $request, int $sequenciaId): JsonResponse
@@ -89,10 +102,17 @@ class SequenciaController extends Controller
             ->where('tenant_id', $request->user()->tenant_id)
             ->firstOrFail();
 
+        $this->decodeButtonSettings($request);
+
         $validated = $request->validate([
-            'conteudo'       => 'nullable|string|max:1000',
-            'delay_segundos' => 'required|integer|min:0|max:604800',
-            'imagem'         => 'nullable|file|image|max:5120',
+            'conteudo'                  => 'nullable|string|max:1000',
+            'delay_segundos'            => 'required|integer|min:0|max:604800',
+            'imagem'                    => 'nullable|file|image|max:5120',
+            'button_settings'           => 'sometimes|array|max:3',
+            'button_settings.*.text'    => 'required_with:button_settings|string|max:20',
+            'button_settings.*.action'  => 'required_with:button_settings|string|in:move_column,trigger_ia,opt_out,open_url,call',
+            'button_settings.*.target'  => 'nullable|string|max:255',
+            'obrigatorio'               => 'sometimes|boolean',
         ]);
 
         if (empty($validated['conteudo']) && ! $request->hasFile('imagem')) {
@@ -108,13 +128,15 @@ class SequenciaController extends Controller
         $ordem = $sequencia->mensagens()->max('ordem') + 1;
 
         $msg = SequenciaMensagem::create([
-            'sequencia_id'   => $sequenciaId,
-            'tenant_id'      => $sequencia->tenant_id,
-            'ordem'          => $ordem,
-            'conteudo'       => $validated['conteudo'] ?? '',
-            'imagem_url'     => $imagemUrl,
-            'delay_segundos' => $validated['delay_segundos'],
-            'ativo'          => true,
+            'sequencia_id'     => $sequenciaId,
+            'tenant_id'        => $sequencia->tenant_id,
+            'ordem'            => $ordem,
+            'conteudo'         => $validated['conteudo'] ?? '',
+            'imagem_url'       => $imagemUrl,
+            'button_settings'  => $validated['button_settings'] ?? [],
+            'obrigatorio'      => $validated['obrigatorio'] ?? false,
+            'delay_segundos'   => $validated['delay_segundos'],
+            'ativo'            => true,
         ]);
 
         return response()->json($msg, 201);
@@ -130,13 +152,20 @@ class SequenciaController extends Controller
             ->where('sequencia_id', $sequenciaId)
             ->firstOrFail();
 
+        $this->decodeButtonSettings($request);
+
         $validated = $request->validate([
-            'conteudo'       => 'sometimes|nullable|string|max:1000',
-            'delay_segundos' => 'sometimes|integer|min:0|max:604800',
-            'ativo'          => 'sometimes|boolean',
-            'ordem'          => 'sometimes|integer|min:1',
-            'imagem'         => 'sometimes|nullable|file|image|max:5120',
-            'remover_imagem' => 'sometimes|boolean',
+            'conteudo'                  => 'sometimes|nullable|string|max:1000',
+            'delay_segundos'            => 'sometimes|integer|min:0|max:604800',
+            'ativo'                     => 'sometimes|boolean',
+            'ordem'                     => 'sometimes|integer|min:1',
+            'imagem'                    => 'sometimes|nullable|file|image|max:5120',
+            'remover_imagem'            => 'sometimes|boolean',
+            'button_settings'           => 'sometimes|array|max:3',
+            'button_settings.*.text'    => 'required_with:button_settings|string|max:20',
+            'button_settings.*.action'  => 'required_with:button_settings|string|in:move_column,trigger_ia,opt_out,open_url,call',
+            'button_settings.*.target'  => 'nullable|string|max:255',
+            'obrigatorio'               => 'sometimes|boolean',
         ]);
 
         if ($request->hasFile('imagem')) {

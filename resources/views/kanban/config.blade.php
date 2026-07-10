@@ -185,7 +185,7 @@
                                                     </template>
                                                     <p class="text-sm text-gray-800 whitespace-pre-wrap break-words"
                                                        x-text="msg.conteudo || '(só imagem)'"></p>
-                                                    <div class="mt-1 flex items-center gap-3">
+                                                    <div class="mt-1 flex items-center gap-3 flex-wrap">
                                                         <span class="text-xs text-gray-400"
                                                               x-text="msg.delay_segundos === 0 ? 'Envio imediato' : 'Aguarda ' + formatDelay(msg.delay_segundos)"></span>
                                                         <label class="flex items-center gap-1 cursor-pointer">
@@ -194,7 +194,17 @@
                                                                    class="w-3 h-3 accent-green-600">
                                                             <span class="text-xs text-gray-400">ativa</span>
                                                         </label>
+                                                        <template x-if="msg.obrigatorio">
+                                                            <span class="text-xs text-red-600 font-semibold">⚠ envio obrigatório</span>
+                                                        </template>
                                                     </div>
+                                                    <template x-if="(msg.button_settings || []).length">
+                                                        <div class="mt-1.5 flex flex-wrap gap-1">
+                                                            <template x-for="b in msg.button_settings" :key="b.text + b.action">
+                                                                <span class="text-xs bg-purple-50 text-purple-600 border border-purple-200 px-1.5 py-0.5 rounded" x-text="b.text"></span>
+                                                            </template>
+                                                        </div>
+                                                    </template>
                                                 </div>
                                             </template>
                                             <template x-if="editandoMsgId === msg.id">
@@ -210,6 +220,9 @@
                                                     <textarea x-model="editMsgConteudo" rows="3"
                                                               class="w-full text-sm border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-green-500"
                                                               placeholder="Texto da mensagem..."></textarea>
+
+                                                    @include('kanban.partials._botoes-editor', ['arrayExpr' => 'editMsgBotoes'])
+
                                                     <div class="flex items-center gap-3 flex-wrap">
                                                         <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-500 hover:text-green-600 border border-gray-200 rounded-lg px-2 py-1.5">
                                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -229,6 +242,10 @@
                                                                 <option value="hora">hora</option>
                                                             </select>
                                                         </div>
+                                                        <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-500" title="Envia mesmo se o lead já tiver respondido e a sequência normalmente seria cancelada">
+                                                            <input type="checkbox" x-model="editMsgObrigatorio" class="w-3.5 h-3.5 accent-red-600">
+                                                            Envio obrigatório
+                                                        </label>
                                                     </div>
                                                     <div class="flex gap-2">
                                                         <button @click="salvarMsg(seq.id, msg)"
@@ -285,6 +302,9 @@
                                           rows="2"
                                           placeholder="Texto... Variáveis: {nome} {empresa} {endereco_saida} {endereco_destino} {data_hoje} {dia_semana}"
                                           class="w-full text-sm border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-green-500"></textarea>
+
+                                @include('kanban.partials._botoes-editor', ['arrayExpr' => 'novoBotoes[seq.id]'])
+
                                 <div class="mt-2 flex items-center gap-3 flex-wrap">
                                     <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-500 hover:text-green-600 border border-gray-200 rounded-lg px-2 py-1.5">
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -309,76 +329,17 @@
                                             <option value="hora">hora</option>
                                         </select>
                                     </div>
+                                    <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-500" title="Envia mesmo se o lead já tiver respondido e a sequência normalmente seria cancelada">
+                                        <input type="checkbox"
+                                               :checked="novoObrigatorio[seq.id] || false"
+                                               @change="novoObrigatorio[seq.id] = $event.target.checked"
+                                               class="w-3.5 h-3.5 accent-red-600">
+                                        Envio obrigatório
+                                    </label>
                                     <button @click="adicionarMsg(seq.id)"
                                             class="ml-auto text-xs bg-green-600 text-white px-4 py-1.5 rounded-lg hover:bg-green-700">
                                         Adicionar
                                     </button>
-                                </div>
-                            </div>
-
-                            {{-- Botões Interativos --}}
-                            <div class="mt-4 pt-4 border-t border-gray-100">
-                                <p class="text-xs font-semibold text-gray-500 mb-2">Botões Interativos (máx. 3)</p>
-
-                                <template x-for="(botao, i) in (botoes[col.key] || [])" :key="i">
-                                    <div class="flex items-center gap-2 mb-2">
-                                        <input type="text" maxlength="20"
-                                               :value="botao.text"
-                                               @input="botoes[col.key][i].text = $event.target.value; botoesAlterado[col.key] = true"
-                                               placeholder="Texto do botão (máx. 20)"
-                                               class="flex-1 text-xs border border-gray-300 rounded px-2 py-1">
-                                        <select :value="botao.action"
-                                                @change="botoes[col.key][i].action = $event.target.value; botoes[col.key][i].target = ''; botoesAlterado[col.key] = true"
-                                                class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white">
-                                            <option value="move_column">Mover para coluna</option>
-                                            <option value="trigger_ia">Acionar IA</option>
-                                            <option value="opt_out">Parar mensagens (opt-out)</option>
-                                            <option value="open_url">Abrir link</option>
-                                            <option value="call">Ligar para número</option>
-                                        </select>
-                                        <template x-if="botao.action === 'move_column'">
-                                            <select :value="botao.target"
-                                                    @change="botoes[col.key][i].target = $event.target.value; botoesAlterado[col.key] = true"
-                                                    class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white">
-                                                <template x-for="c in colunas" :key="c.key">
-                                                    <option :value="c.key" x-text="c.label"></option>
-                                                </template>
-                                            </select>
-                                        </template>
-                                        <template x-if="botao.action === 'open_url'">
-                                            <input type="url"
-                                                   :value="botao.target"
-                                                   @input="botoes[col.key][i].target = $event.target.value; botoesAlterado[col.key] = true"
-                                                   placeholder="https://..."
-                                                   class="text-xs border border-gray-300 rounded px-2 py-1 w-40">
-                                        </template>
-                                        <template x-if="botao.action === 'call'">
-                                            <input type="tel"
-                                                   :value="botao.target"
-                                                   @input="botoes[col.key][i].target = $event.target.value; botoesAlterado[col.key] = true"
-                                                   placeholder="+5511999999999"
-                                                   class="text-xs border border-gray-300 rounded px-2 py-1 w-36">
-                                        </template>
-                                        <button @click="botoes[col.key].splice(i, 1); botoesAlterado[col.key] = true"
-                                                class="text-red-300 hover:text-red-500 text-xs">✕</button>
-                                    </div>
-                                </template>
-
-                                <div class="flex items-center justify-between">
-                                    <button @click="botoes[col.key] = [...(botoes[col.key] || []), { text: '', action: 'move_column', target: '' }]; botoesAlterado[col.key] = true"
-                                            :disabled="(botoes[col.key] || []).length >= 3"
-                                            class="text-xs text-purple-600 hover:text-purple-700 disabled:opacity-40 disabled:cursor-not-allowed">
-                                        + Adicionar botão
-                                    </button>
-                                    <div class="flex items-center gap-2">
-                                        <span x-show="botoesSalvando[col.key]" class="text-xs text-gray-400">Salvando...</span>
-                                        <span x-show="botoesSalvo[col.key]" class="text-xs text-green-600">✓ Salvo</span>
-                                        <button @click="salvarBotoes(col.key)"
-                                                :disabled="!botoesAlterado[col.key]"
-                                                class="text-xs bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white px-3 py-1 rounded-lg transition-colors">
-                                            Salvar botões
-                                        </button>
-                                    </div>
                                 </div>
                             </div>
 
@@ -917,6 +878,8 @@ function kanbanConfig() {
         novoDelayUnidade: {},
         novaImagem: {},
         novaImagemPreview: {},
+        novoBotoes: {},
+        novoObrigatorio: {},
 
         editandoMsgId: null,
         editMsgConteudo: '',
@@ -925,6 +888,8 @@ function kanbanConfig() {
         editMsgImagem: null,
         editMsgImagemPreview: null,
         editMsgRemoverImagem: false,
+        editMsgBotoes: [],
+        editMsgObrigatorio: false,
 
         // Objetivo da coluna
         objetivo: {},
@@ -949,12 +914,6 @@ function kanbanConfig() {
         iaSalvando: {},
         iaSalvo: {},
         iaCarregado: {},
-
-        // Botões interativos por coluna
-        botoes: {},       // { [coluna.key]: [{text, action, target}, ...] }
-        botoesAlterado: {},
-        botoesSalvando: {},
-        botoesSalvo: {},
 
         // ✨ Aplicar Variáveis IA
         analisandoSeqId: null,
@@ -1049,6 +1008,8 @@ function kanbanConfig() {
             fd.append('conteudo', conteudo);
             fd.append('delay_segundos', this.delayParaSegundos(this.novoDelay[seqId] || 0, this.novoDelayUnidade[seqId] || 'min'));
             if (imagem) fd.append('imagem', imagem);
+            fd.append('button_settings', JSON.stringify(this.novoBotoes[seqId] || []));
+            fd.append('obrigatorio', this.novoObrigatorio[seqId] ? '1' : '0');
 
             const res = await fetch(`/api/painel/sequencias/${seqId}/mensagens`, {
                 method: 'POST',
@@ -1061,6 +1022,8 @@ function kanbanConfig() {
                 this.novoDelayUnidade[seqId] = 'min';
                 this.novaImagem[seqId] = null;
                 this.novaImagemPreview[seqId] = null;
+                this.novoBotoes[seqId] = [];
+                this.novoObrigatorio[seqId] = false;
                 await this.carregarMsgs(seqId);
                 await this.carregar();
             }
@@ -1075,6 +1038,8 @@ function kanbanConfig() {
             this.editMsgImagem    = null;
             this.editMsgImagemPreview = null;
             this.editMsgRemoverImagem = false;
+            this.editMsgBotoes = JSON.parse(JSON.stringify(msg.button_settings || []));
+            this.editMsgObrigatorio = !!msg.obrigatorio;
         },
 
         cancelarMsg() {
@@ -1104,6 +1069,8 @@ function kanbanConfig() {
             fd.append('delay_segundos', this.delayParaSegundos(this.editMsgDelay, this.editMsgDelayUnidade));
             if (this.editMsgImagem) fd.append('imagem', this.editMsgImagem);
             if (this.editMsgRemoverImagem) fd.append('remover_imagem', '1');
+            fd.append('button_settings', JSON.stringify(this.editMsgBotoes || []));
+            fd.append('obrigatorio', this.editMsgObrigatorio ? '1' : '0');
 
             await fetch(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}`, {
                 method: 'POST',
@@ -1161,7 +1128,6 @@ function kanbanConfig() {
                 const delay             = this.segundosParaDisplay(json.sdr_delay_segundos ?? 45);
                 this.iaDelay[key]       = delay.valor;
                 this.iaDelayUnidade[key] = delay.unidade;
-                this.botoes[key]        = json.button_settings ?? [];
             }
         },
 
@@ -1205,27 +1171,12 @@ function kanbanConfig() {
                 ia_contexto:         this.iaContexto[key] ?? '',
                 ia_ativo:            this.iaAtivo[key]    ?? false,
                 sdr_delay_segundos:  this.delayParaSegundos(this.iaDelay[key] ?? 45, this.iaDelayUnidade[key] || 'seg'),
-                button_settings:     this.botoes[key] ?? [],
             });
             this.iaSalvando[key] = false;
             if (res.ok) {
                 this.iaAlterado[key] = false;
                 this.iaSalvo[key]    = true;
                 setTimeout(() => { this.iaSalvo[key] = false; }, 3000);
-            }
-        },
-
-        async salvarBotoes(key) {
-            this.botoesSalvando[key] = true;
-            this.botoesSalvo[key]    = false;
-            const res = await this.api(`/api/painel/kanban/coluna-config/${key}`, 'PUT', {
-                button_settings: this.botoes[key] ?? [],
-            });
-            this.botoesSalvando[key] = false;
-            if (res.ok) {
-                this.botoesAlterado[key] = false;
-                this.botoesSalvo[key]    = true;
-                setTimeout(() => { this.botoesSalvo[key] = false; }, 3000);
             }
         },
 

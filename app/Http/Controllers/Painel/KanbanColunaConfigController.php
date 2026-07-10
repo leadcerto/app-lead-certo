@@ -23,7 +23,6 @@ class KanbanColunaConfigController extends Controller
             'ia_contexto'        => $config?->ia_contexto        ?? '',
             'ia_ativo'           => $config?->ia_ativo           ?? false,
             'sdr_delay_segundos' => $config?->sdr_delay_segundos ?? 45,
-            'button_settings'    => $config?->button_settings    ?? [],
         ]);
     }
 
@@ -36,10 +35,6 @@ class KanbanColunaConfigController extends Controller
             'ia_contexto'         => 'nullable|string|max:50000',
             'ia_ativo'            => 'sometimes|boolean',
             'sdr_delay_segundos'  => 'sometimes|integer|min:5|max:86400',
-            'button_settings'     => 'sometimes|array|max:3',
-            'button_settings.*.text'   => 'required_with:button_settings|string|max:20',
-            'button_settings.*.action' => 'required_with:button_settings|string|in:move_column,trigger_ia,opt_out,open_url,call',
-            'button_settings.*.target' => 'nullable|string|max:255',
         ]);
 
         $update = array_filter($validated, fn($v) => $v !== null);

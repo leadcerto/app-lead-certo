@@ -37,6 +37,7 @@ class TicketAtendimento extends Model
         'origem',
         'formulario_id',
         'resumo_ia',
+        'botoes_ativos',
     ];
 
     protected function casts(): array
@@ -47,6 +48,7 @@ class TicketAtendimento extends Model
             'encerrado_em' => 'datetime',
             'followup_agendado_em'  => 'datetime',
             'retorno_agendado_em'   => 'datetime',
+            'botoes_ativos'         => 'array',
         ];
     }
 

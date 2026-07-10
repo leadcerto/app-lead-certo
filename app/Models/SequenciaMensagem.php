@@ -15,12 +15,16 @@ class SequenciaMensagem extends Model
         'ordem',
         'conteudo',
         'imagem_url',
+        'button_settings',
+        'obrigatorio',
         'delay_segundos',
         'ativo',
     ];
 
     protected $casts = [
-        'ativo' => 'boolean',
+        'ativo'            => 'boolean',
+        'obrigatorio'      => 'boolean',
+        'button_settings'  => 'array',
     ];
 
     public function tenant(): BelongsTo

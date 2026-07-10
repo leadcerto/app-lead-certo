@@ -6,6 +6,7 @@ use App\Models\Mensagem;
 use App\Models\SpintaxVariavel;
 use App\Models\TicketAtendimento;
 use App\Services\HumanizacaoService;
+use App\Services\KanbanBotaoActionService;
 use App\Services\UazapiService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -21,7 +22,8 @@ class SequenciaMensagemJob implements ShouldQueue
         public string  $conteudo,
         public ?string $imagemUrl = null,
         public ?string $colunaKanban = null,
-        public bool    $enviarBotoes = false,
+        public ?array  $botoesSettings = null,
+        public bool    $obrigatorio = false,
     ) {}
 
     public function handle(HumanizacaoService $humanizacao, UazapiService $uazapi): void
@@ -44,12 +46,15 @@ class SequenciaMensagemJob implements ShouldQueue
             return;
         }
 
-        // Se a sequência foi vinculada a uma coluna específica, cancelar se o lead saiu dela.
-        // Acesso via ?? por segurança: jobs enfileirados antes desta propriedade existir
-        // não têm colunaKanban no payload serializado, e o unserialize não roda o construtor
-        // (então o default do parâmetro nunca é aplicado nesses jobs antigos).
+        // Se a sequência foi vinculada a uma coluna específica, cancelar se o lead saiu dela —
+        // a menos que a mensagem seja marcada como "envio obrigatório" (obrigatorio = true),
+        // que ignora essa checagem e envia mesmo assim.
+        // Acesso via ?? por segurança: jobs enfileirados antes destas propriedades existirem
+        // não as têm no payload serializado, e o unserialize não roda o construtor (então o
+        // default do parâmetro nunca é aplicado nesses jobs antigos).
         $colunaKanban = $this->colunaKanban ?? null;
-        if ($colunaKanban && $ticket->coluna_kanban !== $colunaKanban) {
+        $obrigatorio  = $this->obrigatorio  ?? false;
+        if ($colunaKanban && $ticket->coluna_kanban !== $colunaKanban && ! $obrigatorio) {
             return;
         }
 
@@ -93,6 +98,31 @@ class SequenciaMensagemJob implements ShouldQueue
 
         if (! $temNome) {
             $texto = preg_replace('/\{nome\},?\s*/u', '', $texto);
+        }
+
+        // Acesso via ?? por segurança: jobs serializados antes desta propriedade
+        // existir (ou com o antigo enviarBotoes: bool) não têm botoesSettings no
+        // payload, e o unserialize não roda o construtor.
+        $botoesSettings = $this->botoesSettings ?? null;
+        if (! empty($botoesSettings)) {
+            $enviadoComBotoes = app(KanbanBotaoActionService::class)->enviarBotoes($ticket, $texto, $botoesSettings);
+
+            if ($enviadoComBotoes) {
+                Mensagem::create([
+                    'ticket_id'  => $ticket->id,
+                    'tenant_id'  => $ticket->tenant_id,
+                    'remetente'  => 'bot',
+                    'tipo'       => 'texto',
+                    'conteudo'   => $texto,
+                    'enviado_em' => now(),
+                ]);
+
+                return;
+            }
+
+            Log::warning('SequenciaMensagemJob: envio com botões falhou, caindo para envio normal', [
+                'ticket_id' => $this->ticketId,
+            ]);
         }
 
         if ($this->imagemUrl) {
@@ -139,13 +169,6 @@ class SequenciaMensagemJob implements ShouldQueue
                 'conteudo'   => $texto,
                 'enviado_em' => now(),
             ]);
-        }
-
-        // Igual ao acesso via ?? já usado pra colunaKanban: jobs serializados antes
-        // desta propriedade existir não têm enviarBotoes no payload, e o unserialize
-        // não roda o construtor.
-        if ($this->enviarBotoes ?? false) {
-            app(\App\Services\KanbanBotaoActionService::class)->enviarBotoesDaColuna($ticket);
         }
     }
 

@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Contato;
-use App\Models\KanbanColunaConfig;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -27,10 +26,8 @@ class UazapiWebhookButtonTest extends TestCase
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
             'coluna_kanban' => 'aguardando_lead', 'agente_responsavel' => 'bot',
             'status' => 'aberto', 'aberto_em' => now(),
-        ]);
-        KanbanColunaConfig::create([
-            'tenant_id' => $tenant->id, 'coluna_kanban' => 'aguardando_lead',
-            'button_settings' => [
+            // Simula os botões que foram enviados de verdade ao lead (via enviarBotoes())
+            'botoes_ativos' => [
                 ['text' => 'Falar com Humano', 'action' => 'move_column', 'target' => 'em_atendimento'],
             ],
         ]);
