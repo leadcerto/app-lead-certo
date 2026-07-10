@@ -8,7 +8,7 @@
     <div class="mb-6">
         <div class="flex items-center gap-2 mb-1">
             <span class="text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">Kanban</span>
-            <span class="text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Em implementação</span>
+            <span class="text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">Implementado</span>
         </div>
         <h1 class="text-2xl font-bold text-gray-800">Botões Interativos do WhatsApp</h1>
         <p class="text-sm text-gray-500 mt-1 max-w-2xl">
@@ -18,7 +18,7 @@
     </div>
 
     <div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-8 text-sm text-amber-800">
-        Esta página descreve como a funcionalidade vai funcionar quando estiver no ar. Plano técnico de implementação:
+        <strong>Importante:</strong> os botões só são enviados junto com a última mensagem da sequência automática da coluna — se a coluna não tiver sequência ativa, os botões salvam mas nunca são enviados (ver "O que ainda não faz" no fim da página). Plano técnico completo:
         <code class="font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-amber-200">docs/superpowers/plans/2026-07-09-botoes-interativos-whatsapp.md</code>
     </div>
 
@@ -26,7 +26,7 @@
     <nav class="flex flex-wrap gap-2 mb-10 text-xs">
         <a href="#estrategia" class="px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">Estratégia</a>
         <a href="#como-configurar" class="px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">Como configurar</a>
-        <a href="#acoes" class="px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">As 3 ações</a>
+        <a href="#acoes" class="px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">As 5 ações</a>
         <a href="#cenarios" class="px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">Cenários de uso</a>
         <a href="#faq" class="px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">Perguntas frequentes</a>
         <a href="#limitacoes" class="px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">O que ainda não faz</a>
@@ -122,9 +122,9 @@
         </ol>
     </section>
 
-    {{-- As 3 ações --}}
+    {{-- As 5 ações --}}
     <section id="acoes" class="mb-12 scroll-mt-6">
-        <h2 class="text-lg font-bold text-gray-800 mb-3">As 3 ações disponíveis</h2>
+        <h2 class="text-lg font-bold text-gray-800 mb-3">As 5 ações disponíveis</h2>
         <div class="space-y-3">
             <div class="bg-white border border-gray-200 rounded-xl p-4">
                 <p class="text-sm font-bold text-gray-800">Mover para coluna <span class="ml-2 text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">move_column</span></p>
@@ -137,6 +137,14 @@
             <div class="bg-white border border-gray-200 rounded-xl p-4">
                 <p class="text-sm font-bold text-gray-800">Parar mensagens <span class="ml-2 text-xs font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">opt_out</span></p>
                 <p class="text-xs text-gray-500 mt-1">Marca o contato como "não enviar mais" — só pra este negócio. Nenhuma automação de sequência envia mais nada pra esse número enquanto o bloqueio estiver ativo.</p>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-xl p-4">
+                <p class="text-sm font-bold text-gray-800">Abrir link <span class="ml-2 text-xs font-semibold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">open_url</span></p>
+                <p class="text-xs text-gray-500 mt-1">Abre um site direto no celular do lead (catálogo, vídeo, página de pagamento). Não avisa o sistema quando é clicado — não move coluna nem aciona nada.</p>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-xl p-4">
+                <p class="text-sm font-bold text-gray-800">Ligar para número <span class="ml-2 text-xs font-semibold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">call</span></p>
+                <p class="text-xs text-gray-500 mt-1">Abre o discador do celular do lead já com o número preenchido. Também não avisa o sistema quando é clicado.</p>
             </div>
         </div>
     </section>
@@ -229,7 +237,9 @@
     <section id="limitacoes" class="scroll-mt-6">
         <h2 class="text-lg font-bold text-gray-800 mb-3">O que ainda não faz (nesta primeira versão)</h2>
         <ul class="space-y-2 text-sm text-gray-600">
-            <li class="flex gap-2"><span class="text-amber-500 font-bold">!</span><span><strong>Adicionar etiqueta/tag</strong> pelo clique do botão ainda não existe — só as 3 ações acima.</span></li>
+            <li class="flex gap-2"><span class="text-red-500 font-bold">!</span><span><strong>Os botões só são enviados junto com a última mensagem da sequência automática daquela coluna.</strong> Se a coluna não tiver nenhuma sequência ativa configurada, os botões salvam normalmente na tela mas nunca chegam pro lead — sem aviso nenhum hoje. Configure uma sequência (mesmo que só com 1 mensagem) na mesma coluna onde configurar botões.</span></li>
+            <li class="flex gap-2"><span class="text-amber-500 font-bold">!</span><span><strong>Misturar "Mover coluna/Acionar IA/Parar mensagens" com "Abrir link/Ligar" na mesma coluna</strong> ainda não foi validado contra o WhatsApp de verdade — a Meta historicamente não deixa misturar botão de resposta com botão de link/ligação na mesma mensagem. Até confirmarmos, evite combinar as duas famílias nos 3 slots de uma mesma coluna.</span></li>
+            <li class="flex gap-2"><span class="text-amber-500 font-bold">!</span><span><strong>Adicionar etiqueta/tag</strong> pelo clique do botão ainda não existe — só as 5 ações acima.</span></li>
             <li class="flex gap-2"><span class="text-amber-500 font-bold">!</span><span><strong>O bloqueio de "Parar mensagens"</strong> só impede as sequências automáticas por enquanto. Um vendedor humano ainda consegue mandar mensagem manual pro contato bloqueado.</span></li>
             <li class="flex gap-2"><span class="text-amber-500 font-bold">!</span><span><strong>Clique duplo rápido</strong> no mesmo botão pode disparar a ação duas vezes — sem trava de idempotência ainda.</span></li>
             <li class="flex gap-2"><span class="text-amber-500 font-bold">!</span><span><strong>Reabordagem automática</strong> de quem deu opt-out (esperar 6 meses e tentar de novo com uma oferta) ainda não existe — precisa ser feito manualmente.</span></li>

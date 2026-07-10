@@ -122,6 +122,28 @@ class UazapiWebhookController extends Controller
             $contato->update(['nome' => $nomeValido]);
         }
 
+        // Clique em botão interativo (buttonsResponseMessage) — trata antes do fluxo de texto normal
+        $buttonId = $msg['buttonOrListid'] ?? null;
+
+        if ($buttonId) {
+            $ticketExistente = TicketAtendimento::withoutGlobalScopes()
+                ->where('tenant_id', $tenant->id)
+                ->where('contato_id', $contato->id)
+                ->whereIn('status', ['aberto', 'aguardando'])
+                ->latest()
+                ->first();
+
+            if ($ticketExistente) {
+                $executou = app(\App\Services\KanbanBotaoActionService::class)->executar($ticketExistente, $buttonId);
+
+                if ($executou) {
+                    return; // clique tratado — não cai no fluxo de texto normal
+                }
+            }
+            // buttonId presente mas sem config correspondente (ou sem ticket aberto):
+            // cai no fluxo normal abaixo, tratando a resposta como texto (fallback).
+        }
+
         // Busca ticket aberto para este contato+tenant
         $ticket = TicketAtendimento::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)

@@ -22,9 +22,12 @@ class KanbanColunaConfig extends Model
         'ia_objetivo',
         'ia_contexto',
         'ia_ativo',
+        'sdr_delay_segundos',
+        'button_settings',
     ];
 
     protected $casts = [
-        'ia_ativo' => 'boolean',
+        'ia_ativo'        => 'boolean',
+        'button_settings' => 'array',
     ];
 }

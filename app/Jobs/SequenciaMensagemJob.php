@@ -21,6 +21,7 @@ class SequenciaMensagemJob implements ShouldQueue
         public string  $conteudo,
         public ?string $imagemUrl = null,
         public ?string $colunaKanban = null,
+        public bool    $enviarBotoes = false,
     ) {}
 
     public function handle(HumanizacaoService $humanizacao, UazapiService $uazapi): void
@@ -28,6 +29,18 @@ class SequenciaMensagemJob implements ShouldQueue
         $ticket = TicketAtendimento::with(['contato', 'tenant'])->find($this->ticketId);
 
         if (! $ticket || $ticket->coluna_kanban === 'encerrado') {
+            return;
+        }
+
+        $bloqueado = \App\Models\VinculoContatoTenant::where('contato_id', $ticket->contato_id)
+            ->where('tenant_id', $ticket->tenant_id)
+            ->whereNotNull('bloqueado_em')
+            ->exists();
+
+        if ($bloqueado) {
+            Log::info('SequenciaMensagemJob: contato bloqueado (opt-out) neste tenant, envio cancelado', [
+                'ticket_id' => $this->ticketId,
+            ]);
             return;
         }
 
@@ -126,6 +139,13 @@ class SequenciaMensagemJob implements ShouldQueue
                 'conteudo'   => $texto,
                 'enviado_em' => now(),
             ]);
+        }
+
+        // Igual ao acesso via ?? já usado pra colunaKanban: jobs serializados antes
+        // desta propriedade existir não têm enviarBotoes no payload, e o unserialize
+        // não roda o construtor.
+        if ($this->enviarBotoes ?? false) {
+            app(\App\Services\KanbanBotaoActionService::class)->enviarBotoesDaColuna($ticket);
         }
     }
 

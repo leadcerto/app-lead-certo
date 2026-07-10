@@ -15,6 +15,7 @@ class VinculoContatoTenant extends Model
     protected $casts = [
         'created_at'        => 'datetime',
         'auditoria_pendente' => 'boolean',
+        'bloqueado_em'       => 'datetime',
     ];
 
     protected $fillable = [
@@ -25,6 +26,7 @@ class VinculoContatoTenant extends Model
         'google_given_name',
         'nome_sugerido',
         'auditoria_pendente',
+        'bloqueado_em',
     ];
 
     public function contato(): BelongsTo

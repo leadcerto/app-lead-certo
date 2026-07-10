@@ -187,6 +187,43 @@ class UazapiService
     }
 
     /**
+     * Envia menu interativo de botões via POST /send/menu (type: button).
+     * $botoes já vem no formato Uazapi "texto|id" (ou "texto|https://...", "texto|call:+55...").
+     * Limite de 3 botões de resposta é responsabilidade de quem monta $botoes — o
+     * WhatsApp não garante exibição confiável acima disso.
+     */
+    public function enviarMenuBotoes(string $instanceToken, string $numero, string $texto, array $botoes, string $footerText = ''): bool
+    {
+        try {
+            $body = [
+                'number'  => $numero,
+                'type'    => 'button',
+                'text'    => $texto,
+                'choices' => $botoes,
+            ];
+            if ($footerText !== '') {
+                $body['footerText'] = $footerText;
+            }
+
+            $response = Http::withHeaders(['token' => $instanceToken])
+                ->post("{$this->baseUrl}/send/menu", $body);
+
+            if (!$response->successful()) {
+                Log::warning('Uazapi enviarMenuBotoes falhou', [
+                    'numero' => $numero,
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ]);
+            }
+
+            return $response->successful();
+        } catch (\Exception $e) {
+            Log::error('Uazapi enviarMenuBotoes exception', ['erro' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
      * Envia mídia via /send/media (endpoint único desde a atualização de 2026-07).
      * Body em JSON: number, type, file (URL ou base64) + campos opcionais.
      * type válidos: image, video, videoplay, document, audio, myaudio, ptt, ptv, sticker.
