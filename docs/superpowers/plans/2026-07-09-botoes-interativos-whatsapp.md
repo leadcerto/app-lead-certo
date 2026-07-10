@@ -1050,11 +1050,13 @@ Expected: FAIL — `button_settings` ainda não é validado nem retornado.
 // update() — adicionar às regras de validação:
 'button_settings'             => 'sometimes|array|max:3',
 'button_settings.*.text'      => 'required_with:button_settings|string|max:20',
-'button_settings.*.action'    => 'required_with:button_settings|string|in:move_column,trigger_ia,opt_out',
-'button_settings.*.target'    => 'nullable|string|max:50',
+'button_settings.*.action'    => 'required_with:button_settings|string|in:move_column,trigger_ia,opt_out,open_url,call',
+'button_settings.*.target'    => 'nullable|string|max:255',
 ```
 
-O limite de 20 caracteres no texto do botão segue o limite prático do WhatsApp citado no guia estratégico da sessão anterior.
+O limite de 20 caracteres no texto do botão segue o limite prático do WhatsApp citado no guia estratégico da sessão anterior. `target` subiu de 50 pra 255 caracteres — `move_column` usa uma coluna curta, mas `open_url` pode carregar uma URL longa.
+
+**Adendo pós-Task 7 (pedido do usuário 2026-07-10):** duas ações novas — `open_url` (abre link) e `call` (disca número) — foram adicionadas ao enum aceito. Diferente de `move_column`/`trigger_ia`/`opt_out`, essas duas **nunca passam pelo `KanbanBotaoActionService`**: são botões nativos do WhatsApp (CTA) que não geram clique de volta via webhook — a API da Uazapi já suporta isso nativamente no formato `"texto|https://..."` (link) e `"texto|call:+55..."` (ligação), confirmado na pesquisa da doc oficial feita nesta mesma sessão. `target` pra essas duas é a URL ou o telefone digitado pelo usuário, não uma coluna. Isso é só validação de formato — a montagem do payload de envio correto fica a cargo da Task 10 (que precisa tocar `enviarBotoesDaColuna()`, ver adendo lá).
 
 - [ ] **Step 4: Rodar de novo e confirmar que passa**
 
@@ -1077,14 +1079,17 @@ git commit -m "feat: validação e retorno de button_settings no KanbanColunaCon
 
 ### Task 10: UI — bloco "Botões Interativos" em `kanban/config.blade.php`
 
+**Adendo pós-Task 7 (pedido do usuário 2026-07-10):** esta task ganhou um segundo objetivo — suportar os tipos de botão `open_url` (abre link) e `call` (disca número), que são CTA nativos do WhatsApp e **nunca** passam pelo `KanbanBotaoActionService` (não geram clique de volta via webhook). Isso significa tocar também `enviarBotoesDaColuna()` em `UazapiWebhookController.php` (método já existe, criado na Task 7, ainda não é chamado por nada — "dead code" documentado — então essa edição não reabre comportamento já revisado em produção).
+
 **Files:**
 - Modify: `resources/views/kanban/config.blade.php`
+- Modify: `app/Http/Controllers/Webhook/UazapiWebhookController.php`
 
 **Interfaces:**
-- Consumes: `GET /api/painel/kanban/coluna-config/{coluna}` e `PUT /api/painel/kanban/coluna-config/{coluna}` (Task 9), campos `text`/`action`/`target` por botão.
+- Consumes: `GET /api/painel/kanban/coluna-config/{coluna}` e `PUT /api/painel/kanban/coluna-config/{coluna}` (Task 9), campos `text`/`action`/`target` por botão. Ações válidas agora: `move_column`, `trigger_ia`, `opt_out`, `open_url`, `call`.
 - Produces: nenhuma interface nova para outras tasks — é a ponta final da cadeia.
 
-Sem test automatizado aqui — este projeto não tem tooling de teste de front-end (confirmado na pesquisa: só Alpine.js inline, sem Jest/Vitest configurado). Verificação é manual, listada no Step 4.
+Sem test automatizado pro front-end aqui — este projeto não tem tooling de teste de front-end (confirmado na pesquisa: só Alpine.js inline, sem Jest/Vitest configurado). Verificação é manual, listada no Step 4. Pro `enviarBotoesDaColuna()`, mesmo critério já usado na Task 7 (método sem chamador ainda) — sem teste automatizado novo, só o code review da task.
 
 - [ ] **Step 1: Adicionar estado Alpine**
 
@@ -1125,11 +1130,13 @@ Logo abaixo do bloco "Aguardar ... antes de responder" (a mesma seção onde fic
                    placeholder="Texto do botão (máx. 20)"
                    class="flex-1 text-xs border border-gray-300 rounded px-2 py-1">
             <select :value="botao.action"
-                    @change="botoes[col.key][i].action = $event.target.value; botoesAlterado[col.key] = true"
+                    @change="botoes[col.key][i].action = $event.target.value; botoes[col.key][i].target = ''; botoesAlterado[col.key] = true"
                     class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white">
                 <option value="move_column">Mover para coluna</option>
                 <option value="trigger_ia">Acionar IA</option>
                 <option value="opt_out">Parar mensagens (opt-out)</option>
+                <option value="open_url">Abrir link</option>
+                <option value="call">Ligar para número</option>
             </select>
             <template x-if="botao.action === 'move_column'">
                 <select :value="botao.target"
@@ -1139,6 +1146,20 @@ Logo abaixo do bloco "Aguardar ... antes de responder" (a mesma seção onde fic
                         <option :value="c.key" x-text="c.label"></option>
                     </template>
                 </select>
+            </template>
+            <template x-if="botao.action === 'open_url'">
+                <input type="url"
+                       :value="botao.target"
+                       @input="botoes[col.key][i].target = $event.target.value; botoesAlterado[col.key] = true"
+                       placeholder="https://..."
+                       class="text-xs border border-gray-300 rounded px-2 py-1 w-40">
+            </template>
+            <template x-if="botao.action === 'call'">
+                <input type="tel"
+                       :value="botao.target"
+                       @input="botoes[col.key][i].target = $event.target.value; botoesAlterado[col.key] = true"
+                       placeholder="+5511999999999"
+                       class="text-xs border border-gray-300 rounded px-2 py-1 w-36">
             </template>
             <button @click="botoes[col.key].splice(i, 1); botoesAlterado[col.key] = true"
                     class="text-red-300 hover:text-red-500 text-xs">✕</button>
@@ -1153,28 +1174,47 @@ Logo abaixo do bloco "Aguardar ... antes de responder" (a mesma seção onde fic
 </div>
 ```
 
-O botão "+ Adicionar" reaproveita `:disabled` para a trava de 3 — igual ao padrão já usado em outros lugares deste arquivo (ex: o botão "Salvar" com `:disabled="!iaAlterado[col.key]"`).
+O botão "+ Adicionar" reaproveita `:disabled` para a trava de 3 — igual ao padrão já usado em outros lugares deste arquivo (ex: o botão "Salvar" com `:disabled="!iaAlterado[col.key]"`). Trocar de ação limpa `target` (`botoes[col.key][i].target = ''`) pra não deixar, por exemplo, um nome de coluna sobrando no campo depois de trocar pra "Abrir link".
 
-- [ ] **Step 4: Verificação manual**
+- [ ] **Step 4: Atualizar `enviarBotoesDaColuna()` pro formato correto por tipo de botão**
+
+Em `app/Http/Controllers/Webhook/UazapiWebhookController.php`, trocar o loop que monta `$choices` (hoje sempre gera `"{texto}|{action}:{indice}"`, o que está certo só pra `move_column`/`trigger_ia`/`opt_out` — `open_url` e `call` precisam do formato nativo da Uazapi, que não leva índice nem é interpretado como clique de volta):
+
+```php
+$choices = [];
+foreach ($botoes as $i => $botao) {
+    $choices[] = match ($botao['action'] ?? null) {
+        'open_url' => "{$botao['text']}|{$botao['target']}",
+        'call'     => "{$botao['text']}|call:{$botao['target']}",
+        default    => "{$botao['text']}|{$botao['action']}:{$i}",
+    };
+}
+```
+
+Isso substitui só o corpo do `foreach` — o resto do método (`enviarBotoesDaColuna`) continua igual.
+
+- [ ] **Step 5: Verificação manual**
 
 1. `php artisan serve` (ou ambiente já rodando) → abrir `/kanban/config`.
-2. Numa coluna, adicionar 3 botões com ações diferentes (`move_column`, `trigger_ia`, `opt_out`) e salvar.
-3. Recarregar a página (F5) e confirmar que os 3 botões voltam preenchidos.
+2. Numa coluna, adicionar 3 botões com ações diferentes (`move_column`, `open_url`, `call`) e salvar.
+3. Recarregar a página (F5) e confirmar que os 3 botões voltam preenchidos, cada um com o campo de alvo certo (select de coluna / campo de URL / campo de telefone).
 4. Tentar adicionar um 4º botão — confirmar que o botão "+ Adicionar" fica desabilitado.
 5. Digitar um texto de botão com mais de 20 caracteres — confirmar que o campo não deixa digitar além disso (`maxlength`).
+6. Trocar a ação de um botão já preenchido (ex: de `move_column` pra `open_url`) — confirmar que o campo de alvo troca de tipo e o valor antigo não fica "grudado".
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add resources/views/kanban/config.blade.php
-git commit -m "feat: UI de configuração dos botões interativos por coluna"
+git add resources/views/kanban/config.blade.php app/Http/Controllers/Webhook/UazapiWebhookController.php
+git commit -m "feat: UI de configuração dos botões interativos por coluna + suporte a open_url/call"
 ```
 
 ---
 
 ## Fora de escopo deste plano (anotado, não esquecido)
 
-- **Ação "adicionar tag"**: precisa de desenho próprio — o sistema de Etiquetas atual está acoplado à sincronização de grupos do Google Contacts, não serve como "tag interna do Kanban" sem generalizar primeiro.
+- **Ação "adicionar/remover tag" (`add_tag`/`remove_tag`)**: precisa de desenho próprio — o sistema de Etiquetas atual está acoplado à sincronização de grupos do Google Contacts, não serve como "tag interna do Kanban" sem generalizar primeiro. Fase 2, plano separado (pedido do usuário 2026-07-10).
+- **Ação "disparar webhook externo" (`trigger_webhook`)**: precisa de tabela nova (URL configurada por coluna/tenant) + job assíncrono de disparo. Fase 2, plano separado (pedido do usuário 2026-07-10).
 - **Opt-out em outros pontos de envio**: `KanbanController::enviarMensagem()` (envio manual pelo painel) e `SdrResponderJob` não checam `bloqueado_em` neste plano — só `SequenciaMensagemJob` (Task 8). Cobrir os demais é a próxima iteração natural.
 - **Idempotência contra duplo-clique**: o MVP aqui não trava clique duplicado no mesmo botão (ex: lead clica 2x rápido, o `move_column` roda 2x — inofensivo porque `update()` é idempotente por natureza, mas `trigger_ia` acionado 2x poderia gerar 2 respostas da IA). Se isso aparecer como problema real de uso, adicionar um registro de "último buttonId processado por ticket" antes de executar.
 - **Snooze/reabordagem futura (1/3/6 meses)** e **dashboard de métricas** (taxa de interação, deflection rate): ficam para depois que o MVP estiver validado com cenários reais no Frete Rio — fazem parte do guia estratégico, não da arquitetura mínima.
