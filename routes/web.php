@@ -20,6 +20,7 @@ use App\Http\Controllers\Painel\SequenciaController;
 use App\Http\Controllers\Painel\ContextoIaController;
 use App\Http\Controllers\Painel\KanbanColunaConfigController;
 use App\Http\Controllers\Painel\SpintaxVariavelController;
+use App\Http\Controllers\Admin\EspecificacoesController;
 
 // ── Formulário público (iframe) — sem auth ────────────────────────────────
 Route::get('/f/{uuid}', function (string $uuid) {
@@ -132,6 +133,14 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     // Documentação/estratégia — dono e admin
     Route::get('/kanban/documentacao/botoes', fn () => view('kanban.documentacao-botoes'))
         ->name('kanban.documentacao-botoes')
+        ->middleware('role:admin,dono');
+
+    // Especificações técnicas (specs de design registradas com o Claude) — dono e admin
+    Route::get('/admin/especificacoes', [EspecificacoesController::class, 'index'])
+        ->name('admin.especificacoes')
+        ->middleware('role:admin,dono');
+    Route::get('/admin/especificacoes/{arquivo}', [EspecificacoesController::class, 'show'])
+        ->name('admin.especificacoes.show')
         ->middleware('role:admin,dono');
 
 
