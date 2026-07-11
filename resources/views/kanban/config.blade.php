@@ -649,6 +649,15 @@
                                     Se o lead ficar em silêncio pelo tempo configurado acima (contado desde a última mensagem da conversa), o sistema move o atendimento sozinho pra coluna escolhida — independente dos Estágios de silêncio acima. Se o destino for <strong>Encerrado</strong>, o sistema também marca como encerrado automaticamente e gera os relatórios de IA (mesmo efeito do botão Encerrar); se o lead responder depois, o atendimento reabre normalmente. Se preencher a mensagem, ela é enviada ao lead exatamente antes de mover — use <code class="bg-white px-1 rounded">{nome}</code> pra personalizar. Roda junto com os Estágios de silêncio (5 em 5 minutos, horário comercial).
                                 </p>
                             </div>
+                            <div class="flex items-center justify-end gap-2 mt-2">
+                                <span x-show="iaSalvando[col.key]" class="text-xs text-gray-400">Salvando...</span>
+                                <span x-show="iaSalvo[col.key]" class="text-xs text-green-600">✓ Salvo</span>
+                                <button @click="salvarIa(col.key)"
+                                        :disabled="!iaAlterado[col.key]"
+                                        class="text-xs bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
+                                    Salvar
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
