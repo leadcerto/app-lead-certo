@@ -584,7 +584,23 @@
                                     </select>
                                 </div>
                             </div>
-                            <p class="text-xs text-gray-400 mt-1.5">Tempo de silêncio (desde a última mensagem da conversa) até cada estágio disparar. Use o mesmo Salvar acima.</p>
+                            <div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                                <p class="text-xs font-semibold text-blue-800 mb-1">Como configurar</p>
+                                <p class="text-xs text-blue-700 leading-relaxed">
+                                    Quando o lead para de responder, o sistema tenta reengajar automaticamente em 3 níveis, cada vez mais direto. Os campos acima definem <strong>quanto tempo de silêncio</strong> (contado desde a última mensagem da conversa, sua ou do lead) é preciso pra cada nível disparar. <strong>O estágio 2 precisa ser maior que o 1, e o 3 maior que o 2</strong> — senão a ordem fica confusa.
+                                </p>
+                                <ul class="text-xs text-blue-700 mt-1.5 space-y-0.5 list-disc list-inside">
+                                    <li><strong>1 · toque suave</strong> — mensagem leve perguntando se o lead teve alguma dificuldade ou prefere responder por áudio.</li>
+                                    <li><strong>2 · urgência sutil</strong> — avisa que a agenda está ficando concorrida e pergunta se o interesse ainda é atual.</li>
+                                    <li><strong>3 · encerramento</strong> — se despede educadamente e pode encerrar o atendimento (mesmo token <code class="bg-white px-1 rounded">[ENCERRADO]</code> explicado acima).</li>
+                                </ul>
+                                <p class="text-xs text-blue-700 mt-1.5">
+                                    O texto exato de cada mensagem fica a critério da IA, com base nas instruções escritas na caixa de texto grande acima (o mesmo campo "AGENTE DE IA" desta coluna). Se quiser controlar o que ela diz em cada estágio, inclua no texto trechos como "No Estágio 1, diga...", "No Estágio 2, diga...", "No Estágio 3, diga..." — se não escrever nada específico, a IA usa um tom padrão adequado a cada nível.
+                                </p>
+                                <p class="text-xs text-blue-700 mt-1.5">
+                                    Isso roda sozinho a cada 5 minutos, só em horário comercial (8h às 20h), e reinicia do zero sempre que o lead responder de novo. Depois de ajustar os tempos, clique em <strong>Salvar</strong> (botão logo acima).
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
