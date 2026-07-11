@@ -276,7 +276,9 @@ class SdrResponderService
         // Gatilho de follow-up injetado no contexto
         $contextoGatilho = match ($gatilho) {
             'vacuo_10m' => "[GATILHO: VACUO_10M — O cliente parou de responder há ~10 minutos. Mande uma mensagem curta e natural para reaquecer. Ex: 'Opa, conseguiu ver a questão lá?' ou 'Tô por aqui, pode falar!']",
-            'vacuo_12h' => "[GATILHO: VACUO_12H — Passaram mais de 12 horas sem resposta. Em horário comercial, reengaje de forma leve: 'E aí, vamos seguir com o agendamento?' Se o cliente disser que já fechou com outro ou desistiu, apenas agradeça e encerre.]",
+            'estagio_1' => "[GATILHO: ESTÁGIO 1 DE SILÊNCIO CONFIRMADO — O tempo real de silêncio do lead (contado pelo sistema, não estimado por você) já cruzou o limite do Estágio 1 configurado para esta coluna. Siga as instruções do Estágio 1 (toque suave) descritas nas instruções desta etapa, se houver; senão, envie uma mensagem curta e empática perguntando se o lead teve alguma dificuldade ou prefere responder por áudio. NÃO use [ENCERRADO] neste estágio.]",
+            'estagio_2' => "[GATILHO: ESTÁGIO 2 DE SILÊNCIO CONFIRMADO — O tempo real de silêncio do lead já cruzou o limite do Estágio 2 configurado para esta coluna. Siga as instruções do Estágio 2 (urgência sutil) descritas nas instruções desta etapa, se houver; senão, informe que a agenda está ficando concorrida e pergunte se o interesse ainda é atual. NÃO use [ENCERRADO] neste estágio.]",
+            'estagio_3' => "[GATILHO: ESTÁGIO 3 DE SILÊNCIO CONFIRMADO — O tempo real de silêncio do lead já cruzou o limite do Estágio 3 configurado para esta coluna. Siga as instruções do Estágio 3 (encerramento) descritas nas instruções desta etapa, se houver; senão, informe que está encerrando por falta de retorno, deixe as portas abertas para o futuro, e inclua [ENCERRADO] ao final. Se o histórico mostrar que o lead já retomou contato recentemente, NÃO encerre — responda normalmente ao que ele disse.]",
             default     => null,
         };
 

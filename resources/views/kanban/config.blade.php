@@ -537,6 +537,55 @@
                                 </button>
                             </div>
                         </div>
+
+                        <div class="mt-3 pt-3 border-t border-gray-100">
+                            <p class="text-xs font-semibold text-gray-500 mb-2">Estágios de silêncio (reengajamento automático, roda a cada 5min entre 8h-20h)</p>
+                            <div class="flex flex-wrap items-center gap-4">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs text-gray-500">1 · toque suave</span>
+                                    <input type="number" min="1"
+                                           :value="estagio1Delay[col.key] ?? 1"
+                                           @input="estagio1Delay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true"
+                                           class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
+                                    <select :value="estagio1DelayUnidade[col.key] || 'hora'"
+                                            @change="estagio1DelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                            class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
+                                        <option value="seg">seg</option>
+                                        <option value="min">min</option>
+                                        <option value="hora">hora</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs text-gray-500">2 · urgência sutil</span>
+                                    <input type="number" min="1"
+                                           :value="estagio2Delay[col.key] ?? 2"
+                                           @input="estagio2Delay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true"
+                                           class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
+                                    <select :value="estagio2DelayUnidade[col.key] || 'hora'"
+                                            @change="estagio2DelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                            class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
+                                        <option value="seg">seg</option>
+                                        <option value="min">min</option>
+                                        <option value="hora">hora</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs text-gray-500">3 · encerramento</span>
+                                    <input type="number" min="1"
+                                           :value="estagio3Delay[col.key] ?? 6"
+                                           @input="estagio3Delay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true"
+                                           class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
+                                    <select :value="estagio3DelayUnidade[col.key] || 'hora'"
+                                            @change="estagio3DelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                            class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
+                                        <option value="seg">seg</option>
+                                        <option value="min">min</option>
+                                        <option value="hora">hora</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-1.5">Tempo de silêncio (desde a última mensagem da conversa) até cada estágio disparar. Use o mesmo Salvar acima.</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -915,6 +964,14 @@ function kanbanConfig() {
         iaSalvo: {},
         iaCarregado: {},
 
+        // Estágios de silêncio (reengajamento automático)
+        estagio1Delay: {},
+        estagio1DelayUnidade: {},
+        estagio2Delay: {},
+        estagio2DelayUnidade: {},
+        estagio3Delay: {},
+        estagio3DelayUnidade: {},
+
         // ✨ Aplicar Variáveis IA
         analisandoSeqId: null,
         modalVar:        false,
@@ -1141,6 +1198,16 @@ function kanbanConfig() {
                 const delay             = this.segundosParaDisplay(json.sdr_delay_segundos ?? 45);
                 this.iaDelay[key]       = delay.valor;
                 this.iaDelayUnidade[key] = delay.unidade;
+
+                const e1 = this.segundosParaDisplay(json.followup_estagio1_segundos ?? 3600);
+                this.estagio1Delay[key]        = e1.valor;
+                this.estagio1DelayUnidade[key] = e1.unidade;
+                const e2 = this.segundosParaDisplay(json.followup_estagio2_segundos ?? 7200);
+                this.estagio2Delay[key]        = e2.valor;
+                this.estagio2DelayUnidade[key] = e2.unidade;
+                const e3 = this.segundosParaDisplay(json.followup_estagio3_segundos ?? 21600);
+                this.estagio3Delay[key]        = e3.valor;
+                this.estagio3DelayUnidade[key] = e3.unidade;
             }
         },
 
@@ -1184,6 +1251,9 @@ function kanbanConfig() {
                 ia_contexto:         this.iaContexto[key] ?? '',
                 ia_ativo:            this.iaAtivo[key]    ?? false,
                 sdr_delay_segundos:  this.delayParaSegundos(this.iaDelay[key] ?? 45, this.iaDelayUnidade[key] || 'seg'),
+                followup_estagio1_segundos: this.delayParaSegundos(this.estagio1Delay[key] ?? 1, this.estagio1DelayUnidade[key] || 'hora'),
+                followup_estagio2_segundos: this.delayParaSegundos(this.estagio2Delay[key] ?? 2, this.estagio2DelayUnidade[key] || 'hora'),
+                followup_estagio3_segundos: this.delayParaSegundos(this.estagio3Delay[key] ?? 6, this.estagio3DelayUnidade[key] || 'hora'),
             });
             this.iaSalvando[key] = false;
             if (res.ok) {

@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\KanbanColunaConfig;
 use App\Models\TicketAtendimento;
 use App\Services\SdrResponderService;
 use Illuminate\Console\Command;
@@ -13,7 +14,7 @@ class FollowupConversas extends Command
     protected $signature = 'conversas:followup
                             {--dry-run : Mostra o que faria sem enviar}';
 
-    protected $description = 'Envia follow-up para leads que pararam de responder (10min = reaquecimento, 12h = reengajamento)';
+    protected $description = 'Envia follow-up para leads que pararam de responder (10min = reaquecimento, estágios 1/2/3 = reengajamento por silêncio configurável por coluna)';
 
     public function handle(SdrResponderService $sdr): int
     {
@@ -61,44 +62,86 @@ class FollowupConversas extends Command
             }
         }
 
-        // ── Follow-up LONGO (12h) ────────────────────────────────────────────
-        // Última mensagem de qualquer um foi há mais de 12h, followup_enviado = false
-        $longos = DB::table('tickets_atendimento as t')
-            ->join(DB::raw('(
-                SELECT m1.ticket_id, m1.enviado_em as ultima_em
-                FROM mensagens m1
-                INNER JOIN (SELECT ticket_id, MAX(id) as max_id FROM mensagens GROUP BY ticket_id) m2
-                ON m1.id = m2.max_id
-            ) as ultima'), 'ultima.ticket_id', '=', 't.id')
-            ->where('t.agente_responsavel', 'bot')
-            ->whereNotIn('t.etapa_ia', ['handoff'])
-            ->where('t.status', 'aberto')
-            ->where('t.followup_enviado', false)
-            ->where('ultima.ultima_em', '<', now()->subHours(12))
-            ->whereRaw('HOUR(NOW()) BETWEEN 8 AND 20') // só em horário comercial
-            ->select('t.id', 't.tenant_id')
-            ->get();
+        // ── Estágios de silêncio (1/2/3) ──────────────────────────────────────
+        // Silêncio = tempo desde a última mensagem da conversa (de qualquer
+        // remetente) até agora. Os limites de cada estágio são configuráveis
+        // por coluna (kanban_coluna_configs.followup_estagio{1,2,3}_segundos).
+        // Cada ticket só dispara um estágio se ainda não tiver disparado esse
+        // estágio (ou um maior) desde a última vez que o lead respondeu.
+        $horaAtual          = now()->hour;
+        $emHorarioComercial = $horaAtual >= 8 && $horaAtual < 20;
 
-        $this->info("Follow-up longo (12h): {$longos->count()} tickets");
+        $configsPorColuna   = [];
+        $estagiosDisparados = ['1' => 0, '2' => 0, '3' => 0];
 
-        foreach ($longos as $row) {
+        $candidatos = $emHorarioComercial
+            ? DB::table('tickets_atendimento as t')
+                ->join(DB::raw('(
+                    SELECT m1.ticket_id, m1.enviado_em as ultima_em
+                    FROM mensagens m1
+                    INNER JOIN (SELECT ticket_id, MAX(id) as max_id FROM mensagens GROUP BY ticket_id) m2
+                    ON m1.id = m2.max_id
+                ) as ultima'), 'ultima.ticket_id', '=', 't.id')
+                ->where('t.agente_responsavel', 'bot')
+                ->whereNotIn('t.etapa_ia', ['handoff'])
+                ->where('t.status', 'aberto')
+                ->where('t.followup_estagio_enviado', '<', 3)
+                ->select('t.id', 't.tenant_id', 't.coluna_kanban', 't.followup_estagio_enviado', 'ultima.ultima_em')
+                ->get()
+            : collect();
+
+        foreach ($candidatos as $row) {
+            $chaveConfig = "{$row->tenant_id}:{$row->coluna_kanban}";
+            if (! isset($configsPorColuna[$chaveConfig])) {
+                $configsPorColuna[$chaveConfig] = KanbanColunaConfig::withoutGlobalScopes()
+                    ->where('tenant_id', $row->tenant_id)
+                    ->where('coluna_kanban', $row->coluna_kanban)
+                    ->first();
+            }
+            $config = $configsPorColuna[$chaveConfig];
+
+            $limite1 = $config?->followup_estagio1_segundos ?? 3600;
+            $limite2 = $config?->followup_estagio2_segundos ?? 7200;
+            $limite3 = $config?->followup_estagio3_segundos ?? 21600;
+
+            $silencioSegundos = now()->diffInSeconds(\Illuminate\Support\Carbon::parse($row->ultima_em), absolute: true);
+
+            $estagioAlvo = match (true) {
+                $silencioSegundos >= $limite3 => 3,
+                $silencioSegundos >= $limite2 => 2,
+                $silencioSegundos >= $limite1 => 1,
+                default => 0,
+            };
+
+            if ($estagioAlvo === 0 || $estagioAlvo <= $row->followup_estagio_enviado) {
+                continue;
+            }
+
             $ticket = TicketAtendimento::withoutGlobalScopes()
                 ->with(['contato', 'mensagens', 'persona', 'tenant'])
                 ->find($row->id);
 
             if (! $ticket) continue;
 
-            $this->line("  ↺ [longo] #{$ticket->id} — {$ticket->contato?->nome}");
+            $this->line("  ↺ [estágio {$estagioAlvo}] #{$ticket->id} — {$ticket->contato?->nome}");
 
             if (! $dry) {
                 try {
-                    $sdr->responder($ticket, gatilho: 'vacuo_12h');
-                    $ticket->update(['followup_enviado' => true]);
+                    $sdr->responder($ticket, gatilho: "estagio_{$estagioAlvo}");
+                    $ticket->update(['followup_estagio_enviado' => $estagioAlvo]);
+                    $estagiosDisparados[(string) $estagioAlvo]++;
                     $enviados++;
                 } catch (\Exception $e) {
-                    Log::warning('FollowupConversas: erro no longo', ['ticket_id' => $row->id, 'erro' => $e->getMessage()]);
+                    Log::warning('FollowupConversas: erro no estágio', [
+                        'ticket_id' => $row->id, 'estagio' => $estagioAlvo, 'erro' => $e->getMessage(),
+                    ]);
                 }
             }
+        }
+
+        $this->info("Estágio 1: {$estagiosDisparados['1']} · Estágio 2: {$estagiosDisparados['2']} · Estágio 3: {$estagiosDisparados['3']}");
+        if (! $emHorarioComercial) {
+            $this->warn('Fora do horário comercial (8h-20h) — estágios de silêncio não disparam nesta execução.');
         }
 
         $this->info("Total enviados: {$enviados}");

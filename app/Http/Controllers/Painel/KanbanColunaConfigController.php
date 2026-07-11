@@ -16,25 +16,31 @@ class KanbanColunaConfigController extends Controller
             ->first();
 
         return response()->json([
-            'coluna_kanban'      => $coluna,
-            'objetivo'           => $config?->objetivo           ?? '',
-            'seq_objetivo'       => $config?->seq_objetivo       ?? '',
-            'ia_objetivo'        => $config?->ia_objetivo        ?? '',
-            'ia_contexto'        => $config?->ia_contexto        ?? '',
-            'ia_ativo'           => $config?->ia_ativo           ?? false,
-            'sdr_delay_segundos' => $config?->sdr_delay_segundos ?? 45,
+            'coluna_kanban'               => $coluna,
+            'objetivo'                    => $config?->objetivo                    ?? '',
+            'seq_objetivo'                => $config?->seq_objetivo                ?? '',
+            'ia_objetivo'                 => $config?->ia_objetivo                 ?? '',
+            'ia_contexto'                 => $config?->ia_contexto                 ?? '',
+            'ia_ativo'                    => $config?->ia_ativo                    ?? false,
+            'sdr_delay_segundos'          => $config?->sdr_delay_segundos          ?? 45,
+            'followup_estagio1_segundos'  => $config?->followup_estagio1_segundos  ?? 3600,
+            'followup_estagio2_segundos'  => $config?->followup_estagio2_segundos  ?? 7200,
+            'followup_estagio3_segundos'  => $config?->followup_estagio3_segundos  ?? 21600,
         ]);
     }
 
     public function update(Request $request, string $coluna): JsonResponse
     {
         $validated = $request->validate([
-            'objetivo'            => 'nullable|string|max:1000',
-            'seq_objetivo'        => 'nullable|string|max:1000',
-            'ia_objetivo'         => 'nullable|string|max:1000',
-            'ia_contexto'         => 'nullable|string|max:50000',
-            'ia_ativo'            => 'sometimes|boolean',
-            'sdr_delay_segundos'  => 'sometimes|integer|min:5|max:86400',
+            'objetivo'                    => 'nullable|string|max:1000',
+            'seq_objetivo'                => 'nullable|string|max:1000',
+            'ia_objetivo'                 => 'nullable|string|max:1000',
+            'ia_contexto'                 => 'nullable|string|max:50000',
+            'ia_ativo'                    => 'sometimes|boolean',
+            'sdr_delay_segundos'          => 'sometimes|integer|min:5|max:86400',
+            'followup_estagio1_segundos'  => 'sometimes|integer|min:60|max:604800',
+            'followup_estagio2_segundos'  => 'sometimes|integer|min:60|max:604800',
+            'followup_estagio3_segundos'  => 'sometimes|integer|min:60|max:604800',
         ]);
 
         $update = array_filter($validated, fn($v) => $v !== null);
