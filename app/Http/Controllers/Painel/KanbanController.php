@@ -184,29 +184,17 @@ class KanbanController extends Controller
         return response()->json(['ticket_id' => $ticket, 'liberado' => true, 'ia_acionada' => true]);
     }
 
+    /**
+     * "Pendente" é uma etiqueta independente (não mexe em status nem coluna) —
+     * sinaliza "tenho uma pergunta em aberto com o lead, aguardando resposta".
+     * Clicar de novo desmarca (alterna).
+     */
     public function marcarPendente(int $ticket): JsonResponse
     {
         $model = TicketAtendimento::findOrFail($ticket);
-        $model->update(['status' => 'pendente']);
+        $model->update(['pendente_desde' => $model->pendente_desde ? null : now()]);
 
-        return response()->json(['ticket_id' => $ticket, 'status' => 'pendente']);
-    }
-
-    public function resolver(Request $request, int $ticket): JsonResponse
-    {
-        $model = TicketAtendimento::findOrFail($ticket);
-
-        $model->update([
-            'status'        => 'resolvido',
-            'tag_desfecho'  => 'resolvido',
-            'coluna_kanban' => 'encerrado',
-            'encerrado_em'  => now(),
-        ]);
-
-        ConversationQAJob::dispatch($model->id);
-        GerarResumoTicketJob::dispatch($model->id)->delay(now()->addSeconds(5));
-
-        return response()->json(['ticket_id' => $ticket, 'status' => 'resolvido']);
+        return response()->json(['ticket_id' => $ticket, 'pendente_desde' => $model->pendente_desde]);
     }
 
     public function agendarRetorno(Request $request, int $ticket): JsonResponse

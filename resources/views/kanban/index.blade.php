@@ -71,7 +71,7 @@
                                     <template x-if="ticket.agente_responsavel === 'humano'">
                                         <span class="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">Humano</span>
                                     </template>
-                                    <template x-if="ticket.status === 'pendente'">
+                                    <template x-if="ticket.pendente_desde">
                                         <span class="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">Pendente</span>
                                     </template>
                                     <template x-if="ticket.status === 'resolvido'">
@@ -181,19 +181,13 @@
                                     <option :value="c.key" x-text="c.label"></option>
                                 </template>
                             </select>
-                            <button @click="moverTicketParaColuna(ticketAtivo, moverColunaAlvo)"
+                            <button @click="moverColunaConfirmar(ticketAtivo, moverColunaAlvo)"
                                     :disabled="moverColunaAlvo === ticketAtivo.coluna_kanban"
                                     class="text-xs bg-blue-100 text-blue-700 px-2.5 py-1.5 rounded-lg hover:bg-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                                     title="Mover manualmente pra outra coluna">
                                 Mover
                             </button>
                         </div>
-                        <template x-if="ticketAtivo.coluna_kanban !== 'outros' && !['resolvido','encerrado'].includes(ticketAtivo.status)">
-                            <button @click="moverParaOutros(ticketAtivo.id)"
-                                    class="text-xs bg-gray-100 text-gray-500 px-2.5 py-1.5 rounded-lg hover:bg-gray-200 transition-colors">
-                                Não é lead
-                            </button>
-                        </template>
                         <template x-if="ticketAtivo.vendedor_id && !['resolvido','encerrado'].includes(ticketAtivo.status)">
                             <div class="flex gap-1">
                                 <button @click="liberar(ticketAtivo.id)"
@@ -208,28 +202,18 @@
                                 </button>
                             </div>
                         </template>
-                        <template x-if="ticketAtivo.status === 'aberto' && ticketAtivo.agente_responsavel === 'humano'">
+                        <template x-if="!['resolvido','encerrado'].includes(ticketAtivo.status)">
                             <button @click="marcarPendente(ticketAtivo.id)"
-                                    class="text-xs bg-orange-100 text-orange-600 px-2.5 py-1.5 rounded-lg hover:bg-orange-200 transition-colors">
-                                Pendente
-                            </button>
-                        </template>
-                        <template x-if="ticketAtivo.agente_responsavel === 'humano' && !['resolvido','encerrado'].includes(ticketAtivo.status)">
-                            <button @click="resolver(ticketAtivo.id)"
-                                    class="text-xs bg-teal-100 text-teal-600 px-2.5 py-1.5 rounded-lg hover:bg-teal-200 transition-colors">
-                                Resolver
+                                    :class="ticketAtivo.pendente_desde ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-orange-100 text-orange-600 hover:bg-orange-200'"
+                                    class="text-xs px-2.5 py-1.5 rounded-lg transition-colors"
+                                    title="Etiqueta: tenho uma pergunta em aberto com o lead, aguardando resposta">
+                                <span x-text="ticketAtivo.pendente_desde ? 'Pendente ✓' : 'Pendente'"></span>
                             </button>
                         </template>
                         <template x-if="ticketAtivo.coluna_kanban === 'aguardando_orcamento' && !['resolvido','encerrado'].includes(ticketAtivo.status)">
                             <button @click="orcamentoEnviado(ticketAtivo.id)"
                                     class="text-xs bg-orange-500 hover:bg-orange-600 text-white px-2.5 py-1.5 rounded-lg transition-colors font-medium">
                                 Orçamento Enviado ✓
-                            </button>
-                        </template>
-                        <template x-if="!['resolvido','encerrado'].includes(ticketAtivo.status)">
-                            <button @click="encerrarModal = true"
-                                    class="text-xs bg-red-100 text-red-600 px-2.5 py-1.5 rounded-lg hover:bg-red-200 transition-colors">
-                                Encerrar
                             </button>
                         </template>
                         <button @click="ticketAtivo = null"
@@ -644,6 +628,23 @@ function kanban() {
             }
         },
 
+        // Decide o fluxo certo conforme a coluna escolhida no seletor "Mover":
+        // Outros e Encerrado têm efeitos além de só mudar a coluna (transferir
+        // pra humano / marcar motivo e disparar relatórios), então reaproveitam
+        // os fluxos que já existiam pra isso em vez de só mover.
+        moverColunaConfirmar(ticket, colunaDestino) {
+            if (!ticket || !colunaDestino || colunaDestino === ticket.coluna_kanban) return;
+
+            if (colunaDestino === 'outros') {
+                this.moverParaOutros(ticket.id);
+            } else if (colunaDestino === 'encerrado') {
+                this.tagDesfecho = '';
+                this.encerrarModal = true;
+            } else {
+                this.moverTicketParaColuna(ticket, colunaDestino);
+            }
+        },
+
         async salvarRetorno(data) {
             if (!this.ticketAtivo) return;
             // Ignora datas com ano incompleto (navegador dispara change a cada dígito)
@@ -744,16 +745,8 @@ function kanban() {
         async marcarPendente(id) {
             const res = await this.api(`/api/painel/kanban/ticket/${id}/pendente`, 'POST');
             if (res.ok) {
-                this.ticketAtivo.status = 'pendente';
-                await this.carregar();
-            }
-        },
-
-        async resolver(id) {
-            if (!confirm('Marcar este atendimento como resolvido?')) return;
-            const res = await this.api(`/api/painel/kanban/ticket/${id}/resolver`, 'POST');
-            if (res.ok) {
-                this.ticketAtivo = null;
+                const json = await res.json();
+                this.ticketAtivo.pendente_desde = json.pendente_desde;
                 await this.carregar();
             }
         },

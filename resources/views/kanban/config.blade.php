@@ -602,6 +602,54 @@
                                 </p>
                             </div>
                         </div>
+
+                        <div class="mt-3 pt-3 border-t border-gray-100">
+                            <label class="flex items-center gap-2 mb-2 cursor-pointer">
+                                <input type="checkbox"
+                                       :checked="autoMoverAtivo[col.key]"
+                                       @change="autoMoverAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true"
+                                       class="w-3.5 h-3.5 accent-red-600">
+                                <span class="text-xs font-semibold text-gray-500">Transferência automática por silêncio</span>
+                            </label>
+                            <template x-if="autoMoverAtivo[col.key]">
+                                <div>
+                                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                                        <span class="text-xs text-gray-500">Depois de</span>
+                                        <input type="number" min="1"
+                                               :value="autoMoverDelay[col.key] ?? 3"
+                                               @input="autoMoverDelay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true"
+                                               class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
+                                        <select :value="autoMoverDelayUnidade[col.key] || 'dia'"
+                                                @change="autoMoverDelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                                class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
+                                            <option value="seg">seg</option>
+                                            <option value="min">min</option>
+                                            <option value="hora">hora</option>
+                                            <option value="dia">dia</option>
+                                        </select>
+                                        <span class="text-xs text-gray-500">de silêncio, mover para</span>
+                                        <select :value="autoMoverDestino[col.key] || 'encerrado'"
+                                                @change="autoMoverDestino[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                                class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
+                                            <template x-for="c in colunas" :key="c.key">
+                                                <option :value="c.key" x-text="c.label"></option>
+                                            </template>
+                                        </select>
+                                    </div>
+                                    <textarea :value="autoMoverMensagem[col.key] || ''"
+                                              @input="autoMoverMensagem[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                              rows="2"
+                                              placeholder="Mensagem opcional pra avisar o lead antes de mover (ex: Por falta de comunicação, estamos encerrando seu atendimento e ficamos à disposição caso queira retomar o assunto). Deixe em branco pra mover sem avisar."
+                                              class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"></textarea>
+                                </div>
+                            </template>
+                            <div class="mt-2 p-3 bg-red-50 border border-red-200 rounded-xl">
+                                <p class="text-xs font-semibold text-red-800 mb-1">Como configurar</p>
+                                <p class="text-xs text-red-700 leading-relaxed">
+                                    Se o lead ficar em silêncio pelo tempo configurado acima (contado desde a última mensagem da conversa), o sistema move o atendimento sozinho pra coluna escolhida — independente dos Estágios de silêncio acima. Se o destino for <strong>Encerrado</strong>, o sistema também marca como encerrado automaticamente e gera os relatórios de IA (mesmo efeito do botão Encerrar); se o lead responder depois, o atendimento reabre normalmente. Se preencher a mensagem, ela é enviada ao lead exatamente antes de mover — use <code class="bg-white px-1 rounded">{nome}</code> pra personalizar. Roda junto com os Estágios de silêncio (5 em 5 minutos, horário comercial).
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -988,6 +1036,13 @@ function kanbanConfig() {
         estagio3Delay: {},
         estagio3DelayUnidade: {},
 
+        // Transferência automática de coluna por silêncio
+        autoMoverAtivo: {},
+        autoMoverDelay: {},
+        autoMoverDelayUnidade: {},
+        autoMoverDestino: {},
+        autoMoverMensagem: {},
+
         // ✨ Aplicar Variáveis IA
         analisandoSeqId: null,
         modalVar:        false,
@@ -1187,6 +1242,7 @@ function kanbanConfig() {
 
         delayParaSegundos(valor, unidade) {
             const v = parseInt(valor) || 0;
+            if (unidade === 'dia')  return v * 86400;
             if (unidade === 'hora') return v * 3600;
             if (unidade === 'min')  return v * 60;
             return v; // seg
@@ -1194,8 +1250,9 @@ function kanbanConfig() {
 
         segundosParaDisplay(s) {
             const n = parseInt(s) || 0;
-            if (n > 0 && n % 3600 === 0) return { valor: n / 3600, unidade: 'hora' };
-            if (n > 0 && n % 60 === 0)   return { valor: n / 60,   unidade: 'min' };
+            if (n > 0 && n % 86400 === 0) return { valor: n / 86400, unidade: 'dia' };
+            if (n > 0 && n % 3600 === 0)  return { valor: n / 3600,  unidade: 'hora' };
+            if (n > 0 && n % 60 === 0)    return { valor: n / 60,    unidade: 'min' };
             return { valor: n, unidade: 'seg' };
         },
 
@@ -1224,6 +1281,13 @@ function kanbanConfig() {
                 const e3 = this.segundosParaDisplay(json.followup_estagio3_segundos ?? 21600);
                 this.estagio3Delay[key]        = e3.valor;
                 this.estagio3DelayUnidade[key] = e3.unidade;
+
+                this.autoMoverAtivo[key]    = json.auto_mover_ativo          ?? false;
+                this.autoMoverDestino[key]  = json.auto_mover_coluna_destino || 'encerrado';
+                this.autoMoverMensagem[key] = json.auto_mover_mensagem       ?? '';
+                const am = this.segundosParaDisplay(json.auto_mover_segundos ?? 259200);
+                this.autoMoverDelay[key]        = am.valor;
+                this.autoMoverDelayUnidade[key] = am.unidade;
             }
         },
 
@@ -1270,6 +1334,10 @@ function kanbanConfig() {
                 followup_estagio1_segundos: this.delayParaSegundos(this.estagio1Delay[key] ?? 1, this.estagio1DelayUnidade[key] || 'hora'),
                 followup_estagio2_segundos: this.delayParaSegundos(this.estagio2Delay[key] ?? 2, this.estagio2DelayUnidade[key] || 'hora'),
                 followup_estagio3_segundos: this.delayParaSegundos(this.estagio3Delay[key] ?? 6, this.estagio3DelayUnidade[key] || 'hora'),
+                auto_mover_ativo:           this.autoMoverAtivo[key] ?? false,
+                auto_mover_coluna_destino:  this.autoMoverDestino[key] || 'encerrado',
+                auto_mover_segundos:        this.delayParaSegundos(this.autoMoverDelay[key] ?? 3, this.autoMoverDelayUnidade[key] || 'dia'),
+                auto_mover_mensagem:        this.autoMoverMensagem[key] ?? '',
             });
             this.iaSalvando[key] = false;
             if (res.ok) {

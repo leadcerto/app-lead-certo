@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\KanbanColunaConfig;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class KanbanColunaConfigController extends Controller
 {
@@ -26,6 +27,10 @@ class KanbanColunaConfigController extends Controller
             'followup_estagio1_segundos'  => $config?->followup_estagio1_segundos  ?? 3600,
             'followup_estagio2_segundos'  => $config?->followup_estagio2_segundos  ?? 7200,
             'followup_estagio3_segundos'  => $config?->followup_estagio3_segundos  ?? 21600,
+            'auto_mover_ativo'            => $config?->auto_mover_ativo            ?? false,
+            'auto_mover_coluna_destino'   => $config?->auto_mover_coluna_destino   ?? '',
+            'auto_mover_segundos'         => $config?->auto_mover_segundos         ?? 259200,
+            'auto_mover_mensagem'         => $config?->auto_mover_mensagem         ?? '',
         ]);
     }
 
@@ -41,6 +46,13 @@ class KanbanColunaConfigController extends Controller
             'followup_estagio1_segundos'  => 'sometimes|integer|min:60|max:604800',
             'followup_estagio2_segundos'  => 'sometimes|integer|min:60|max:604800',
             'followup_estagio3_segundos'  => 'sometimes|integer|min:60|max:604800',
+            'auto_mover_ativo'            => 'sometimes|boolean',
+            'auto_mover_coluna_destino'   => [
+                'sometimes', 'nullable', 'string',
+                Rule::in(['lead_novo', 'em_atendimento', 'aguardando_orcamento', 'aguardando_lead', 'pagamento', 'servico_agendado', 'encerrado', 'outros']),
+            ],
+            'auto_mover_segundos'         => 'sometimes|integer|min:60|max:31536000',
+            'auto_mover_mensagem'         => 'nullable|string|max:1000',
         ]);
 
         $update = array_filter($validated, fn($v) => $v !== null);

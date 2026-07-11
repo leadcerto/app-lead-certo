@@ -26,9 +26,14 @@ class KanbanColunaConfig extends Model
         'followup_estagio1_segundos',
         'followup_estagio2_segundos',
         'followup_estagio3_segundos',
+        'auto_mover_ativo',
+        'auto_mover_coluna_destino',
+        'auto_mover_segundos',
+        'auto_mover_mensagem',
     ];
 
     protected $casts = [
-        'ia_ativo' => 'boolean',
+        'ia_ativo'         => 'boolean',
+        'auto_mover_ativo' => 'boolean',
     ];
 }

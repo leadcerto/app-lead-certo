@@ -39,6 +39,7 @@ class TicketAtendimento extends Model
         'resumo_ia',
         'botoes_ativos',
         'followup_estagio_enviado',
+        'pendente_desde',
     ];
 
     protected function casts(): array
@@ -51,6 +52,7 @@ class TicketAtendimento extends Model
             'retorno_agendado_em'   => 'datetime',
             'botoes_ativos'         => 'array',
             'followup_estagio_enviado' => 'integer',
+            'pendente_desde'        => 'datetime',
         ];
     }
 
