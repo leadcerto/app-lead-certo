@@ -120,9 +120,9 @@
 
     {{-- Modal de atendimento --}}
     <template x-if="ticketAtivo">
-        <div class="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4 pointer-events-none">
-            <div @click.outside="if (!encerrarModal) ticketAtivo = null"
-                 class="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] pointer-events-auto">
+        <div class="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-4"
+             @click.self="ticketAtivo = null">
+            <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
 
                 {{-- Header --}}
                 <div class="flex items-start justify-between gap-2 flex-wrap px-5 py-4 border-b">
