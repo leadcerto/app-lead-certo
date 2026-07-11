@@ -120,8 +120,9 @@
 
     {{-- Modal de atendimento --}}
     <template x-if="ticketAtivo">
-        <div class="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-4">
-            <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
+        <div class="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4 pointer-events-none">
+            <div @click.outside="if (!encerrarModal) ticketAtivo = null"
+                 class="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] pointer-events-auto">
 
                 {{-- Header --}}
                 <div class="flex items-start justify-between gap-2 flex-wrap px-5 py-4 border-b">
@@ -140,6 +141,15 @@
                                           d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
                                 </svg>
                             </button>
+                            <a :href="'/contatos?abrir=' + ticketAtivo.contato?.id"
+                               target="_blank"
+                               title="Abrir ficha completa do contato numa aba nova"
+                               class="text-gray-300 hover:text-blue-500 transition-colors">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                </svg>
+                            </a>
                         </div>
                         <div x-show="editandoNome" class="flex items-center gap-2">
                             <input x-model="nomeEdit" type="text"

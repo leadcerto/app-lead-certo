@@ -864,6 +864,13 @@ async function salvarNovoContato() {
     // Abre a ficha para completar os dados
     setTimeout(() => abrirFicha(data.contato_id), 400);
 }
+
+// Deep-link: /contatos?abrir=123 abre a ficha desse contato automaticamente
+// (usado pelo botão "ficha completa" no card do Kanban, entre outros)
+(function () {
+    const idParaAbrir = new URLSearchParams(window.location.search).get('abrir');
+    if (idParaAbrir) abrirFicha(idParaAbrir);
+})();
 </script>
 
 <script>
