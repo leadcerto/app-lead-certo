@@ -314,4 +314,44 @@ class MediaProcessorService
         if (! $midia) return null;
         return "data:{$midia['mime']};base64,{$midia['base64']}";
     }
+
+    /**
+     * Baixa a mídia (via Uazapi) e salva permanentemente em storage/public,
+     * retornando uma URL própria — as URLs diretas do WhatsApp (mmg.whatsapp.net)
+     * expiram, então não servem pra exibir depois no histórico da conversa.
+     * Retorna null se não conseguir baixar nem achar uma URL direta como fallback.
+     */
+    public function baixarEPersistirUrl(array $msg, string $instanceToken, string $mediaType): ?string
+    {
+        $midia = $this->baixarMidiaDoUazapi($instanceToken, $msg);
+
+        if (! $midia) {
+            // Fallback: URL direta do payload (pode expirar, mas é melhor que nada)
+            return $this->extrairUrl($msg);
+        }
+
+        $extensao = $this->extensaoPorMime($midia['mime'], $mediaType);
+        $caminho  = 'kanban-midia/recebida-' . \Illuminate\Support\Str::random(24) . '.' . $extensao;
+
+        \Illuminate\Support\Facades\Storage::disk('public')->put($caminho, base64_decode($midia['base64']));
+
+        return url('storage/' . $caminho);
+    }
+
+    private function extensaoPorMime(string $mime, string $mediaType): string
+    {
+        return match (true) {
+            str_contains($mime, 'jpeg') => 'jpg',
+            str_contains($mime, 'png')  => 'png',
+            str_contains($mime, 'webp') => 'webp',
+            str_contains($mime, 'gif')  => 'gif',
+            str_contains($mime, 'ogg')  => 'ogg',
+            str_contains($mime, 'mp4')  => 'mp4',
+            str_contains($mime, 'mpeg') => 'mp3',
+            str_contains($mime, 'webm') => 'webm',
+            $mediaType === 'image' => 'jpg',
+            $mediaType === 'audio' => 'ogg',
+            default => 'bin',
+        };
+    }
 }

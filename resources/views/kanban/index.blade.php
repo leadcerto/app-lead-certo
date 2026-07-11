@@ -174,6 +174,20 @@
                         </div>
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap justify-end">
+                        <div class="flex items-center gap-1">
+                            <select x-model="moverColunaAlvo"
+                                    class="text-xs border border-gray-300 rounded-lg px-2 py-1.5 bg-white text-gray-700">
+                                <template x-for="c in colunas" :key="c.key">
+                                    <option :value="c.key" x-text="c.label"></option>
+                                </template>
+                            </select>
+                            <button @click="moverTicketParaColuna(ticketAtivo, moverColunaAlvo)"
+                                    :disabled="moverColunaAlvo === ticketAtivo.coluna_kanban"
+                                    class="text-xs bg-blue-100 text-blue-700 px-2.5 py-1.5 rounded-lg hover:bg-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    title="Mover manualmente pra outra coluna">
+                                Mover
+                            </button>
+                        </div>
                         <template x-if="ticketAtivo.coluna_kanban !== 'outros' && !['resolvido','encerrado'].includes(ticketAtivo.status)">
                             <button @click="moverParaOutros(ticketAtivo.id)"
                                     class="text-xs bg-gray-100 text-gray-500 px-2.5 py-1.5 rounded-lg hover:bg-gray-200 transition-colors">
@@ -528,6 +542,7 @@ function kanban() {
         tickets:        {},
         totalPorColuna: {},
         ticketAtivo:  null,
+        moverColunaAlvo: '',
         mensagens:    [],
         novaMensagem:      '',
         encerrarModal:     false,
@@ -613,6 +628,22 @@ function kanban() {
             }
         },
 
+        async moverTicketParaColuna(ticket, colunaDestino) {
+            if (!ticket || !colunaDestino || ticket.coluna_kanban === colunaDestino) return;
+
+            const origem   = ticket.coluna_kanban;
+            const ticketId = ticket.id;
+
+            this.tickets[origem]       = (this.tickets[origem]       || []).filter(t => t.id !== ticketId);
+            this.tickets[colunaDestino] = [...(this.tickets[colunaDestino] || []), { ...ticket, coluna_kanban: colunaDestino }];
+            ticket.coluna_kanban = colunaDestino;
+
+            const res = await this.api(`/api/painel/kanban/ticket/${ticketId}/mover`, 'POST', { coluna: colunaDestino });
+            if (!res.ok) {
+                await this.carregar();
+            }
+        },
+
         async salvarRetorno(data) {
             if (!this.ticketAtivo) return;
             // Ignora datas com ano incompleto (navegador dispara change a cada dígito)
@@ -656,6 +687,7 @@ function kanban() {
             this.notas        = [];
             this.notasAberto  = false;
             this.novaNota     = '';
+            this.moverColunaAlvo = ticket.coluna_kanban;
             this.limparMidia();
             await this.carregarMensagens(ticket.id);
             if (ticket.contato?.id) await this.carregarNotas(ticket.contato.id);

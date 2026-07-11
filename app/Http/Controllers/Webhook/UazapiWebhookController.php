@@ -89,7 +89,7 @@ class UazapiWebhookController extends Controller
         if ($fromMe) {
             // Franqueado respondeu pelo celular físico — passa para humano
             if (! $viaApi) {
-                $this->transferirParaHumano($tenant, $telefone, $conteudo);
+                $this->transferirParaHumano($tenant, $telefone, $conteudo, $msg, $tenant->uazapi_instance_token);
             }
             return;
         }
@@ -191,12 +191,16 @@ class UazapiWebhookController extends Controller
         // Processa mídia se houver (imagem → visão IA / áudio → transcrição / etc)
         $mediaType = $msg['mediaType'] ?? null;
         $tipoMensagem = 'texto';
+        $midiaUrl = null;
         if ($mediaType && $instanceToken) {
             try {
                 $processado = app(MediaProcessorService::class)->processar($msg, $instanceToken);
                 if ($processado !== null) {
                     $conteudo     = $processado;
                     $tipoMensagem = in_array($mediaType, ['image','video']) ? 'imagem' : ($mediaType === 'audio' ? 'audio' : 'texto');
+                    if (in_array($mediaType, ['image', 'audio'])) {
+                        $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrl($msg, $instanceToken, $mediaType);
+                    }
                 }
             } catch (\Throwable $e) {
                 Log::warning("MediaProcessorService falhou, continuando sem processar mídia", [
@@ -225,6 +229,7 @@ class UazapiWebhookController extends Controller
                 'remetente'  => 'lead',
                 'tipo'       => $tipoMensagem,
                 'conteudo'   => $conteudo,
+                'midia_url'  => $midiaUrl,
                 'enviado_em' => now(),
             ]);
         }
@@ -389,6 +394,11 @@ class UazapiWebhookController extends Controller
             'solicito', 'solicitando', 'peço', 'pedindo', 'necessito',
             'seria', 'posso', 'poderia', 'podendo',
             'olá', 'oi', 'sim', 'não', 'ok',
+            // Expressões religiosas/interjeições que brasileiros costumam escrever
+            // com maiúscula por respeito — nunca são o nome de quem escreveu
+            'deus', 'jesus', 'cristo', 'senhor', 'senhora', 'graças', 'glória',
+            'amém', 'aleluia', 'espírito', 'divino', 'pai', 'fiel', 'bendito',
+            'abençoado', 'abençoada', 'aleluya',
         ];
 
         foreach ($padroes as $padrao) {
@@ -468,7 +478,7 @@ class UazapiWebhookController extends Controller
         return 'whatsapp';
     }
 
-    private function transferirParaHumano(Tenant $tenant, string $telefone, ?string $conteudo): void
+    private function transferirParaHumano(Tenant $tenant, string $telefone, ?string $conteudo, array $msg = [], string $instanceToken = ''): void
     {
         $contato = Contato::where('telefone', $telefone)->first();
         if (! $contato) {
@@ -492,14 +502,34 @@ class UazapiWebhookController extends Controller
             Log::info("Ticket #{$ticket->id} transferido para humano (resposta pelo celular)");
         }
 
+        // Processa mídia (imagem/áudio enviados pelo WhatsApp Web/celular) — mesma
+        // lógica usada pra mensagens do lead, senão a mídia não aparece no card.
+        $mediaType = $msg['mediaType'] ?? null;
+        $tipoMensagem = 'texto';
+        $midiaUrl = null;
+        if ($mediaType && $instanceToken && in_array($mediaType, ['image', 'audio'])) {
+            try {
+                $midiaUrl     = app(MediaProcessorService::class)->baixarEPersistirUrl($msg, $instanceToken, $mediaType);
+                $tipoMensagem = $mediaType === 'image' ? 'imagem' : 'audio';
+                if (! $conteudo) {
+                    $conteudo = $mediaType === 'image' ? '[Imagem]' : '[Áudio]';
+                }
+            } catch (\Throwable $e) {
+                Log::warning('transferirParaHumano: falha ao processar mídia', [
+                    'mediaType' => $mediaType, 'erro' => $e->getMessage(),
+                ]);
+            }
+        }
+
         // Salva a mensagem enviada pelo franqueado
         if ($conteudo) {
             Mensagem::create([
                 'ticket_id'  => $ticket->id,
                 'tenant_id'  => $tenant->id,
                 'remetente'  => 'humano',
-                'tipo'       => 'texto',
+                'tipo'       => $tipoMensagem,
                 'conteudo'   => $conteudo,
+                'midia_url'  => $midiaUrl,
                 'enviado_em' => now(),
             ]);
         }
