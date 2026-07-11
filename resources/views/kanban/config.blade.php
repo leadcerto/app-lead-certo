@@ -1004,11 +1004,13 @@ function kanbanConfig() {
             const imagem   = this.novaImagem[seqId];
             if (!conteudo.trim() && !imagem) return;
 
+            const botoes = (this.novoBotoes[seqId] || []).filter(b => (b.text || '').trim() !== '');
+
             const fd = new FormData();
             fd.append('conteudo', conteudo);
             fd.append('delay_segundos', this.delayParaSegundos(this.novoDelay[seqId] || 0, this.novoDelayUnidade[seqId] || 'min'));
             if (imagem) fd.append('imagem', imagem);
-            fd.append('button_settings', JSON.stringify(this.novoBotoes[seqId] || []));
+            fd.append('button_settings', JSON.stringify(botoes));
             fd.append('obrigatorio', this.novoObrigatorio[seqId] ? '1' : '0');
 
             const res = await fetch(`/api/painel/sequencias/${seqId}/mensagens`, {
@@ -1026,6 +1028,9 @@ function kanbanConfig() {
                 this.novoObrigatorio[seqId] = false;
                 await this.carregarMsgs(seqId);
                 await this.carregar();
+            } else {
+                const erro = await res.json().catch(() => null);
+                this.mostrarToast(erro?.message || 'Não foi possível adicionar a mensagem. Confira os botões preenchidos.', 'erro');
             }
         },
 
@@ -1063,22 +1068,30 @@ function kanbanConfig() {
         },
 
         async salvarMsg(seqId, msg) {
+            const botoes = (this.editMsgBotoes || []).filter(b => (b.text || '').trim() !== '');
+
             const fd = new FormData();
             fd.append('_method', 'PUT');
             fd.append('conteudo', this.editMsgConteudo);
             fd.append('delay_segundos', this.delayParaSegundos(this.editMsgDelay, this.editMsgDelayUnidade));
             if (this.editMsgImagem) fd.append('imagem', this.editMsgImagem);
             if (this.editMsgRemoverImagem) fd.append('remover_imagem', '1');
-            fd.append('button_settings', JSON.stringify(this.editMsgBotoes || []));
+            fd.append('button_settings', JSON.stringify(botoes));
             fd.append('obrigatorio', this.editMsgObrigatorio ? '1' : '0');
 
-            await fetch(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}`, {
+            const res = await fetch(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}`, {
                 method: 'POST',
                 headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                 body: fd,
             });
-            this.cancelarMsg();
-            await this.carregarMsgs(seqId);
+
+            if (res.ok) {
+                this.cancelarMsg();
+                await this.carregarMsgs(seqId);
+            } else {
+                const erro = await res.json().catch(() => null);
+                this.mostrarToast(erro?.message || 'Não foi possível salvar a mensagem. Confira os botões preenchidos.', 'erro');
+            }
         },
 
         async toggleAtivoMsg(seqId, msg) {
