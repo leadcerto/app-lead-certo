@@ -42,6 +42,32 @@ class KanbanController extends Controller
         $todosTickets = collect();
         $totais       = [];
 
+        // Último remetente da conversa — usado pra saber se o lead respondeu
+        // e ainda ninguém (humano) voltou pra ele.
+        $ultimoRemetenteSub = Mensagem::select('remetente')
+            ->whereColumn('ticket_id', 'tickets_atendimento.id')
+            ->orderByDesc('id')
+            ->limit(1);
+
+        // Prioridade de exibição dentro da coluna: 0 = lead esperando resposta
+        // humana, 1 = tem retorno agendado ou etiqueta Pendente, 2 = resto.
+        // Escrito como SQL bruto com tenant_id literal (inteiro confiável, vem
+        // do usuário autenticado) pra não misturar bindings do TenantScope do
+        // Mensagem com os do addSelect abaixo.
+        $tenantIdInt   = (int) $tenantId;
+        $prioridadeRaw = "
+            CASE
+                WHEN tickets_atendimento.agente_responsavel = 'humano' AND (
+                    SELECT remetente FROM mensagens
+                    WHERE mensagens.ticket_id = tickets_atendimento.id
+                    AND mensagens.tenant_id = {$tenantIdInt}
+                    ORDER BY mensagens.id DESC LIMIT 1
+                ) = 'lead' THEN 0
+                WHEN tickets_atendimento.retorno_agendado_em IS NOT NULL OR tickets_atendimento.pendente_desde IS NOT NULL THEN 1
+                ELSE 2
+            END
+        ";
+
         foreach ($colunas as $coluna) {
             $query = TicketAtendimento::where('coluna_kanban', $coluna);
 
@@ -49,9 +75,15 @@ class KanbanController extends Controller
 
             $ticketsColuna = $query->with(['contato', 'vendedor'])
                 ->withCount(['mensagens as count_midias' => fn ($q) => $q->where('tipo', '!=', 'texto')])
+                ->addSelect(['ultimo_remetente' => $ultimoRemetenteSub])
+                ->orderByRaw($prioridadeRaw)
                 ->orderByDesc('aberto_em')
                 ->limit(self::LIMITE_COLUNA)
                 ->get();
+
+            $ticketsColuna->each(function ($ticket) {
+                $ticket->precisa_resposta = $ticket->agente_responsavel === 'humano' && $ticket->ultimo_remetente === 'lead';
+            });
 
             $todosTickets = $todosTickets->concat($ticketsColuna);
         }

@@ -45,7 +45,9 @@
                      :class="coluna.key === 'outros' ? 'border-l-2 border-dashed border-gray-200 pl-3' : ''"
                      style="min-height: 5rem">
                     <template x-for="ticket in (tickets[coluna.key] || [])" :key="ticket.id">
-                        <div :class="coluna.key === 'outros' ? 'bg-gray-50 rounded-xl shadow-sm p-4 cursor-grab hover:shadow-md transition-shadow border border-gray-200' : 'bg-white rounded-xl shadow-sm p-4 cursor-grab hover:shadow-md transition-shadow'"
+                        <div :class="ticket.precisa_resposta
+                                ? 'bg-blue-50 border-2 border-blue-300 rounded-xl shadow-sm p-4 cursor-grab hover:shadow-md transition-shadow'
+                                : (coluna.key === 'outros' ? 'bg-gray-50 rounded-xl shadow-sm p-4 cursor-grab hover:shadow-md transition-shadow border border-gray-200' : 'bg-white rounded-xl shadow-sm p-4 cursor-grab hover:shadow-md transition-shadow')"
                              :style="dragCard?.id === ticket.id ? 'opacity:0.4;cursor:grabbing' : ''"
                              draggable="true"
                              @dragstart="iniciarDrag($event, ticket)"
