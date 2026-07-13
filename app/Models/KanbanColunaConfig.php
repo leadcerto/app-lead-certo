@@ -21,6 +21,7 @@ class KanbanColunaConfig extends Model
         'seq_objetivo',
         'ia_objetivo',
         'ia_contexto',
+        'foco_analise_imagem',
         'ia_ativo',
         'sdr_delay_segundos',
         'followup_estagio1_segundos',

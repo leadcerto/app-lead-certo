@@ -332,6 +332,30 @@
                     </div>
                 </template>
 
+                {{-- Itens identificados nas imagens --}}
+                <template x-if="ticketAtivo.lista_itens">
+                    <div class="border-b">
+                        <button @click="itensAberto = !itensAberto"
+                                class="w-full flex items-center justify-between px-5 py-2 text-xs text-gray-500 hover:bg-gray-50 transition-colors">
+                            <span class="flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7a2 2 0 012-2h6a2 2 0 012 2v10a2 2 0 01-2 2H9a2 2 0 01-2-2zm-4 0V9a2 2 0 012-2h1v10H7a2 2 0 01-2-2z"/>
+                                </svg>
+                                Itens identificados
+                            </span>
+                            <svg class="w-3.5 h-3.5 transition-transform duration-200" :class="itensAberto ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <template x-if="itensAberto">
+                            <div class="px-5 pb-3">
+                                <p class="text-xs text-gray-600 leading-relaxed bg-teal-50 border border-teal-100 rounded-lg px-3 py-2 whitespace-pre-wrap"
+                                   x-text="ticketAtivo.lista_itens"></p>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
                 {{-- Mensagens --}}
                 <div class="flex-1 overflow-y-auto px-5 py-4 space-y-2" x-ref="msgBox">
                     <template x-for="msg in mensagens" :key="msg.id">
@@ -590,6 +614,7 @@ function kanban() {
         notas:             [],
         notasAberto:       false,
         resumoAberto:      false,
+        itensAberto:       false,
         novaNota:          '',
         salvandoNota:      false,
         dragCard:          null,

@@ -21,8 +21,10 @@ class MediaProcessorService
     /**
      * Processa qualquer tipo de mídia e retorna texto descritivo para o bot.
      * Retorna null se não há mídia ou não conseguiu processar.
+     * $focoAnalise vem da configuração da coluna (foco_analise_imagem) — o que a
+     * IA deve procurar na imagem varia por negócio (móveis, placas, cores, etc.).
      */
-    public function processar(array $msg, string $instanceToken): ?string
+    public function processar(array $msg, string $instanceToken, ?string $focoAnalise = null): ?string
     {
         $mediaType = $msg['mediaType'] ?? null;
 
@@ -31,7 +33,7 @@ class MediaProcessorService
         }
 
         return match ($mediaType) {
-            'image'    => $this->processarImagem($msg, $instanceToken),
+            'image'    => $this->processarImagem($msg, $instanceToken, $focoAnalise),
             'audio'    => $this->processarAudio($msg, $instanceToken),
             'video'    => $this->processarVideo($msg, $instanceToken),
             'document' => $this->processarDocumento($msg),
@@ -43,14 +45,10 @@ class MediaProcessorService
     // Imagem → visão IA
     // -------------------------------------------------------------------------
 
-    private function processarImagem(array $msg, string $instanceToken): string
+    private function processarImagem(array $msg, string $instanceToken, ?string $focoAnalise = null): string
     {
-        $caption = is_string($msg['content'] ?? null) ? ($msg['content'] ?? '') : '';
-
-        $descriptografado = $this->descriptografarMidiaWhatsApp($msg, 'image');
-        $mediaUrl = $descriptografado
-            ? 'data:' . ($descriptografado['mime'] ?: 'image/jpeg') . ';base64,' . base64_encode($descriptografado['bytes'])
-            : ($this->extrairUrl($msg) ?? $this->baixarUrlViaUazapi($instanceToken, $msg));
+        $caption  = is_string($msg['content'] ?? null) ? ($msg['content'] ?? '') : '';
+        $mediaUrl = $this->obterUrlImagem($msg, $instanceToken);
 
         if (! $mediaUrl) {
             Log::warning('MediaProcessor: não encontrou URL de imagem', ['msg' => array_keys($msg)]);
@@ -58,16 +56,89 @@ class MediaProcessorService
             return $caption;
         }
 
-        $descricao = $this->descreverImagemComVisao($mediaUrl, $caption);
+        $descricao = $this->descreverImagemComVisao($mediaUrl, $caption, $focoAnalise);
         $prefixo   = $caption ? "[Imagem: {$caption}] " : '[Imagem] ';
 
         return $prefixo . $descricao;
     }
 
+    /**
+     * Gera uma lista curta dos itens vistos na imagem, focada no que a coluna
+     * configurou (ou num foco genérico se não configurado) — usada pra alimentar
+     * o campo "Itens identificados" do card, separado da descrição narrativa que
+     * vai pro contexto do agente. Retorna null se não conseguir processar.
+     */
+    public function extrairItensImagem(array $msg, string $instanceToken, ?string $focoAnalise = null): ?string
+    {
+        if (! $this->openRouterKey) {
+            return null;
+        }
+
+        $mediaUrl = $this->obterUrlImagem($msg, $instanceToken);
+        if (! $mediaUrl) {
+            return null;
+        }
+
+        $foco = trim($focoAnalise ?: self::FOCO_PADRAO);
+
+        $modelosVision = FreeModelsService::vision();
+        if (count($modelosVision) < 3) {
+            $modelosVision[] = self::VISAO_PAGO_FALLBACK;
+        }
+
+        $prompt = "Liste em tópicos curtos (um item por linha, começando com '-') o que aparece na imagem "
+            . "relacionado a: {$foco}. Seja objetivo, sem frases longas — só o essencial de cada item "
+            . "(ex: '- Sofá 3 lugares'). Se nada relevante aparecer, responda apenas 'Nada identificado'.";
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$this->openRouterKey}",
+                'HTTP-Referer'  => config('app.url', 'https://app.leadcerto.app.br'),
+                'X-Title'       => 'Lead Certo',
+            ])->timeout(45)->post('https://openrouter.ai/api/v1/chat/completions', [
+                'models'   => $modelosVision,
+                'route'    => 'fallback',
+                'messages' => [[
+                    'role'    => 'user',
+                    'content' => [
+                        ['type' => 'image_url', 'image_url' => ['url' => $mediaUrl]],
+                        ['type' => 'text',      'text'      => $prompt],
+                    ],
+                ]],
+                'max_tokens' => 200,
+            ]);
+
+            if ($response->successful()) {
+                $texto = trim($response->json('choices.0.message.content') ?? '');
+                return ($texto && ! str_contains(mb_strtolower($texto), 'nada identificado')) ? $texto : null;
+            }
+
+            Log::warning('MediaProcessor: extração de itens falhou', ['status' => $response->status()]);
+        } catch (\Exception $e) {
+            Log::error('MediaProcessor: extração de itens exceção', ['erro' => $e->getMessage()]);
+        }
+
+        return null;
+    }
+
+    private function obterUrlImagem(array $msg, string $instanceToken): ?string
+    {
+        $descriptografado = $this->descriptografarMidiaWhatsApp($msg, 'image');
+
+        return $descriptografado
+            ? 'data:' . ($descriptografado['mime'] ?: 'image/jpeg') . ';base64,' . base64_encode($descriptografado['bytes'])
+            : ($this->extrairUrl($msg) ?? $this->baixarUrlViaUazapi($instanceToken, $msg));
+    }
+
     // Modelo pago de visão — último recurso se todos os gratuitos falharem
     private const VISAO_PAGO_FALLBACK = 'google/gemini-flash-1.5-8b';
 
-    private function descreverImagemComVisao(string $imageUrl, string $caption = ''): string
+    // Foco padrão quando a coluna não configura foco_analise_imagem — mantém o
+    // comportamento original (voltado a frete/mudança) pra não mudar nada de
+    // quem já usa o sistema sem configurar esse campo novo.
+    private const FOCO_PADRAO = 'móveis, volumes, caixas, dimensões estimadas, quantidade de itens, condição dos objetos';
+
+    private function descreverImagemComVisao(string $imageUrl, string $caption = '', ?string $focoAnalise = null): string
     {
         if (! $this->openRouterKey) {
             return '[Imagem recebida — processamento de visão não configurado]';
@@ -79,10 +150,11 @@ class MediaProcessorService
             $modelosVision[] = self::VISAO_PAGO_FALLBACK;
         }
 
-        $promptContexto = 'Você é um assistente de uma empresa de fretes e mudanças. '
+        $foco = trim($focoAnalise ?: self::FOCO_PADRAO);
+
+        $promptContexto = 'Você é um assistente de uma empresa. '
             . 'Descreva em português o que vê na imagem de forma objetiva e prática, '
-            . 'focando em: móveis, volumes, caixas, dimensões estimadas, quantidade de itens, '
-            . 'condição dos objetos. Se não for relevante para frete/mudança, descreva brevemente o que vê.';
+            . "focando em: {$foco}. Se não for relevante, descreva brevemente o que vê.";
 
         if ($caption) {
             $promptContexto .= " O remetente adicionou a legenda: \"{$caption}\".";

@@ -502,6 +502,18 @@
                             class="w-full text-sm border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none bg-gray-50"
                         ></textarea>
 
+                        <div class="mt-3">
+                            <label class="text-xs font-semibold text-gray-500 mb-1 block">O que a IA deve procurar nas imagens desta coluna</label>
+                            <textarea
+                                @input="focoAnaliseImagem[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                :value="focoAnaliseImagem[col.key] ?? ''"
+                                placeholder="Ex: móveis, volumes, caixas, quantidade de itens de mudança (deixe em branco para usar a descrição genérica)"
+                                rows="2"
+                                class="w-full text-xs border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none bg-gray-50"
+                            ></textarea>
+                            <p class="text-xs text-gray-400 mt-1">Usado tanto na descrição da imagem pro agente quanto na lista de itens identificados no card. Cada negócio pode focar em algo diferente — móveis, placas de carro, cores, o que fizer sentido.</p>
+                        </div>
+
                         <div class="mt-3 flex items-center justify-between">
                             <div class="flex items-center gap-4">
                                 <label class="flex items-center gap-1.5 cursor-pointer">
@@ -1029,6 +1041,7 @@ function kanbanConfig() {
 
         // Contexto completo da IA
         iaContexto: {},
+        focoAnaliseImagem: {},
         iaAtivo: {},
         iaDelay: {},
         iaDelayUnidade: {},
@@ -1276,6 +1289,7 @@ function kanbanConfig() {
                 this.objetivo[key]      = json.objetivo       ?? '';
                 this.iaObjetivo[key]    = json.ia_objetivo    ?? '';
                 this.iaContexto[key]    = json.ia_contexto        ?? '';
+                this.focoAnaliseImagem[key] = json.foco_analise_imagem ?? '';
                 this.iaAtivo[key]       = json.ia_ativo           ?? false;
                 const delay             = this.segundosParaDisplay(json.sdr_delay_segundos ?? 45);
                 this.iaDelay[key]       = delay.valor;
@@ -1338,6 +1352,7 @@ function kanbanConfig() {
             this.iaSalvo[key]    = false;
             const res = await this.api(`/api/painel/kanban/coluna-config/${key}`, 'PUT', {
                 ia_contexto:         this.iaContexto[key] ?? '',
+                foco_analise_imagem: this.focoAnaliseImagem[key] ?? '',
                 ia_ativo:            this.iaAtivo[key]    ?? false,
                 sdr_delay_segundos:  this.delayParaSegundos(this.iaDelay[key] ?? 45, this.iaDelayUnidade[key] || 'seg'),
                 followup_estagio1_segundos: this.delayParaSegundos(this.estagio1Delay[key] ?? 1, this.estagio1DelayUnidade[key] || 'hora'),

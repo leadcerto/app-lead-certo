@@ -224,7 +224,14 @@ class UazapiWebhookController extends Controller
         $midiaUrl = null;
         if ($mediaType && $instanceToken) {
             try {
-                $processado = app(MediaProcessorService::class)->processar($msg, $instanceToken);
+                $focoAnalise = $mediaType === 'image'
+                    ? KanbanColunaConfig::withoutGlobalScopes()
+                        ->where('tenant_id', $tenant->id)
+                        ->where('coluna_kanban', $ticket->coluna_kanban)
+                        ->value('foco_analise_imagem')
+                    : null;
+
+                $processado = app(MediaProcessorService::class)->processar($msg, $instanceToken, $focoAnalise);
                 if ($processado !== null) {
                     $conteudo     = $processado;
                     $tipoMensagem = match ($mediaType) {
@@ -232,6 +239,16 @@ class UazapiWebhookController extends Controller
                     };
                     if (in_array($mediaType, ['image', 'audio', 'video'])) {
                         $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrl($msg, $instanceToken, $mediaType);
+                    }
+
+                    // Acumula os itens identificados na imagem no card, pra quem
+                    // vende ver de relance o que já foi enviado sem reabrir cada foto.
+                    if ($mediaType === 'image') {
+                        $itens = app(MediaProcessorService::class)->extrairItensImagem($msg, $instanceToken, $focoAnalise);
+                        if ($itens) {
+                            $listaAtual = $ticket->lista_itens ? $ticket->lista_itens . "\n" : '';
+                            $ticket->update(['lista_itens' => $listaAtual . $itens]);
+                        }
                     }
                 }
             } catch (\Throwable $e) {
