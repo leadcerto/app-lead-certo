@@ -178,13 +178,20 @@ class UazapiWebhookController extends Controller
                 ->first();
 
             if ($ticketEncerrado) {
+                // Volta pra coluna em que estava antes de encerrar — independente de quem
+                // encerrou (humano, silêncio automático ou a própria IA) — em vez de
+                // depender da IA classificar a mensagem de volta pra alguma coluna.
+                $colunaRestaurada = $ticketEncerrado->coluna_antes_encerrar ?: 'em_atendimento';
+
                 $ticketEncerrado->update([
-                    'status'             => 'aberto',
-                    'agente_responsavel' => 'bot',
+                    'status'                => 'aberto',
+                    'agente_responsavel'    => 'bot',
+                    'coluna_kanban'         => $colunaRestaurada,
+                    'coluna_antes_encerrar' => null,
                 ]);
                 $ticket = $ticketEncerrado;
-                // ticketNovo permanece false → cai no elseif abaixo → SdrResponderJob na coluna encerrado
-                Log::info("Webhook: ticket #{$ticketEncerrado->id} reativado para Guardião (mensagem pós-encerramento)");
+                // ticketNovo permanece false → cai no elseif abaixo → SdrResponderJob na coluna restaurada
+                Log::info("Webhook: ticket #{$ticketEncerrado->id} reativado, voltou pra coluna '{$colunaRestaurada}'");
             } else {
                 // Abre novo ticket
                 $persona = $tenant->personas()->where('is_default', true)->where('ativo', true)->first();

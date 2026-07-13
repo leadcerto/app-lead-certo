@@ -188,13 +188,11 @@ class KanbanController extends Controller
 
         $model = TicketAtendimento::findOrFail($ticket);
 
-        $model->update([
-            'status'               => 'encerrado',
+        $model->update($model->dadosParaEncerrar([
             'tag_desfecho'         => $request->tag_desfecho,
-            'coluna_kanban'        => 'encerrado',
             'encerrado_em'         => now(),
             'followup_agendado_em' => $request->followup_em ?? null,
-        ]);
+        ]));
 
         ConversationQAJob::dispatch($model->id);
         GerarResumoTicketJob::dispatch($model->id)->delay(now()->addSeconds(5));

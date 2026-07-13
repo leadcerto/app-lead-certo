@@ -20,6 +20,7 @@ class TicketAtendimento extends Model
         'tenant_id',
         'contato_id',
         'coluna_kanban',
+        'coluna_antes_encerrar',
         'agente_responsavel',
         'sdr_persona_id',
         'vendedor_id',
@@ -79,5 +80,25 @@ class TicketAtendimento extends Model
     public function mensagens(): HasMany
     {
         return $this->hasMany(Mensagem::class, 'ticket_id')->orderBy('enviado_em');
+    }
+
+    /**
+     * Monta os campos pra encerrar o ticket guardando a coluna em que ele estava,
+     * pra poder voltar pra lá se o lead reabrir a conversa depois — independente
+     * de quem encerrou (humano, silêncio automático ou a própria IA).
+     * Não sobrescreve a coluna guardada se o ticket já estava encerrado.
+     */
+    public function dadosParaEncerrar(array $extra = []): array
+    {
+        $updates = array_merge($extra, [
+            'coluna_kanban' => 'encerrado',
+            'status'        => 'encerrado',
+        ]);
+
+        if ($this->coluna_kanban !== 'encerrado') {
+            $updates['coluna_antes_encerrar'] = $this->coluna_kanban;
+        }
+
+        return $updates;
     }
 }

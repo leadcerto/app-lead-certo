@@ -217,12 +217,10 @@ class FollowupConversas extends Command
         }
 
         if ($destino === 'encerrado') {
-            $ticket->update([
-                'coluna_kanban' => 'encerrado',
-                'status'        => 'encerrado',
-                'tag_desfecho'  => 'sem_resposta_automatico',
-                'encerrado_em'  => now(),
-            ]);
+            $ticket->update($ticket->dadosParaEncerrar([
+                'tag_desfecho' => 'sem_resposta_automatico',
+                'encerrado_em' => now(),
+            ]));
             ConversationQAJob::dispatch($ticket->id);
             GerarResumoTicketJob::dispatch($ticket->id)->delay(now()->addSeconds(5));
         } elseif ($destino === 'outros') {

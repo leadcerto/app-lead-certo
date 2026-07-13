@@ -66,10 +66,9 @@ class SdrResponderService
         $moveu = false;
         foreach ($tokenColunas as $token => $cfg) {
             if (str_contains($resposta, $token)) {
-                $updates = ['coluna_kanban' => $cfg['coluna'], 'etapa_ia' => $cfg['etapa']];
-                if ($cfg['coluna'] === 'encerrado') {
-                    $updates['status'] = 'encerrado';
-                }
+                $updates = $cfg['coluna'] === 'encerrado'
+                    ? $ticket->dadosParaEncerrar(['etapa_ia' => $cfg['etapa']])
+                    : ['coluna_kanban' => $cfg['coluna'], 'etapa_ia' => $cfg['etapa']];
                 $ticket->update($updates);
                 Log::info("SdrResponder: → {$cfg['coluna']} via token {$token}", ['ticket_id' => $ticket->id]);
                 $moveu = true;
@@ -106,12 +105,14 @@ class SdrResponderService
             'enviado_em' => now(),
         ]);
 
-        // ── 7. Se o Guardião respondeu sem mover de coluna, fechar ticket de volta ──
-        // Ticket encerrado foi reativado temporariamente no webhook para o Guardião avaliar.
-        // Se nenhum token de movimento foi emitido, fecha o ticket de volta.
+        // ── 7. Rede de segurança ──────────────────────────────────────────────
+        // O webhook já restaura a coluna anterior assim que um ticket encerrado
+        // é reativado (ver UazapiWebhookController::processarMensagemLead), então
+        // isso não deveria mais disparar — mantido como fallback caso o ticket
+        // chegue aqui ainda em 'encerrado' por algum outro caminho.
         if (! $moveu && $ticket->coluna_kanban === 'encerrado') {
             $ticket->update(['status' => 'encerrado']);
-            Log::info('SdrResponder: Guardião sem token de movimento, ticket fechado de volta', ['ticket_id' => $ticket->id]);
+            Log::info('SdrResponder: ticket ainda em encerrado sem token de movimento, fechado de volta', ['ticket_id' => $ticket->id]);
         }
 
         return $resposta;
