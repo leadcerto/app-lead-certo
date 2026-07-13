@@ -210,7 +210,9 @@ class MediaProcessorService
 
     /**
      * Tenta extrair URL de mídia do payload Uazapi.
-     * A URL vem dentro do campo `content` como JSON: {"URL":"https://mmg.whatsapp.net/...","mimetype":"..."}
+     * O campo `content` chega como objeto já decodificado pelo Laravel (array PHP)
+     * na maioria dos casos — {"URL":"https://mmg.whatsapp.net/...","mimetype":"..."} —
+     * mas trata também o caso de vir como string JSON, por segurança.
      * Arquivos de áudio têm URL com extensão .enc (criptografados) — devem ir via baixarMidiaDoUazapi.
      */
     private function extrairUrl(array $msg): ?string
@@ -230,13 +232,14 @@ class MediaProcessorService
                 return $content;
             }
 
-            // content como JSON: {"URL":"https://...","mimetype":"..."}
-            $decoded = json_decode($content, true);
-            if (is_array($decoded)) {
-                foreach (['URL', 'url', 'directPath', 'mediaUrl'] as $key) {
-                    if (! empty($decoded[$key]) && str_starts_with($decoded[$key], 'http')) {
-                        return $decoded[$key];
-                    }
+            // content como string JSON: {"URL":"https://...","mimetype":"..."}
+            $content = json_decode($content, true);
+        }
+
+        if (is_array($content)) {
+            foreach (['URL', 'url', 'directPath', 'mediaUrl'] as $key) {
+                if (! empty($content[$key]) && is_string($content[$key]) && str_starts_with($content[$key], 'http')) {
+                    return $content[$key];
                 }
             }
         }

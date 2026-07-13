@@ -49,6 +49,15 @@ class KanbanController extends Controller
             ->orderByDesc('id')
             ->limit(1);
 
+        // Horário da última mensagem — usado como desempate dentro de cada
+        // grupo de prioridade, pra quem está com conversa ativa agora (em
+        // qualquer direção, inclusive quando o humano responde direto pelo
+        // WhatsApp Web) sempre aparecer mais acima do que um card parado.
+        $ultimaMensagemEmSub = Mensagem::select('enviado_em')
+            ->whereColumn('ticket_id', 'tickets_atendimento.id')
+            ->orderByDesc('id')
+            ->limit(1);
+
         // Prioridade de exibição dentro da coluna: 0 = lead esperando resposta
         // humana, 1 = tem retorno agendado ou etiqueta Pendente, 2 = resto.
         // Escrito como SQL bruto com tenant_id literal (inteiro confiável, vem
@@ -75,9 +84,12 @@ class KanbanController extends Controller
 
             $ticketsColuna = $query->with(['contato', 'vendedor'])
                 ->withCount(['mensagens as count_midias' => fn ($q) => $q->where('tipo', '!=', 'texto')])
-                ->addSelect(['ultimo_remetente' => $ultimoRemetenteSub])
+                ->addSelect([
+                    'ultimo_remetente'   => $ultimoRemetenteSub,
+                    'ultima_mensagem_em' => $ultimaMensagemEmSub,
+                ])
                 ->orderByRaw($prioridadeRaw)
-                ->orderByDesc('aberto_em')
+                ->orderByDesc('ultima_mensagem_em')
                 ->limit(self::LIMITE_COLUNA)
                 ->get();
 

@@ -92,4 +92,76 @@ class UazapiWebhookMidiaTest extends TestCase
         $this->assertSame('audio', $mensagem->tipo);
         $this->assertNotNull($mensagem->midia_url);
     }
+
+    public function test_imagem_usa_url_direta_do_content_quando_download_do_uazapi_falha(): void
+    {
+        // Simula o cenário real de produção: os endpoints de download do Uazapi
+        // retornam erro, então o fallback tem que extrair a URL direta do campo
+        // `content` — que chega como array já decodificado, não como string JSON.
+        Http::fake(['*' => Http::response('method not allowed', 405)]);
+
+        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-3', 'uazapi_instance_token' => 'inst-3']);
+
+        $this->postJson('/api/webhook/uazapi/wh-midia-3', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'    => false,
+                'isGroup'   => false,
+                'chatid'    => '5511955556666@s.whatsapp.net',
+                'mediaType' => 'image',
+                'messageid' => 'msg-3',
+                'content'   => [
+                    'URL'      => 'https://mmg.whatsapp.net/o1/v/t24/f2/m235/fake-image-url',
+                    'mimetype' => 'image/jpeg',
+                ],
+            ],
+        ]);
+
+        $mensagem = Mensagem::where('remetente', 'lead')->latest()->first();
+        $this->assertNotNull($mensagem);
+        $this->assertSame('imagem', $mensagem->tipo);
+        $this->assertSame('https://mmg.whatsapp.net/o1/v/t24/f2/m235/fake-image-url', $mensagem->midia_url);
+    }
+
+    public function test_webhook_duplicado_com_mesmo_messageid_nao_cria_segunda_mensagem(): void
+    {
+        Http::fake(['*' => Http::response('not found', 404)]);
+
+        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-4', 'uazapi_instance_token' => 'inst-4']);
+
+        $payload = [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'    => false,
+                'isGroup'   => false,
+                'chatid'    => '5511966667777@s.whatsapp.net',
+                'text'      => 'Oi, tudo bem?',
+                'messageid' => 'msg-duplicado',
+            ],
+        ];
+
+        // Uazapi reenvia o mesmo evento (mesmo messageid) mais de uma vez
+        $this->postJson('/api/webhook/uazapi/wh-midia-4', $payload);
+        $this->postJson('/api/webhook/uazapi/wh-midia-4', $payload);
+
+        $this->assertSame(1, Mensagem::where('uazapi_message_id', 'msg-duplicado')->count());
+    }
+
+    public function test_album_placeholder_e_ignorado_e_nao_vira_mensagem(): void
+    {
+        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-5', 'uazapi_instance_token' => 'inst-5']);
+
+        $this->postJson('/api/webhook/uazapi/wh-midia-5', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'    => false,
+                'isGroup'   => false,
+                'chatid'    => '5511977778888@s.whatsapp.net',
+                'text'      => 'Album: 3 images',
+                'messageid' => 'msg-album',
+            ],
+        ]);
+
+        $this->assertSame(0, Mensagem::where('conteudo', 'Album: 3 images')->count());
+    }
 }

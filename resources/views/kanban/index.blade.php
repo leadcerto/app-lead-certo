@@ -5,9 +5,37 @@
 @section('content')
 <div x-data="kanban()" x-init="carregar()" class="h-full">
 
-    <div class="flex items-center justify-between mb-5">
-        <h1 class="text-xl font-bold text-gray-800">Atendimentos</h1>
-        <div class="flex items-center gap-3">
+    <div class="flex items-center justify-between mb-5 gap-4">
+        <h1 class="text-xl font-bold text-gray-800 flex-shrink-0">Atendimentos</h1>
+
+        {{-- Busca de atendimento por nome, telefone ou ID --}}
+        <div class="relative w-full max-w-xs" @click.outside="buscaTexto = ''">
+            <input type="text" x-model="buscaTexto"
+                   placeholder="Buscar por nome, telefone ou ID..."
+                   class="w-full text-sm border border-gray-200 rounded-lg pl-8 pr-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-200 focus:border-green-400">
+            <svg class="w-4 h-4 text-gray-400 absolute left-2.5 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z"/>
+            </svg>
+
+            <template x-if="buscaTexto.trim().length >= 2">
+                <div class="absolute z-40 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto">
+                    <template x-if="resultadosBusca().length === 0">
+                        <p class="text-xs text-gray-400 px-3 py-2">Nenhum atendimento encontrado</p>
+                    </template>
+                    <template x-for="r in resultadosBusca()" :key="r.ticket.id">
+                        <button @click="abrirTicket(r.ticket); buscaTexto = ''"
+                                class="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-0">
+                            <p class="text-sm font-medium text-gray-800"
+                               x-text="r.ticket.contato?.nome_local || r.ticket.contato?.nome || r.ticket.contato?.telefone || ('#' + r.ticket.id)"></p>
+                            <p class="text-xs text-gray-400"
+                               x-text="[r.ticket.contato?.telefone, '#' + r.ticket.contato?.id, r.colunaLabel].filter(Boolean).join(' · ')"></p>
+                        </button>
+                    </template>
+                </div>
+            </template>
+        </div>
+
+        <div class="flex items-center gap-3 flex-shrink-0">
             <span class="text-xs text-gray-400">Atualiza a cada 5s</span>
             @if(auth()->user()->isDono())
             <a href="{{ route('kanban.config') }}"
@@ -352,6 +380,11 @@
                                     <a :href="msg.midia_url" target="_blank" class="text-xs underline opacity-80">Ver vídeo</a>
                                 </template>
 
+                                {{-- Fallback: mídia sem URL disponível (download falhou) — nunca deixa a bolha em branco --}}
+                                <template x-if="msg.tipo !== 'texto' && !msg.midia_url">
+                                    <p x-text="msg.conteudo || '[Mídia recebida — não foi possível carregar]'" class="whitespace-pre-wrap break-words italic opacity-80"></p>
+                                </template>
+
                                 <p class="text-xs opacity-50 mt-1 text-right"
                                    x-text="new Date(msg.enviado_em).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})"></p>
                             </div>
@@ -537,6 +570,7 @@ function kanban() {
         ],
         tickets:        {},
         totalPorColuna: {},
+        buscaTexto:     '',
         ticketAtivo:  null,
         moverColunaAlvo: '',
         mensagens:    [],
@@ -579,6 +613,30 @@ function kanban() {
                 this.totalPorColuna[c.key] = entrada.total;
             }
             this.tickets = novosTickets;
+        },
+
+        resultadosBusca() {
+            const termo = this.buscaTexto.trim().toLowerCase();
+            if (termo.length < 2) return [];
+
+            const achados = [];
+            for (const coluna of this.colunas) {
+                for (const ticket of (this.tickets[coluna.key] || [])) {
+                    const alvo = [
+                        ticket.contato?.nome_local,
+                        ticket.contato?.nome,
+                        ticket.contato?.telefone,
+                        ticket.contato?.id,
+                        ticket.id,
+                    ].filter(Boolean).join(' ').toLowerCase();
+
+                    if (alvo.includes(termo)) {
+                        achados.push({ ticket, colunaLabel: coluna.label });
+                        if (achados.length >= 20) return achados;
+                    }
+                }
+            }
+            return achados;
         },
 
         iniciarDrag(event, ticket) {

@@ -57,8 +57,18 @@ class UazapiWebhookController extends Controller
         $isGroup  = $msg['isGroup'] ?? false;
         $chatId   = $msg['chatid'] ?? null; // ex: "5521997797960@s.whatsapp.net"
         $viaApi   = $msg['wasSentByApi'] ?? false;
+        $messageId = $msg['messageid'] ?? null;
 
         if (! $chatId || $isGroup) {
+            return;
+        }
+
+        // Uazapi reenvia o mesmo evento mais de uma vez em alguns casos (ex.: mídia,
+        // onde o segundo envio traz metadados completos) — sem essa trava, a mesma
+        // mensagem do lead vira duas linhas e o bot pode responder duas vezes ao mesmo
+        // conteúdo, dessincronizando o card em relação à conversa real do WhatsApp.
+        if ($messageId && Mensagem::withoutGlobalScopes()->where('uazapi_message_id', $messageId)->exists()) {
+            Log::debug('Uazapi webhook: mensagem duplicada ignorada', ['messageid' => $messageId]);
             return;
         }
 
@@ -67,6 +77,14 @@ class UazapiWebhookController extends Controller
         $conteudo  = $msg['text'] ?? null;
         $pushName  = $msg['senderName'] ?? null;
         $mediaType = $msg['mediaType'] ?? null; // 'image','audio','video','document' ou null
+
+        // Uazapi manda um evento à parte com texto tipo "Album: 3 images" quando o
+        // lead envia várias fotos juntas — é metadado da plataforma, não algo que
+        // o lead escreveu. Ignora esse evento em si (as imagens chegam em eventos
+        // separados, cada uma com seu próprio mediaType).
+        if ($conteudo && ! $mediaType && preg_match('/^Album:\s*\d+\s*images?$/i', trim($conteudo))) {
+            return;
+        }
 
         // Loga payload completo de mídia para mapeamento
         if ($mediaType) {
@@ -224,13 +242,14 @@ class UazapiWebhookController extends Controller
         // Salva a mensagem
         if ($conteudo) {
             Mensagem::create([
-                'ticket_id'  => $ticket->id,
-                'tenant_id'  => $tenant->id,
-                'remetente'  => 'lead',
-                'tipo'       => $tipoMensagem,
-                'conteudo'   => $conteudo,
-                'midia_url'  => $midiaUrl,
-                'enviado_em' => now(),
+                'ticket_id'         => $ticket->id,
+                'tenant_id'         => $tenant->id,
+                'remetente'         => 'lead',
+                'tipo'              => $tipoMensagem,
+                'conteudo'          => $conteudo,
+                'midia_url'         => $midiaUrl,
+                'uazapi_message_id' => $msg['messageid'] ?? null,
+                'enviado_em'        => now(),
             ]);
         }
 
@@ -524,13 +543,14 @@ class UazapiWebhookController extends Controller
         // Salva a mensagem enviada pelo franqueado
         if ($conteudo) {
             Mensagem::create([
-                'ticket_id'  => $ticket->id,
-                'tenant_id'  => $tenant->id,
-                'remetente'  => 'humano',
-                'tipo'       => $tipoMensagem,
-                'conteudo'   => $conteudo,
-                'midia_url'  => $midiaUrl,
-                'enviado_em' => now(),
+                'ticket_id'         => $ticket->id,
+                'tenant_id'         => $tenant->id,
+                'remetente'         => 'humano',
+                'tipo'              => $tipoMensagem,
+                'conteudo'          => $conteudo,
+                'midia_url'         => $midiaUrl,
+                'uazapi_message_id' => $msg['messageid'] ?? null,
+                'enviado_em'        => now(),
             ]);
         }
     }
