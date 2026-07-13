@@ -86,8 +86,9 @@ class GoogleService
             if ($res->successful()) {
                 $data = $res->json();
                 $token->update([
-                    'access_token' => $data['access_token'],
-                    'expires_at'   => Carbon::now()->addSeconds($data['expires_in'] - 60),
+                    'access_token'       => $data['access_token'],
+                    'expires_at'         => Carbon::now()->addSeconds($data['expires_in'] - 60),
+                    'falha_renovacao_em' => null,
                 ]);
                 return true;
             }
@@ -96,6 +97,10 @@ class GoogleService
         } catch (\Exception $e) {
             Log::error('Google OAuth renovar exceção', ['erro' => $e->getMessage()]);
         }
+
+        // Marca a falha pra aparecer como aviso no painel — sem isso, o sync
+        // simplesmente para de funcionar em silêncio e só se percebe dias depois.
+        $token->update(['falha_renovacao_em' => now()]);
 
         return false;
     }

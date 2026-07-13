@@ -17,11 +17,13 @@ class GoogleToken extends Model
         'token_type',
         'expires_at',
         'scopes',
+        'falha_renovacao_em',
     ];
 
     protected $casts = [
-        'expires_at' => 'datetime',
-        'scopes'     => 'array',
+        'expires_at'         => 'datetime',
+        'scopes'              => 'array',
+        'falha_renovacao_em' => 'datetime',
     ];
 
     public function tenant(): BelongsTo

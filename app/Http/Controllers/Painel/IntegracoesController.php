@@ -68,12 +68,13 @@ class IntegracoesController extends Controller
         GoogleToken::updateOrCreate(
             ['tenant_id' => $tenantId],
             [
-                'google_email'  => $email,
-                'access_token'  => $tokens['access_token'],
-                'refresh_token' => $tokens['refresh_token'] ?? '',
-                'token_type'    => $tokens['token_type'] ?? 'Bearer',
-                'expires_at'    => Carbon::now()->addSeconds(($tokens['expires_in'] ?? 3600) - 60),
-                'scopes'        => explode(' ', $tokens['scope'] ?? ''),
+                'google_email'       => $email,
+                'access_token'       => $tokens['access_token'],
+                'refresh_token'      => $tokens['refresh_token'] ?? '',
+                'token_type'         => $tokens['token_type'] ?? 'Bearer',
+                'expires_at'         => Carbon::now()->addSeconds(($tokens['expires_in'] ?? 3600) - 60),
+                'scopes'             => explode(' ', $tokens['scope'] ?? ''),
+                'falha_renovacao_em' => null,
             ]
         );
 
