@@ -403,13 +403,23 @@ class MediaProcessorService
             return null;
         }
 
+        // A URL vem do payload do webhook (relayed pelo Uazapi a partir do próprio
+        // WhatsApp) — sem essa checagem, um payload malicioso poderia fazer o
+        // servidor buscar qualquer endereço interno (SSRF). Só aceita o CDN
+        // oficial do WhatsApp, via HTTPS, e não segue redirecionamentos (um host
+        // válido não deveria precisar redirecionar pra servir o arquivo).
+        if (! $this->urlEhCdnWhatsapp($url)) {
+            Log::warning('MediaProcessor: URL de mídia fora do domínio esperado do WhatsApp, recusando', ['url' => $url]);
+            return null;
+        }
+
         $mediaKey = base64_decode($mediaKeyB64, true);
         if ($mediaKey === false || strlen($mediaKey) !== 32) {
             return null;
         }
 
         try {
-            $response = Http::timeout(30)->get($url);
+            $response = Http::withOptions(['allow_redirects' => false])->timeout(30)->get($url);
         } catch (\Exception $e) {
             Log::warning('MediaProcessor: falha ao baixar arquivo criptografado', ['erro' => $e->getMessage()]);
             return null;
@@ -444,6 +454,22 @@ class MediaProcessorService
         }
 
         return ['bytes' => $decrypted, 'mime' => $mime];
+    }
+
+    /**
+     * Só aceita HTTPS em domínios do CDN de mídia do WhatsApp — barreira contra
+     * SSRF via URL manipulada no payload do webhook.
+     */
+    private function urlEhCdnWhatsapp(string $url): bool
+    {
+        $partes = parse_url($url);
+        if (! is_array($partes) || ($partes['scheme'] ?? '') !== 'https') {
+            return false;
+        }
+
+        $host = strtolower($partes['host'] ?? '');
+
+        return $host === 'whatsapp.net' || str_ends_with($host, '.whatsapp.net');
     }
 
     private function extensaoPorMime(string $mime, string $mediaType): string

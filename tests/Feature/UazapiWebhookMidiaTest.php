@@ -312,4 +312,31 @@ class UazapiWebhookMidiaTest extends TestCase
         $ticket = TicketAtendimento::withoutGlobalScopes()->where('contato_id', $contato->id)->first();
         $this->assertNotNull($ticket);
     }
+
+    public function test_url_de_midia_fora_do_dominio_whatsapp_nao_e_buscada(): void
+    {
+        // Protecao contra SSRF: uma URL manipulada no payload nao pode fazer o
+        // servidor buscar um endereco interno/arbitrario.
+        Http::fake(['*' => Http::response('not found', 404)]);
+
+        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-10', 'uazapi_instance_token' => 'inst-10']);
+
+        $this->postJson('/api/webhook/uazapi/wh-midia-10', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'    => false,
+                'isGroup'   => false,
+                'chatid'    => '5511900001111@s.whatsapp.net',
+                'mediaType' => 'image',
+                'messageid' => 'msg-10',
+                'content'   => [
+                    'URL'      => 'http://169.254.169.254/latest/meta-data/',
+                    'mimetype' => 'image/jpeg',
+                    'mediaKey' => base64_encode(random_bytes(32)),
+                ],
+            ],
+        ]);
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '169.254.169.254'));
+    }
 }
