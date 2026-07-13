@@ -164,4 +164,152 @@ class UazapiWebhookMidiaTest extends TestCase
 
         $this->assertSame(0, Mensagem::where('conteudo', 'Album: 3 images')->count());
     }
+
+    /**
+     * Monta um arquivo "criptografado" de verdade seguindo o mesmo protocolo do
+     * WhatsApp (HKDF-SHA256 sem salt + AES-256-CBC + HMAC-SHA256 truncado em 10
+     * bytes), pra provar que o decrypt do MediaProcessorService recupera
+     * exatamente o conteúdo original — sem precisar de nenhuma mensagem real.
+     */
+    private function criptografarComoWhatsApp(string $plaintext, string $infoLabel): array
+    {
+        $mediaKey  = random_bytes(32);
+        $expandido = hash_hkdf('sha256', $mediaKey, 112, $infoLabel);
+        $iv        = substr($expandido, 0, 16);
+        $cipherKey = substr($expandido, 16, 32);
+        $macKey    = substr($expandido, 48, 32);
+
+        $ciphertext = openssl_encrypt($plaintext, 'aes-256-cbc', $cipherKey, OPENSSL_RAW_DATA, $iv);
+        $mac10      = substr(hash_hmac('sha256', $iv . $ciphertext, $macKey, true), 0, 10);
+
+        return [
+            'arquivo_criptografado' => $ciphertext . $mac10,
+            'media_key_base64'      => base64_encode($mediaKey),
+        ];
+    }
+
+    public function test_imagem_e_descriptografada_corretamente_sem_depender_do_uazapi(): void
+    {
+        $plaintextFakeJpeg = "conteudo-binario-de-uma-imagem-jpeg-de-verdade";
+        $pacote = $this->criptografarComoWhatsApp($plaintextFakeJpeg, 'WhatsApp Image Keys');
+
+        Http::fake([
+            'mmg.whatsapp.net/*' => Http::response($pacote['arquivo_criptografado'], 200),
+            '*'                  => Http::response('not found', 404), // Uazapi nunca deveria ser chamado aqui
+        ]);
+
+        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-6', 'uazapi_instance_token' => 'inst-6']);
+
+        $this->postJson('/api/webhook/uazapi/wh-midia-6', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'    => false,
+                'isGroup'   => false,
+                'chatid'    => '5511988889999@s.whatsapp.net',
+                'mediaType' => 'image',
+                'messageid' => 'msg-6',
+                'content'   => [
+                    'URL'      => 'https://mmg.whatsapp.net/v/t62/fake.enc',
+                    'mimetype' => 'image/jpeg',
+                    'mediaKey' => $pacote['media_key_base64'],
+                ],
+            ],
+        ]);
+
+        $mensagem = Mensagem::where('remetente', 'lead')->latest()->first();
+        $this->assertNotNull($mensagem);
+        $this->assertSame('imagem', $mensagem->tipo);
+        $this->assertNotNull($mensagem->midia_url);
+
+        $caminho = Storage::disk('public')->allFiles('kanban-midia')[0] ?? null;
+        $this->assertNotNull($caminho);
+        $this->assertSame($plaintextFakeJpeg, Storage::disk('public')->get($caminho));
+    }
+
+    public function test_audio_de_voz_ptt_e_reconhecido_como_audio(): void
+    {
+        // WhatsApp manda mensagem de voz com mediaType 'ptt', não 'audio'.
+        Http::fake(['*' => Http::response('not found', 404)]);
+
+        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-7', 'uazapi_instance_token' => 'inst-7']);
+
+        $this->postJson('/api/webhook/uazapi/wh-midia-7', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'    => false,
+                'isGroup'   => false,
+                'chatid'    => '5511999990000@s.whatsapp.net',
+                'mediaType' => 'ptt',
+                'messageid' => 'msg-7',
+                'content'   => ['mimetype' => 'audio/ogg; codecs=opus'],
+            ],
+        ]);
+
+        $mensagem = Mensagem::where('remetente', 'lead')->latest()->first();
+        $this->assertNotNull($mensagem, 'Mensagem de voz (ptt) deveria ter sido salva como áudio');
+        $this->assertSame('audio', $mensagem->tipo);
+    }
+
+    public function test_video_e_salvo_com_tipo_video_e_midia_url(): void
+    {
+        $plaintextFakeMp4 = "conteudo-binario-de-um-video-mp4-de-verdade";
+        $pacote = $this->criptografarComoWhatsApp($plaintextFakeMp4, 'WhatsApp Video Keys');
+
+        Http::fake([
+            'mmg.whatsapp.net/*' => Http::response($pacote['arquivo_criptografado'], 200),
+            '*'                  => Http::response('not found', 404),
+        ]);
+
+        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-8', 'uazapi_instance_token' => 'inst-8']);
+
+        $this->postJson('/api/webhook/uazapi/wh-midia-8', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'    => false,
+                'isGroup'   => false,
+                'chatid'    => '5511911110000@s.whatsapp.net',
+                'mediaType' => 'video',
+                'messageid' => 'msg-8',
+                'content'   => [
+                    'URL'      => 'https://mmg.whatsapp.net/v/t62/fake-video.enc',
+                    'mimetype' => 'video/mp4',
+                    'mediaKey' => $pacote['media_key_base64'],
+                ],
+            ],
+        ]);
+
+        $mensagem = Mensagem::where('remetente', 'lead')->latest()->first();
+        $this->assertNotNull($mensagem);
+        $this->assertSame('video', $mensagem->tipo);
+        $this->assertNotNull($mensagem->midia_url);
+    }
+
+    public function test_telefone_de_contato_apagado_e_restaurado_em_vez_de_travar(): void
+    {
+        Http::fake(['*' => Http::response('not found', 404)]);
+
+        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-9', 'uazapi_instance_token' => 'inst-9']);
+
+        $apagado = Contato::factory()->create(['telefone' => '5511922223333', 'nome' => 'Fulano Antigo']);
+        $apagado->delete();
+        $this->assertTrue($apagado->fresh()->trashed());
+
+        $this->postJson('/api/webhook/uazapi/wh-midia-9', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'    => false,
+                'isGroup'   => false,
+                'chatid'    => '5511922223333@s.whatsapp.net',
+                'text'      => 'Oi, voltei a falar com vocês',
+                'messageid' => 'msg-9',
+            ],
+        ]);
+
+        $contato = Contato::where('telefone', '5511922223333')->first();
+        $this->assertNotNull($contato, 'Contato apagado deveria ter sido restaurado');
+        $this->assertSame($apagado->id, $contato->id);
+
+        $ticket = TicketAtendimento::withoutGlobalScopes()->where('contato_id', $contato->id)->first();
+        $this->assertNotNull($ticket);
+    }
 }

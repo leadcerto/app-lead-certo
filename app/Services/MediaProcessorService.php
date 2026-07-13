@@ -45,8 +45,12 @@ class MediaProcessorService
 
     private function processarImagem(array $msg, string $instanceToken): string
     {
-        $caption  = is_string($msg['content'] ?? null) ? ($msg['content'] ?? '') : '';
-        $mediaUrl = $this->extrairUrl($msg) ?? $this->baixarUrlViaUazapi($instanceToken, $msg);
+        $caption = is_string($msg['content'] ?? null) ? ($msg['content'] ?? '') : '';
+
+        $descriptografado = $this->descriptografarMidiaWhatsApp($msg, 'image');
+        $mediaUrl = $descriptografado
+            ? 'data:' . ($descriptografado['mime'] ?: 'image/jpeg') . ';base64,' . base64_encode($descriptografado['bytes'])
+            : ($this->extrairUrl($msg) ?? $this->baixarUrlViaUazapi($instanceToken, $msg));
 
         if (! $mediaUrl) {
             Log::warning('MediaProcessor: não encontrou URL de imagem', ['msg' => array_keys($msg)]);
@@ -127,8 +131,12 @@ class MediaProcessorService
             return '[Áudio recebido — transcrição não configurada]';
         }
 
-        // Áudio do WhatsApp vem criptografado (.enc) — deve ser baixado pelo Uazapi
-        $midia = $this->baixarMidiaDoUazapi($instanceToken, $msg);
+        // Áudio do WhatsApp vem criptografado (.enc) — descriptografa com o mediaKey
+        // do próprio payload; só recorre ao Uazapi se por algum motivo não der certo.
+        $descriptografado = $this->descriptografarMidiaWhatsApp($msg, 'audio');
+        $midia = $descriptografado
+            ? ['base64' => base64_encode($descriptografado['bytes']), 'mime' => $descriptografado['mime'] ?: 'audio/ogg']
+            : $this->baixarMidiaDoUazapi($instanceToken, $msg);
 
         if (! $midia) {
             Log::warning('MediaProcessor: não conseguiu baixar áudio', ['messageid' => $msg['messageid'] ?? null]);
@@ -319,26 +327,123 @@ class MediaProcessorService
     }
 
     /**
-     * Baixa a mídia (via Uazapi) e salva permanentemente em storage/public,
-     * retornando uma URL própria — as URLs diretas do WhatsApp (mmg.whatsapp.net)
+     * Baixa e descriptografa a mídia, salvando permanentemente em storage/public
+     * e retornando uma URL própria — as URLs diretas do WhatsApp (mmg.whatsapp.net)
      * expiram, então não servem pra exibir depois no histórico da conversa.
-     * Retorna null se não conseguir baixar nem achar uma URL direta como fallback.
+     * Retorna null se não conseguir descriptografar, nem via Uazapi, nem achar
+     * uma URL direta como último recurso.
      */
     public function baixarEPersistirUrl(array $msg, string $instanceToken, string $mediaType): ?string
     {
-        $midia = $this->baixarMidiaDoUazapi($instanceToken, $msg);
+        $descriptografado = $this->descriptografarMidiaWhatsApp($msg, $mediaType);
 
-        if (! $midia) {
-            // Fallback: URL direta do payload (pode expirar, mas é melhor que nada)
-            return $this->extrairUrl($msg);
+        if ($descriptografado) {
+            return $this->salvarBytes($descriptografado['bytes'], $descriptografado['mime'] ?? '', $mediaType);
         }
 
-        $extensao = $this->extensaoPorMime($midia['mime'], $mediaType);
+        // Fallback: tenta via Uazapi (endpoint deles, hoje instável/quebrado)
+        $midia = $this->baixarMidiaDoUazapi($instanceToken, $msg);
+        if ($midia) {
+            return $this->salvarBytes(base64_decode($midia['base64']), $midia['mime'], $mediaType);
+        }
+
+        // Último recurso: URL criptografada crua do payload (não abre no navegador,
+        // mas é melhor que nada guardar caso precisemos investigar depois)
+        return $this->extrairUrl($msg);
+    }
+
+    private function salvarBytes(string $bytes, string $mime, string $mediaType): string
+    {
+        $extensao = $this->extensaoPorMime($mime, $mediaType);
         $caminho  = 'kanban-midia/recebida-' . \Illuminate\Support\Str::random(24) . '.' . $extensao;
 
-        \Illuminate\Support\Facades\Storage::disk('public')->put($caminho, base64_decode($midia['base64']));
+        \Illuminate\Support\Facades\Storage::disk('public')->put($caminho, $bytes);
 
         return url('storage/' . $caminho);
+    }
+
+    // -------------------------------------------------------------------------
+    // Descriptografia de mídia do WhatsApp (protocolo público, sem depender do Uazapi)
+    // -------------------------------------------------------------------------
+
+    private const HKDF_INFO = [
+        'image'    => 'WhatsApp Image Keys',
+        'video'    => 'WhatsApp Video Keys',
+        'audio'    => 'WhatsApp Audio Keys',
+        'document' => 'WhatsApp Document Keys',
+    ];
+
+    /**
+     * Descriptografa mídia do WhatsApp usando o `mediaKey` que já vem no payload
+     * do webhook — dispensa o endpoint de download do Uazapi (instável/quebrado
+     * desde 01/07). Protocolo documentado publicamente pela comunidade (usado por
+     * bibliotecas como Baileys): HKDF-SHA256 sem salt expande o mediaKey (32 bytes)
+     * em 112 bytes = IV(16) + chave AES-256(32) + chave HMAC(32) + refKey(32, não
+     * usado aqui). O arquivo baixado é [ciphertext AES-256-CBC][HMAC-SHA256
+     * truncado nos últimos 10 bytes], usado pra validar a integridade antes de
+     * decifrar. Retorna null em qualquer etapa que falhar — quem chama já sabe
+     * cair pro fallback do Uazapi.
+     */
+    private function descriptografarMidiaWhatsApp(array $msg, string $mediaType): ?array
+    {
+        $content = $msg['content'] ?? null;
+        if (is_string($content)) {
+            $content = json_decode($content, true);
+        }
+        if (! is_array($content)) {
+            return null;
+        }
+
+        $url         = $content['URL'] ?? null;
+        $mediaKeyB64 = $content['mediaKey'] ?? null;
+        $mime        = $content['mimetype'] ?? null;
+        $infoLabel   = self::HKDF_INFO[$mediaType] ?? null;
+
+        if (! $url || ! $mediaKeyB64 || ! $infoLabel) {
+            return null;
+        }
+
+        $mediaKey = base64_decode($mediaKeyB64, true);
+        if ($mediaKey === false || strlen($mediaKey) !== 32) {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout(30)->get($url);
+        } catch (\Exception $e) {
+            Log::warning('MediaProcessor: falha ao baixar arquivo criptografado', ['erro' => $e->getMessage()]);
+            return null;
+        }
+
+        if (! $response->successful()) {
+            return null;
+        }
+
+        $arquivo = $response->body();
+        if (strlen($arquivo) <= 10) {
+            return null;
+        }
+
+        $expandido = hash_hkdf('sha256', $mediaKey, 112, $infoLabel);
+        $iv        = substr($expandido, 0, 16);
+        $cipherKey = substr($expandido, 16, 32);
+        $macKey    = substr($expandido, 48, 32);
+
+        $ciphertext   = substr($arquivo, 0, -10);
+        $macRecebido  = substr($arquivo, -10);
+        $macCalculado = substr(hash_hmac('sha256', $iv . $ciphertext, $macKey, true), 0, 10);
+
+        if (! hash_equals($macRecebido, $macCalculado)) {
+            Log::warning('MediaProcessor: MAC da mídia não confere, descartando decrypt');
+            return null;
+        }
+
+        $decrypted = openssl_decrypt($ciphertext, 'aes-256-cbc', $cipherKey, OPENSSL_RAW_DATA, $iv);
+        if ($decrypted === false) {
+            return null;
+        }
+
+        return ['bytes' => $decrypted, 'mime' => $mime];
     }
 
     private function extensaoPorMime(string $mime, string $mediaType): string

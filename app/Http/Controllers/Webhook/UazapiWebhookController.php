@@ -53,6 +53,14 @@ class UazapiWebhookController extends Controller
     {
         $msg = $payload['message'] ?? [];
 
+        // WhatsApp manda mensagem de voz como mediaType 'ptt' (push-to-talk), não
+        // 'audio' — normaliza aqui pra todo o resto do fluxo (que só verifica
+        // 'audio') tratar do mesmo jeito. Sem isso, áudio de voz nunca virava
+        // mensagem nenhuma (nem tipo, nem conteúdo, nem mídia).
+        if (($msg['mediaType'] ?? null) === 'ptt') {
+            $msg['mediaType'] = 'audio';
+        }
+
         $fromMe   = $msg['fromMe'] ?? false;
         $isGroup  = $msg['isGroup'] ?? false;
         $chatId   = $msg['chatid'] ?? null; // ex: "5521997797960@s.whatsapp.net"
@@ -219,8 +227,10 @@ class UazapiWebhookController extends Controller
                 $processado = app(MediaProcessorService::class)->processar($msg, $instanceToken);
                 if ($processado !== null) {
                     $conteudo     = $processado;
-                    $tipoMensagem = in_array($mediaType, ['image','video']) ? 'imagem' : ($mediaType === 'audio' ? 'audio' : 'texto');
-                    if (in_array($mediaType, ['image', 'audio'])) {
+                    $tipoMensagem = match ($mediaType) {
+                        'image' => 'imagem', 'video' => 'video', 'audio' => 'audio', default => 'texto',
+                    };
+                    if (in_array($mediaType, ['image', 'audio', 'video'])) {
                         $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrl($msg, $instanceToken, $mediaType);
                     }
                 }
@@ -363,9 +373,17 @@ class UazapiWebhookController extends Controller
         try {
             return Contato::firstOrCreate(['telefone' => $telefone], $atributos);
         } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
-            $contato = Contato::where('telefone', $telefone)->first();
+            // O telefone pode pertencer a um contato apagado (soft delete) — a
+            // restrição única do banco continua valendo mesmo apagado, então
+            // firstOrCreate() bate de frente com ele sem nunca encontrá-lo
+            // (a busca padrão ignora registros apagados). Sem isso, o webhook
+            // ficava preso pra sempre nesse telefone.
+            $contato = Contato::withTrashed()->where('telefone', $telefone)->first();
             if (! $contato) {
                 throw $e;
+            }
+            if ($contato->trashed()) {
+                $contato->restore();
             }
             return $contato;
         }
@@ -542,17 +560,21 @@ class UazapiWebhookController extends Controller
             Log::info("Ticket #{$ticket->id} transferido para humano (resposta pelo celular)");
         }
 
-        // Processa mídia (imagem/áudio enviados pelo WhatsApp Web/celular) — mesma
-        // lógica usada pra mensagens do lead, senão a mídia não aparece no card.
+        // Processa mídia (imagem/áudio/vídeo enviados pelo WhatsApp Web/celular) —
+        // mesma lógica usada pra mensagens do lead, senão a mídia não aparece no card.
         $mediaType = $msg['mediaType'] ?? null;
         $tipoMensagem = 'texto';
         $midiaUrl = null;
-        if ($mediaType && $instanceToken && in_array($mediaType, ['image', 'audio'])) {
+        if ($mediaType && $instanceToken && in_array($mediaType, ['image', 'audio', 'video'])) {
             try {
                 $midiaUrl     = app(MediaProcessorService::class)->baixarEPersistirUrl($msg, $instanceToken, $mediaType);
-                $tipoMensagem = $mediaType === 'image' ? 'imagem' : 'audio';
+                $tipoMensagem = match ($mediaType) {
+                    'image' => 'imagem', 'video' => 'video', default => 'audio',
+                };
                 if (! $conteudo) {
-                    $conteudo = $mediaType === 'image' ? '[Imagem]' : '[Áudio]';
+                    $conteudo = match ($mediaType) {
+                        'image' => '[Imagem]', 'video' => '[Vídeo]', default => '[Áudio]',
+                    };
                 }
             } catch (\Throwable $e) {
                 Log::warning('transferirParaHumano: falha ao processar mídia', [

@@ -115,9 +115,15 @@ class ContatoSyncService
                             'opt_out'  => false,
                         ]));
                     } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
-                        $contato = Contato::where('telefone', $telefone)->first();
+                        // Tambem cobre o caso do telefone pertencer a um contato
+                        // apagado (soft delete) — a restricao unica do banco vale
+                        // mesmo apagado, e a busca padrao nunca acha esse registro.
+                        $contato = Contato::withTrashed()->where('telefone', $telefone)->first();
                         if (! $contato) {
                             throw $e;
+                        }
+                        if ($contato->trashed()) {
+                            $contato->restore();
                         }
                     }
 
