@@ -360,7 +360,7 @@
 
                                 {{-- Áudio --}}
                                 <template x-if="msg.tipo === 'audio' && msg.midia_url">
-                                    <audio controls class="w-full h-10" :src="msg.midia_url"></audio>
+                                    <audio controls class="w-[280px] h-10" :src="msg.midia_url"></audio>
                                 </template>
 
                                 {{-- Documento --}}
