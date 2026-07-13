@@ -360,7 +360,12 @@
 
                                 {{-- Áudio --}}
                                 <template x-if="msg.tipo === 'audio' && msg.midia_url">
-                                    <audio controls class="w-[280px] h-10" :src="msg.midia_url"></audio>
+                                    <div>
+                                        <audio controls class="w-[280px] h-10" :src="msg.midia_url"></audio>
+                                        <template x-if="msg.conteudo">
+                                            <p class="text-xs mt-1 opacity-80 whitespace-pre-wrap break-words" x-text="msg.conteudo"></p>
+                                        </template>
+                                    </div>
                                 </template>
 
                                 {{-- Documento --}}
