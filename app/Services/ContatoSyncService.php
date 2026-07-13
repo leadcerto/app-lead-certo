@@ -103,11 +103,23 @@ class ContatoSyncService
 
                 if (! $existente) {
                     // ── Contato novo ─────────────────────────────────────────
-                    $contato = Contato::create(array_merge($dados, [
-                        'telefone' => $telefone,
-                        'origem'   => 'agenda_google',
-                        'opt_out'  => false,
-                    ]));
+                    // O Google as vezes lista o mesmo contato duas vezes (cartoes
+                    // duplicados na propria agenda) ou o webhook do WhatsApp pode
+                    // estar criando esse telefone no mesmo instante — tolera a
+                    // corrida em vez de deixar a excecao de chave duplicada subir
+                    // e abortar o sync inteiro daquele contato.
+                    try {
+                        $contato = Contato::create(array_merge($dados, [
+                            'telefone' => $telefone,
+                            'origem'   => 'agenda_google',
+                            'opt_out'  => false,
+                        ]));
+                    } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+                        $contato = Contato::where('telefone', $telefone)->first();
+                        if (! $contato) {
+                            throw $e;
+                        }
+                    }
 
                     VinculoContatoTenant::updateOrCreate(
                         ['contato_id' => $contato->id, 'tenant_id' => $tenantId],
