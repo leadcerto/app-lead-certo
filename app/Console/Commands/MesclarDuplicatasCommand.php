@@ -2,15 +2,9 @@
 
 namespace App\Console\Commands;
 
-use App\Models\AuditoriaContato;
-use App\Models\ChamadaPerdida;
 use App\Models\Contato;
-use App\Models\FormularioEnvio;
-use App\Models\NotaContato;
-use App\Models\TicketAtendimento;
-use App\Models\VinculoContatoTenant;
+use App\Services\ContatoMergeService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class MesclarDuplicatasCommand extends Command
@@ -24,6 +18,11 @@ class MesclarDuplicatasCommand extends Command
     private int $mesclados = 0;
     private int $ignorados = 0;
     private int $erros     = 0;
+
+    public function __construct(private ContatoMergeService $merge)
+    {
+        parent::__construct();
+    }
 
     public function handle(): int
     {
@@ -93,64 +92,7 @@ class MesclarDuplicatasCommand extends Command
         }
 
         try {
-            DB::transaction(function () use ($antigo, $canonico) {
-                // 1. Tickets (sem global scope de tenant)
-                TicketAtendimento::withoutGlobalScopes()
-                    ->where('contato_id', $antigo->id)
-                    ->update(['contato_id' => $canonico->id]);
-
-                // 2. Notas
-                NotaContato::where('contato_id', $antigo->id)
-                    ->update(['contato_id' => $canonico->id]);
-
-                // 3. Chamadas perdidas
-                ChamadaPerdida::where('contato_id', $antigo->id)
-                    ->update(['contato_id' => $canonico->id]);
-
-                // 4. Formulario envios
-                FormularioEnvio::where('contato_id', $antigo->id)
-                    ->update(['contato_id' => $canonico->id]);
-
-                // 5. Auditoria
-                AuditoriaContato::where('contato_id', $antigo->id)
-                    ->update(['contato_id' => $canonico->id]);
-
-                // 6. Vinculos tenant — unique (contato_id, tenant_id) — merge cuidadoso
-                $vinculosAntigo = VinculoContatoTenant::where('contato_id', $antigo->id)->get();
-                foreach ($vinculosAntigo as $vinculo) {
-                    $jaExiste = VinculoContatoTenant::where('contato_id', $canonico->id)
-                        ->where('tenant_id', $vinculo->tenant_id)
-                        ->exists();
-                    if ($jaExiste) {
-                        $vinculo->delete();
-                    } else {
-                        $vinculo->update(['contato_id' => $canonico->id]);
-                    }
-                }
-
-                // 7. Enriquece canonico com dados do antigo (nao sobrescreve campos preenchidos)
-                $campos = ['nome', 'email', 'email_2', 'profissao', 'empresa', 'observacoes', 'foto_url', 'tags'];
-                $updates = [];
-                foreach ($campos as $campo) {
-                    if (empty($canonico->{$campo}) && ! empty($antigo->{$campo})) {
-                        $updates[$campo] = $antigo->{$campo};
-                    }
-                }
-                if (! empty($updates)) {
-                    $canonico->update($updates);
-                }
-
-                // 8. Remove o contato antigo (soft delete)
-                $antigo->delete();
-
-                Log::info('MesclarDuplicatas: mesclado', [
-                    'antigo_id'    => $antigo->id,
-                    'antigo_tel'   => $antigo->telefone,
-                    'canonico_id'  => $canonico->id,
-                    'canonico_tel' => $canonico->telefone,
-                ]);
-            });
-
+            $this->merge->mesclar($antigo, $canonico);
             $this->mesclados++;
         } catch (\Throwable $e) {
             $this->erros++;

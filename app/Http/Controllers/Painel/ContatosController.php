@@ -7,6 +7,7 @@ use App\Models\AuditoriaContato;
 use App\Models\Contato;
 use App\Models\GoogleToken;
 use App\Models\VinculoContatoTenant;
+use App\Services\ContatoMergeService;
 use App\Services\ContatoSyncService;
 use App\Services\GoogleService;
 use Illuminate\Contracts\View\View;
@@ -117,7 +118,7 @@ class ContatosController extends Controller
         ]);
     }
 
-    public function resolverAuditoria(Request $request, int $id): JsonResponse
+    public function resolverAuditoria(Request $request, int $id, ContatoMergeService $merge): JsonResponse
     {
         $request->validate([
             'valor_novo' => 'required|string|max:255',
@@ -132,8 +133,27 @@ class ContatosController extends Controller
             return response()->json(['erro' => 'Contato não encontrado.'], 404);
         }
 
-        $campo = $auditoria->campo;
-        $contato->update([$campo => $request->input('valor_novo')]);
+        $campo     = $auditoria->campo;
+        $valorNovo = $request->input('valor_novo');
+
+        try {
+            $contato->update([$campo => $valorNovo]);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            // O valor corrigido (normalmente telefone) já pertence a outro contato —
+            // não é erro de digitação, são dois registros da mesma pessoa. Mescla em
+            // vez de só sobrescrever, senão a correção nunca consegue ser salva.
+            if ($campo !== 'telefone') {
+                return response()->json(['erro' => 'Esse valor já pertence a outro contato.'], 422);
+            }
+
+            $canonico = Contato::withTrashed()->where('telefone', $valorNovo)->first();
+            if (! $canonico) {
+                throw $e;
+            }
+
+            $merge->mesclar($contato, $canonico);
+            $contato = $canonico;
+        }
 
         $auditoria->update([
             'status'       => 'resolvido',
