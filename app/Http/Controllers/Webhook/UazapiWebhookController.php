@@ -91,7 +91,7 @@ class UazapiWebhookController extends Controller
             Log::debug('Uazapi media recebida', [
                 'mediaType'   => $mediaType,
                 'messageType' => $msg['messageType'] ?? null,
-                'content'     => substr(json_encode($msg['content'] ?? null), 0, 300),
+                'content'     => substr(json_encode($msg['content'] ?? null), 0, 2000),
                 'fileUrl'     => $msg['fileUrl'] ?? ($msg['mediaUrl'] ?? ($msg['url'] ?? null)),
                 'messageid'   => $msg['messageid'] ?? null,
             ]);
