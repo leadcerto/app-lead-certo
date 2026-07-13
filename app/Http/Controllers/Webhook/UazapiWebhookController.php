@@ -126,10 +126,7 @@ class UazapiWebhookController extends Controller
 
         // Busca ou cria contato — usa nome validado se disponível
         $novoContato = false;
-        $contato = Contato::firstOrCreate(
-            ['telefone' => $telefone],
-            ['nome' => $nomeValido ?: 'Sem Nome', 'origem' => $origemDetectada]
-        );
+        $contato = $this->buscarOuCriarContato($telefone, ['nome' => $nomeValido ?: 'Sem Nome', 'origem' => $origemDetectada]);
 
         if ($contato->wasRecentlyCreated) {
             $novoContato = true;
@@ -298,10 +295,7 @@ class UazapiWebhookController extends Controller
     private function processarChamadaWhatsApp(Tenant $tenant, string $telefone, ?string $pushName): void
     {
         // Ignora se já há ticket ativo (evita duplicar sequência)
-        $contato = Contato::firstOrCreate(
-            ['telefone' => $telefone],
-            ['nome' => $pushName ?: 'Sem Nome', 'origem' => 'whatsapp']
-        );
+        $contato = $this->buscarOuCriarContato($telefone, ['nome' => $pushName ?: 'Sem Nome', 'origem' => 'whatsapp']);
 
         if ($pushName && $this->semNomeReal($contato)) {
             $contato->update(['nome' => $pushName]);
@@ -348,6 +342,26 @@ class UazapiWebhookController extends Controller
         ]);
 
         app(SequenciaService::class)->iniciarParaTicket($ticket);
+    }
+
+    /**
+     * Busca um contato pelo telefone ou cria um novo — tolerante à corrida com o
+     * job `contatos:sincronizar-google` (roda a cada 6h), que pode inserir o mesmo
+     * telefone entre o SELECT e o INSERT do firstOrCreate normal. Sem essa proteção,
+     * a exceção de chave duplicada derrubava a requisição inteira do webhook e a
+     * mensagem do lead nunca chegava a ser salva.
+     */
+    private function buscarOuCriarContato(string $telefone, array $atributos): Contato
+    {
+        try {
+            return Contato::firstOrCreate(['telefone' => $telefone], $atributos);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            $contato = Contato::where('telefone', $telefone)->first();
+            if (! $contato) {
+                throw $e;
+            }
+            return $contato;
+        }
     }
 
     /**
