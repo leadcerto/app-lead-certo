@@ -421,19 +421,11 @@
                     </template>
                 </div>
 
-                {{-- Input --}}
+                {{-- Input — sempre disponível; mandar mensagem já assume o atendimento
+                     automaticamente do lado do servidor, sem precisar de um clique
+                     separado em "Assumir" antes de poder digitar. --}}
                 <template x-if="ticketAtivo.status !== 'encerrado'">
                     <div class="px-4 pb-4 pt-2 border-t">
-                        <template x-if="ticketAtivo.agente_responsavel !== 'humano'">
-                            <div class="text-center text-xs text-gray-400 py-2">
-                                <button @click="assumir(ticketAtivo.id)"
-                                        class="text-green-600 font-medium hover:underline">
-                                    Assumir atendimento
-                                </button>
-                                para enviar mensagens
-                            </div>
-                        </template>
-                        <template x-if="ticketAtivo.agente_responsavel === 'humano'">
                             <div>
                                 {{-- Preview de mídia selecionada --}}
                                 <template x-if="midiaPreview || audioPreviewUrl">
@@ -543,7 +535,6 @@
                                     </button>
                                 </div>
                             </div>
-                        </template>
                     </div>
                 </template>
 

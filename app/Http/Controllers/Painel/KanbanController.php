@@ -145,18 +145,35 @@ class KanbanController extends Controller
     {
         $model = TicketAtendimento::findOrFail($ticket);
 
-        if ($model->vendedor_id && $model->vendedor_id !== $request->user()->id) {
+        if ($conflito = $this->assumirAutomaticamente($model, $request->user())) {
+            return $conflito;
+        }
+
+        return response()->json(['ticket_id' => $ticket, 'assumido' => true]);
+    }
+
+    /**
+     * Garante que o usuário atual está no controle do ticket antes de mandar
+     * mensagem/mídia — assume sozinho se o ticket ainda estiver com a IA ou
+     * sem dono, sem precisar de um clique separado em "Assumir" antes de poder
+     * digitar. Só bloqueia se outra pessoa já tiver assumido.
+     */
+    private function assumirAutomaticamente(TicketAtendimento $model, $usuario): ?JsonResponse
+    {
+        if ($model->vendedor_id && $model->vendedor_id !== $usuario->id) {
             return response()->json([
                 'message' => 'Já assumido por ' . $model->vendedor->nome . '.',
             ], 409);
         }
 
-        $model->update([
-            'vendedor_id'        => $request->user()->id,
-            'agente_responsavel' => 'humano',
-        ]);
+        if ($model->agente_responsavel !== 'humano' || $model->vendedor_id !== $usuario->id) {
+            $model->update([
+                'vendedor_id'        => $usuario->id,
+                'agente_responsavel' => 'humano',
+            ]);
+        }
 
-        return response()->json(['ticket_id' => $ticket, 'assumido' => true]);
+        return null;
     }
 
     public function mensagens(int $ticket): JsonResponse
@@ -176,10 +193,8 @@ class KanbanController extends Controller
 
         $model = TicketAtendimento::findOrFail($ticket);
 
-        if ($model->agente_responsavel !== 'humano') {
-            return response()->json([
-                'message' => 'A IA está no controle deste atendimento. Assuma o atendimento primeiro.',
-            ], 403);
+        if ($conflito = $this->assumirAutomaticamente($model, $request->user())) {
+            return $conflito;
         }
 
         $telefone = $model->contato->telefone;
@@ -294,7 +309,16 @@ class KanbanController extends Controller
         $colunaAntes  = $model->coluna_kanban;
         $colunaDepois = $request->coluna;
 
-        $model->update(['coluna_kanban' => $colunaDepois]);
+        $updates = ['coluna_kanban' => $colunaDepois];
+
+        // Reabre o status se estava encerrado e foi movido manualmente pra fora
+        // do Encerrado — sem isso a coluna muda mas o ticket continua com
+        // status 'encerrado' por baixo, escondendo a caixa de mensagem inteira.
+        if ($colunaAntes === 'encerrado' && $colunaDepois !== 'encerrado') {
+            $updates['status'] = 'aberto';
+        }
+
+        $model->update($updates);
 
         // Ao entrar em aguardando_lead: dispara sequência de follow-up
         if ($colunaDepois === 'aguardando_lead' && $colunaAntes !== 'aguardando_lead') {
@@ -321,8 +345,8 @@ class KanbanController extends Controller
 
         $model = TicketAtendimento::with(['contato', 'tenant'])->findOrFail($ticket);
 
-        if ($model->agente_responsavel !== 'humano') {
-            return response()->json(['message' => 'Assuma o atendimento primeiro.'], 403);
+        if ($conflito = $this->assumirAutomaticamente($model, $request->user())) {
+            return $conflito;
         }
 
         $arquivo  = $request->file('arquivo');
