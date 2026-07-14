@@ -60,4 +60,17 @@ class Contato extends Model
     {
         return $this->hasMany(TicketAtendimento::class, 'contato_id');
     }
+
+    /**
+     * "Sem Nome" e o telefone repetido no campo nome sao placeholders, não um
+     * nome de verdade — usado em vários pontos (sync do Google, formulário,
+     * mesclagem de duplicatas) pra decidir se um nome recém-descoberto deve
+     * substituir o que já está salvo.
+     */
+    public function semNomeReal(): bool
+    {
+        $nome = trim((string) $this->nome);
+
+        return $nome === '' || $nome === $this->telefone || mb_strtolower($nome) === 'sem nome';
+    }
 }

@@ -61,9 +61,12 @@ class FormularioService
         $tenant = $formulario->tenant;
 
         // Extrair campos padrão
-        $telefone = preg_replace('/\D/', '', $dados['telefone'] ?? '');
-        $nome     = trim($dados['nome'] ?? $dados['name'] ?? $telefone);
-        $email    = strtolower(trim($dados['email'] ?? ''));
+        $telefone      = preg_replace('/\D/', '', $dados['telefone'] ?? '');
+        $nomeFornecido = trim($dados['nome'] ?? $dados['name'] ?? '');
+        // Nunca usa o telefone como nome — "Sem Nome" fica marcado pra alguém
+        // identificar depois (mesma regra usada no webhook do WhatsApp).
+        $nome  = $nomeFornecido ?: 'Sem Nome';
+        $email = strtolower(trim($dados['email'] ?? ''));
 
         // Normaliza telefone para formato 55+DDD+número
         if (strlen($telefone) <= 11) {
@@ -90,8 +93,8 @@ class FormularioService
         if ($email && ! $contato->email) {
             $updates['email'] = $email;
         }
-        if ($nome && $contato->nome === $contato->telefone) {
-            $updates['nome'] = $nome;
+        if ($nomeFornecido && $contato->semNomeReal()) {
+            $updates['nome'] = $nomeFornecido;
         }
         if ($updates) {
             $contato->update($updates);

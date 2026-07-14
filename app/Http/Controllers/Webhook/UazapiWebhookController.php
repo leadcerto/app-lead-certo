@@ -422,8 +422,7 @@ class UazapiWebhookController extends Controller
      */
     private function semNomeReal(\App\Models\Contato $c): bool
     {
-        $nome = trim($c->nome ?? '');
-        return ! $nome || $nome === $c->telefone || strtolower($nome) === 'sem nome';
+        return $c->semNomeReal();
     }
 
     private function validarPushName(?string $nome): bool

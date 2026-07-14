@@ -64,7 +64,7 @@ class ContatoMergeService
             $updates = [];
             foreach ($campos as $campo) {
                 $vazioNoCanonico = $campo === 'nome'
-                    ? $this->semNomeReal($canonico)
+                    ? $canonico->semNomeReal()
                     : empty($canonico->{$campo});
 
                 if ($vazioNoCanonico && ! empty($antigo->{$campo})) {
@@ -85,16 +85,5 @@ class ContatoMergeService
                 'canonico_tel' => $canonico->telefone,
             ]);
         });
-    }
-
-    /**
-     * "Sem Nome" é um placeholder, não um nome de verdade — trata como vazio
-     * pra decidir se o nome do contato antigo deve substituir o do canônico.
-     */
-    private function semNomeReal(Contato $c): bool
-    {
-        $nome = trim((string) $c->nome);
-
-        return $nome === '' || $nome === $c->telefone || mb_strtolower($nome) === 'sem nome';
     }
 }
