@@ -860,9 +860,27 @@ function kanban() {
             }
         },
 
-        async carregarMensagens(id) {
+        async carregarMensagens(id, manterScroll = false) {
+            const box = this.$refs.msgBox;
+            const pertoDoFim = box ? (box.scrollHeight - box.scrollTop - box.clientHeight) < 80 : true;
+
             const res = await this.api(`/api/painel/kanban/ticket/${id}/mensagens`);
-            if (res.ok) this.mensagens = await res.json();
+            if (!res.ok) return;
+
+            const novas = await res.json();
+            const mudou = novas.length !== this.mensagens.length
+                || (novas.length && novas[novas.length - 1].id !== this.mensagens[this.mensagens.length - 1]?.id);
+            this.mensagens = novas;
+
+            // Só rola pro fim sozinho se o usuário já estava lendo o fim da
+            // conversa — se ele rolou pra cima pra ler o histórico, atualizar
+            // em segundo plano não deve puxar a tela pra baixo.
+            if (mudou && (pertoDoFim || !manterScroll)) {
+                this.$nextTick(() => {
+                    const box = this.$refs.msgBox;
+                    if (box) box.scrollTop = box.scrollHeight;
+                });
+            }
         },
 
         async assumir(id) {
@@ -1084,7 +1102,10 @@ function kanban() {
         },
 
         init() {
-            this.intervalo = setInterval(() => this.carregar(), 5000);
+            this.intervalo = setInterval(() => {
+                this.carregar();
+                if (this.ticketAtivo) this.carregarMensagens(this.ticketAtivo.id, true);
+            }, 5000);
         },
 
         destroy() {
