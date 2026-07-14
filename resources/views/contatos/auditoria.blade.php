@@ -243,6 +243,10 @@
                                     class="text-xs text-gray-400 hover:text-gray-600 px-2 py-1.5 rounded-lg transition-colors">
                                 Ignorar
                             </button>
+                            <button onclick="excluirContato({{ $reg->contato_id }}, {{ $reg->id }}, true)"
+                                    class="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-2 py-1.5 rounded-lg transition-colors">
+                                Excluir
+                            </button>
                         </div>
                         <div x-show="editando" style="display:none;" class="flex items-center gap-2">
                             <button @click="salvar()" :disabled="salvando"
@@ -329,9 +333,12 @@
             </div>
             <p id="modal-erro" class="text-xs text-red-500 hidden"></p>
         </div>
-        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-            <button onclick="fecharModal()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg">Cancelar</button>
-            <button onclick="salvarEdicaoAuditoria()" class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium">Salvar e Resolver</button>
+        <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+            <button onclick="excluirContatoModal()" class="px-4 py-2 text-sm text-red-600 hover:text-red-800 rounded-lg font-medium">Excluir contato</button>
+            <div class="flex gap-3">
+                <button onclick="fecharModal()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg">Cancelar</button>
+                <button onclick="salvarEdicaoAuditoria()" class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium">Salvar e Resolver</button>
+            </div>
         </div>
     </div>
 </div>
@@ -526,17 +533,31 @@ async function ignorar(id) {
     }
 }
 
-async function excluirContato(contatoId, auditoriaId) {
-    if (!confirm('Excluir definitivamente este contato? Esta ação não pode ser desfeita.')) return;
+async function excluirContato(contatoId, auditoriaId, eraPendente = false) {
+    if (!confirm('Excluir definitivamente este contato? Esta ação não pode ser desfeita.')) return false;
     const res = await fetch(`/contato/${contatoId}/excluir-definitivo`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF },
     });
     if (res.ok) {
         document.getElementById(`row-${auditoriaId}`)?.remove();
-    } else {
-        alert('Erro ao excluir contato.');
+        if (eraPendente) atualizarContadorPendente(-1);
+        return true;
     }
+    alert('Erro ao excluir contato.');
+    return false;
+}
+
+async function excluirContatoModal() {
+    if (_contatoId === null) return;
+    const breakdownIdx = _breakdownRowIdx;
+    const ok = await excluirContato(_contatoId, _auditoriaId, breakdownIdx !== null);
+    if (!ok) return;
+    if (breakdownIdx !== null) {
+        document.getElementById(`breakdown-row-${breakdownIdx}`)?.remove();
+        _breakdownRowIdx = null;
+    }
+    fecharModal();
 }
 
 document.getElementById('modal-editar').addEventListener('click', function(e) {
