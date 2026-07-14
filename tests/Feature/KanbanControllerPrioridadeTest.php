@@ -84,4 +84,32 @@ class KanbanControllerPrioridadeTest extends TestCase
         $this->assertSame($pendente->id, $tickets[0]['id']);
         $this->assertSame($normal->id, $tickets[1]['id']);
     }
+
+    public function test_ticket_ja_visualizado_depois_da_ultima_mensagem_nao_fica_marcado(): void
+    {
+        $tenant   = Tenant::factory()->create();
+        $user     = $this->criarUsuarioDono($tenant);
+        $visto    = $this->criarTicketComUltimaMensagem($tenant, 'humano', 'lead', ['visualizado_em' => now()->addMinute()]);
+        $naoVisto = $this->criarTicketComUltimaMensagem($tenant, 'humano', 'lead');
+
+        $response = $this->actingAs($user)->getJson('/api/painel/kanban/tickets');
+        $tickets  = collect($response->json('em_atendimento.tickets'))->keyBy('id');
+
+        $this->assertFalse($tickets[$visto->id]['precisa_resposta']);
+        $this->assertTrue($tickets[$naoVisto->id]['precisa_resposta']);
+    }
+
+    public function test_visualizar_marca_o_ticket_como_lido(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = $this->criarUsuarioDono($tenant);
+        $ticket = $this->criarTicketComUltimaMensagem($tenant, 'humano', 'lead');
+
+        $this->assertNull($ticket->visualizado_em);
+
+        $response = $this->actingAs($user)->postJson("/api/painel/kanban/ticket/{$ticket->id}/visualizar");
+
+        $response->assertOk();
+        $this->assertNotNull($ticket->fresh()->visualizado_em);
+    }
 }

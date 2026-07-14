@@ -176,6 +176,7 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::post('/kanban/ticket/{ticket}/encerrar', [KanbanController::class, 'encerrar']);
         Route::post('/kanban/ticket/{ticket}/liberar',         [KanbanController::class, 'liberar']);
         Route::post('/kanban/ticket/{ticket}/liberar-ia',      [KanbanController::class, 'liberarEAcionarIA']);
+        Route::post('/kanban/ticket/{ticket}/visualizar',      [KanbanController::class, 'visualizar']);
         Route::post('/kanban/ticket/{ticket}/pendente',        [KanbanController::class, 'marcarPendente']);
         Route::post('/kanban/ticket/{ticket}/outros',          [KanbanController::class, 'moverParaOutros']);
         Route::post('/kanban/ticket/{ticket}/mover',           [KanbanController::class, 'mover']);

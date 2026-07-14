@@ -71,7 +71,14 @@ class KanbanController extends Controller
                     WHERE mensagens.ticket_id = tickets_atendimento.id
                     AND mensagens.tenant_id = {$tenantIdInt}
                     ORDER BY mensagens.id DESC LIMIT 1
-                ) = 'lead' THEN 0
+                ) = 'lead' AND (
+                    tickets_atendimento.visualizado_em IS NULL OR tickets_atendimento.visualizado_em < (
+                        SELECT enviado_em FROM mensagens
+                        WHERE mensagens.ticket_id = tickets_atendimento.id
+                        AND mensagens.tenant_id = {$tenantIdInt}
+                        ORDER BY mensagens.id DESC LIMIT 1
+                    )
+                ) THEN 0
                 WHEN tickets_atendimento.retorno_agendado_em IS NOT NULL OR tickets_atendimento.pendente_desde IS NOT NULL THEN 1
                 ELSE 2
             END
@@ -94,7 +101,14 @@ class KanbanController extends Controller
                 ->get();
 
             $ticketsColuna->each(function ($ticket) {
-                $ticket->precisa_resposta = $ticket->agente_responsavel === 'humano' && $ticket->ultimo_remetente === 'lead';
+                // ultima_mensagem_em vem de um addSelect bruto — não é auto-cast pra
+                // Carbon como os campos declarados em $casts, por isso o parse manual.
+                $jaVisualizadoDepoisDaUltima = $ticket->visualizado_em && $ticket->ultima_mensagem_em
+                    && $ticket->visualizado_em->gte(\Illuminate\Support\Carbon::parse($ticket->ultima_mensagem_em));
+
+                $ticket->precisa_resposta = $ticket->agente_responsavel === 'humano'
+                    && $ticket->ultimo_remetente === 'lead'
+                    && ! $jaVisualizadoDepoisDaUltima;
             });
 
             $todosTickets = $todosTickets->concat($ticketsColuna);
@@ -231,6 +245,18 @@ class KanbanController extends Controller
      * sinaliza "tenho uma pergunta em aberto com o lead, aguardando resposta".
      * Clicar de novo desmarca (alterna).
      */
+    /**
+     * Marca que o usuário abriu/leu o ticket agora — usado pra tirar o destaque
+     * azul mesmo sem responder. Chamado sempre que o card é aberto no painel.
+     */
+    public function visualizar(int $ticket): JsonResponse
+    {
+        $model = TicketAtendimento::findOrFail($ticket);
+        $model->update(['visualizado_em' => now()]);
+
+        return response()->json(['ok' => true]);
+    }
+
     public function marcarPendente(int $ticket): JsonResponse
     {
         $model = TicketAtendimento::findOrFail($ticket);

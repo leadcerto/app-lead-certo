@@ -796,6 +796,11 @@ function kanban() {
                 const box = this.$refs.msgBox;
                 if (box) box.scrollTop = box.scrollHeight;
             });
+
+            // Marca como lido na hora (tira o destaque azul mesmo sem responder)
+            // — otimista aqui, o próximo poll confirma com o servidor.
+            if (ticket.precisa_resposta) ticket.precisa_resposta = false;
+            this.api(`/api/painel/kanban/ticket/${ticket.id}/visualizar`, 'POST');
         },
 
         async carregarNotas(contatoId) {
@@ -1102,9 +1107,26 @@ function kanban() {
         },
 
         init() {
-            this.intervalo = setInterval(() => {
-                this.carregar();
-                if (this.ticketAtivo) this.carregarMensagens(this.ticketAtivo.id, true);
+            this.intervalo = setInterval(async () => {
+                const colunaAntes = this.ticketAtivo?.coluna_kanban;
+                await this.carregar();
+
+                if (this.ticketAtivo) {
+                    // Sincroniza o próprio ticket (coluna, status, etc.) — sem isso,
+                    // o card aberto ficava com dados velhos (ex.: dropdown "Mover"
+                    // mostrando a coluna de antes de encerrar) mesmo com o board
+                    // já atualizado por baixo.
+                    const atualizado = Object.values(this.tickets).flat().find(t => t.id === this.ticketAtivo.id);
+                    if (atualizado) {
+                        // Só re-sincroniza o dropdown se o usuário não tiver
+                        // mexido nele ainda, pra não perder uma escolha em curso.
+                        if (this.moverColunaAlvo === colunaAntes) {
+                            this.moverColunaAlvo = atualizado.coluna_kanban;
+                        }
+                        this.ticketAtivo = atualizado;
+                    }
+                    this.carregarMensagens(this.ticketAtivo.id, true);
+                }
             }, 5000);
         },
 
