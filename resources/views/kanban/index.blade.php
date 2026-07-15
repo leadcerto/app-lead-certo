@@ -425,7 +425,7 @@
                      automaticamente do lado do servidor, sem precisar de um clique
                      separado em "Assumir" antes de poder digitar. --}}
                 <template x-if="ticketAtivo.status !== 'encerrado'">
-                    <div class="px-4 pb-4 pt-2 border-t">
+                    <div class="px-4 pb-4 pt-2 border-t relative">
                             <div>
                                 {{-- Preview de mídia selecionada --}}
                                 <template x-if="midiaPreview || audioPreviewUrl">
@@ -500,9 +500,31 @@
                                         </svg>
                                     </button>
 
+                                    {{-- Botão Emoji --}}
+                                    <button type="button"
+                                            @click.stop="mostrarEmojis = !mostrarEmojis"
+                                            title="Inserir emoji"
+                                            :class="mostrarEmojis ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:text-gray-600'"
+                                            class="p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0 text-lg leading-none">
+                                        🙂
+                                    </button>
+
+                                    {{-- Painel de emoji --}}
+                                    <template x-if="mostrarEmojis">
+                                        <div @click.outside="mostrarEmojis = false"
+                                             class="absolute bottom-full left-4 mb-2 grid grid-cols-8 gap-1 bg-white border border-gray-200 rounded-xl shadow-lg p-2 z-10 w-72 max-h-48 overflow-y-auto">
+                                            <template x-for="emoji in emojisComuns" :key="emoji">
+                                                <button type="button"
+                                                        @click="inserirEmoji(emoji)"
+                                                        class="text-xl leading-none p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                                                        x-text="emoji"></button>
+                                            </template>
+                                        </div>
+                                    </template>
+
                                     {{-- Input de texto (oculto durante gravação) --}}
                                     <template x-if="!gravandoAudio && !audioPreviewUrl">
-                                        <input x-model="novaMensagem" type="text"
+                                        <input x-model="novaMensagem" type="text" x-ref="novaMensagemInput"
                                                placeholder="Digite / para respostas prontas..."
                                                @input="onInputMensagem()"
                                                @keydown.escape="sugestoes = []"
@@ -595,6 +617,13 @@ function kanban() {
         moverColunaAlvo: '',
         mensagens:    [],
         novaMensagem:      '',
+        mostrarEmojis:     false,
+        emojisComuns: [
+            '😀','😁','😂','🤣','😊','🙂','😉','😍','😘','😎','🤔','😅',
+            '😢','😭','😡','😱','🥳','😴','🙄','😇','👍','👎','👏','🙏',
+            '💪','✌️','🤝','👋','❤️','💚','💙','💛','🧡','💜','🔥','✅',
+            '❌','⚠️','🎉','📦','🚚','📅','🕐','💰','📍','📞','✍️','🙌',
+        ],
         encerrarModal:     false,
         tagDesfecho:       '',
         intervalo:         null,
@@ -917,6 +946,23 @@ function kanban() {
                 this.sugestoes.length - 1,
                 this.sugestaoSelecionada + dir
             ));
+        },
+
+        inserirEmoji(emoji) {
+            const el = this.$refs.novaMensagemInput;
+            if (el) {
+                const start = el.selectionStart ?? this.novaMensagem.length;
+                const end   = el.selectionEnd   ?? this.novaMensagem.length;
+                this.novaMensagem = this.novaMensagem.slice(0, start) + emoji + this.novaMensagem.slice(end);
+                this.$nextTick(() => {
+                    el.focus();
+                    const pos = start + emoji.length;
+                    el.setSelectionRange(pos, pos);
+                });
+            } else {
+                this.novaMensagem += emoji;
+            }
+            this.mostrarEmojis = false;
         },
 
         async enviarMensagem() {
