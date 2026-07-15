@@ -82,6 +82,45 @@ class GestorKanbanServiceAmostraTest extends TestCase
         $this->assertStringContainsString('Cliente pediu frete de SP para RJ, fechou negócio.', $texto);
     }
 
+    public function test_amostra_da_coluna_encerrado_nao_e_engolida_por_volume_antigo(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create();
+        $limite  = 2;
+
+        // Mais tickets antigos "travados" em encerrado do que o $limite,
+        // todos atualizados bem antes da semana do relatório.
+        Carbon::setTestNow('2026-01-01 10:00:00');
+        for ($i = 0; $i < $limite + 3; $i++) {
+            TicketAtendimento::create([
+                'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+                'coluna_kanban' => 'encerrado', 'agente_responsavel' => 'humano',
+                'status' => 'encerrado', 'aberto_em' => now(),
+                'encerrado_em' => Carbon::parse('2026-01-02 10:00:00'),
+            ]);
+        }
+        Carbon::setTestNow();
+
+        // Um ticket fechado DENTRO da semana do relatório.
+        $fechadoNaSemana = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'encerrado', 'agente_responsavel' => 'humano',
+            'status' => 'encerrado', 'aberto_em' => now(),
+            'encerrado_em' => Carbon::parse('2026-07-08 10:00:00'),
+        ]);
+
+        $inicio = Carbon::parse('2026-07-06 00:00:00');
+        $fim    = Carbon::parse('2026-07-12 23:59:59');
+
+        $amostra = app(GestorKanbanService::class)->amostrarConversasColuna($tenant, 'encerrado', $inicio, $fim, $limite);
+
+        $this->assertTrue(
+            $amostra->contains('id', $fechadoNaSemana->id),
+            'O ticket fechado dentro da semana do relatório deve aparecer na amostra, mesmo com muito volume antigo travado na coluna.'
+        );
+        $this->assertCount($limite, $amostra);
+    }
+
     public function test_formatar_conversa_monta_thread_quando_nao_tem_resumo(): void
     {
         $tenant  = Tenant::factory()->create();

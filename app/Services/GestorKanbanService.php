@@ -49,18 +49,22 @@ class GestorKanbanService
 
     public function amostrarConversasColuna(Tenant $tenant, string $coluna, Carbon $inicio, Carbon $fim, int $limite = 15): Collection
     {
-        $travados = TicketAtendimento::withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
-            ->where('coluna_kanban', $coluna)
-            ->with('mensagens')
-            ->orderBy('updated_at', 'asc')
-            ->limit($limite)
-            ->get();
-
         if ($coluna !== 'encerrado') {
-            return $travados;
+            return TicketAtendimento::withoutGlobalScopes()
+                ->where('tenant_id', $tenant->id)
+                ->where('coluna_kanban', $coluna)
+                ->with('mensagens')
+                ->orderBy('updated_at', 'asc')
+                ->limit($limite)
+                ->get();
         }
 
+        // Coluna "encerrado": os fechados NESTA semana são o dado que o
+        // relatório semanal realmente precisa mostrar, então entram primeiro
+        // e sempre cabem (até $limite). Só preenche o que sobrar com os mais
+        // travados (fechados há mais tempo) — nunca o contrário, senão um
+        // tenant com muito histórico antigo faz o volume velho engolir a
+        // amostra e nenhum encerramento da semana aparece na análise.
         $fechados = TicketAtendimento::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
             ->where('coluna_kanban', 'encerrado')
@@ -70,7 +74,22 @@ class GestorKanbanService
             ->limit($limite)
             ->get();
 
-        return $travados->merge($fechados)->unique('id')->take($limite)->values();
+        $vagasRestantes = $limite - $fechados->count();
+
+        if ($vagasRestantes <= 0) {
+            return $fechados->values();
+        }
+
+        $travados = TicketAtendimento::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('coluna_kanban', 'encerrado')
+            ->whereNotIn('id', $fechados->pluck('id'))
+            ->with('mensagens')
+            ->orderBy('updated_at', 'asc')
+            ->limit($vagasRestantes)
+            ->get();
+
+        return $fechados->merge($travados)->values();
     }
 
     public function formatarConversa(TicketAtendimento $ticket): string
