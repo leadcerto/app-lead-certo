@@ -1454,6 +1454,15 @@ class GestorKanbanSemanalCommandTest extends TestCase
         $this->assertSame(0, GestorKanbanRelatorio::withoutGlobalScopes()->where('tenant_id', $tenantB->id)->count());
     }
 
+    public function test_opcao_tenant_processa_mesmo_tenant_suspenso(): void
+    {
+        $tenantSuspenso = $this->criarTenantComAtividade('suspenso');
+
+        $this->artisan('kanban:gestor-semanal', ['--tenant' => $tenantSuspenso->id])->assertExitCode(0);
+
+        $this->assertSame(1, GestorKanbanRelatorio::withoutGlobalScopes()->where('tenant_id', $tenantSuspenso->id)->count());
+    }
+
     public function test_dry_run_nao_persiste_nada(): void
     {
         $tenant = $this->criarTenantComAtividade('ativo');
@@ -1493,8 +1502,12 @@ class GestorKanbanSemanalCommand extends Command
     public function handle(GestorKanbanService $service): int
     {
         $dryRun = $this->option('dry-run');
-        $fim    = Carbon::now()->endOfDay();
-        $inicio = $fim->copy()->subDays(7)->startOfDay();
+        // Termina ONTEM (não hoje) — se rodar manualmente via --tenant no meio
+        // do sábado, um Carbon::now()->endOfDay() incluiria o próprio sábado
+        // (ainda incompleto) na janela "semana anterior", gerando 8 dias em
+        // vez de 7 e misturando dado parcial de hoje no relatório.
+        $fim    = Carbon::yesterday()->endOfDay();
+        $inicio = $fim->copy()->subDays(6)->startOfDay();
 
         $query = Tenant::query();
 
@@ -1531,7 +1544,7 @@ class GestorKanbanSemanalCommand extends Command
 - [ ] **Step 4: Rodar o teste, confirmar que passa**
 
 Run: `php artisan test --filter=GestorKanbanSemanalCommandTest`
-Expected: PASS (3 tests)
+Expected: PASS (4 tests)
 
 - [ ] **Step 5: Agendar o comando em `routes/console.php`**
 
