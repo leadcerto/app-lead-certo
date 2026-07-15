@@ -940,6 +940,7 @@ class ContatosController extends Controller
             unset($dados['nome']); // master intacto
 
             $contato->update($dados); // aplica outros campos (email, profissao, etc.)
+            $this->sincronizarComGoogle($contato, $tenantId, $dados);
 
             return response()->json([
                 'ok'         => true,
@@ -950,8 +951,44 @@ class ContatosController extends Controller
         }
 
         $contato->update($dados);
+        $this->sincronizarComGoogle($contato, $tenantId, $dados);
 
         return response()->json(['ok' => true, 'auditoria' => false, 'contato' => $contato->fresh()]);
+    }
+
+    /**
+     * Empurra nome/e-mail pro Google quando o lead é editado aqui — sem isso,
+     * o nome mostrado no card fica diferente do nome que aparece no WhatsApp
+     * Web, e não dá pra buscar o contato por nome lá. Método legado
+     * (`enriquecerContato`) já existia mas nunca era chamado nesse fluxo.
+     */
+    private function sincronizarComGoogle(Contato $contato, int $tenantId, array $camposSalvos): void
+    {
+        if (! array_intersect(['nome', 'email'], array_keys($camposSalvos))) {
+            return;
+        }
+
+        $token = GoogleToken::where('tenant_id', $tenantId)->first();
+        if (! $token) return;
+
+        $vinculo = VinculoContatoTenant::where('contato_id', $contato->id)
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        if (! $vinculo || ! $vinculo->google_resource_name || ! $vinculo->google_etag) {
+            return;
+        }
+
+        $novoEtag = app(GoogleService::class)->enriquecerContato(
+            $token,
+            $vinculo->google_resource_name,
+            $vinculo->google_etag,
+            $contato
+        );
+
+        if ($novoEtag) {
+            $vinculo->update(['google_etag' => $novoEtag]);
+        }
     }
 
     private function encontrarColuna(array $cabecalho, array $opcoes): ?int

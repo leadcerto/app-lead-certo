@@ -230,6 +230,9 @@ class GoogleService
     /**
      * Atualiza contato existente com dados enriquecidos do WhatsApp.
      * Nome limpo · middleName=ID · familyName=descriptor · email se disponível.
+     * Retorna o etag NOVO (o Google invalida o etag antigo a cada PATCH) —
+     * quem chama precisa salvar esse valor de volta, senão a próxima
+     * atualização falha por etag desatualizado. Retorna null em caso de falha.
      */
     public function enriquecerContato(
         GoogleToken $token,
@@ -237,9 +240,9 @@ class GoogleService
         string $etag,
         Contato $contato,
         ?string $pushName = null
-    ): bool {
+    ): ?string {
         $token = $this->tokenValido($token);
-        if (! $token) return false;
+        if (! $token) return null;
 
         $semNome     = ! $contato->nome || $contato->nome === $contato->telefone;
         $nomeTratado = $semNome ? 'Sem Nome' : $this->limparNome($contato->nome);
@@ -266,10 +269,19 @@ class GoogleService
                     $body
                 );
 
-            return $res->successful();
+            if ($res->successful()) {
+                return $res->json('etag');
+            }
+
+            Log::warning('Google enriquecerContato falhou', [
+                'resource' => $resourceName,
+                'status'   => $res->status(),
+                'body'     => $res->body(),
+            ]);
+            return null;
         } catch (\Exception $e) {
-            Log::error('Google enriquecerContato falhou', ['resource' => $resourceName, 'erro' => $e->getMessage()]);
-            return false;
+            Log::error('Google enriquecerContato exception', ['resource' => $resourceName, 'erro' => $e->getMessage()]);
+            return null;
         }
     }
 
