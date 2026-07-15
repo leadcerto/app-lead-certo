@@ -6,6 +6,7 @@ use App\Scopes\TenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\KanbanColunaHistorico;
 
 class TicketAtendimento extends Model
 {
@@ -14,6 +15,28 @@ class TicketAtendimento extends Model
     protected static function booted(): void
     {
         static::addGlobalScope(new TenantScope());
+
+        static::created(function (TicketAtendimento $ticket) {
+            KanbanColunaHistorico::create([
+                'tenant_id'       => $ticket->tenant_id,
+                'ticket_id'       => $ticket->id,
+                'coluna'          => $ticket->coluna_kanban,
+                'coluna_anterior' => null,
+                'entrou_em'       => now(),
+            ]);
+        });
+
+        static::updated(function (TicketAtendimento $ticket) {
+            if ($ticket->wasChanged('coluna_kanban')) {
+                KanbanColunaHistorico::create([
+                    'tenant_id'       => $ticket->tenant_id,
+                    'ticket_id'       => $ticket->id,
+                    'coluna'          => $ticket->coluna_kanban,
+                    'coluna_anterior' => $ticket->getOriginal('coluna_kanban'),
+                    'entrou_em'       => now(),
+                ]);
+            }
+        });
     }
 
     protected $fillable = [
