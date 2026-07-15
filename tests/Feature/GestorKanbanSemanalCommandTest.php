@@ -81,4 +81,32 @@ class GestorKanbanSemanalCommandTest extends TestCase
 
         $this->assertSame(0, GestorKanbanRelatorio::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count());
     }
+
+    public function test_janela_de_7_dias_exclui_atividade_de_hoje(): void
+    {
+        // Sábado 00:00:00 — mesmo horário em que o schedule roda o comando.
+        Carbon::setTestNow(Carbon::parse('2026-07-18 00:00:00'));
+
+        $tenant  = Tenant::factory()->create(['status' => 'ativo']);
+        $contato = Contato::factory()->create();
+
+        // Única atividade do tenant, criada exatamente "hoje" (o dia em que o
+        // comando roda). Numa janela correta de 7 dias terminando ONTEM,
+        // atividade de "hoje" nunca deve entrar — então isso deve contar
+        // como zero atividade na semana e nenhum relatório deve ser gerado.
+        // Com o bug antigo (Carbon::now()->endOfDay() como $fim), "hoje"
+        // entraria na janela e um relatório seria gerado — este teste falha
+        // contra aquele código.
+        TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'lead_novo', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $this->artisan('kanban:gestor-semanal')->assertExitCode(0);
+
+        $this->assertSame(0, GestorKanbanRelatorio::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count());
+
+        Carbon::setTestNow();
+    }
 }
