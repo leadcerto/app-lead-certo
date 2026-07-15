@@ -198,7 +198,11 @@ class KanbanController extends Controller
         }
 
         $telefone = $model->contato->telefone;
-        $this->uazapi->enviarMensagem($telefone, $request->conteudo);
+        $enviado  = $this->uazapi->enviarMensagem($telefone, $request->conteudo);
+
+        if (! $enviado) {
+            return response()->json(['message' => 'Falha ao enviar pelo WhatsApp.'], 502);
+        }
 
         $mensagem = Mensagem::create([
             'ticket_id'  => $ticket,
