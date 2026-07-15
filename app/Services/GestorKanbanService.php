@@ -6,6 +6,7 @@ use App\Models\KanbanColunaHistorico;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 class GestorKanbanService
 {
@@ -44,6 +45,49 @@ class GestorKanbanService
             'travados'               => $travados,
             'tag_desfecho_breakdown' => $tagDesfechoBreakdown,
         ];
+    }
+
+    public function amostrarConversasColuna(Tenant $tenant, string $coluna, Carbon $inicio, Carbon $fim, int $limite = 15): Collection
+    {
+        $travados = TicketAtendimento::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('coluna_kanban', $coluna)
+            ->with('mensagens')
+            ->orderBy('updated_at', 'asc')
+            ->limit($limite)
+            ->get();
+
+        if ($coluna !== 'encerrado') {
+            return $travados;
+        }
+
+        $fechados = TicketAtendimento::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('coluna_kanban', 'encerrado')
+            ->whereBetween('encerrado_em', [$inicio, $fim])
+            ->with('mensagens')
+            ->orderByDesc('encerrado_em')
+            ->limit($limite)
+            ->get();
+
+        return $travados->merge($fechados)->unique('id')->take($limite)->values();
+    }
+
+    public function formatarConversa(TicketAtendimento $ticket): string
+    {
+        if ($ticket->coluna_kanban === 'encerrado' && $ticket->resumo_ia) {
+            return "[Resumo] {$ticket->resumo_ia}";
+        }
+
+        return $ticket->mensagens
+            ->filter(fn ($m) => $m->conteudo && $m->conteudo !== '')
+            ->map(fn ($m) => match ($m->remetente) {
+                'lead'   => 'CLIENTE: ' . $m->conteudo,
+                'bot'    => 'BOT: ' . $m->conteudo,
+                'humano' => 'ATENDENTE: ' . $m->conteudo,
+                default  => strtoupper($m->remetente) . ': ' . $m->conteudo,
+            })
+            ->implode("\n");
     }
 
     /**
