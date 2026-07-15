@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\GestorKanbanConfig;
+use App\Models\GestorKanbanRelatorio;
 use App\Models\KanbanColunaHistorico;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
@@ -12,6 +13,11 @@ use Illuminate\Support\Facades\Log;
 
 class GestorKanbanService
 {
+    private const COLUNAS = [
+        'lead_novo', 'em_atendimento', 'aguardando_orcamento', 'aguardando_lead',
+        'pagamento', 'servico_agendado', 'encerrado', 'outros',
+    ];
+
     public function __construct(private OpenRouterService $openRouter) {}
 
     public function coletarNumerosColuna(Tenant $tenant, string $coluna, Carbon $inicio, Carbon $fim): array
@@ -186,5 +192,69 @@ class GestorKanbanService
             ->havingRaw('MAX(entrou_em) < ?', [$inicioSemana])
             ->get()
             ->count();
+    }
+
+    public function gerarRelatorioSemanal(Tenant $tenant, Carbon $inicio, Carbon $fim): ?GestorKanbanRelatorio
+    {
+        $config = GestorKanbanConfig::first();
+
+        if (! $config) {
+            Log::error('GestorKanbanService: config global não encontrada');
+            return null;
+        }
+
+        $dados        = [];
+        $temAtividade = false;
+
+        foreach (self::COLUNAS as $coluna) {
+            $numeros = $this->coletarNumerosColuna($tenant, $coluna, $inicio, $fim);
+
+            if ($numeros['entradas'] === 0 && $numeros['avancos'] === 0 && $numeros['travados'] === 0) {
+                $dados[$coluna] = array_merge($numeros, [
+                    'coluna'          => $coluna,
+                    'analise'         => 'Sem atividade nesta coluna na semana.',
+                    'sugestao_prompt' => null,
+                ]);
+                continue;
+            }
+
+            $temAtividade = true;
+            $amostras      = $this->amostrarConversasColuna($tenant, $coluna, $inicio, $fim);
+            $resultado     = $this->analisarColuna($tenant, $coluna, $numeros, $amostras, $config);
+
+            $dados[$coluna] = array_merge($numeros, ['coluna' => $coluna], $resultado);
+        }
+
+        if (! $temAtividade) {
+            return null;
+        }
+
+        $sintese = $this->sintetizarSemana($tenant, $dados, $config);
+
+        return GestorKanbanRelatorio::withoutGlobalScopes()->updateOrCreate(
+            ['tenant_id' => $tenant->id, 'semana_inicio' => $inicio->copy()->startOfDay()],
+            [
+                'semana_fim'    => $fim->toDateString(),
+                'dados'         => $dados,
+                'sintese_geral' => $sintese ? trim($sintese) : null,
+            ]
+        );
+    }
+
+    public function sintetizarSemana(Tenant $tenant, array $dadosPorColuna, GestorKanbanConfig $config): ?string
+    {
+        $resumoColunas = collect($dadosPorColuna)
+            ->filter(fn (array $d) => ! empty($d['analise']))
+            ->map(fn (array $d, string $coluna) => "### {$coluna}\n{$d['analise']}")
+            ->implode("\n\n");
+
+        if (trim($resumoColunas) === '') {
+            return null;
+        }
+
+        return $this->openRouter->chat([
+            ['role' => 'system', 'content' => $config->prompt_sintese],
+            ['role' => 'user', 'content' => "Análises da semana por coluna:\n\n{$resumoColunas}"],
+        ], 'complexo', 600, 'gestor_kanban_sintese', $tenant->id);
     }
 }
