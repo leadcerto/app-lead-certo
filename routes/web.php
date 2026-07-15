@@ -22,6 +22,7 @@ use App\Http\Controllers\Painel\KanbanColunaConfigController;
 use App\Http\Controllers\Painel\SpintaxVariavelController;
 use App\Http\Controllers\Admin\EspecificacoesController;
 use App\Http\Controllers\Admin\GestorKanbanConfigController;
+use App\Http\Controllers\Painel\GestorKanbanRelatorioController;
 
 // ── Formulário público (iframe) — sem auth ────────────────────────────────
 Route::get('/f/{uuid}', function (string $uuid) {
@@ -131,6 +132,11 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('kanban.variaveis')
         ->middleware('role:admin,dono');
 
+    // Relatórios semanais do Gestor do Kanban — dono e admin
+    Route::get('/kanban/relatorios', [GestorKanbanRelatorioController::class, 'view'])
+        ->name('kanban.relatorios')
+        ->middleware('role:admin,dono');
+
     // Documentação/estratégia — dono e admin
     Route::get('/kanban/documentacao/botoes', fn () => view('kanban.documentacao-botoes'))
         ->name('kanban.documentacao-botoes')
@@ -188,6 +194,12 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::post('/kanban/ticket/{ticket}/mover',           [KanbanController::class, 'mover']);
         Route::post('/kanban/ticket/{ticket}/retorno',         [KanbanController::class, 'agendarRetorno']);
         Route::post('/kanban/ticket/{ticket}/midia',           [KanbanController::class, 'enviarMidia']);
+    });
+
+    // Relatórios semanais do Gestor do Kanban — dono e admin apenas
+    Route::middleware('role:admin,dono')->group(function () {
+        Route::get('/kanban/relatorios', [GestorKanbanRelatorioController::class, 'index']);
+        Route::get('/kanban/relatorios/{id}', [GestorKanbanRelatorioController::class, 'show']);
     });
 
     // Contatos
