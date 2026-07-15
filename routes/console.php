@@ -48,3 +48,10 @@ Schedule::command('conversas:limpar-antigas')
     ->dailyAt('02:00')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/limpar-conversas.log'));
+
+// Sábado 00:00 — Relatório semanal do Gestor do Kanban (números + análise + sugestão de prompt por coluna)
+Schedule::command('kanban:gestor-semanal')
+    ->weeklyOn(6, '00:00')
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/gestor-kanban-semanal.log'));
