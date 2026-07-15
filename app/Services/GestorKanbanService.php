@@ -2,14 +2,18 @@
 
 namespace App\Services;
 
+use App\Models\GestorKanbanConfig;
 use App\Models\KanbanColunaHistorico;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 class GestorKanbanService
 {
+    public function __construct(private OpenRouterService $openRouter) {}
+
     public function coletarNumerosColuna(Tenant $tenant, string $coluna, Carbon $inicio, Carbon $fim): array
     {
         $entradas = KanbanColunaHistorico::withoutGlobalScopes()
@@ -107,6 +111,56 @@ class GestorKanbanService
                 default  => strtoupper($m->remetente) . ': ' . $m->conteudo,
             })
             ->implode("\n");
+    }
+
+    public function analisarColuna(Tenant $tenant, string $coluna, array $numeros, Collection $amostras, GestorKanbanConfig $config): array
+    {
+        $conversas = $amostras
+            ->map(fn (TicketAtendimento $t) => $this->formatarConversa($t))
+            ->filter(fn (string $texto) => trim($texto) !== '')
+            ->implode("\n\n---\n\n");
+
+        $numerosTexto = "Entradas: {$numeros['entradas']} | Avanços: {$numeros['avancos']} | Travados: {$numeros['travados']}";
+        if (! empty($numeros['tag_desfecho_breakdown'])) {
+            $breakdown = collect($numeros['tag_desfecho_breakdown'])
+                ->map(fn ($total, $tag) => "{$tag}: {$total}")
+                ->implode(', ');
+            $numerosTexto .= "\nMotivos de encerramento: {$breakdown}";
+        }
+
+        $resposta = $this->openRouter->chat([
+            ['role' => 'system', 'content' => $config->prompt_coluna],
+            ['role' => 'user', 'content' => "Coluna: {$coluna}\n\nNúmeros da semana:\n{$numerosTexto}\n\nAmostra de conversas:\n\n{$conversas}"],
+        ], 'complexo', 800, 'gestor_kanban_coluna', $tenant->id);
+
+        if (! $resposta) {
+            Log::warning('GestorKanbanService: falha ao analisar coluna', ['tenant_id' => $tenant->id, 'coluna' => $coluna]);
+            return ['analise' => null, 'sugestao_prompt' => null];
+        }
+
+        return [
+            'analise'         => $this->extrairAnalise($resposta),
+            'sugestao_prompt' => $this->extrairSugestao($resposta),
+        ];
+    }
+
+    private function extrairAnalise(string $resposta): ?string
+    {
+        $semSugestao = preg_split('/SUGEST[AÃ]O_PROMPT:/iu', $resposta)[0];
+        $analise     = trim(preg_replace('/AN[AÁ]LISE:\s*/iu', '', $semSugestao, 1));
+
+        return $analise !== '' ? $analise : null;
+    }
+
+    private function extrairSugestao(string $resposta): ?string
+    {
+        if (! preg_match('/SUGEST[AÃ]O_PROMPT:\s*(.+)/isu', $resposta, $m)) {
+            return null;
+        }
+
+        $sugestao = trim($m[1]);
+
+        return $sugestao !== '' ? $sugestao : null;
     }
 
     /**
