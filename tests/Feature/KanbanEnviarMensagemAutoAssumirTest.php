@@ -22,7 +22,7 @@ class KanbanEnviarMensagemAutoAssumirTest extends TestCase
 
     public function test_enviar_mensagem_assume_o_ticket_automaticamente(): void
     {
-        $tenant  = Tenant::factory()->create();
+        $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'token-teste']);
         $user    = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
         $contato = Contato::factory()->create();
         $ticket  = TicketAtendimento::create([

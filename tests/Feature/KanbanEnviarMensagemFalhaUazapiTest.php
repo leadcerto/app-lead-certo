@@ -17,7 +17,7 @@ class KanbanEnviarMensagemFalhaUazapiTest extends TestCase
 
     private function criarTicket(): TicketAtendimento
     {
-        $tenant  = Tenant::factory()->create();
+        $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'token-teste']);
         $contato = Contato::factory()->create();
 
         return TicketAtendimento::create([

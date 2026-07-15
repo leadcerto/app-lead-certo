@@ -191,14 +191,20 @@ class KanbanController extends Controller
     {
         $request->validate(['conteudo' => 'required|string|min:1']);
 
-        $model = TicketAtendimento::findOrFail($ticket);
+        $model = TicketAtendimento::with(['contato', 'tenant'])->findOrFail($ticket);
 
         if ($conflito = $this->assumirAutomaticamente($model, $request->user())) {
             return $conflito;
         }
 
         $telefone = $model->contato->telefone;
-        $enviado  = $this->uazapi->enviarMensagem($telefone, $request->conteudo);
+        $token    = $model->tenant->uazapi_instance_token;
+
+        if (! $token) {
+            return response()->json(['message' => 'Instância do WhatsApp não configurada para este tenant.'], 502);
+        }
+
+        $enviado = $this->uazapi->enviarTexto($token, $telefone, $request->conteudo);
 
         if (! $enviado) {
             return response()->json(['message' => 'Falha ao enviar pelo WhatsApp.'], 502);
