@@ -261,6 +261,13 @@
                     </div>
                 </div>
 
+                {{-- Coluna atual do lead — deixa explícito além do dropdown "Mover" --}}
+                <div class="px-5 py-1.5 bg-gray-50 border-b text-xs text-gray-500 flex items-center gap-1.5">
+                    <span>Coluna atual:</span>
+                    <span class="font-medium text-gray-700"
+                          x-text="colunas.find(c => c.key === ticketAtivo.coluna_kanban)?.label || ticketAtivo.coluna_kanban"></span>
+                </div>
+
                 {{-- Notas do contato --}}
                 <template x-if="ticketAtivo.contato?.id">
                     <div class="border-b">
@@ -811,6 +818,7 @@ function kanban() {
             this.moverColunaAlvo = ticket.coluna_kanban;
             this.limparMidia();
             this.mensagens = [];
+            await this.sincronizarTicketAtivo();
             await this.carregarMensagens(ticket.id);
             if (ticket.contato?.id) await this.carregarNotas(ticket.contato.id);
             this.$nextTick(() => {
@@ -1146,26 +1154,34 @@ function kanban() {
 
         init() {
             this.intervalo = setInterval(async () => {
-                const colunaAntes = this.ticketAtivo?.coluna_kanban;
                 await this.carregar();
 
                 if (this.ticketAtivo) {
-                    // Sincroniza o próprio ticket (coluna, status, etc.) — sem isso,
-                    // o card aberto ficava com dados velhos (ex.: dropdown "Mover"
-                    // mostrando a coluna de antes de encerrar) mesmo com o board
-                    // já atualizado por baixo.
-                    const atualizado = Object.values(this.tickets).flat().find(t => t.id === this.ticketAtivo.id);
-                    if (atualizado) {
-                        // Só re-sincroniza o dropdown se o usuário não tiver
-                        // mexido nele ainda, pra não perder uma escolha em curso.
-                        if (this.moverColunaAlvo === colunaAntes) {
-                            this.moverColunaAlvo = atualizado.coluna_kanban;
-                        }
-                        this.ticketAtivo = atualizado;
-                    }
+                    await this.sincronizarTicketAtivo();
                     this.carregarMensagens(this.ticketAtivo.id, true);
                 }
             }, 5000);
+        },
+
+        // Ressincroniza o ticket aberto no modal buscando ele direto pelo ID
+        // — não procura dentro de this.tickets (o board), porque cada coluna
+        // só carrega até LIMITE_COLUNA tickets mais recentes. Um ticket
+        // "encerrado" antigo, empurrado pra fora dessa fatia por fechamentos
+        // mais novos, nunca seria encontrado ali e o modal ficava travado
+        // mostrando a coluna de antes pra sempre.
+        async sincronizarTicketAtivo() {
+            const colunaAntes = this.ticketAtivo.coluna_kanban;
+            const res = await this.api(`/api/painel/kanban/ticket/${this.ticketAtivo.id}`);
+            if (!res.ok) return;
+
+            const atualizado = await res.json();
+
+            // Só re-sincroniza o dropdown se o usuário não tiver mexido nele
+            // ainda, pra não perder uma escolha em curso.
+            if (this.moverColunaAlvo === colunaAntes) {
+                this.moverColunaAlvo = atualizado.coluna_kanban;
+            }
+            this.ticketAtivo = atualizado;
         },
 
         destroy() {

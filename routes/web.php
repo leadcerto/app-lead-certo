@@ -182,6 +182,7 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
     // Kanban
     Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda')->group(function () {
         Route::get('/kanban/tickets', [KanbanController::class, 'index']);
+        Route::get('/kanban/ticket/{ticket}', [KanbanController::class, 'show']);
         Route::get('/kanban/ticket/{ticket}/mensagens', [KanbanController::class, 'mensagens']);
         Route::post('/kanban/ticket/{ticket}/assumir', [KanbanController::class, 'assumir']);
         Route::post('/kanban/ticket/{ticket}/mensagem', [KanbanController::class, 'enviarMensagem']);

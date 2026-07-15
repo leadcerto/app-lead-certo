@@ -141,6 +141,32 @@ class KanbanController extends Controller
         return response()->json($resultado);
     }
 
+    /**
+     * Estado atual de um único ticket, buscado direto pelo ID — usado pra
+     * ressincronizar o card aberto no modal. Diferente do index(), não
+     * depende de o ticket estar dentro do recorte de LIMITE_COLUNA por
+     * coluna: um ticket "encerrado" antigo, empurrado pra fora da fatia
+     * carregada no board, nunca seria encontrado pelo polling e o modal
+     * ficava travado mostrando a coluna de antes pra sempre.
+     */
+    public function show(Request $request, int $ticket): JsonResponse
+    {
+        $model = TicketAtendimento::with('contato')->findOrFail($ticket);
+
+        if ($model->contato) {
+            $vinculo = VinculoContatoTenant::where('contato_id', $model->contato_id)
+                ->where('tenant_id', $request->user()->tenant_id)
+                ->first();
+
+            if ($vinculo) {
+                $model->contato->nome_local        = $vinculo->nome_sugerido;
+                $model->contato->auditoria_pendente = $vinculo->auditoria_pendente;
+            }
+        }
+
+        return response()->json($model);
+    }
+
     public function assumir(Request $request, int $ticket): JsonResponse
     {
         $model = TicketAtendimento::findOrFail($ticket);
