@@ -152,7 +152,7 @@
     <template x-if="ticketAtivo">
         <div class="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-4"
              @click.self="ticketAtivo = null">
-            <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="bg-white rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col h-[92vh]">
 
                 {{-- Header --}}
                 <div class="flex items-start justify-between gap-2 flex-wrap px-5 py-4 border-b">
@@ -810,6 +810,7 @@ function kanban() {
             this.novaNota     = '';
             this.moverColunaAlvo = ticket.coluna_kanban;
             this.limparMidia();
+            this.mensagens = [];
             await this.carregarMensagens(ticket.id);
             if (ticket.contato?.id) await this.carregarNotas(ticket.contato.id);
             this.$nextTick(() => {
@@ -887,7 +888,7 @@ function kanban() {
 
         async carregarMensagens(id, manterScroll = false) {
             const box = this.$refs.msgBox;
-            const pertoDoFim = box ? (box.scrollHeight - box.scrollTop - box.clientHeight) < 80 : true;
+            const pertoDoFim = box ? (box.scrollHeight - box.scrollTop - box.clientHeight) < 200 : true;
 
             const res = await this.api(`/api/painel/kanban/ticket/${id}/mensagens`);
             if (!res.ok) return;
