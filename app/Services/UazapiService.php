@@ -281,6 +281,16 @@ class UazapiService
     }
 
     /**
+     * Envia figurinha (.webp). O WhatsApp trata sticker como um tipo de mídia
+     * próprio — mandar um .webp pelo tipo "image" é rejeitado/renderizado errado,
+     * já que imagem comum só aceita jpeg/png.
+     */
+    public function enviarSticker(string $instanceToken, string $numero, string $url): bool
+    {
+        return $this->enviarMedia($instanceToken, $numero, 'sticker', $url);
+    }
+
+    /**
      * Define o status de presença da instância.
      * $presenca: 'composing' (digitando), 'recording' (gravando áudio),
      *            'available', 'unavailable'

@@ -358,11 +358,14 @@ class KanbanController extends Controller
         $url      = url('storage/' . $path);
         $filename = $arquivo->getClientOriginalName();
 
-        $enviado = match ($tipo) {
-            'imagem'    => $this->uazapi->enviarImagem($token, $telefone, $url, $caption),
-            'audio'     => $this->uazapi->enviarAudio($token, $telefone, $url, true),
-            'documento' => $this->uazapi->enviarDocumento($token, $telefone, $url, $filename, $caption),
-            default     => false,
+        $ehFigurinha = $tipo === 'imagem' && strtolower($arquivo->getClientOriginalExtension()) === 'webp';
+
+        $enviado = match (true) {
+            $ehFigurinha          => $this->uazapi->enviarSticker($token, $telefone, $url),
+            $tipo === 'imagem'    => $this->uazapi->enviarImagem($token, $telefone, $url, $caption),
+            $tipo === 'audio'     => $this->uazapi->enviarAudio($token, $telefone, $url, true),
+            $tipo === 'documento' => $this->uazapi->enviarDocumento($token, $telefone, $url, $filename, $caption),
+            default               => false,
         };
 
         if (! $enviado) {
