@@ -1318,8 +1318,17 @@ Em `app/Services/GestorKanbanService.php`, adicionar `use App\Models\GestorKanba
 
         $sintese = $this->sintetizarSemana($tenant, $dados, $config);
 
+        // O cast 'date' do model grava semana_inicio como 'Y-m-d H:i:s' (o
+        // formato padrão do Grammar do Laravel, mesmo em MySQL/SQLite — só o
+        // SqlServerGrammar sobrescreve isso). updateOrCreate() NÃO passa a
+        // chave de busca pelo pipeline de cast do model, então buscar com uma
+        // string 'Y-m-d' pura (via ->toDateString()) nunca bate com o valor
+        // já salvo — o find() falha, tenta inserir de novo, e colide com o
+        // índice único. Passar um Carbon (não string) resolve: o binding
+        // passa por Connection::prepareBindings(), que formata qualquer
+        // DateTimeInterface com o mesmo getDateFormat() usado na escrita.
         return GestorKanbanRelatorio::withoutGlobalScopes()->updateOrCreate(
-            ['tenant_id' => $tenant->id, 'semana_inicio' => $inicio->toDateString()],
+            ['tenant_id' => $tenant->id, 'semana_inicio' => $inicio->copy()->startOfDay()],
             [
                 'semana_fim'    => $fim->toDateString(),
                 'dados'         => $dados,
