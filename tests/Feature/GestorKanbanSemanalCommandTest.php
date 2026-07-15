@@ -64,6 +64,15 @@ class GestorKanbanSemanalCommandTest extends TestCase
         $this->assertSame(0, GestorKanbanRelatorio::withoutGlobalScopes()->where('tenant_id', $tenantB->id)->count());
     }
 
+    public function test_opcao_tenant_processa_mesmo_tenant_suspenso(): void
+    {
+        $tenantSuspenso = $this->criarTenantComAtividade('suspenso');
+
+        $this->artisan('kanban:gestor-semanal', ['--tenant' => $tenantSuspenso->id])->assertExitCode(0);
+
+        $this->assertSame(1, GestorKanbanRelatorio::withoutGlobalScopes()->where('tenant_id', $tenantSuspenso->id)->count());
+    }
+
     public function test_dry_run_nao_persiste_nada(): void
     {
         $tenant = $this->criarTenantComAtividade('ativo');

@@ -18,8 +18,12 @@ class GestorKanbanSemanalCommand extends Command
     public function handle(GestorKanbanService $service): int
     {
         $dryRun = $this->option('dry-run');
-        $fim    = Carbon::now()->endOfDay();
-        $inicio = $fim->copy()->subDays(7)->startOfDay();
+        // Termina ONTEM (não hoje) — se rodar manualmente via --tenant no meio
+        // do sábado, um Carbon::now()->endOfDay() incluiria o próprio sábado
+        // (ainda incompleto) na janela "semana anterior", gerando 8 dias em
+        // vez de 7 e misturando dado parcial de hoje no relatório.
+        $fim    = Carbon::yesterday()->endOfDay();
+        $inicio = $fim->copy()->subDays(6)->startOfDay();
 
         $query = Tenant::query();
 
