@@ -21,6 +21,7 @@ use App\Http\Controllers\Painel\ContextoIaController;
 use App\Http\Controllers\Painel\KanbanColunaConfigController;
 use App\Http\Controllers\Painel\SpintaxVariavelController;
 use App\Http\Controllers\Admin\EspecificacoesController;
+use App\Http\Controllers\Admin\GestorKanbanConfigController;
 
 // ── Formulário público (iframe) — sem auth ────────────────────────────────
 Route::get('/f/{uuid}', function (string $uuid) {
@@ -142,6 +143,11 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/admin/especificacoes/{arquivo}', [EspecificacoesController::class, 'show'])
         ->name('admin.especificacoes.show')
         ->middleware('role:admin,dono');
+
+    // Gestor do Kanban — configuração do prompt global — só admin (nunca dono)
+    Route::get('/admin/gestor-kanban', [GestorKanbanConfigController::class, 'view'])
+        ->name('admin.gestor-kanban')
+        ->middleware('role:admin');
 
 
     // Secretária Eletrônica — dono e admin
@@ -345,4 +351,10 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::get('/personas/qa/pendentes',            [PersonasController::class, 'qasPendentes']);
         Route::post('/personas/qa/{auditoria}/revisar', [PersonasController::class, 'qaRevisar']);
     });
+});
+
+// ── API — Admin (Lead Certo, nunca franqueado) ────────────────────────────
+Route::prefix('api/admin')->middleware(['auth', 'tenant', 'role:admin'])->group(function () {
+    Route::get('/gestor-kanban/prompt', [GestorKanbanConfigController::class, 'show']);
+    Route::put('/gestor-kanban/prompt', [GestorKanbanConfigController::class, 'update']);
 });
