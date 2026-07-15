@@ -60,8 +60,8 @@
                  id="breakdown-row-{{ $loop->index }}">
                 <div class="flex items-center gap-3 min-w-0">
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-                        {{ $grupo->tipo === 'telefone_invalido' ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700' }} shrink-0">
-                        {{ $grupo->tipo === 'telefone_invalido' ? '📞 Telefone' : '✏️ Nome' }}
+                        {{ in_array($grupo->tipo, ['telefone_invalido', 'telefone']) ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700' }} shrink-0">
+                        {{ in_array($grupo->tipo, ['telefone_invalido', 'telefone']) ? '📞 Telefone' : '✏️ Nome' }}
                     </span>
                     <div class="min-w-0">
                         <span class="text-sm text-gray-700 truncate block">{{ $grupo->observacao ?: '—' }}</span>
@@ -86,7 +86,8 @@
                                 {{ json_encode($grupo->contato?->email ?? '') }},
                                 {{ json_encode($grupo->contato?->profissao ?? '') }},
                                 {{ json_encode($grupo->campo ?? '') }},
-                                {{ json_encode($grupo->valor_sugerido ?? '') }}
+                                {{ json_encode($grupo->valor_sugerido ?? '') }},
+                                true
                             ); _breakdownRowIdx = {{ $loop->index }};"
                                 class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors">
                             Editar
@@ -206,8 +207,8 @@
                     </td>
                     <td class="px-4 py-3">
                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
-                            {{ $reg->tipo === 'telefone_invalido' ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700' }}">
-                            {{ $reg->tipo === 'telefone_invalido' ? '📞 Telefone' : '✏️ Nome' }}
+                            {{ $reg->campo === 'telefone' ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700' }}">
+                            {{ $reg->campo === 'telefone' ? '📞 Telefone' : '✏️ Nome' }}
                         </span>
                         @if($reg->observacao)
                             <div class="text-xs text-gray-400 mt-0.5">{{ $reg->observacao }}</div>
@@ -235,10 +236,28 @@
                     <td class="px-4 py-3">
                         @if($reg->status === 'pendente')
                         <div x-show="!editando" class="flex items-center gap-2">
+                            @if($reg->campo === 'telefone')
+                            {{-- Problema é no telefone: abre a ficha completa (o editor inline só tem campo de nome) --}}
+                            <button onclick="abrirEdicaoContato(
+                                    {{ $reg->id }},
+                                    {{ $reg->contato_id }},
+                                    {{ json_encode($reg->contato?->nome ?? '') }},
+                                    {{ json_encode($reg->contato?->telefone ?? '') }},
+                                    {{ json_encode($reg->contato?->email ?? '') }},
+                                    {{ json_encode($reg->contato?->profissao ?? '') }},
+                                    {{ json_encode($reg->campo) }},
+                                    {{ json_encode($reg->valor_sugerido ?? '') }},
+                                    true
+                                )"
+                                    class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors">
+                                Editar
+                            </button>
+                            @else
                             <button @click="editando=true; $nextTick(() => $refs.nomeInput.focus())"
                                     class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors">
                                 Editar
                             </button>
+                            @endif
                             <button onclick="ignorar({{ $reg->id }})"
                                     class="text-xs text-gray-400 hover:text-gray-600 px-2 py-1.5 rounded-lg transition-colors">
                                 Ignorar
@@ -453,11 +472,13 @@ function atualizarContadorPendente(delta) {
 let _auditoriaId   = null;
 let _contatoId     = null;
 let _campoProblema = null;
+let _eraPendente   = false;
 
-function abrirEdicaoContato(auditoriaId, contatoId, nome, telefone, email, profissao, campo, sugerido) {
+function abrirEdicaoContato(auditoriaId, contatoId, nome, telefone, email, profissao, campo, sugerido, eraPendente = false) {
     _auditoriaId   = auditoriaId;
     _contatoId     = contatoId;
     _campoProblema = campo;
+    _eraPendente   = eraPendente;
 
     document.getElementById('modal-auditoria-id').value = auditoriaId;
     document.getElementById('modal-contato-id').value   = contatoId;
@@ -490,6 +511,7 @@ function fecharModal() {
     document.getElementById('edit-nome').classList.remove('border-orange-400', 'bg-orange-50');
     document.getElementById('edit-telefone').classList.remove('border-orange-400', 'bg-orange-50');
     _auditoriaId = _contatoId = _campoProblema = null;
+    _eraPendente = false;
 }
 
 async function salvarEdicaoAuditoria() {
@@ -551,7 +573,7 @@ async function excluirContato(contatoId, auditoriaId, eraPendente = false) {
 async function excluirContatoModal() {
     if (_contatoId === null) return;
     const breakdownIdx = _breakdownRowIdx;
-    const ok = await excluirContato(_contatoId, _auditoriaId, breakdownIdx !== null);
+    const ok = await excluirContato(_contatoId, _auditoriaId, _eraPendente);
     if (!ok) return;
     if (breakdownIdx !== null) {
         document.getElementById(`breakdown-row-${breakdownIdx}`)?.remove();

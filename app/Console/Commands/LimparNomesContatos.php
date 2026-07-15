@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\AuditoriaContato;
 use App\Models\Contato;
+use App\Services\TelefoneService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -214,26 +215,6 @@ PROMPT;
      * normalizado → string "+55XXXXXXXXXXX" se conseguiu corrigir
      * null        → não conseguiu; sugestao pode ter um palpite para o auditor
      */
-    // DDIs internacionais reconhecidos (2 e 3 dígitos)
-    private const DDI_2 = [
-        '1','7','20','27','30','31','32','33','34','36','39','40','41','43',
-        '44','45','46','47','48','49','51','52','53','54','56','57','58',
-        '60','61','62','63','64','65','66','81','82','84','86','90','91',
-        '92','94','95','98',
-    ];
-    private const DDI_3 = [
-        '351','352','353','354','355','356','357','358','359',
-        '370','371','372','373','374','375','376','377','378','380',
-        '381','382','385','386','387','389',
-        '420','421','423',
-        '500','501','502','503','504','505','506','507','509',
-        '590','591','592','593','594','595','596','597','598','599',
-        '852','853','855','856','880','886',
-        '960','961','962','963','964','965','966','967','968',
-        '970','971','972','973','974','975','976','977',
-        '992','993','994','995','996','998',
-    ];
-
     private function normalizarTelefoneCompleto(string $telefone): array
     {
         $digitos = preg_replace('/\D/', '', $telefone);
@@ -252,7 +233,7 @@ PROMPT;
         // ── Padrão 2: DDI internacional reconhecido ───────────────────────────
         // Testa DDI de 3 dígitos primeiro (mais específico), depois 2 dígitos
         $ddiEncontrado = null;
-        foreach (self::DDI_3 as $ddi) {
+        foreach (TelefoneService::DDI_3 as $ddi) {
             if (str_starts_with($semZero, $ddi)) {
                 $resto = substr($semZero, strlen($ddi));
                 if (strlen($resto) >= 6 && strlen($resto) <= 12) {
@@ -262,7 +243,7 @@ PROMPT;
             }
         }
         if (! $ddiEncontrado) {
-            foreach (self::DDI_2 as $ddi) {
+            foreach (TelefoneService::DDI_2 as $ddi) {
                 if (str_starts_with($semZero, $ddi)) {
                     $resto = substr($semZero, strlen($ddi));
                     if (strlen($resto) >= 6 && strlen($resto) <= 12) {

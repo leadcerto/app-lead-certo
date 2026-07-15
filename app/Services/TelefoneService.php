@@ -47,6 +47,28 @@ class TelefoneService
         98, 99,                               // MA
     ];
 
+    // DDIs internacionais reconhecidos (2 e 3 dígitos) — mesma lista usada pelo
+    // contatos:limpar-nomes, para não marcar como "inválido" um número de
+    // WhatsApp legítimo de fora do Brasil.
+    public const DDI_2 = [
+        '1','7','20','27','30','31','32','33','34','36','39','40','41','43',
+        '44','45','46','47','48','49','51','52','53','54','56','57','58',
+        '60','61','62','63','64','65','66','81','82','84','86','90','91',
+        '92','94','95','98',
+    ];
+    public const DDI_3 = [
+        '351','352','353','354','355','356','357','358','359',
+        '370','371','372','373','374','375','376','377','378','380',
+        '381','382','385','386','387','389',
+        '420','421','423',
+        '500','501','502','503','504','505','506','507','509',
+        '590','591','592','593','594','595','596','597','598','599',
+        '852','853','855','856','880','886',
+        '960','961','962','963','964','965','966','967','968',
+        '970','971','972','973','974','975','976','977',
+        '992','993','994','995','996','998',
+    ];
+
     /**
      * Normaliza um número de telefone para o formato 55DDXXXXXXXX(X).
      * Retorna null se o número for inválido e não puder ser corrigido.
@@ -84,16 +106,14 @@ class TelefoneService
             $ddd    = (int) substr($semDdi, 0, 2);
             $numero = substr($semDdi, 2);
 
-            if (! $this->dddValido($ddd)) {
-                return null;
-            }
+            if ($this->dddValido($ddd)) {
+                // Celular de 9 dígitos que não começa com 9 → adiciona o 9
+                if (strlen($numero) === 8 && in_array(substr($numero, 0, 1), ['6','7','8','9'])) {
+                    $numero = '9' . $numero;
+                }
 
-            // Celular de 9 dígitos que não começa com 9 → adiciona o 9
-            if (strlen($numero) === 8 && in_array(substr($numero, 0, 1), ['6','7','8','9'])) {
-                $numero = '9' . $numero;
+                return '55' . str_pad((string) $ddd, 2, '0', STR_PAD_LEFT) . $numero;
             }
-
-            return '55' . str_pad((string) $ddd, 2, '0', STR_PAD_LEFT) . $numero;
         }
 
         // 7. Comprimentos anômalos: tenta recuperar removendo dígitos duplicados de prefixo
@@ -107,7 +127,47 @@ class TelefoneService
             }
         }
 
+        // 8. Não é um número brasileiro reconhecido — antes de desistir, tenta
+        // como internacional (WhatsApp de Portugal, Itália, Chile, Reino Unido
+        // etc é legítimo e não deve virar pendência de auditoria como se fosse
+        // erro de digitação).
+        $internacional = $this->reconhecerInternacional($digitos);
+        if ($internacional !== null) {
+            return $internacional;
+        }
+
         // Não conseguiu normalizar
+        return null;
+    }
+
+    /**
+     * Reconhece números internacionais por DDI (código de país) conhecido.
+     * Retorna os dígitos como estão (sem zeros de discagem à esquerda) se o
+     * prefixo bater com um DDI real e sobrar uma quantidade plausível de
+     * dígitos para o número local; caso contrário, null.
+     */
+    private function reconhecerInternacional(string $digitos): ?string
+    {
+        $semZero = ltrim($digitos, '0');
+
+        foreach (self::DDI_3 as $ddi) {
+            if (str_starts_with($semZero, $ddi)) {
+                $resto = substr($semZero, strlen($ddi));
+                if (strlen($resto) >= 6 && strlen($resto) <= 12) {
+                    return $semZero;
+                }
+            }
+        }
+
+        foreach (self::DDI_2 as $ddi) {
+            if (str_starts_with($semZero, $ddi)) {
+                $resto = substr($semZero, strlen($ddi));
+                if (strlen($resto) >= 6 && strlen($resto) <= 12) {
+                    return $semZero;
+                }
+            }
+        }
+
         return null;
     }
 

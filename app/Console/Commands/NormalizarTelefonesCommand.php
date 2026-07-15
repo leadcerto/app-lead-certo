@@ -30,17 +30,31 @@ class NormalizarTelefonesCommand extends Command
 
         $this->info($dryRun ? '[DRY-RUN] Nenhuma alteração será salva.' : 'Iniciando normalização + fusão de duplicatas...');
 
-        $mesclados  = 0;
-        $corrigidos = 0;
-        $invalidos  = 0;
-        $intocados  = 0;
+        $mesclados          = 0;
+        $corrigidos         = 0;
+        $invalidos          = 0;
+        $intocados          = 0;
+        $pendenciasResolvidas = 0;
 
-        Contato::orderBy('id')->chunk($chunk, function ($contatos) use ($tel, $dryRun, &$mesclados, &$corrigidos, &$invalidos, &$intocados) {
+        Contato::orderBy('id')->chunk($chunk, function ($contatos) use ($tel, $dryRun, &$mesclados, &$corrigidos, &$invalidos, &$intocados, &$pendenciasResolvidas) {
             foreach ($contatos as $contato) {
                 $resultado = $tel->diagnosticar($contato->telefone);
 
                 if ($resultado['status'] === 'valido') {
                     $intocados++;
+
+                    // Uma pendência de auditoria pode ter sido criada num run anterior
+                    // com uma versão do validador que não reconhecia esse número (ex:
+                    // WhatsApp internacional flagado como "DDD inválido"). Já que o
+                    // número está correto agora, a pendência não faz mais sentido.
+                    if (! $dryRun) {
+                        $resolvidas = AuditoriaContato::where('contato_id', $contato->id)
+                            ->where('tipo', 'telefone')
+                            ->where('status', 'pendente')
+                            ->update(['status' => 'resolvido', 'resolvido_em' => now()]);
+                        $pendenciasResolvidas += $resolvidas;
+                    }
+
                     continue;
                 }
 
@@ -107,10 +121,11 @@ class NormalizarTelefonesCommand extends Command
         $this->table(
             ['Status', 'Quantidade'],
             [
-                ['Já válidos (intocados)',          $intocados],
-                ['Duplicatas mescladas (removidas)', $mesclados],
-                ['Corrigidos (só formato)',          $corrigidos],
-                ['Inválidos (auditoria criada)',     $invalidos],
+                ['Já válidos (intocados)',              $intocados],
+                ['Pendências de auditoria resolvidas',  $pendenciasResolvidas],
+                ['Duplicatas mescladas (removidas)',    $mesclados],
+                ['Corrigidos (só formato)',              $corrigidos],
+                ['Inválidos (auditoria criada)',         $invalidos],
             ]
         );
 
