@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Painel;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditoriaContato;
+use App\Models\MotivoDesfecho;
 use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
 use Illuminate\Contracts\View\View;
@@ -29,10 +30,17 @@ class DashboardController extends Controller
             default  => [now()->startOfDay(), now()->endOfDay()],
         };
 
+        // Motivos marcados como "conta como venda" pra esse tenant — hoje só
+        // 'venda_fechada' por padrão, mas o tenant pode renomear/adicionar
+        // outros motivos que também contam (ver /kanban/motivos-desfecho).
+        $chavesVenda = MotivoDesfecho::where('tenant_id', $tenantId)
+            ->where('e_venda', true)
+            ->pluck('chave');
+
         $base = TicketAtendimento::whereBetween('aberto_em', [$inicio, $fim]);
 
         $recebidos = (clone $base)->count();
-        $fechados   = (clone $base)->where('tag_desfecho', 'venda_fechada')->count();
+        $fechados   = (clone $base)->whereIn('tag_desfecho', $chavesVenda)->count();
         $emAberto   = TicketAtendimento::where('status', 'aberto')->count();
 
         $taxaConversao = $recebidos > 0 ? round(($fechados / $recebidos) * 100, 1) : null;
@@ -44,7 +52,7 @@ class DashboardController extends Controller
 
         $motivosPerda = TicketAtendimento::whereBetween('encerrado_em', [$inicio, $fim])
             ->whereNotNull('tag_desfecho')
-            ->where('tag_desfecho', '!=', 'venda_fechada')
+            ->whereNotIn('tag_desfecho', $chavesVenda)
             ->selectRaw('tag_desfecho, count(*) as count')
             ->groupBy('tag_desfecho')
             ->orderByDesc('count')

@@ -580,12 +580,9 @@
                 <select x-model="tagDesfecho"
                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 mb-4">
                     <option value="">Selecione...</option>
-                    <option value="venda_fechada">Venda fechada</option>
-                    <option value="sem_interesse">Sem interesse</option>
-                    <option value="preco_alto">Preço alto</option>
-                    <option value="sem_resposta">Sem resposta</option>
-                    <option value="fora_de_area">Fora de área</option>
-                    <option value="outro">Outro</option>
+                    <template x-for="m in motivosDesfecho" :key="m.id">
+                        <option :value="m.chave" x-text="m.label"></option>
+                    </template>
                 </select>
                 <div class="flex gap-2">
                     <button @click="encerrarModal = false"
@@ -619,6 +616,7 @@ function kanban() {
         ],
         tickets:        {},
         totalPorColuna: {},
+        motivosDesfecho: [],
         buscaTexto:     '',
         ticketAtivo:  null,
         moverColunaAlvo: '',
@@ -1152,7 +1150,16 @@ function kanban() {
             });
         },
 
+        async carregarMotivosDesfecho() {
+            const res = await this.api('/api/painel/kanban/motivos-desfecho');
+            if (res.ok) {
+                const json = await res.json();
+                this.motivosDesfecho = json.data;
+            }
+        },
+
         init() {
+            this.carregarMotivosDesfecho();
             this.intervalo = setInterval(async () => {
                 await this.carregar();
 

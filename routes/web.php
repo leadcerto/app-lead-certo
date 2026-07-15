@@ -23,6 +23,7 @@ use App\Http\Controllers\Painel\SpintaxVariavelController;
 use App\Http\Controllers\Admin\EspecificacoesController;
 use App\Http\Controllers\Admin\GestorKanbanConfigController;
 use App\Http\Controllers\Painel\GestorKanbanRelatorioController;
+use App\Http\Controllers\Painel\MotivoDesfechoController;
 
 // ── Formulário público (iframe) — sem auth ────────────────────────────────
 Route::get('/f/{uuid}', function (string $uuid) {
@@ -137,6 +138,11 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('kanban.relatorios')
         ->middleware('role:admin,dono');
 
+    // Motivos de encerramento — dono e admin
+    Route::get('/kanban/motivos-desfecho', [MotivoDesfechoController::class, 'view'])
+        ->name('kanban.motivos-desfecho')
+        ->middleware('role:admin,dono');
+
     // Documentação/estratégia — dono e admin
     Route::get('/kanban/documentacao/botoes', fn () => view('kanban.documentacao-botoes'))
         ->name('kanban.documentacao-botoes')
@@ -183,6 +189,7 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
     Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda')->group(function () {
         Route::get('/kanban/tickets', [KanbanController::class, 'index']);
         Route::get('/kanban/ticket/{ticket}', [KanbanController::class, 'show']);
+        Route::get('/kanban/motivos-desfecho', [MotivoDesfechoController::class, 'index']);
         Route::get('/kanban/ticket/{ticket}/mensagens', [KanbanController::class, 'mensagens']);
         Route::post('/kanban/ticket/{ticket}/assumir', [KanbanController::class, 'assumir']);
         Route::post('/kanban/ticket/{ticket}/mensagem', [KanbanController::class, 'enviarMensagem']);
@@ -201,6 +208,13 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
     Route::middleware('role:admin,dono')->group(function () {
         Route::get('/kanban/relatorios', [GestorKanbanRelatorioController::class, 'index']);
         Route::get('/kanban/relatorios/{id}', [GestorKanbanRelatorioController::class, 'show']);
+    });
+
+    // Gerenciar motivos de encerramento — dono e admin apenas (ver a lista, todo mundo do Kanban pode)
+    Route::middleware('role:admin,dono')->group(function () {
+        Route::post('/kanban/motivos-desfecho', [MotivoDesfechoController::class, 'store']);
+        Route::put('/kanban/motivos-desfecho/{id}', [MotivoDesfechoController::class, 'update']);
+        Route::delete('/kanban/motivos-desfecho/{id}', [MotivoDesfechoController::class, 'destroy']);
     });
 
     // Contatos

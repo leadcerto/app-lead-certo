@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\KanbanColunaConfig;
+use App\Models\MotivoDesfecho;
 use App\Models\SdrPersona;
 use App\Models\Tenant;
 
@@ -17,6 +18,7 @@ class TenantSetupService
     {
         $this->criarPersonaPadrao($tenant);
         $this->criarColunasKanban($tenant);
+        $this->criarMotivosDesfechoPadrao($tenant);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -65,6 +67,29 @@ class TenantSetupService
             KanbanColunaConfig::firstOrCreate(
                 ['tenant_id' => $tenant->id, 'coluna_kanban' => $coluna],
                 ['ia_ativo' => $cfg['ativo'], 'ia_contexto' => $cfg['prompt']]
+            );
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Motivos de encerramento (tag_desfecho) padrão
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private function criarMotivosDesfechoPadrao(Tenant $tenant): void
+    {
+        $motivos = [
+            ['chave' => 'venda_fechada', 'label' => 'Venda fechada', 'e_venda' => true,  'ordem' => 1],
+            ['chave' => 'sem_interesse', 'label' => 'Sem interesse', 'e_venda' => false, 'ordem' => 2],
+            ['chave' => 'preco_alto',    'label' => 'Preço alto',    'e_venda' => false, 'ordem' => 3],
+            ['chave' => 'sem_resposta',  'label' => 'Sem resposta',  'e_venda' => false, 'ordem' => 4],
+            ['chave' => 'fora_de_area',  'label' => 'Fora de área',  'e_venda' => false, 'ordem' => 5],
+            ['chave' => 'outro',         'label' => 'Outro',         'e_venda' => false, 'ordem' => 6],
+        ];
+
+        foreach ($motivos as $motivo) {
+            MotivoDesfecho::firstOrCreate(
+                ['tenant_id' => $tenant->id, 'chave' => $motivo['chave']],
+                ['label' => $motivo['label'], 'e_venda' => $motivo['e_venda'], 'ordem' => $motivo['ordem']]
             );
         }
     }
