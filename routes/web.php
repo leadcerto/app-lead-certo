@@ -24,6 +24,7 @@ use App\Http\Controllers\Admin\EspecificacoesController;
 use App\Http\Controllers\Admin\GestorKanbanConfigController;
 use App\Http\Controllers\Painel\GestorKanbanRelatorioController;
 use App\Http\Controllers\Painel\MotivoDesfechoController;
+use App\Http\Controllers\Painel\IaUsageController;
 
 // ── Formulário público (iframe) — sem auth ────────────────────────────────
 Route::get('/f/{uuid}', function (string $uuid) {
@@ -171,6 +172,11 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/formularios', [FormulariosController::class, 'view'])
         ->name('formularios')
         ->middleware('role:admin,dono');
+
+    // Monitor de uso de IA — dono e admin
+    Route::get('/ia-monitor', [IaUsageController::class, 'view'])
+        ->name('ia-monitor')
+        ->middleware('role:admin,dono');
 });
 
 // ── Painel — API JSON (protegida por sessão) ──────────────────────────────
@@ -215,6 +221,11 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::post('/kanban/motivos-desfecho', [MotivoDesfechoController::class, 'store']);
         Route::put('/kanban/motivos-desfecho/{id}', [MotivoDesfechoController::class, 'update']);
         Route::delete('/kanban/motivos-desfecho/{id}', [MotivoDesfechoController::class, 'destroy']);
+    });
+
+    // Monitor de uso de IA — dono e admin apenas
+    Route::middleware('role:admin,dono')->group(function () {
+        Route::get('/ia-monitor', [IaUsageController::class, 'index']);
     });
 
     // Contatos
