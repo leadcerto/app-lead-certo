@@ -77,6 +77,7 @@
                                 ? 'bg-blue-50 border-2 border-blue-300 rounded-xl shadow-sm p-4 cursor-grab hover:shadow-md transition-shadow'
                                 : (coluna.key === 'outros' ? 'bg-gray-50 rounded-xl shadow-sm p-4 cursor-grab hover:shadow-md transition-shadow border border-gray-200' : 'bg-white rounded-xl shadow-sm p-4 cursor-grab hover:shadow-md transition-shadow')"
                              :style="dragCard?.id === ticket.id ? 'opacity:0.4;cursor:grabbing' : ''"
+                             :data-ticket-id="ticket.id"
                              draggable="true"
                              @dragstart="iniciarDrag($event, ticket)"
                              @dragend="terminarDrag()"
@@ -151,7 +152,7 @@
     {{-- Modal de atendimento --}}
     <template x-if="ticketAtivo">
         <div class="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-4"
-             @click.self="ticketAtivo = null">
+             @click.self="fecharOuTrocarCard($event)">
             <div class="bg-white rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col h-[92vh]">
 
                 {{-- Header --}}
@@ -713,6 +714,33 @@ function kanban() {
             this.abrirTicket(ticket);
         },
 
+        encontrarTicketPorId(id) {
+            for (const coluna of this.colunas) {
+                const achado = (this.tickets[coluna.key] || []).find(t => t.id === id);
+                if (achado) return achado;
+            }
+            return null;
+        },
+
+        // Clique no fundo escurecido do modal: se por baixo do ponto clicado
+        // houver um card do board (identificado por data-ticket-id), troca
+        // direto pra ele em vez de só fechar — permite trocar de atendimento
+        // sem precisar fechar o modal atual primeiro. Não mexe em pointer-events
+        // nem @click.outside (uma tentativa anterior combinando os dois quebrou
+        // a abertura de card em produção).
+        fecharOuTrocarCard(event) {
+            const elementos  = document.elementsFromPoint(event.clientX, event.clientY);
+            const cardEl     = elementos.find(el => el.dataset && el.dataset.ticketId);
+            const ticketId   = cardEl ? parseInt(cardEl.dataset.ticketId, 10) : null;
+            const ticket     = ticketId ? this.encontrarTicketPorId(ticketId) : null;
+
+            if (ticket) {
+                this.abrirTicket(ticket);
+            } else {
+                this.ticketAtivo = null;
+            }
+        },
+
         async soltar(colunaDestino) {
             const ticket = this.dragCard;
             this.dragOver = null;
@@ -834,6 +862,8 @@ function kanban() {
             const res = await this.api(`/api/painel/contato/${contatoId}/notas`);
             if (res.ok) {
                 const json = await res.json();
+                // Usuário trocou de card antes dessa resposta chegar.
+                if (this.ticketAtivo?.contato?.id !== contatoId) return;
                 this.notas = json.data;
             }
         },
@@ -900,6 +930,11 @@ function kanban() {
             if (!res.ok) return;
 
             const novas = await res.json();
+
+            // Usuário trocou de card antes dessa resposta chegar — não é
+            // mais o ticket exibido, descarta pra não misturar conversas.
+            if (this.ticketAtivo?.id !== id) return;
+
             const mudou = novas.length !== this.mensagens.length
                 || (novas.length && novas[novas.length - 1].id !== this.mensagens[this.mensagens.length - 1]?.id);
             this.mensagens = novas;
@@ -1177,11 +1212,18 @@ function kanban() {
         // mais novos, nunca seria encontrado ali e o modal ficava travado
         // mostrando a coluna de antes pra sempre.
         async sincronizarTicketAtivo() {
+            const idAlvo      = this.ticketAtivo.id;
             const colunaAntes = this.ticketAtivo.coluna_kanban;
-            const res = await this.api(`/api/painel/kanban/ticket/${this.ticketAtivo.id}`);
+            const res = await this.api(`/api/painel/kanban/ticket/${idAlvo}`);
             if (!res.ok) return;
 
             const atualizado = await res.json();
+
+            // Se o usuário trocou de card enquanto essa chamada ainda estava
+            // em andamento, essa resposta é de um ticket que não é mais o
+            // exibido — descarta, senão sobrescreve o card certo com dados
+            // de outro atendimento.
+            if (this.ticketAtivo?.id !== idAlvo) return;
 
             // Só re-sincroniza o dropdown se o usuário não tiver mexido nele
             // ainda, pra não perder uma escolha em curso.
