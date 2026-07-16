@@ -15,7 +15,7 @@ class ContatoSyncService
     // Limiar de similaridade: abaixo disso → possível número reciclado → auditoria
     private const LIMIAR_SIMILARIDADE = 75.0;
 
-    public function __construct(private GoogleService $google) {}
+    public function __construct(private GoogleService $google, private TelefoneService $telefoneService) {}
 
     /**
      * Executa o sync para um tenant.
@@ -299,25 +299,12 @@ class ContatoSyncService
 
     private function limparTelefone(string $telefone): string
     {
-        $limpo = preg_replace('/\D/', '', $telefone);
-
-        // Números BR: 55 + 2 DDD + 9 dígitos = 13 dígitos (formato correto)
-        // Remove 55 apenas se resultar em > 13 dígitos (improvável, mas previne overflow)
-        if (strlen($limpo) > 13 && str_starts_with($limpo, '55')) {
-            $limpo = substr($limpo, 2);
-        }
-
-        // 11 dígitos sem prefixo: 2 DDD + 9 celular brasileiro → adiciona 55
-        if (strlen($limpo) === 11 && ! str_starts_with($limpo, '55')) {
-            $limpo = '55' . $limpo;
-        }
-
-        // Rejeita números com menos de 10 dígitos (inválidos — só DDI, campo vazio, etc.)
-        if (strlen($limpo) < 10) {
-            return '';
-        }
-
-        return $limpo;
+        // Usa o mesmo normalizador canônico do webhook do WhatsApp e do
+        // comando de normalização em lote — o Google às vezes devolve o
+        // telefone em formato antigo (sem "55", sem o "9" do celular), e
+        // salvar esse formato "quase certo" cria um Contato duplicado do
+        // mesmo número já existente em formato canônico.
+        return $this->telefoneService->normalizar($telefone) ?? '';
     }
 
     /**
