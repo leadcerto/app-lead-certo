@@ -8,12 +8,12 @@
 
 1. **Escopo:** desenhar pensando em múltiplos Kanbans por tenant (T-MULTI-KANBAN-ARQUITETURA), mas construir agora só o necessário pro Kanban de Vendas — schema pronto pra `kanban_id`, sem seletor de UI (só existe 1 Kanban ativo hoje).
 2. **Reconhecimento de comportamento especial:** cada coluna tem um **papel** fixo, escolhido de uma lista do sistema. O nome/emoji da coluna é livre; o papel decide qual automação especial roda. Várias colunas podem ter o mesmo papel.
-3. **Papéis são por tipo de Kanban:** o catálogo de papéis vive no código, não no banco, e é específico por `tipo` de Kanban (`vendas`, `pos_venda`, etc). Nesta tarefa só o catálogo de **Vendas** é populado — os outros tipos ganham seus papéis quando forem desenhados individualmente (T-KANBAN-POS-VENDA e afins).
+3. **Papéis são universais, não por tipo de Kanban** *(revisado em 2026-07-17, após a primeira versão desta spec propor um catálogo por tipo)*: o usuário esclareceu que todo Kanban é montado da mesma forma — o que muda é só o nome que se dá ao Kanban e às colunas, e o que se configura dentro de cada uma (IA, sequência, botão). As ferramentas/funções disponíveis são as mesmas em qualquer coluna, de qualquer Kanban. Por isso existe **um único catálogo de papéis** (`PapelColunaKanban`), que vive no código e serve pra qualquer Kanban — Vendas, Pós-Venda, Pesquisa, o que for. O campo `kanbans.tipo` continua existindo, mas é só um rótulo informativo (categorização pra relatórios), não gate de funcionalidade.
 4. **Abordagem de dados:** `tickets_atendimento.coluna_kanban` continua sendo **string** (a `chave` da coluna), não vira FK. Evita migrar dado histórico de tickets/mensagens. Validação deixa de ser `Rule::in()` fixo e passa a checar contra as colunas daquele tenant.
 5. **Exclusão de coluna com ticket:** bloqueada. Sistema recusa e informa quantos tickets ainda estão lá.
 6. **Backfill:** não-destrutivo. Tenants existentes (Frete.Rio) recebem as mesmas 8 colunas de hoje, com os mesmos nomes — nenhum ticket muda de lugar, nenhum dado se perde.
 
-## Papéis do Kanban de Vendas
+## Papéis (catálogo universal — vale pra qualquer Kanban)
 
 | Papel (`PapelColunaKanban`) | Comportamento especial do sistema | Cardinalidade |
 |---|---|---|
@@ -69,7 +69,7 @@ enum PapelColunaKanban: string
     public function promptExemplo(): string { ... }  // texto-sugestão genérico (substitui iaPlaceholder hardcoded)
 }
 ```
-Cada `tipo` de Kanban terá seu próprio enum (`PapelColunaKanbanPosVenda` etc) quando for desenhado — não existe ainda.
+Um único enum, usado por qualquer Kanban independente do `tipo`. Se no futuro surgir a necessidade de um papel novo (ex: um comportamento específico que nenhum dos 4 cobre), ele entra nesse mesmo catálogo universal — não se cria um catálogo paralelo por tipo.
 
 ## Helper central (elimina comparação de string solta)
 
@@ -120,8 +120,7 @@ Nova seção dentro da tela já existente `kanban/config.blade.php` (não é tel
 
 ## Fora de escopo (explicitamente adiado)
 
-- Seletor de múltiplos Kanbans na UI (T-MULTI-KANBAN-ARQUITETURA — schema pronto, tela não)
-- Catálogo de papéis pra Pós-Venda, Relacionamento, Pesquisa, Prospecção Fria (cada um ganha seu próprio design quando for a vez)
+- Seletor de múltiplos Kanbans na UI (T-MULTI-KANBAN-ARQUITETURA — schema pronto, tela não). Como o catálogo de papéis agora é universal, criar um segundo Kanban (Pós-Venda, Pesquisa etc) deixa de depender de uma sessão de design própria pro mecanismo — só falta a UI de seleção/criação de Kanban, que é o que fica de fato pendente.
 - Migrar `tickets_atendimento.coluna_kanban` pra FK (mantido como string por decisão desta sessão)
 - Automação de pagamento via webhook (mencionada no backlog como V2, independente desta tarefa)
 
