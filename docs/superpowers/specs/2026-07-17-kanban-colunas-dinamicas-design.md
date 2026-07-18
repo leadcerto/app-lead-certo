@@ -92,6 +92,14 @@ Cada arquivo é revisado individualmente (não em lote) e testado antes/depois d
 
 Arquivos identificados (a validar um a um durante o plano de implementação): `KanbanController`, `KanbanColunaConfigController`, `GestorKanbanService`, `TicketAtendimento` (model), `UazapiWebhookController`, `FormularioService`, `SdrResponderService`, `FollowupConversas`, `SequenciaMensagemJob`, `SequenciaController`, `SecretariaEletronicaController`, `SincronizarContatosWhatsApp`, `SincronizarAgendaWhatsAppJob`, `ImportarParticipantesGrupos`, `AgendaImediataService`, `TicketController` (Internal), `ContatosController`, `TenantSetupService`.
 
+### Addendum — token de movimento da IA (achado durante o planejamento, 2026-07-17)
+
+`SdrResponderService::responder()` hoje detecta na resposta da IA um token fixo entre colchetes (`[AGUARDANDO_ORCAMENTO]`, `[ENCERRADO]`, etc — a chave da coluna em maiúsculas) pra mover o ticket. O mapa de 7 tokens está hardcoded (`$tokenColunas`). Isso quebra silenciosamente se o franqueado renomear uma coluna (a `chave` muda, o token que a IA foi instruída a usar no `ia_contexto` também precisa mudar).
+
+**Resolvido assim:** o token passa a ser gerado dinamicamente a partir da `chave` de cada `kanban_colunas` do tenant (`'[' . Str::upper($coluna->chave) . ']'`), não mais de uma lista fixa. A tela de configuração de coluna mostra esse token como dica copiável ao lado do campo `ia_contexto`, pra o franqueado saber qual token usar ao escrever/editar o prompt.
+
+O campo `etapa_ia` (`etapa_1`/`etapa_2`/`handoff`) aplicado quando o ticket entra em cada coluna não segue o papel (ex: `aguardando_orcamento` e `servico_agendado` são `handoff` hoje mesmo sendo papel Em Andamento — nuance de negócio, não do papel). Isso vira um novo campo em `kanban_coluna_configs.etapa_ia_ao_mover` (string, default `etapa_1`), preenchido no backfill com os valores exatos de hoje (`aguardando_orcamento`→`handoff`, `servico_agendado`→`handoff`, colunas de papel `encerramento`→`handoff`, demais→`etapa_1`), preservando o comportamento atual sem gap de UI nesta primeira versão (campo consumido pelo backend; edição manual fica pra uma iteração futura se for pedida).
+
 ## Migração de dados (backfill)
 
 Uma migration, rodada uma única vez, não-destrutiva:
@@ -131,3 +139,4 @@ Nova seção dentro da tela já existente `kanban/config.blade.php` (não é tel
 - Feature: criar/editar/reordenar/excluir coluna via UI (incluindo bloqueio de exclusão com ticket ativo)
 - Feature: backfill migration — rodar contra um snapshot de dados equivalente à Frete.Rio e confirmar 0 ticket órfão, 0 config perdida
 - Feature (regressão, por arquivo migrado): confirmar que auto-avanço de Entrada, encerramento com reabertura via IA, e transferência humana continuam funcionando depois de cada arquivo trocar de comparação-string pra papel
+- Unit/Feature: `SdrResponderService` gera e reconhece token dinâmico a partir da `chave` de cada coluna do tenant (incluindo tenant com coluna renomeada, chave diferente das 7 originais) e aplica o `etapa_ia_ao_mover` configurado
