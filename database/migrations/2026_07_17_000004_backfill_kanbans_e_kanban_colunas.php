@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\KanbanColuna;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
@@ -58,6 +59,13 @@ return new class extends Migration
                         'etapa_ia_ao_mover' => self::ETAPA_POR_CHAVE[$def['chave']] ?? 'etapa_1',
                     ]);
             }
+
+            // As inserções/updates acima usam o query-builder direto (DB::table(...)),
+            // que não dispara os eventos saved/deleted do Eloquent — os únicos hooks que
+            // limpam o cache "kanban_colunas:{tenantId}" (ver KanbanColuna::doTenant()).
+            // Sem isso, um tenant cujo cache já estivesse aquecido antes do deploy
+            // continuaria servindo resultado stale por até CACHE_TTL_SEGUNDOS.
+            KanbanColuna::limparCache($tenant->id);
         }
     }
 

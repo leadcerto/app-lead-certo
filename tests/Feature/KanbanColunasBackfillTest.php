@@ -54,4 +54,43 @@ class KanbanColunasBackfillTest extends TestCase
         $this->assertSame($colunaAguardandoOrcamento->id, $config->kanban_coluna_id);
         $this->assertSame('PROMPT CUSTOMIZADO PELO FRANQUEADO — NÃO PODE SER SOBRESCRITO', $config->ia_contexto);
     }
+
+    public function test_backfill_nao_sobrescreve_kanban_coluna_id_ja_vinculado(): void
+    {
+        // Mesmo setup de "tenant antigo" do teste acima: apaga a estrutura nova
+        // semeada pela factory pra simular o estado ANTES desta migration.
+        $tenant = Tenant::factory()->create();
+        KanbanColuna::where('tenant_id', $tenant->id)->delete();
+        DB::table('kanbans')->where('tenant_id', $tenant->id)->delete();
+
+        // Simula um config que já foi vinculado a uma coluna (execução anterior da
+        // migration, ou vínculo manual). Usamos o id de uma kanban_coluna real de OUTRO
+        // tenant (a FK de kanban_coluna_id exige um id existente em kanban_colunas) —
+        // esse id certamente não é o que a migration calcularia pra 'aguardando_orcamento'
+        // deste tenant, já que pertence a outra linha/tenant inteiramente. O guard
+        // whereNull('kanban_coluna_id') deve impedir que esse valor seja reatribuído.
+        $outroTenant = Tenant::factory()->create();
+        $idArbitrarioJaVinculado = KanbanColuna::where('tenant_id', $outroTenant->id)
+            ->where('chave', 'lead_novo')->value('id');
+
+        KanbanColunaConfig::where('tenant_id', $tenant->id)->delete();
+        $config = KanbanColunaConfig::create([
+            'tenant_id' => $tenant->id, 'coluna_kanban' => 'aguardando_orcamento',
+            'kanban_coluna_id' => $idArbitrarioJaVinculado,
+            'ia_contexto' => 'PROMPT CUSTOMIZADO PELO FRANQUEADO — NÃO PODE SER SOBRESCRITO',
+            'ia_ativo' => true,
+        ]);
+
+        // Mesmo motivo do teste acima: rollback + re-migrate pra simular a migration
+        // rodando "pendente" contra o estado de tenant antigo já preparado.
+        $this->artisan('migrate:rollback', ['--path' => 'database/migrations/2026_07_17_000004_backfill_kanbans_e_kanban_colunas.php', '--realpath' => false])
+            ->run();
+
+        $this->artisan('migrate', ['--path' => 'database/migrations/2026_07_17_000004_backfill_kanbans_e_kanban_colunas.php', '--realpath' => false])
+            ->run();
+
+        $config->refresh();
+
+        $this->assertSame($idArbitrarioJaVinculado, $config->kanban_coluna_id);
+    }
 }

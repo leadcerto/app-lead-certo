@@ -17,7 +17,7 @@ return new class extends Migration
             return;
         }
 
-        DB::statement("ALTER TABLE tickets_atendimento MODIFY coluna_kanban VARCHAR(50) NOT NULL");
+        DB::statement("ALTER TABLE tickets_atendimento MODIFY coluna_kanban VARCHAR(50) NOT NULL DEFAULT 'lead_novo'");
     }
 
     public function down(): void
@@ -36,6 +36,6 @@ return new class extends Migration
         DB::statement("ALTER TABLE tickets_atendimento MODIFY coluna_kanban ENUM(
             'lead_novo','em_atendimento','aguardando_orcamento','aguardando_lead',
             'pagamento','servico_agendado','encerrado','outros'
-        ) NOT NULL");
+        ) NOT NULL DEFAULT 'lead_novo'");
     }
 };
