@@ -1271,21 +1271,45 @@ return new class extends Migration
 ```
 
 `database/migrations/2026_07_17_000005_widen_coluna_kanban_to_string_tickets_atendimento.php`:
+
+> **Nota de portabilidade (achada ao planejar a Task 8):** `ALTER TABLE ... MODIFY` é sintaxe exclusiva do MySQL/MariaDB — a suíte de testes automatizados roda em SQLite (`phpunit.xml`), onde esse comando não existe. O projeto já tem um padrão estabelecido pra isso em `database/migrations/2026_07_09_174657_add_pagamento_to_tickets_coluna_kanban.php` e `2026_07_07_000003_add_servico_agendado_to_tickets_coluna.php`: checar `DB::getDriverName()` e usar o schema builder nativo do Laravel (`->change()`, que recria a tabela sob SQLite) como caminho alternativo. Seguir o mesmo padrão aqui.
+
 ```php
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            Schema::table('tickets_atendimento', function (Blueprint $table) {
+                $table->string('coluna_kanban', 50)->change();
+            });
+
+            return;
+        }
+
         DB::statement("ALTER TABLE tickets_atendimento MODIFY coluna_kanban VARCHAR(50) NOT NULL");
     }
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            Schema::table('tickets_atendimento', function (Blueprint $table) {
+                $table->enum('coluna_kanban', [
+                    'lead_novo', 'em_atendimento', 'aguardando_orcamento', 'aguardando_lead',
+                    'pagamento', 'servico_agendado', 'encerrado', 'outros',
+                ])->default('lead_novo')->change();
+            });
+
+            return;
+        }
+
         DB::statement("ALTER TABLE tickets_atendimento MODIFY coluna_kanban ENUM(
             'lead_novo','em_atendimento','aguardando_orcamento','aguardando_lead',
             'pagamento','servico_agendado','encerrado','outros'
