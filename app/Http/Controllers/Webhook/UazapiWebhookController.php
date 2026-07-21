@@ -217,7 +217,7 @@ class UazapiWebhookController extends Controller
                 $ticket = TicketAtendimento::create([
                     'tenant_id'          => $tenant->id,
                     'contato_id'         => $contato->id,
-                    'coluna_kanban'      => 'lead_novo',
+                    'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
                     'agente_responsavel' => 'bot',
                     'sdr_persona_id'     => $persona?->id,
                     'status'             => 'aberto',
@@ -316,15 +316,17 @@ class UazapiWebhookController extends Controller
             app(SequenciaService::class)->iniciarParaTicket($ticket);
         } else {
             // Lead respondeu em ticket existente
-            if ($ticket->coluna_kanban === 'lead_novo' && $conteudo) {
-                // Lead respondeu à sequência → avança para em_atendimento e dispara SDR
+            $chaveEntrada = \App\Models\KanbanColuna::chaveDeEntrada($tenant->id);
+            if ($ticket->coluna_kanban === $chaveEntrada && $conteudo) {
+                // Lead respondeu à sequência → avança para a próxima coluna e dispara SDR
                 $temMensagemBot = Mensagem::where('ticket_id', $ticket->id)
                     ->where('remetente', 'bot')
                     ->exists();
-                if ($temMensagemBot) {
-                    $ticket->update(['coluna_kanban' => 'em_atendimento']);
-                    $ticket->coluna_kanban = 'em_atendimento';
-                    $delay = $this->sdrDelay($tenant->id, 'em_atendimento');
+                $proximaColuna = \App\Models\KanbanColuna::proximaChave($tenant->id, $chaveEntrada);
+                if ($temMensagemBot && $proximaColuna) {
+                    $ticket->update(['coluna_kanban' => $proximaColuna]);
+                    $ticket->coluna_kanban = $proximaColuna;
+                    $delay = $this->sdrDelay($tenant->id, $proximaColuna);
                     dispatch(new SdrResponderJob($ticket->id, $conteudo, false, false, $delay))
                         ->delay(now()->addSeconds($delay));
                 }
@@ -371,7 +373,7 @@ class UazapiWebhookController extends Controller
         $ticket = TicketAtendimento::create([
             'tenant_id'          => $tenant->id,
             'contato_id'         => $contato->id,
-            'coluna_kanban'      => 'lead_novo',
+            'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
             'agente_responsavel' => 'bot',
             'sdr_persona_id'     => $persona?->id,
             'status'             => 'aberto',
