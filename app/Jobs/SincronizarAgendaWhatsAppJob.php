@@ -95,7 +95,7 @@ class SincronizarAgendaWhatsAppJob implements ShouldQueue
                 TicketAtendimento::withoutGlobalScopes()->create([
                     'tenant_id'          => $tenant->id,
                     'contato_id'         => $contato->id,
-                    'coluna_kanban'      => 'lead_novo',
+                    'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
                     'agente_responsavel' => 'humano',
                     'sdr_persona_id'     => $personaId,
                     'status'             => 'aberto',

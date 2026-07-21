@@ -86,7 +86,10 @@ class SecretariaEletronicaController extends Controller
         // Verifica se já tem ticket bot aberto — não abre duplicado
         $ticketExistente = TicketAtendimento::where('tenant_id', $tenant->id)
             ->where('contato_id', $contato->id)
-            ->whereIn('coluna_kanban', ['lead_novo', 'em_atendimento'])
+            ->whereNotIn('coluna_kanban', array_merge(
+                \App\Models\KanbanColuna::chavesComPapel($tenant->id, \App\Enums\PapelColunaKanban::Encerramento),
+                \App\Models\KanbanColuna::chavesComPapel($tenant->id, \App\Enums\PapelColunaKanban::TransferenciaHumana),
+            ))
             ->first();
 
         if ($ticketExistente) {
@@ -109,7 +112,7 @@ class SecretariaEletronicaController extends Controller
         $ticket = TicketAtendimento::create([
             'tenant_id'          => $tenant->id,
             'contato_id'         => $contato->id,
-            'coluna_kanban'      => 'lead_novo',
+            'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
             'agente_responsavel' => 'bot',
             'etapa_ia'           => 'etapa_1',
             'origem'             => 'ligacao',
