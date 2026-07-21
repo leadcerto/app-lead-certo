@@ -531,17 +531,18 @@
 
                     <div class="px-5 py-4">
 
-                        {{-- Dica compacta: tokens --}}
+                        {{-- Dica compacta: tokens (dinâmico — reflete as colunas reais deste tenant) --}}
                         <div class="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-xl">
                             <p class="text-xs font-semibold text-gray-500 mb-2">Tokens que movem o card automaticamente:</p>
                             <div class="flex flex-wrap gap-1.5">
-                                <code class="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-mono cursor-default" title="Move para a coluna Novo Lead">[LEAD_NOVO]</code>
-                                <code class="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded font-mono cursor-default" title="Move para Em Atendimento (lead respondeu)">[EM_ATENDIMENTO]</code>
-                                <code class="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded font-mono cursor-default" title="Move para Aguardando Orçamento (dados completos)">[AGUARDANDO_ORCAMENTO]</code>
-                                <code class="text-xs bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded font-mono cursor-default" title="Move para Aguardando Lead (proposta enviada, esperando retorno)">[AGUARDANDO_LEAD]</code>
-                                <code class="text-xs bg-pink-50 text-pink-700 border border-pink-200 px-2 py-0.5 rounded font-mono cursor-default" title="Move para Pagamento (orçamento aprovado, aguardando sinal)">[PAGAMENTO]</code>
-                                <code class="text-xs bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded font-mono cursor-default" title="Move para Serviço Agendado (sinal pago, serviço confirmado)">[SERVICO_AGENDADO]</code>
-                                <code class="text-xs bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded font-mono cursor-default" title="Encerra o atendimento (lead desistiu ou não responde)">[ENCERRADO]</code>
+                                <template x-for="c in colunas" :key="c.key">
+                                    <span class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded cursor-default"
+                                          :title="'Move o card para a coluna ' + c.label">
+                                        <span class="font-sans" x-text="c.label"></span>
+                                        <span class="font-sans text-blue-400">→</span>
+                                        <code class="font-mono" x-text="c.token"></code>
+                                    </span>
+                                </template>
                             </div>
                             <p class="text-xs text-gray-400 mt-2">Inclua um token no final da resposta da IA para mover o card. Use apenas um por mensagem.</p>
                         </div>
