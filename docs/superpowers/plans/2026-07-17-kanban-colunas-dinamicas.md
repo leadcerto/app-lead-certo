@@ -558,7 +558,18 @@ class KanbanColunaHelpersTest extends TestCase
 
         $this->assertSame(['outros'], KanbanColuna::chavesComPapel($tenant->id, PapelColunaKanban::TransferenciaHumana));
         $this->assertSame('outros', KanbanColuna::primeiraChaveComPapel($tenant->id, PapelColunaKanban::TransferenciaHumana));
-        $this->assertNull(KanbanColuna::primeiraChaveComPapel($tenant->id, PapelColunaKanban::TransferenciaHumana) === null ? null : 'x');
+    }
+
+    public function test_primeira_chave_com_papel_retorna_null_quando_nenhuma_coluna_tem_esse_papel(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $kanban = Kanban::create(['tenant_id' => $tenant->id, 'tipo' => 'vendas', 'nome' => 'Vendas', 'ordem' => 0]);
+        KanbanColuna::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanban->id,
+            'chave' => 'lead_novo', 'label' => 'lead_novo', 'papel' => PapelColunaKanban::Entrada, 'ordem' => 1,
+        ]);
+
+        $this->assertNull(KanbanColuna::primeiraChaveComPapel($tenant->id, PapelColunaKanban::TransferenciaHumana));
     }
 
     public function test_proxima_chave_retorna_a_coluna_seguinte_por_ordem_ou_null_na_ultima(): void
