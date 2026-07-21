@@ -13,9 +13,17 @@ class KanbanColunaHelpersTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function kanbanDoTenant(Tenant $tenant): Kanban
+    {
+        $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+        KanbanColuna::where('kanban_id', $kanban->id)->delete();
+
+        return $kanban;
+    }
+
     private function criarColunasPadrao(Tenant $tenant): Kanban
     {
-        $kanban = Kanban::create(['tenant_id' => $tenant->id, 'tipo' => 'vendas', 'nome' => 'Vendas', 'ordem' => 0]);
+        $kanban = $this->kanbanDoTenant($tenant);
 
         $defs = [
             ['chave' => 'lead_novo', 'papel' => PapelColunaKanban::Entrada, 'ordem' => 1],
@@ -65,7 +73,7 @@ class KanbanColunaHelpersTest extends TestCase
     public function test_chave_de_entrada_lanca_excecao_se_nao_houver_coluna_de_entrada(): void
     {
         $tenant = Tenant::factory()->create();
-        Kanban::create(['tenant_id' => $tenant->id, 'tipo' => 'vendas', 'nome' => 'Vendas', 'ordem' => 0]);
+        $this->kanbanDoTenant($tenant); // remove as colunas semeadas pela factory, sem recriar nenhuma
 
         $this->expectException(\RuntimeException::class);
         KanbanColuna::chaveDeEntrada($tenant->id);
@@ -83,7 +91,7 @@ class KanbanColunaHelpersTest extends TestCase
     public function test_primeira_chave_com_papel_retorna_null_quando_nenhuma_coluna_tem_esse_papel(): void
     {
         $tenant = Tenant::factory()->create();
-        $kanban = Kanban::create(['tenant_id' => $tenant->id, 'tipo' => 'vendas', 'nome' => 'Vendas', 'ordem' => 0]);
+        $kanban = $this->kanbanDoTenant($tenant);
         KanbanColuna::create([
             'tenant_id' => $tenant->id, 'kanban_id' => $kanban->id,
             'chave' => 'lead_novo', 'label' => 'lead_novo', 'papel' => PapelColunaKanban::Entrada, 'ordem' => 1,
