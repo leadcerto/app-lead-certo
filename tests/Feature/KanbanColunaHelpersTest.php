@@ -7,7 +7,6 @@ use App\Models\Kanban;
 use App\Models\KanbanColuna;
 use App\Models\Tenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class KanbanColunaHelpersTest extends TestCase

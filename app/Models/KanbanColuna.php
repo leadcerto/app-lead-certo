@@ -13,6 +13,8 @@ class KanbanColuna extends Model
 {
     protected $table = 'kanban_colunas';
 
+    private const CACHE_TTL_SEGUNDOS = 3600;
+
     protected static function booted(): void
     {
         static::addGlobalScope(new TenantScope());
@@ -49,10 +51,16 @@ class KanbanColuna extends Model
         Cache::forget("kanban_colunas:{$tenantId}");
     }
 
-    /** @return Collection<int, self> */
+    /**
+     * Aviso: cache invalidado apenas em mutações de instância (->save(), ->update(), ->delete()).
+     * Operações em lote via query-builder (::where(...)->update(), ::whereIn(...)->delete())
+     * não disparam eventos e deixam o cache inválido — chame limparCache() manualmente nesses casos.
+     *
+     * @return Collection<int, self>
+     */
     protected static function doTenant(int $tenantId): Collection
     {
-        return Cache::remember("kanban_colunas:{$tenantId}", 3600, function () use ($tenantId) {
+        return Cache::remember("kanban_colunas:{$tenantId}", self::CACHE_TTL_SEGUNDOS, function () use ($tenantId) {
             return static::withoutGlobalScope(TenantScope::class)
                 ->where('tenant_id', $tenantId)
                 ->orderBy('ordem')
