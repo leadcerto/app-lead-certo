@@ -36,8 +36,8 @@ class KanbanController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $colunas  = ['lead_novo', 'em_atendimento', 'aguardando_orcamento', 'aguardando_lead', 'pagamento', 'servico_agendado', 'encerrado', 'outros'];
         $tenantId = $request->user()->tenant_id;
+        $colunas  = \App\Models\KanbanColuna::chavesDoTenant($tenantId);
 
         $todosTickets = collect();
         $totais       = [];
@@ -137,6 +137,20 @@ class KanbanController extends Controller
                 'total'   => $totais[$coluna],
             ];
         }
+
+        // Metadado das colunas do tenant (label/emoji/papel) pro frontend parar
+        // de hardcodar a lista fixa — as chaves de $resultado acima continuam
+        // como estão hoje, isso só adiciona uma chave nova ao lado delas.
+        $resultado['colunas'] = \App\Models\KanbanColuna::query()
+            ->whereIn('chave', $colunas)
+            ->orderBy('ordem')
+            ->get(['chave', 'label', 'emoji', 'papel'])
+            ->map(fn ($c) => [
+                'chave' => $c->chave,
+                'label' => $c->label,
+                'emoji' => $c->emoji,
+                'papel' => $c->papel->value,
+            ]);
 
         return response()->json($resultado);
     }
@@ -335,7 +349,8 @@ class KanbanController extends Controller
 
     public function mover(Request $request, int $ticket): JsonResponse
     {
-        $colunas = ['lead_novo', 'em_atendimento', 'aguardando_orcamento', 'aguardando_lead', 'pagamento', 'servico_agendado', 'encerrado', 'outros'];
+        $tenantId = $request->user()->tenant_id;
+        $colunas  = \App\Models\KanbanColuna::chavesDoTenant($tenantId);
 
         $request->validate([
             'coluna' => ['required', 'string', Rule::in($colunas)],
@@ -424,14 +439,21 @@ class KanbanController extends Controller
 
     public function moverParaOutros(Request $request, int $ticket): JsonResponse
     {
+        $tenantId     = $request->user()->tenant_id;
+        $colunaOutros = \App\Models\KanbanColuna::primeiraChaveComPapel($tenantId, \App\Enums\PapelColunaKanban::TransferenciaHumana);
+
+        if (! $colunaOutros) {
+            return response()->json(['message' => 'Nenhuma coluna de Transferência Humana configurada.'], 422);
+        }
+
         $model = TicketAtendimento::findOrFail($ticket);
 
         $model->update([
-            'coluna_kanban'      => 'outros',
+            'coluna_kanban'      => $colunaOutros,
             'agente_responsavel' => 'humano',
             'vendedor_id'        => $request->user()->id,
         ]);
 
-        return response()->json(['ticket_id' => $ticket, 'coluna_kanban' => 'outros']);
+        return response()->json(['ticket_id' => $ticket, 'coluna_kanban' => $colunaOutros]);
     }
 }
