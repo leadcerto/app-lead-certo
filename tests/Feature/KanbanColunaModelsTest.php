@@ -20,4 +20,26 @@ class KanbanColunaModelsTest extends TestCase
             'tenant_id', 'kanban_id', 'chave', 'label', 'emoji', 'papel', 'ordem',
         ]));
     }
+
+    public function test_kanban_tem_colunas_ordenadas_e_coluna_pertence_ao_kanban(): void
+    {
+        $tenant = \App\Models\Tenant::factory()->create();
+
+        $kanban = \App\Models\Kanban::create([
+            'tenant_id' => $tenant->id, 'tipo' => 'vendas', 'nome' => 'Vendas', 'ordem' => 0,
+        ]);
+
+        \App\Models\KanbanColuna::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanban->id,
+            'chave' => 'b', 'label' => 'B', 'papel' => \App\Enums\PapelColunaKanban::EmAndamento, 'ordem' => 2,
+        ]);
+        $primeira = \App\Models\KanbanColuna::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanban->id,
+            'chave' => 'a', 'label' => 'A', 'papel' => \App\Enums\PapelColunaKanban::Entrada, 'ordem' => 1,
+        ]);
+
+        $this->assertSame(['a', 'b'], $kanban->colunas->pluck('chave')->all());
+        $this->assertTrue($primeira->kanban->is($kanban));
+        $this->assertSame(\App\Enums\PapelColunaKanban::Entrada, $primeira->papel);
+    }
 }
