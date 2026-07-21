@@ -109,4 +109,46 @@ class KanbanColunaControllerTest extends TestCase
         $response->assertOk();
         $this->assertDatabaseMissing('kanban_colunas', ['id' => $coluna->id]);
     }
+
+    public function test_bloqueia_criar_segunda_coluna_de_entrada(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+
+        $response = $this->actingAs($user)->postJson('/api/painel/kanban/colunas', [
+            'label' => 'Outra Entrada', 'emoji' => '🟢', 'papel' => 'entrada',
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertDatabaseMissing('kanban_colunas', ['tenant_id' => $tenant->id, 'label' => 'Outra Entrada']);
+    }
+
+    public function test_bloqueia_editar_coluna_para_entrada_quando_ja_existe_uma(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+        $coluna = KanbanColuna::where('tenant_id', $tenant->id)->where('chave', 'em_atendimento')->firstOrFail();
+
+        $response = $this->actingAs($user)->putJson("/api/painel/kanban/colunas/{$coluna->id}", [
+            'label' => 'Em Atendimento', 'emoji' => '🔵', 'papel' => 'entrada',
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertSame('em_andamento', $coluna->fresh()->papel->value);
+    }
+
+    public function test_permite_resalvar_a_propria_coluna_de_entrada_sem_bloqueio(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+        $coluna = KanbanColuna::where('tenant_id', $tenant->id)->where('chave', 'lead_novo')->firstOrFail();
+
+        $response = $this->actingAs($user)->putJson("/api/painel/kanban/colunas/{$coluna->id}", [
+            'label' => 'Novo Lead', 'emoji' => '🟢', 'papel' => 'entrada',
+        ]);
+
+        $response->assertOk();
+        $this->assertSame('Novo Lead', $coluna->fresh()->label);
+        $this->assertSame('entrada', $coluna->fresh()->papel->value);
+    }
 }
