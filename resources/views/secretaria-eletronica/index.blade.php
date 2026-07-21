@@ -167,16 +167,38 @@
 
     {{-- Mensagem de abertura --}}
     <div class="bg-white rounded-2xl shadow-sm p-6 mb-6">
-        <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-1">Mensagem de Abertura</h2>
-        <p class="text-xs text-gray-400 mb-4">Texto que o João vai usar ao entrar em contato com quem ligou e não foi atendido. Deixe em branco para usar o padrão do sistema.</p>
+        <div class="flex items-start justify-between gap-4 mb-1">
+            <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Mensagem de Abertura</h2>
+
+            <label class="flex items-center gap-2 cursor-pointer shrink-0">
+                <span class="text-xs font-medium" :class="envioAtivo ? 'text-green-600' : 'text-gray-400'"
+                      x-text="envioAtivo ? 'Envio ativado' : 'Envio desativado'"></span>
+                <button type="button" role="switch" :aria-checked="envioAtivo.toString()"
+                        @click="toggleEnvio()"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                        :class="envioAtivo ? 'bg-green-500' : 'bg-gray-300'">
+                    <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                          :class="envioAtivo ? 'translate-x-6' : 'translate-x-1'"></span>
+                </button>
+            </label>
+        </div>
+
+        <p class="text-xs text-gray-400 mb-4">
+            Toda vez que alguém liga pro seu número e você não consegue atender a tempo, o sistema identifica a chamada perdida,
+            cria automaticamente o contato e o card no Kanban, e — se o envio acima estiver <strong>ativado</strong> — manda essa
+            mensagem pra essa pessoa pelo WhatsApp puxando conversa. Com o envio <strong>desativado</strong>, o contato e o card
+            continuam sendo criados normalmente, só essa mensagem automática de abertura não é enviada (útil se você prefere
+            responder manualmente ligações perdidas). Deixe o texto em branco para usar a mensagem padrão do sistema.
+        </p>
 
         <textarea x-model="mensagemInicial" rows="3"
                   @input="salvoOk = false"
+                  :disabled="!envioAtivo"
                   placeholder="Ex: Oi! Vi que você ligou aqui pra gente e não consegui atender na hora. Tô disponível agora no WhatsApp, pode falar!"
-                  class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 resize-none"></textarea>
+                  class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 resize-none disabled:bg-gray-50 disabled:text-gray-400"></textarea>
 
         <div class="flex items-center justify-between mt-3">
-            <p class="text-xs text-gray-400">O João vai usar esta mensagem exatamente como você escreveu.</p>
+            <p class="text-xs text-gray-400">O sistema vai usar esta mensagem exatamente como você escreveu.</p>
             <button @click="salvarMensagem()"
                     class="px-4 py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2">
                 <template x-if="salvando"><span>Salvando…</span></template>
@@ -308,6 +330,7 @@ function secretaria() {
     return {
         token: '',
         mensagemInicial: '',
+        envioAtivo: true,
         chamadas: [],
         totalMes: 0,
         dispositivosAtivos: 0,
@@ -325,9 +348,24 @@ function secretaria() {
             const d = await res.json();
             this.token              = d.secretaria_token ?? '';
             this.mensagemInicial    = d.mensagem_inicial ?? '';
+            this.envioAtivo         = d.envio_ativo ?? true;
             this.chamadas           = d.chamadas ?? [];
             this.totalMes           = d.total_mes ?? 0;
             this.dispositivosAtivos = d.dispositivos_ativos ?? 0;
+        },
+
+        async toggleEnvio() {
+            const novoValor = ! this.envioAtivo;
+            this.envioAtivo = novoValor; // otimista — reverte se a chamada falhar
+            const res = await fetch('/api/painel/secretaria-eletronica/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                },
+                body: JSON.stringify({ ativo: novoValor }),
+            });
+            if (! res.ok) this.envioAtivo = ! novoValor;
         },
 
         async salvarMensagem() {

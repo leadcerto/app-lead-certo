@@ -124,12 +124,15 @@ class SecretariaEletronicaController extends Controller
         ]);
 
         // Envia mensagem de abertura configurada (ou padrão) antes da sequência
-        $mensagemAbertura = $tenant->secretaria_mensagem_inicial
-            ?: "Oi! Vi que você ligou aqui pra gente e não consegui atender na hora. Tô disponível agora no WhatsApp, pode falar! 😊";
+        // — só se o franqueado não tiver desativado esse envio nas configurações.
+        if ($tenant->secretaria_envio_ativo) {
+            $mensagemAbertura = $tenant->secretaria_mensagem_inicial
+                ?: "Oi! Vi que você ligou aqui pra gente e não consegui atender na hora. Tô disponível agora no WhatsApp, pode falar! 😊";
 
-        SequenciaMensagemJob::dispatch($ticket->id, $mensagemAbertura)
-            ->onQueue('default')
-            ->delay(now()->addSeconds(5));
+            SequenciaMensagemJob::dispatch($ticket->id, $mensagemAbertura)
+                ->onQueue('default')
+                ->delay(now()->addSeconds(5));
+        }
 
         // Inicia sequência de mensagens automáticas (Boas-vindas)
         app(SequenciaService::class)->iniciarParaTicket($ticket);
@@ -200,6 +203,7 @@ class SecretariaEletronicaController extends Controller
         return response()->json([
             'secretaria_token'    => $tenant->secretaria_token,
             'mensagem_inicial'    => $tenant->secretaria_mensagem_inicial ?? '',
+            'envio_ativo'         => $tenant->secretaria_envio_ativo,
             'chamadas'            => $chamadas,
             'total_mes'           => $totalMes,
             'dispositivos_ativos' => $dispositivosAtivos,
@@ -218,6 +222,20 @@ class SecretariaEletronicaController extends Controller
         $tenant->update(['secretaria_mensagem_inicial' => $validated['mensagem'] ?? null]);
 
         return response()->json(['ok' => true]);
+    }
+
+    // ─── Liga/desliga o envio da mensagem de abertura ─────────────────────────
+
+    public function toggleEnvio(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'ativo' => 'required|boolean',
+        ]);
+
+        $tenant = Tenant::find($request->user()->tenant_id);
+        $tenant->update(['secretaria_envio_ativo' => $validated['ativo']]);
+
+        return response()->json(['ok' => true, 'envio_ativo' => $tenant->secretaria_envio_ativo]);
     }
 
     // ─── Gerar/rotacionar token ───────────────────────────────────────────────

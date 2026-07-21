@@ -311,6 +311,7 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::get('/secretaria-eletronica/dados',       [SecretariaEletronicaController::class, 'dadosPainel']);
         Route::post('/secretaria-eletronica/token',      [SecretariaEletronicaController::class, 'rotacionarToken']);
         Route::post('/secretaria-eletronica/mensagem',   [SecretariaEletronicaController::class, 'salvarMensagem']);
+        Route::post('/secretaria-eletronica/toggle',     [SecretariaEletronicaController::class, 'toggleEnvio']);
         Route::put('/ia/sdr-ativo',                      [\App\Http\Controllers\Painel\WhatsAppController::class, 'toggleSdrAtivo']);
     });
 
