@@ -187,9 +187,10 @@ class FollowupConversas extends Command
     /**
      * Move o ticket automaticamente para $destino por silêncio prolongado.
      * Se $mensagem estiver preenchida, envia antes de mover (e registra no
-     * histórico). Se o destino for 'encerrado' ou 'outros', aplica os mesmos
-     * efeitos que o fluxo manual equivalente (status/tag/relatórios de IA,
-     * ou transferência pra humano) — pra não deixar o ticket num estado
+     * histórico). Se o destino for uma coluna de papel Encerramento ou
+     * TransferenciaHumana (independente da chave/nome da coluna), aplica os
+     * mesmos efeitos que o fluxo manual equivalente (status/tag/relatórios de
+     * IA, ou transferência pra humano) — pra não deixar o ticket num estado
      * inconsistente (coluna encerrada mas status ainda "aberto").
      */
     private function aplicarMovimentoAutomatico(TicketAtendimento $ticket, string $destino, ?string $mensagem, HumanizacaoService $humanizacao): void
@@ -216,16 +217,18 @@ class FollowupConversas extends Command
             }
         }
 
-        if ($destino === 'encerrado') {
+        $papelDestino = \App\Models\KanbanColuna::papelDe($ticket->tenant_id, $destino);
+
+        if ($papelDestino === \App\Enums\PapelColunaKanban::Encerramento) {
             $ticket->update($ticket->dadosParaEncerrar([
                 'tag_desfecho' => 'sem_resposta_automatico',
                 'encerrado_em' => now(),
-            ]));
+            ], $destino));
             ConversationQAJob::dispatch($ticket->id);
             GerarResumoTicketJob::dispatch($ticket->id)->delay(now()->addSeconds(5));
-        } elseif ($destino === 'outros') {
+        } elseif ($papelDestino === \App\Enums\PapelColunaKanban::TransferenciaHumana) {
             $ticket->update([
-                'coluna_kanban'      => 'outros',
+                'coluna_kanban'      => $destino,
                 'agente_responsavel' => 'humano',
             ]);
         } else {
