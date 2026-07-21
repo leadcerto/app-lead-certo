@@ -19,6 +19,7 @@ use App\Http\Controllers\Painel\FormulariosController;
 use App\Http\Controllers\Painel\SequenciaController;
 use App\Http\Controllers\Painel\ContextoIaController;
 use App\Http\Controllers\Painel\KanbanColunaConfigController;
+use App\Http\Controllers\Painel\KanbanColunaController;
 use App\Http\Controllers\Painel\SpintaxVariavelController;
 use App\Http\Controllers\Admin\EspecificacoesController;
 use App\Http\Controllers\Admin\GestorKanbanConfigController;
@@ -344,6 +345,13 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
     Route::middleware('role:admin,dono')->group(function () {
         Route::get('/kanban/coluna-config/{coluna}', [KanbanColunaConfigController::class, 'show']);
         Route::put('/kanban/coluna-config/{coluna}', [KanbanColunaConfigController::class, 'update']);
+        // CRUD self-service de colunas do Kanban
+        Route::get('/kanban/colunas',             [KanbanColunaController::class, 'index']);
+        Route::get('/kanban/papeis',              [KanbanColunaController::class, 'papeis']);
+        Route::post('/kanban/colunas',            [KanbanColunaController::class, 'store']);
+        Route::put('/kanban/colunas/{coluna}',    [KanbanColunaController::class, 'update']);
+        Route::delete('/kanban/colunas/{coluna}', [KanbanColunaController::class, 'destroy']);
+        Route::post('/kanban/colunas/reordenar',  [KanbanColunaController::class, 'reordenar']);
         // Variáveis de sorteio (spintax)
         Route::get('/kanban/variaveis',           [SpintaxVariavelController::class, 'index']);
         Route::get('/kanban/variaveis/listar',    [SpintaxVariavelController::class, 'listar']);
