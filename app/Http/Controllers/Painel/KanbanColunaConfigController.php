@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Painel;
 
 use App\Http\Controllers\Controller;
+use App\Models\KanbanColuna;
 use App\Models\KanbanColunaConfig;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -51,7 +52,7 @@ class KanbanColunaConfigController extends Controller
             'auto_mover_ativo'            => 'sometimes|boolean',
             'auto_mover_coluna_destino'   => [
                 'sometimes', 'nullable', 'string',
-                Rule::in(['lead_novo', 'em_atendimento', 'aguardando_orcamento', 'aguardando_lead', 'pagamento', 'servico_agendado', 'encerrado', 'outros']),
+                Rule::in(KanbanColuna::chavesDoTenant($request->user()->tenant_id)),
             ],
             'auto_mover_segundos'         => 'sometimes|integer|min:60|max:31536000',
             'auto_mover_mensagem'         => 'nullable|string|max:1000',
