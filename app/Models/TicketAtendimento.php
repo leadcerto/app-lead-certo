@@ -113,14 +113,17 @@ class TicketAtendimento extends Model
      * de quem encerrou (humano, silêncio automático ou a própria IA).
      * Não sobrescreve a coluna guardada se o ticket já estava encerrado.
      */
-    public function dadosParaEncerrar(array $extra = []): array
+    public function dadosParaEncerrar(array $extra = [], ?string $colunaDestino = null): array
     {
+        $colunaDestino ??= \App\Models\KanbanColuna::primeiraChaveComPapel($this->tenant_id, \App\Enums\PapelColunaKanban::Encerramento)
+            ?? 'encerrado';
+
         $updates = array_merge($extra, [
-            'coluna_kanban' => 'encerrado',
+            'coluna_kanban' => $colunaDestino,
             'status'        => 'encerrado',
         ]);
 
-        if ($this->coluna_kanban !== 'encerrado') {
+        if (\App\Models\KanbanColuna::papelDe($this->tenant_id, $this->coluna_kanban) !== \App\Enums\PapelColunaKanban::Encerramento) {
             $updates['coluna_antes_encerrar'] = $this->coluna_kanban;
         }
 
