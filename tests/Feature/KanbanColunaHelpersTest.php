@@ -111,6 +111,23 @@ class KanbanColunaHelpersTest extends TestCase
         $this->assertNull(KanbanColuna::proximaChave($tenant->id, 'chave_que_nao_existe'));
     }
 
+    public function test_descricao_para_ia_combina_label_real_com_descricao_generica_do_papel(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $kanban = $this->criarColunasPadrao($tenant);
+        KanbanColuna::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanban->id,
+            'chave' => 'triagem_extra', 'label' => 'Minha Triagem Especial',
+            'papel' => PapelColunaKanban::EmAndamento, 'ordem' => 5,
+        ]);
+
+        $this->assertSame(
+            'Minha Triagem Especial — ' . PapelColunaKanban::EmAndamento->descricao(),
+            KanbanColuna::descricaoParaIa($tenant->id, 'triagem_extra')
+        );
+        $this->assertSame('chave_inexistente', KanbanColuna::descricaoParaIa($tenant->id, 'chave_inexistente'));
+    }
+
     public function test_cache_e_invalidado_ao_criar_editar_e_excluir_coluna(): void
     {
         $tenant = Tenant::factory()->create();

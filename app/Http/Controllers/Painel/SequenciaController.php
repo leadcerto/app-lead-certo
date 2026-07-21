@@ -223,16 +223,7 @@ class SequenciaController extends Controller
             return response()->json(['sugestoes' => []]);
         }
 
-        $labelColuna = match ($sequencia->coluna_kanban) {
-            'lead_novo'            => 'Novo Lead — PRIMEIRO contato, lead nunca interagiu antes',
-            'em_atendimento'       => 'Em Atendimento — lead está em conversa ativa',
-            'aguardando_orcamento' => 'Aguardando Orçamento — lead qualificado aguardando proposta',
-            'aguardando_lead'      => 'Aguardando Lead — follow-up após envio do orçamento (lead sumiu)',
-            'pagamento'            => 'Pagamento — orçamento aprovado, aguardando sinal do lead',
-            'servico_agendado'     => 'Serviço Agendado — confirmação e orientações pré-serviço',
-            'encerrado'            => 'Encerrado — agradecimento e encerramento do atendimento',
-            default                => $sequencia->coluna_kanban,
-        };
+        $labelColuna = \App\Models\KanbanColuna::descricaoParaIa($sequencia->tenant_id, $sequencia->coluna_kanban);
 
         $listaTexto = $mensagens->map(fn ($m) =>
             "[MSG:{$m->id}]\n{$m->conteudo}"

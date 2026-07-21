@@ -840,16 +840,7 @@ class ContatosController extends Controller
             ->orderByDesc('aberto_em')
             ->get(['id','coluna_kanban','status','origem','tag_desfecho','aberto_em','encerrado_em','agente_responsavel']);
 
-        $colunaLabel = [
-            'lead_novo'           => 'Novo',
-            'em_atendimento'      => 'Em Atendimento',
-            'aguardando_orcamento'=> 'Ag. Orçamento',
-            'aguardando_lead'     => 'Ag. Lead',
-            'pagamento'           => 'Pagamento',
-            'servico_agendado'    => 'Serv. Agendado',
-            'encerrado'           => 'Encerrado',
-            'outros'              => 'Outros',
-        ];
+        $colunaLabel = \App\Models\KanbanColuna::where('tenant_id', $tenantId)->pluck('label', 'chave')->all();
 
         $resultado = $tickets->map(fn($t) => [
             'id'           => $t->id,

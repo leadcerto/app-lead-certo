@@ -114,4 +114,11 @@ class KanbanColuna extends Model
 
         return $colunas->get($indice + 1)?->chave;
     }
+
+    public static function descricaoParaIa(int $tenantId, string $chave): string
+    {
+        $coluna = static::doTenant($tenantId)->firstWhere('chave', $chave);
+
+        return $coluna ? "{$coluna->label} — {$coluna->papel->descricao()}" : $chave;
+    }
 }
