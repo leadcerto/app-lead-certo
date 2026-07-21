@@ -133,6 +133,11 @@ class KanbanColunaController extends Controller
             KanbanColuna::where('tenant_id', $tenantId)->where('id', $id)->update(['ordem' => $indice + 1]);
         }
 
+        // Atualização em lote via query-builder não dispara o evento `saved`,
+        // então o cache de colunas do tenant precisa ser limpo manualmente
+        // (ver aviso no docblock de KanbanColuna::doTenant()).
+        KanbanColuna::limparCache($tenantId);
+
         return response()->json(['reordenado' => true]);
     }
 }
