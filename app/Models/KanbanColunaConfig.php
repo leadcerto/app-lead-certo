@@ -17,10 +17,12 @@ class KanbanColunaConfig extends Model
     protected $fillable = [
         'tenant_id',
         'coluna_kanban',
+        'kanban_coluna_id',
         'objetivo',
         'seq_objetivo',
         'ia_objetivo',
         'ia_contexto',
+        'etapa_ia_ao_mover',
         'foco_analise_imagem',
         'ia_ativo',
         'sdr_delay_segundos',
