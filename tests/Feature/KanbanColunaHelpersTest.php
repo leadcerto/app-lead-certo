@@ -17,6 +17,7 @@ class KanbanColunaHelpersTest extends TestCase
     {
         $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
         KanbanColuna::where('kanban_id', $kanban->id)->delete();
+        KanbanColuna::limparCache($tenant->id);
 
         return $kanban;
     }
