@@ -77,4 +77,34 @@ class UazapiWebhookColunaDinamicaTest extends TestCase
 
         $this->assertSame('em_atendimento', $ticket->fresh()->coluna_kanban);
     }
+
+    public function test_chamada_whatsapp_perdida_cria_ticket_na_coluna_de_entrada_do_tenant(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+
+        $tenant = Tenant::factory()->create([
+            'uazapi_webhook_token'  => 'token-teste-3',
+            'uazapi_instance_token' => 'instance-token-3',
+        ]);
+        $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+        // Franqueado renomeou a coluna de Entrada de 'lead_novo' para 'novo_contato'
+        KanbanColuna::where('kanban_id', $kanban->id)->where('papel', PapelColunaKanban::Entrada)
+            ->update(['chave' => 'novo_contato']);
+
+        $response = $this->postJson('/api/webhook/uazapi/token-teste-3', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'      => false,
+                'isGroup'     => false,
+                'chatid'      => '5511977776666@s.whatsapp.net',
+                'messageType' => 'call_log',
+                'senderName'  => 'Fulano',
+            ],
+        ]);
+
+        $response->assertOk();
+        $ticket = TicketAtendimento::where('tenant_id', $tenant->id)->firstOrFail();
+        $this->assertSame('novo_contato', $ticket->coluna_kanban);
+        $this->assertSame('ligacao', $ticket->origem);
+    }
 }
