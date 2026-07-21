@@ -605,16 +605,7 @@
 <script>
 function kanban() {
     return {
-        colunas: [
-            { key: 'lead_novo',           label: 'Novo' },
-            { key: 'em_atendimento',      label: 'Em Atendimento' },
-            { key: 'aguardando_orcamento',label: 'Aguardando Orçamento' },
-            { key: 'aguardando_lead',     label: 'Aguardando Lead' },
-            { key: 'pagamento',           label: 'Pagamento' },
-            { key: 'servico_agendado',    label: 'Serviço Agendado' },
-            { key: 'encerrado',           label: 'Encerrado' },
-            { key: 'outros',              label: 'Outros / Internos' },
-        ],
+        colunas: [],
         tickets:        {},
         totalPorColuna: {},
         motivosDesfecho: [],
@@ -662,6 +653,8 @@ function kanban() {
             if (!res.ok) return;
 
             const data = await res.json();
+            this.colunas = (data.colunas || []).map(c => ({ key: c.chave, label: c.label, emoji: c.emoji }));
+
             const novosTickets = {};
             for (const c of this.colunas) {
                 const entrada = data[c.key] || { tickets: [], total: 0 };
