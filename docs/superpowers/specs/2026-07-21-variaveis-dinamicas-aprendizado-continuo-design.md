@@ -88,9 +88,14 @@ nenhuma outra parte deste sistema — pode ser entregue em paralelo a qualquer f
 
 ## 8. Horário de funcionamento
 
-Novo campo em `Sequencia` (ou em `Kanban`/`KanbanColuna`, a decidir na fase de plano técnico):
-horário de funcionamento com opção de "ativa 24h". Quando fora do horário configurado, a sequência
-segue um conjunto alternativo de mensagens (sequência de "repouso") em vez da sequência normal.
+Novos campos em `Sequencia`: `horario_ativo` (boolean, `false` = 24h sempre ativa), `horario_inicio`,
+`horario_fim` (horário local do tenant). Quando `horario_ativo = true` e o disparo cai fora da janela,
+o sistema usa a **sequência de repouso**: um segundo registro `Sequencia` (mesma `coluna_kanban`),
+referenciado por `sequencia_repouso_id` (FK nullable, self-referencing) na sequência principal.
+Se não houver sequência de repouso configurada, a sequência principal simplesmente não dispara fora
+do horário (mensagens ficam pendentes até a próxima janela).
+Reaproveita 100% da estrutura `Sequencia`/`SequenciaMensagem` já existente — não cria um conceito
+novo de "mensagem alternativa por flag".
 
 ## 9. Aprendizado contínuo (Fase 2)
 
@@ -135,11 +140,10 @@ Cada item acima vira uma task com TDD (RED→GREEN) quando formos para
 `superpowers:writing-plans`, no mesmo padrão usado no branch de colunas dinâmicas do Kanban — specs
 por tarefa, testes reais com `RefreshDatabase`, respeitando `TenantScope`.
 
-## 11. Pontos em aberto para o usuário decidir antes do plano técnico
+## 11. Decisões confirmadas com o usuário
 
-- Horário de funcionamento: fica em `Sequencia` (por sequência) ou em `Kanban`/`KanbanColuna` (por
-  coluna, afetando todas as sequências daquela coluna)?
-- A sequência de "repouso" (fora do horário) é uma segunda `Sequencia` completa vinculada, ou um
-  flag por mensagem dentro da mesma sequência?
-- Fase 2 (aprendizado) — começar a construir o log de envio já na Fase 1 (mesmo sem uso ainda), para
-  não perder dados históricos enquanto o sistema roda em produção?
+- **Horário de funcionamento fica em `Sequencia`** (não em `Kanban`/`KanbanColuna`) — granularidade
+  por sequência, sem acoplar ao trabalho de colunas dinâmicas recém-concluído.
+- **Escopo desta rodada: só a Fase 1** (variações + jitter + horário de funcionamento). A Fase 2
+  (aprendizado contínuo) fica para um novo brainstorm quando houver volume real de envios em
+  produção — não entra no plano técnico agora.
