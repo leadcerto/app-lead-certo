@@ -29,7 +29,7 @@ class TicketController extends Controller
             $ticket = TicketAtendimento::create([
                 'tenant_id'          => $request->tenant_id,
                 'contato_id'         => $request->contato_id,
-                'coluna_kanban'      => 'lead_novo',
+                'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($request->tenant_id),
                 'agente_responsavel' => 'bot',
                 'etapa_ia'           => 'etapa_1',
                 'status'             => 'aberto',

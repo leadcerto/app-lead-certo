@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Enums\PapelColunaKanban;
 use App\Models\Contato;
+use App\Models\Kanban;
+use App\Models\KanbanColuna;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use App\Models\User;
@@ -50,6 +53,34 @@ class KanbanControllerMoverTest extends TestCase
         $response->assertOk();
         $ticket->refresh();
         $this->assertSame('lead_novo', $ticket->coluna_kanban);
+        $this->assertSame('aberto', $ticket->status);
+    }
+
+    public function test_mover_para_fora_de_encerrado_reabre_o_status_mesmo_com_a_coluna_renomeada(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $user    = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $kanban  = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+        // Franqueado renomeou a coluna de Encerramento de 'encerrado' para 'finalizado'
+        KanbanColuna::where('kanban_id', $kanban->id)->where('papel', PapelColunaKanban::Encerramento)
+            ->update(['chave' => 'finalizado']);
+
+        $contato = Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'finalizado', 'agente_responsavel' => 'humano',
+            'status' => 'encerrado', 'aberto_em' => now(), 'encerrado_em' => now(),
+        ]);
+
+        $response = $this->actingAs($user)->postJson("/api/painel/kanban/ticket/{$ticket->id}/mover", [
+            'coluna' => 'lead_novo',
+        ]);
+
+        $response->assertOk();
+        $ticket->refresh();
+        $this->assertSame('lead_novo', $ticket->coluna_kanban);
+        // Sem o fix, a comparação literal '=== encerrado' não reconhece 'finalizado' como
+        // Encerramento e o status fica preso em 'encerrado', escondendo a caixa de mensagem.
         $this->assertSame('aberto', $ticket->status);
     }
 

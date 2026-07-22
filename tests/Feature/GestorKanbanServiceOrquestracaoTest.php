@@ -105,4 +105,34 @@ class GestorKanbanServiceOrquestracaoTest extends TestCase
 
         $this->assertSame(1, GestorKanbanRelatorio::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count());
     }
+
+    public function test_relatorio_inclui_coluna_customizada_criada_pelo_franqueado(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $kanban = \App\Models\Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+        \App\Models\KanbanColuna::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanban->id,
+            'chave' => 'triagem_extra', 'label' => 'Triagem Extra',
+            'papel' => \App\Enums\PapelColunaKanban::EmAndamento, 'ordem' => 99,
+        ]);
+        $inicio = Carbon::parse('2026-07-06 00:00:00');
+        $fim    = Carbon::parse('2026-07-12 23:59:59');
+
+        // Precisa de atividade em ALGUMA coluna do tenant na semana, senão
+        // gerarRelatorioSemanal() retorna null antes mesmo de montar $dados
+        // (mesmo comportamento coberto em test_tenant_sem_nenhuma_atividade_nao_gera_relatorio).
+        $contato = Contato::factory()->create();
+        Carbon::setTestNow('2026-07-08 10:00:00');
+        TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'lead_novo', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+        Carbon::setTestNow();
+
+        $relatorio = app(GestorKanbanService::class)->gerarRelatorioSemanal($tenant, $inicio, $fim);
+
+        $this->assertNotNull($relatorio);
+        $this->assertArrayHasKey('triagem_extra', $relatorio->dados);
+    }
 }

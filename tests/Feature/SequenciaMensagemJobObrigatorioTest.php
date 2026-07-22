@@ -54,4 +54,25 @@ class SequenciaMensagemJobObrigatorioTest extends TestCase
         Http::assertSent(fn ($request) => true);
         $this->assertDatabaseHas('mensagens', ['ticket_id' => $ticket->id, 'conteudo' => 'Mensagem obrigatória']);
     }
+
+    public function test_nao_envia_mensagem_se_ticket_ja_esta_em_coluna_de_papel_encerramento(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+
+        $tenant = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $kanban = \App\Models\Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+        \App\Models\KanbanColuna::where('kanban_id', $kanban->id)->where('papel', \App\Enums\PapelColunaKanban::Encerramento)
+            ->update(['chave' => 'finalizado']);
+        $contato = Contato::factory()->create(['telefone' => '5511999999998']);
+        $ticket = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'finalizado', 'agente_responsavel' => 'humano', 'status' => 'encerrado', 'aberto_em' => now(),
+        ]);
+
+        (new SequenciaMensagemJob($ticket->id, 'Mensagem de teste que não deveria ser enviada'))
+            ->handle(app(HumanizacaoService::class), app(UazapiService::class));
+
+        Http::assertNothingSent();
+        $this->assertDatabaseMissing('mensagens', ['ticket_id' => $ticket->id]);
+    }
 }

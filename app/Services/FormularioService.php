@@ -109,7 +109,10 @@ class FormularioService
         // Verifica ticket já aberto para não duplicar
         $ticketExistente = TicketAtendimento::where('tenant_id', $tenant->id)
             ->where('contato_id', $contato->id)
-            ->whereIn('coluna_kanban', ['lead_novo', 'em_atendimento'])
+            ->whereNotIn('coluna_kanban', array_merge(
+                \App\Models\KanbanColuna::chavesComPapel($tenant->id, \App\Enums\PapelColunaKanban::Encerramento),
+                \App\Models\KanbanColuna::chavesComPapel($tenant->id, \App\Enums\PapelColunaKanban::TransferenciaHumana),
+            ))
             ->first();
 
         if ($ticketExistente) {
@@ -129,7 +132,7 @@ class FormularioService
         $ticket = TicketAtendimento::create([
             'tenant_id'          => $tenant->id,
             'contato_id'         => $contato->id,
-            'coluna_kanban'      => 'lead_novo',
+            'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
             'agente_responsavel' => 'bot',
             'etapa_ia'           => 'etapa_1',
             'origem'             => 'formulario',

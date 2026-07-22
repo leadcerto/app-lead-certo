@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Enums\PapelColunaKanban;
+use App\Models\KanbanColuna;
 use App\Models\KanbanColunaConfig;
 use App\Models\Mensagem;
 use App\Models\SdrPersona;
@@ -51,31 +53,35 @@ class SdrResponderService
         }
 
         // ── 4. Detectar token de movimento de coluna e aplicar ──────────────
-        // Token = nome da coluna em maiúsculas entre colchetes.
-        // A IA pode mover o lead para qualquer coluna a partir de qualquer etapa.
-        $tokenColunas = [
-            '[LEAD_NOVO]'            => ['coluna' => 'lead_novo',            'etapa' => 'etapa_1'],
-            '[EM_ATENDIMENTO]'       => ['coluna' => 'em_atendimento',       'etapa' => 'etapa_1'],
-            '[AGUARDANDO_ORCAMENTO]' => ['coluna' => 'aguardando_orcamento', 'etapa' => 'handoff'],
-            '[AGUARDANDO_LEAD]'      => ['coluna' => 'aguardando_lead',      'etapa' => 'etapa_1'],
-            '[PAGAMENTO]'            => ['coluna' => 'pagamento',            'etapa' => 'etapa_1'],
-            '[SERVICO_AGENDADO]'     => ['coluna' => 'servico_agendado',     'etapa' => 'handoff'],
-            '[ENCERRADO]'            => ['coluna' => 'encerrado',            'etapa' => 'handoff'],
-        ];
+        // Token = chave da coluna em maiúsculas entre colchetes. Gerado dinamicamente
+        // a partir das colunas reais do tenant — se o franqueado renomear uma coluna,
+        // o token muda junto (a tela de config mostra o token atual como dica).
+        $tenantId = $ticket->tenant_id;
+        $chaves   = \App\Models\KanbanColuna::chavesDoTenant($tenantId);
 
         $moveu = false;
-        foreach ($tokenColunas as $token => $cfg) {
+        foreach ($chaves as $chave) {
+            $token = '[' . mb_strtoupper($chave) . ']';
+
             if (str_contains($resposta, $token)) {
-                $updates = $cfg['coluna'] === 'encerrado'
-                    ? $ticket->dadosParaEncerrar(['etapa_ia' => $cfg['etapa']])
-                    : ['coluna_kanban' => $cfg['coluna'], 'etapa_ia' => $cfg['etapa']];
+                $etapa = KanbanColunaConfig::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantId)
+                    ->where('coluna_kanban', $chave)
+                    ->value('etapa_ia_ao_mover') ?? 'etapa_1';
+
+                $papel   = \App\Models\KanbanColuna::papelDe($tenantId, $chave);
+                $updates = $papel === \App\Enums\PapelColunaKanban::Encerramento
+                    ? $ticket->dadosParaEncerrar(['etapa_ia' => $etapa], $chave)
+                    : ['coluna_kanban' => $chave, 'etapa_ia' => $etapa];
+
                 $ticket->update($updates);
-                Log::info("SdrResponder: → {$cfg['coluna']} via token {$token}", ['ticket_id' => $ticket->id]);
+                Log::info("SdrResponder: → {$chave} via token {$token}", ['ticket_id' => $ticket->id]);
                 $moveu = true;
                 break;
             }
         }
-        $resposta = trim(str_replace(array_keys($tokenColunas), '', $resposta));
+        $tokens   = array_map(fn (string $chave) => '[' . mb_strtoupper($chave) . ']', $chaves);
+        $resposta = trim(str_replace($tokens, '', $resposta));
 
         // ── 5. Enviar via WhatsApp com humanização ───────────────────────────
         $tenant   = $ticket->tenant;
@@ -110,7 +116,7 @@ class SdrResponderService
         // é reativado (ver UazapiWebhookController::processarMensagemLead), então
         // isso não deveria mais disparar — mantido como fallback caso o ticket
         // chegue aqui ainda em 'encerrado' por algum outro caminho.
-        if (! $moveu && $ticket->coluna_kanban === 'encerrado') {
+        if (! $moveu && KanbanColuna::papelDe($tenantId, $ticket->coluna_kanban) === PapelColunaKanban::Encerramento) {
             $ticket->update(['status' => 'encerrado']);
             Log::info('SdrResponder: ticket ainda em encerrado sem token de movimento, fechado de volta', ['ticket_id' => $ticket->id]);
         }

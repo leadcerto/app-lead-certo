@@ -155,4 +155,56 @@ class FollowupConversasAutoMoverTest extends TestCase
 
         $this->assertSame('aguardando_orcamento', $ticket->fresh()->coluna_kanban);
     }
+
+    public function test_mover_para_coluna_de_papel_transferencia_humana_seta_agente_humano_mesmo_renomeada(): void
+    {
+        $tenant = \App\Models\Tenant::factory()->create();
+        $kanban = \App\Models\Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+        \App\Models\KanbanColuna::where('kanban_id', $kanban->id)->where('papel', \App\Enums\PapelColunaKanban::TransferenciaHumana)
+            ->update(['chave' => 'time_humano']);
+        $contato = \App\Models\Contato::factory()->create();
+        $ticket = \App\Models\TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot', 'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $metodo = new \ReflectionMethod(\App\Console\Commands\FollowupConversas::class, 'aplicarMovimentoAutomatico');
+        $metodo->setAccessible(true);
+        $metodo->invoke(
+            app(\App\Console\Commands\FollowupConversas::class),
+            $ticket,
+            'time_humano',
+            null,
+            app(\App\Services\HumanizacaoService::class)
+        );
+
+        $this->assertSame('time_humano', $ticket->fresh()->coluna_kanban);
+        $this->assertSame('humano', $ticket->fresh()->agente_responsavel);
+    }
+
+    public function test_mover_para_coluna_de_papel_encerramento_renomeada_encerra_o_ticket(): void
+    {
+        $tenant = \App\Models\Tenant::factory()->create();
+        $kanban = \App\Models\Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+        \App\Models\KanbanColuna::where('kanban_id', $kanban->id)->where('papel', \App\Enums\PapelColunaKanban::Encerramento)
+            ->update(['chave' => 'finalizado']);
+        $contato = \App\Models\Contato::factory()->create();
+        $ticket = \App\Models\TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot', 'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $metodo = new \ReflectionMethod(\App\Console\Commands\FollowupConversas::class, 'aplicarMovimentoAutomatico');
+        $metodo->setAccessible(true);
+        $metodo->invoke(
+            app(\App\Console\Commands\FollowupConversas::class),
+            $ticket,
+            'finalizado',
+            null,
+            app(\App\Services\HumanizacaoService::class)
+        );
+
+        $this->assertSame('finalizado', $ticket->fresh()->coluna_kanban);
+        $this->assertSame('encerrado', $ticket->fresh()->status);
+    }
 }

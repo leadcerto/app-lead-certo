@@ -13,11 +13,6 @@ use Illuminate\Support\Facades\Log;
 
 class GestorKanbanService
 {
-    private const COLUNAS = [
-        'lead_novo', 'em_atendimento', 'aguardando_orcamento', 'aguardando_lead',
-        'pagamento', 'servico_agendado', 'encerrado', 'outros',
-    ];
-
     public function __construct(private OpenRouterService $openRouter) {}
 
     public function coletarNumerosColuna(Tenant $tenant, string $coluna, Carbon $inicio, Carbon $fim): array
@@ -37,10 +32,10 @@ class GestorKanbanService
         $travados = $this->travadosNaColuna($tenant, $coluna, $inicio);
 
         $tagDesfechoBreakdown = [];
-        if ($coluna === 'encerrado') {
+        if (\App\Models\KanbanColuna::papelDe($tenant->id, $coluna) === \App\Enums\PapelColunaKanban::Encerramento) {
             $tagDesfechoBreakdown = TicketAtendimento::withoutGlobalScopes()
                 ->where('tenant_id', $tenant->id)
-                ->where('coluna_kanban', 'encerrado')
+                ->where('coluna_kanban', $coluna)
                 ->whereBetween('encerrado_em', [$inicio, $fim])
                 ->whereNotNull('tag_desfecho')
                 ->selectRaw('tag_desfecho, count(*) as total')
@@ -59,7 +54,7 @@ class GestorKanbanService
 
     public function amostrarConversasColuna(Tenant $tenant, string $coluna, Carbon $inicio, Carbon $fim, int $limite = 15): Collection
     {
-        if ($coluna !== 'encerrado') {
+        if (\App\Models\KanbanColuna::papelDe($tenant->id, $coluna) !== \App\Enums\PapelColunaKanban::Encerramento) {
             return TicketAtendimento::withoutGlobalScopes()
                 ->where('tenant_id', $tenant->id)
                 ->where('coluna_kanban', $coluna)
@@ -77,7 +72,7 @@ class GestorKanbanService
         // amostra e nenhum encerramento da semana aparece na análise.
         $fechados = TicketAtendimento::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
-            ->where('coluna_kanban', 'encerrado')
+            ->where('coluna_kanban', $coluna)
             ->whereBetween('encerrado_em', [$inicio, $fim])
             ->with('mensagens')
             ->orderByDesc('encerrado_em')
@@ -92,7 +87,7 @@ class GestorKanbanService
 
         $travados = TicketAtendimento::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
-            ->where('coluna_kanban', 'encerrado')
+            ->where('coluna_kanban', $coluna)
             ->whereNotIn('id', $fechados->pluck('id'))
             ->with('mensagens')
             ->orderBy('updated_at', 'asc')
@@ -104,7 +99,7 @@ class GestorKanbanService
 
     public function formatarConversa(TicketAtendimento $ticket): string
     {
-        if ($ticket->coluna_kanban === 'encerrado' && $ticket->resumo_ia) {
+        if (\App\Models\KanbanColuna::papelDe($ticket->tenant_id, $ticket->coluna_kanban) === \App\Enums\PapelColunaKanban::Encerramento && $ticket->resumo_ia) {
             return "[Resumo] {$ticket->resumo_ia}";
         }
 
@@ -206,7 +201,7 @@ class GestorKanbanService
         $dados        = [];
         $temAtividade = false;
 
-        foreach (self::COLUNAS as $coluna) {
+        foreach (\App\Models\KanbanColuna::chavesDoTenant($tenant->id) as $coluna) {
             $numeros = $this->coletarNumerosColuna($tenant, $coluna, $inicio, $fim);
 
             if ($numeros['entradas'] === 0 && $numeros['avancos'] === 0 && $numeros['travados'] === 0) {

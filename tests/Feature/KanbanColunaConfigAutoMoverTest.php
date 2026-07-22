@@ -65,4 +65,24 @@ class KanbanColunaConfigAutoMoverTest extends TestCase
             'auto_mover_mensagem'       => '',
         ]);
     }
+
+    public function test_auto_mover_coluna_destino_aceita_coluna_customizada(): void
+    {
+        $tenant = \App\Models\Tenant::factory()->create();
+        $user   = \App\Models\User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $kanban = \App\Models\Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+        \App\Models\KanbanColuna::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanban->id,
+            'chave' => 'coluna_customizada', 'label' => 'Minha Coluna',
+            'papel' => \App\Enums\PapelColunaKanban::EmAndamento, 'ordem' => 99,
+        ]);
+
+        $response = $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/lead_novo', [
+            'auto_mover_ativo'          => true,
+            'auto_mover_coluna_destino' => 'coluna_customizada',
+            'auto_mover_segundos'       => 3600,
+        ]);
+
+        $response->assertOk();
+    }
 }

@@ -18,6 +18,58 @@
         </div>
     </div>
 
+    {{-- Gerenciar colunas do Kanban (self-service) --}}
+    <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm mb-6">
+        <div class="flex items-center justify-between gap-2 mb-3">
+            <div>
+                <h2 class="font-bold text-gray-800 text-base">Colunas do Kanban</h2>
+                <p class="text-xs text-gray-400 mt-0.5">Crie, edite, reordene (arraste pelo ⠿) ou exclua as colunas do seu funil.</p>
+            </div>
+            <button @click="abrirModalNovaColuna()"
+                    class="flex-shrink-0 bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+                + Nova Coluna
+            </button>
+        </div>
+
+        <div class="space-y-2">
+            <template x-for="(c, idx) in colunas" :key="c.id">
+                <div class="flex items-center gap-3 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 transition-opacity"
+                     draggable="true"
+                     @dragstart="colunaDragIndex = idx"
+                     @dragover.prevent="reordenarLocal(idx)"
+                     @dragend="salvarOrdemColunas()"
+                     :style="colunaDragIndex === idx ? 'opacity:0.4' : ''">
+                    <span class="text-gray-300 cursor-grab select-none flex-shrink-0" title="Arraste para reordenar">⠿</span>
+                    <span class="flex-shrink-0" x-text="c.emoji"></span>
+                    <span class="text-sm font-medium text-gray-700 flex-1 truncate" x-text="c.label"></span>
+                    <span class="text-xs text-gray-400 flex-shrink-0" x-text="labelPapel(c.papel)"></span>
+                    <code class="text-xs bg-white border border-gray-200 text-gray-500 px-1.5 py-0.5 rounded font-mono cursor-pointer hover:bg-gray-100 hover:text-gray-700 flex-shrink-0"
+                          title="Clique para copiar o token"
+                          @click="copiarToken(c.token)"
+                          x-text="c.token"></code>
+                    <button @click="abrirModalEditarColuna(c)" class="text-gray-400 hover:text-gray-600 p-1 flex-shrink-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                        </svg>
+                    </button>
+                    <button @click="excluirColuna(c)" class="text-red-300 hover:text-red-500 p-1 flex-shrink-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                    </button>
+                </div>
+            </template>
+
+            <template x-if="colunas.length === 0">
+                <div class="text-center py-6 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-xl">
+                    Nenhuma coluna configurada ainda.
+                </div>
+            </template>
+        </div>
+    </div>
+
     {{-- Tabs de colunas --}}
     <div class="flex gap-1 bg-gray-100 p-1 rounded-xl mb-6 overflow-x-auto">
         <template x-for="col in colunas" :key="col.key">
@@ -479,17 +531,18 @@
 
                     <div class="px-5 py-4">
 
-                        {{-- Dica compacta: tokens --}}
+                        {{-- Dica compacta: tokens (dinâmico — reflete as colunas reais deste tenant) --}}
                         <div class="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-xl">
                             <p class="text-xs font-semibold text-gray-500 mb-2">Tokens que movem o card automaticamente:</p>
                             <div class="flex flex-wrap gap-1.5">
-                                <code class="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-mono cursor-default" title="Move para a coluna Novo Lead">[LEAD_NOVO]</code>
-                                <code class="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded font-mono cursor-default" title="Move para Em Atendimento (lead respondeu)">[EM_ATENDIMENTO]</code>
-                                <code class="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded font-mono cursor-default" title="Move para Aguardando Orçamento (dados completos)">[AGUARDANDO_ORCAMENTO]</code>
-                                <code class="text-xs bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded font-mono cursor-default" title="Move para Aguardando Lead (proposta enviada, esperando retorno)">[AGUARDANDO_LEAD]</code>
-                                <code class="text-xs bg-pink-50 text-pink-700 border border-pink-200 px-2 py-0.5 rounded font-mono cursor-default" title="Move para Pagamento (orçamento aprovado, aguardando sinal)">[PAGAMENTO]</code>
-                                <code class="text-xs bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded font-mono cursor-default" title="Move para Serviço Agendado (sinal pago, serviço confirmado)">[SERVICO_AGENDADO]</code>
-                                <code class="text-xs bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded font-mono cursor-default" title="Encerra o atendimento (lead desistiu ou não responde)">[ENCERRADO]</code>
+                                <template x-for="c in colunas" :key="c.key">
+                                    <span class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded cursor-default"
+                                          :title="'Move o card para a coluna ' + c.label">
+                                        <span class="font-sans" x-text="c.label"></span>
+                                        <span class="font-sans text-blue-400">→</span>
+                                        <code class="font-mono" x-text="c.token"></code>
+                                    </span>
+                                </template>
                             </div>
                             <p class="text-xs text-gray-400 mt-2">Inclua um token no final da resposta da IA para mover o card. Use apenas um por mensagem.</p>
                         </div>
@@ -887,6 +940,53 @@
         </div>
     </template>
 
+    {{-- Modal coluna (criar/editar) --}}
+    <template x-if="modalColunaAberto">
+        <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                <h2 class="font-semibold text-gray-800 mb-4"
+                    x-text="colunaEditando ? 'Editar coluna' : 'Nova coluna'"></h2>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Nome *</label>
+                        <input type="text" x-model="formColuna.label" maxlength="60"
+                               placeholder="Ex: Aguardando Pagamento"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Emoji</label>
+                        <input type="text" x-model="formColuna.emoji" maxlength="10"
+                               placeholder="Ex: 💳"
+                               class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Papel *</label>
+                        <select x-model="formColuna.papel"
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500">
+                            <template x-for="p in papeisDisponiveis" :key="p.value">
+                                <option :value="p.value" x-text="p.label"></option>
+                            </template>
+                        </select>
+                        <p class="text-xs text-gray-400 mt-1" x-text="papelSelecionadoDescricao()"></p>
+                    </div>
+                </div>
+
+                <div class="flex gap-2 mt-5">
+                    <button @click="fecharModalColuna()"
+                            class="flex-1 border border-gray-300 text-gray-600 py-2 rounded-lg text-sm hover:bg-gray-50">
+                        Cancelar
+                    </button>
+                    <button @click="salvarColuna()"
+                            :disabled="!formColuna.label.trim() || !formColuna.papel"
+                            class="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white py-2 rounded-lg text-sm transition-colors">
+                        Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+
 </div>
 @endsection
 
@@ -894,112 +994,39 @@
 <script>
 function kanbanConfig() {
     return {
-        colunas: [
-            {
-                key: 'lead_novo', emoji: '🟢', label: 'Novo',
-                desc: 'Lead acabou de entrar em contato pela primeira vez.',
-                objetivoEx: 'Ex: Capturar o interesse inicial, coletar nome e tipo de serviço, e iniciar o relacionamento com simpatia.',
-                seqObjetivoEx: 'Ex: Dar boas-vindas, confirmar recebimento da mensagem e informar que retornaremos em breve com um orçamento.',
-                iaPlaceholder: 'Ex: Você é a assistente da Frete.Rio. O lead acabou de entrar em contato. Seu objetivo é coletar o nome, endereço de origem e destino, data da mudança e lista de itens. Seja simpático e objetivo. Não envie orçamento ainda.',
-                dicas: [
-                    'Nome da empresa e ramo de atuação',
-                    'Serviços que você oferece (com detalhes)',
-                    'Serviços que você NÃO faz',
-                    'Área de atendimento (bairros, cidades)',
-                    'Tom de voz (formal, descontraído, etc.)',
-                    'Dados que a IA deve coletar do lead',
-                    'O que a IA NÃO deve fazer nesta etapa',
-                    'Perguntas frequentes e respostas padrão',
-                ],
-            },
-            {
-                key: 'em_atendimento', emoji: '🔵', label: 'Em Atendimento',
-                desc: 'Lead respondeu — está em conversa ativa com a equipe ou com a IA.',
-                objetivoEx: 'Ex: Entender as necessidades do lead, aprofundar informações e conduzir para o envio do orçamento.',
-                iaPlaceholder: 'Ex: O lead já demonstrou interesse. Aprofunde as informações necessárias para o orçamento: metragem do imóvel, quantidade de cômodos, itens especiais (piano, safe, aquário). Seja consultivo e mostre experiência.',
-                dicas: [
-                    'Identidade do atendente (nome, empresa, tom)',
-                    'Regras de estilo: tamanho das mensagens, uma pergunta por vez',
-                    'Informações necessárias para fazer o orçamento',
-                    'O que a IA NÃO deve fazer nesta etapa (ex: não dar preço)',
-                    'Quando usar [AGUARDANDO_ORCAMENTO] (checklist completo)',
-                    'Diferenciais do serviço que podem ser mencionados',
-                    'Formas de pagamento aceitas',
-                    'Situações em que deve transferir para humano',
-                ],
-            },
-            {
-                key: 'aguardando_orcamento', emoji: '🟡', label: 'Ag. Orçamento',
-                desc: 'Aguardando a elaboração e envio do orçamento pelo time.',
-                objetivoEx: 'Ex: Lead qualificado aguardando proposta. Manter o interesse aquecido enquanto o orçamento é preparado.',
-                iaPlaceholder: 'Ex: O orçamento está sendo preparado pela equipe. Se o lead perguntar sobre prazo, informe que retornaremos em breve com os valores. Não cite preços sem ter o orçamento oficial aprovado.',
-                dicas: [
-                    'Prazo médio para envio do orçamento',
-                    'O que está incluso no orçamento',
-                    'Política de validade da proposta',
-                    'Como o orçamento é enviado (PDF, link, etc.)',
-                    'Mensagem de manutenção do interesse',
-                    'Quando escalar para humano',
-                ],
-            },
-            {
-                key: 'aguardando_lead', emoji: '🟠', label: 'Ag. Lead',
-                desc: 'Orçamento enviado — aguardando resposta ou decisão do lead.',
-                objetivoEx: 'Ex: Acompanhar o lead com follow-up estratégico, contornar objeções e conduzir ao fechamento.',
-                iaPlaceholder: 'Ex: O orçamento já foi enviado. Se o lead questionar o preço, reforce os diferenciais do serviço (seguro, equipe especializada, avaliações 5 estrelas). Ofereça formas de pagamento flexíveis. Não dê desconto sem autorização.',
-                dicas: [
-                    'Objeções mais comuns e como contorná-las',
-                    'Gatilhos de urgência / escassez que podem ser usados',
-                    'Desconto máximo que a IA pode oferecer (ou proibir)',
-                    'Diferenciais vs. concorrência',
-                    'Condições especiais de pagamento',
-                    'Número de follow-ups e intervalo entre eles',
-                    'Quando considerar o lead perdido',
-                ],
-            },
-            {
-                key: 'pagamento', emoji: '💳', label: 'Pagamento',
-                desc: 'Orçamento aprovado — aguardando pagamento do sinal para confirmar o agendamento.',
-                objetivoEx: 'Ex: Lead aprovou o orçamento. Enviar os dados para pagamento do sinal e confirmar o recebimento.',
-                iaPlaceholder: 'Ex: O orçamento foi aprovado. Envie os dados de pagamento do sinal (Pix, link, boleto) e informe que o agendamento só é confirmado após a confirmação do pagamento.',
-                dicas: [
-                    'Formas de pagamento aceitas (Pix, cartão, boleto)',
-                    'Valor do sinal exigido e como calcular',
-                    'Prazo para pagamento após aprovação',
-                    'O que acontece se o sinal não for pago',
-                    'Como confirmar o recebimento do pagamento',
-                    'Quando usar [SERVICO_AGENDADO] (após confirmação)',
-                ],
-            },
-            {
-                key: 'servico_agendado', emoji: '📅', label: 'Serv. Agendado',
-                desc: 'Serviço confirmado e agendado na agenda.',
-                objetivoEx: 'Ex: Confirmar detalhes do serviço, orientar o cliente sobre a preparação e garantir a satisfação pré-serviço.',
-                iaPlaceholder: 'Ex: O serviço está agendado. Confirme data, horário e endereço completo. Oriente o cliente sobre como se preparar (encaixotar itens, desmontar móveis, liberar elevador). Informe que a equipe chegará no horário combinado.',
-                dicas: [
-                    'Checklist de preparação que o cliente deve seguir',
-                    'Orientações sobre embalagem de itens frágeis',
-                    'Política de cancelamento e reagendamento',
-                    'Como a equipe se identifica no dia',
-                    'Contato de emergência no dia do serviço',
-                    'O que fazer se o cliente não estiver pronto',
-                ],
-            },
-            {
-                key: 'encerrado', emoji: '⚫', label: 'Encerrado',
-                desc: 'Atendimento finalizado — fechado com ou sem venda.',
-                objetivoEx: 'Ex: Registrar motivo do encerramento, coletar avaliação e abrir porta para futuras oportunidades.',
-                iaPlaceholder: 'Ex: O atendimento foi encerrado. Agradeça o contato, solicite uma avaliação no Google e deixe a porta aberta para um próximo serviço. Se foi perda, registre o motivo com cordialidade.',
-                dicas: [
-                    'Mensagem de agradecimento padrão',
-                    'Link / instrução para avaliação no Google',
-                    'Motivos de perda mais comuns (para registrar)',
-                    'Oferta de reengajamento futuro',
-                    'Política de indicação / referral',
-                ],
-            },
-        ],
-        abaAtiva: 'lead_novo',
+        colunas: [],
+        papeisDisponiveis: [],
+        // Dicas de "o que informar para a IA" são genéricas por papel (não mais
+        // por coluna específica de um negócio) — o texto de negócio em si vem de
+        // objetivoEx/iaPlaceholder, carregados do papel via API em carregarColunas().
+        dicasPorPapel: {
+            entrada: [
+                'Nome da empresa e o que ela faz',
+                'Tom de voz (formal, descontraído, etc.)',
+                'Dados que a IA deve coletar do lead nesta etapa',
+                'O que a IA NÃO deve fazer nesta etapa',
+                'Perguntas frequentes e respostas padrão',
+            ],
+            em_andamento: [
+                'Identidade do atendente/agente (nome, tom)',
+                'Informações que ainda faltam ser coletadas',
+                'Regras de estilo: tamanho das mensagens, uma pergunta por vez',
+                'Critério para considerar esta etapa concluída',
+                'Situações em que deve transferir para humano',
+            ],
+            encerramento: [
+                'Mensagem de agradecimento padrão',
+                'Motivos de encerramento mais comuns (para registrar)',
+                'Como pedir avaliação / feedback',
+                'Quando reabrir o atendimento se o lead voltar a falar',
+            ],
+            transferencia_humana: [
+                'Aviso ao lead de que um humano vai continuar o atendimento',
+                'O que a IA deve parar de fazer nesta coluna',
+                'Informações que devem ser repassadas ao atendente humano',
+            ],
+        },
+        abaAtiva: null,
         lista: [],
         aberto: null,
         mensagensPor: {},
@@ -1077,11 +1104,50 @@ function kanbanConfig() {
         // Toast de feedback
         toast: { visivel: false, tipo: 'ok', texto: '' },
 
+        // Self-service de colunas
+        modalColunaAberto: false,
+        colunaEditando: null,
+        formColuna: { label: '', emoji: '', papel: '' },
+        colunaDragIndex: null,
+
         async carregar() {
+            const resPapeis = await this.api('/api/painel/kanban/papeis');
+            if (resPapeis.ok) this.papeisDisponiveis = await resPapeis.json();
+
+            await this.carregarColunas();
+
             const res = await this.api('/api/painel/sequencias');
             if (res.ok) this.lista = await res.json();
             // Pré-carrega IA da aba inicial
-            await this.carregarIa(this.abaAtiva);
+            if (this.abaAtiva) await this.carregarIa(this.abaAtiva);
+        },
+
+        async carregarColunas() {
+            const res = await this.api('/api/painel/kanban/colunas');
+            if (!res.ok) return;
+            const dados = await res.json();
+
+            this.colunas = dados.map(c => {
+                const papel = this.papeisDisponiveis.find(p => p.value === c.papel) || {};
+                return {
+                    key: c.chave,
+                    id: c.id,
+                    emoji: c.emoji,
+                    label: c.label,
+                    papel: c.papel,
+                    token: c.token,
+                    desc: papel.descricao || '',
+                    objetivoEx: papel.objetivo_exemplo || '',
+                    iaPlaceholder: papel.prompt_exemplo || '',
+                    dicas: this.dicasPorPapel[c.papel] || [],
+                };
+            });
+
+            // Se a aba ativa não existir mais (ex: coluna excluída) ou ainda não
+            // tiver sido definida (primeiro carregamento), cai na primeira coluna.
+            if (!this.colunas.some(c => c.key === this.abaAtiva)) {
+                this.abaAtiva = this.colunas[0]?.key ?? null;
+            }
         },
 
         seqsPorColuna(key) {
@@ -1374,6 +1440,88 @@ function kanbanConfig() {
         labelColuna(key) {
             const col = this.colunas.find(c => c.key === key);
             return col ? col.emoji + ' ' + col.label : key || '—';
+        },
+
+        // ── Self-service de colunas ──────────────────────────────────────────
+
+        abrirModalNovaColuna() {
+            this.colunaEditando = null;
+            this.formColuna = { label: '', emoji: '', papel: this.papeisDisponiveis[0]?.value || '' };
+            this.modalColunaAberto = true;
+        },
+
+        abrirModalEditarColuna(c) {
+            this.colunaEditando = c;
+            this.formColuna = { label: c.label, emoji: c.emoji || '', papel: c.papel };
+            this.modalColunaAberto = true;
+        },
+
+        fecharModalColuna() {
+            this.modalColunaAberto = false;
+            this.colunaEditando = null;
+        },
+
+        papelSelecionadoDescricao() {
+            const p = this.papeisDisponiveis.find(p => p.value === this.formColuna.papel);
+            return p?.descricao || '';
+        },
+
+        labelPapel(valor) {
+            return this.papeisDisponiveis.find(p => p.value === valor)?.label || valor;
+        },
+
+        async salvarColuna() {
+            if (!this.formColuna.label.trim() || !this.formColuna.papel) return;
+            let res;
+            if (this.colunaEditando) {
+                res = await this.api(`/api/painel/kanban/colunas/${this.colunaEditando.id}`, 'PUT', this.formColuna);
+            } else {
+                res = await this.api('/api/painel/kanban/colunas', 'POST', this.formColuna);
+            }
+            if (res.ok) {
+                this.fecharModalColuna();
+                await this.carregarColunas();
+                this.mostrarToast(this.colunaEditando ? 'Coluna atualizada.' : 'Coluna criada.');
+            } else {
+                const erro = await res.json().catch(() => null);
+                this.mostrarToast(erro?.message || 'Não foi possível salvar a coluna.', 'erro');
+            }
+        },
+
+        async excluirColuna(c) {
+            if (!confirm(`Excluir a coluna "${c.label}"? Essa ação não pode ser desfeita.`)) return;
+            const res = await this.api(`/api/painel/kanban/colunas/${c.id}`, 'DELETE');
+            if (res.ok) {
+                await this.carregarColunas();
+                this.mostrarToast('Coluna excluída.');
+            } else {
+                const erro = await res.json().catch(() => null);
+                this.mostrarToast(erro?.message || 'Não foi possível excluir: verifique se ainda há tickets nesta coluna.', 'erro');
+            }
+        },
+
+        copiarToken(token) {
+            if (!navigator.clipboard) return;
+            navigator.clipboard.writeText(token).then(() => this.mostrarToast('Token copiado!'));
+        },
+
+        reordenarLocal(overIndex) {
+            if (this.colunaDragIndex === null || this.colunaDragIndex === overIndex) return;
+            const arr = this.colunas;
+            const [item] = arr.splice(this.colunaDragIndex, 1);
+            arr.splice(overIndex, 0, item);
+            this.colunaDragIndex = overIndex;
+        },
+
+        async salvarOrdemColunas() {
+            if (this.colunaDragIndex === null) return;
+            this.colunaDragIndex = null;
+            const ids = this.colunas.map(c => c.id);
+            const res = await this.api('/api/painel/kanban/colunas/reordenar', 'POST', { ids });
+            if (!res.ok) {
+                await this.carregarColunas();
+                this.mostrarToast('Não foi possível salvar a nova ordem.', 'erro');
+            }
         },
 
         // ── ✨ Aplicar Variáveis com IA ───────────────────────────────────────

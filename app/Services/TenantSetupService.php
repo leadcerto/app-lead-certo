@@ -53,20 +53,44 @@ class TenantSetupService
     {
         $empresa = $tenant->nome ?? 'a empresa';
 
-        $colunas = [
-            'lead_novo'            => ['ativo' => true,  'prompt' => $this->promptLeadNovo()],
-            'em_atendimento'       => ['ativo' => true,  'prompt' => $this->promptEmAtendimento($empresa)],
-            'aguardando_orcamento' => ['ativo' => false, 'prompt' => $this->promptAguardandoOrcamento($empresa)],
-            'aguardando_lead'      => ['ativo' => true,  'prompt' => $this->promptAguardandoLead($empresa)],
-            'pagamento'            => ['ativo' => true,  'prompt' => $this->promptPagamento($empresa)],
-            'servico_agendado'     => ['ativo' => true,  'prompt' => $this->promptServicoAgendado($empresa)],
-            'encerrado'            => ['ativo' => true,  'prompt' => $this->promptEncerrado($empresa)],
+        $kanban = \App\Models\Kanban::firstOrCreate(
+            ['tenant_id' => $tenant->id, 'tipo' => 'vendas'],
+            ['nome' => 'Vendas', 'ordem' => 0]
+        );
+
+        $colunasCriadas = [];
+        foreach (\Database\Factories\TenantFactory::colunasPadrao() as $def) {
+            $colunasCriadas[$def['chave']] = \App\Models\KanbanColuna::firstOrCreate(
+                ['kanban_id' => $kanban->id, 'chave' => $def['chave']],
+                [
+                    'tenant_id' => $tenant->id,
+                    'label'     => $def['label'],
+                    'emoji'     => $def['emoji'],
+                    'papel'     => $def['papel'],
+                    'ordem'     => $def['ordem'],
+                ]
+            );
+        }
+
+        $configs = [
+            'lead_novo'            => ['ativo' => true,  'prompt' => $this->promptLeadNovo(),                      'etapa' => 'etapa_1'],
+            'em_atendimento'       => ['ativo' => true,  'prompt' => $this->promptEmAtendimento($empresa),          'etapa' => 'etapa_1'],
+            'aguardando_orcamento' => ['ativo' => false, 'prompt' => $this->promptAguardandoOrcamento($empresa),    'etapa' => 'handoff'],
+            'aguardando_lead'      => ['ativo' => true,  'prompt' => $this->promptAguardandoLead($empresa),         'etapa' => 'etapa_1'],
+            'pagamento'            => ['ativo' => true,  'prompt' => $this->promptPagamento($empresa),              'etapa' => 'etapa_1'],
+            'servico_agendado'     => ['ativo' => true,  'prompt' => $this->promptServicoAgendado($empresa),        'etapa' => 'handoff'],
+            'encerrado'            => ['ativo' => true,  'prompt' => $this->promptEncerrado($empresa),              'etapa' => 'handoff'],
         ];
 
-        foreach ($colunas as $coluna => $cfg) {
+        foreach ($configs as $coluna => $cfg) {
             KanbanColunaConfig::firstOrCreate(
                 ['tenant_id' => $tenant->id, 'coluna_kanban' => $coluna],
-                ['ia_ativo' => $cfg['ativo'], 'ia_contexto' => $cfg['prompt']]
+                [
+                    'kanban_coluna_id'  => $colunasCriadas[$coluna]->id,
+                    'ia_ativo'          => $cfg['ativo'],
+                    'ia_contexto'       => $cfg['prompt'],
+                    'etapa_ia_ao_mover' => $cfg['etapa'],
+                ]
             );
         }
     }

@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Enums\PapelColunaKanban;
+use App\Models\KanbanColuna;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -30,7 +32,7 @@ class AgendaImediataService
             ->joinSub($latestLead, 'lm', 'lm.ticket_id', '=', 't.id')
             ->leftJoinSub($latestHuman, 'hm', 'hm.ticket_id', '=', 't.id')
             ->where('t.tenant_id', $tenantId)
-            ->where('t.coluna_kanban', '!=', 'encerrado')
+            ->whereNotIn('t.coluna_kanban', KanbanColuna::chavesComPapel($tenantId, PapelColunaKanban::Encerramento))
             ->where('t.agente_responsavel', 'humano')
             ->where('lm.ultima_lead_em', '<=', $threshold)
             ->where(function ($q) {
@@ -58,7 +60,7 @@ class AgendaImediataService
         // New leads without assignment
         $totalNovos = DB::table('tickets_atendimento')
             ->where('tenant_id', $tenantId)
-            ->where('coluna_kanban', 'lead_novo')
+            ->whereIn('coluna_kanban', KanbanColuna::chavesComPapel($tenantId, PapelColunaKanban::Entrada))
             ->count();
 
         $hoje = [];
