@@ -107,4 +107,47 @@ class UazapiWebhookColunaDinamicaTest extends TestCase
         $this->assertSame('novo_contato', $ticket->coluna_kanban);
         $this->assertSame('ligacao', $ticket->origem);
     }
+
+    public function test_lead_manda_mensagem_de_novo_reativa_ticket_encerrado_mesmo_com_a_coluna_de_encerramento_renomeada(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+
+        $tenant = Tenant::factory()->create([
+            'uazapi_webhook_token'  => 'token-teste-4',
+            'uazapi_instance_token' => 'instance-token-4',
+        ]);
+        $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+        // Franqueado renomeou a coluna de Encerramento de 'encerrado' para 'finalizado'
+        KanbanColuna::where('kanban_id', $kanban->id)->where('papel', PapelColunaKanban::Encerramento)
+            ->update(['chave' => 'finalizado']);
+
+        $contato = \App\Models\Contato::factory()->create(['telefone' => '5511977778888']);
+        $ticketEncerrado = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'finalizado', 'coluna_antes_encerrar' => 'em_atendimento',
+            'agente_responsavel' => 'humano', 'status' => 'encerrado',
+            'aberto_em' => now()->subDays(2), 'encerrado_em' => now()->subDay(),
+        ]);
+
+        $response = $this->postJson('/api/webhook/uazapi/token-teste-4', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'  => false,
+                'isGroup' => false,
+                'chatid'  => '5511977778888@s.whatsapp.net',
+                // Sem 'text': deveReabrirTicketEncerrado() retorna true sem precisar da IA.
+            ],
+        ]);
+
+        $response->assertOk();
+
+        // Sem o fix, a busca pelo ticket encerrado usava a chave literal 'encerrado' e não
+        // achava nada — resultando num ticket novo duplicado em vez de reativar o antigo.
+        $this->assertSame(1, TicketAtendimento::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count());
+
+        $ticketEncerrado->refresh();
+        $this->assertSame('em_atendimento', $ticketEncerrado->coluna_kanban);
+        $this->assertSame('aberto', $ticketEncerrado->status);
+        $this->assertNull($ticketEncerrado->coluna_antes_encerrar);
+    }
 }

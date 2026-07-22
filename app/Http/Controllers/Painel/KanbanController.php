@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Painel;
 
+use App\Enums\PapelColunaKanban;
 use App\Http\Controllers\Controller;
 use App\Jobs\ConversationQAJob;
 use App\Jobs\GerarResumoTicketJob;
+use App\Models\KanbanColuna;
 use App\Models\Mensagem;
 use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
@@ -365,7 +367,8 @@ class KanbanController extends Controller
         // Reabre o status se estava encerrado e foi movido manualmente pra fora
         // do Encerrado — sem isso a coluna muda mas o ticket continua com
         // status 'encerrado' por baixo, escondendo a caixa de mensagem inteira.
-        if ($colunaAntes === 'encerrado' && $colunaDepois !== 'encerrado') {
+        if (KanbanColuna::papelDe($tenantId, $colunaAntes) === PapelColunaKanban::Encerramento
+            && KanbanColuna::papelDe($tenantId, $colunaDepois) !== PapelColunaKanban::Encerramento) {
             $updates['status'] = 'aberto';
         }
 

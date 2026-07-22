@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Webhook;
 
+use App\Enums\PapelColunaKanban;
 use App\Http\Controllers\Controller;
 use App\Jobs\PushContatoParaGoogleJob;
 use App\Jobs\SdrResponderJob;
 use App\Models\Contato;
+use App\Models\KanbanColuna;
 use App\Models\KanbanColunaConfig;
 use App\Models\Mensagem;
 use App\Models\Tenant;
@@ -182,7 +184,7 @@ class UazapiWebhookController extends Controller
             $ticketEncerrado = TicketAtendimento::withoutGlobalScopes()
                 ->where('tenant_id', $tenant->id)
                 ->where('contato_id', $contato->id)
-                ->where('coluna_kanban', 'encerrado')
+                ->whereIn('coluna_kanban', KanbanColuna::chavesComPapel($tenant->id, PapelColunaKanban::Encerramento))
                 ->latest()
                 ->first();
 

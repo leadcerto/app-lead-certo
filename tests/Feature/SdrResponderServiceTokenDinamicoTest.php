@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\PapelColunaKanban;
 use App\Models\Contato;
 use App\Models\Kanban;
 use App\Models\KanbanColuna;
@@ -103,5 +104,40 @@ class SdrResponderServiceTokenDinamicoTest extends TestCase
         $ticket->refresh();
         $this->assertSame('aguardando_orcamento', $ticket->coluna_kanban);
         $this->assertSame('handoff', $ticket->etapa_ia);
+    }
+
+    public function test_rede_de_seguranca_fecha_ticket_ainda_na_coluna_de_encerramento_renomeada_sem_token_de_movimento(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+
+        $tenant = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+        // Franqueado renomeou a coluna de Encerramento de 'encerrado' para 'finalizado'
+        KanbanColuna::where('kanban_id', $kanban->id)->where('papel', PapelColunaKanban::Encerramento)
+            ->update(['chave' => 'finalizado']);
+
+        $persona = SdrPersona::create([
+            'tenant_id' => $tenant->id, 'nome_interno' => 'padrao', 'nome_display' => 'Joao',
+            'system_prompt' => 'Você é um atendente.', 'ativo' => true, 'is_default' => true, 'tier' => 'simples',
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511988887777']);
+        // Ticket já na coluna de Encerramento renomeada, mas com status ainda 'aberto'
+        // (simula o ticket chegando aqui por algum caminho que não passou pelo webhook).
+        $ticket = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'finalizado', 'agente_responsavel' => 'bot', 'status' => 'aberto',
+            'aberto_em' => now(), 'sdr_persona_id' => $persona->id, 'etapa_ia' => 'etapa_1',
+        ]);
+
+        $this->mock(OpenRouterService::class, function ($mock) {
+            $mock->shouldReceive('chat')->once()->andReturn('De nada, qualquer coisa é só chamar!');
+        });
+
+        app(SdrResponderService::class)->responder($ticket);
+
+        $ticket->refresh();
+        // Sem o fix, a rede de segurança comparava literalmente com 'encerrado' e nunca
+        // disparava pra uma coluna de Encerramento renomeada, deixando o ticket 'aberto'.
+        $this->assertSame('encerrado', $ticket->status);
     }
 }

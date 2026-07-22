@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Enums\PapelColunaKanban;
+use App\Models\KanbanColuna;
 use App\Models\KanbanColunaConfig;
 use App\Models\Mensagem;
 use App\Models\SdrPersona;
@@ -114,7 +116,7 @@ class SdrResponderService
         // é reativado (ver UazapiWebhookController::processarMensagemLead), então
         // isso não deveria mais disparar — mantido como fallback caso o ticket
         // chegue aqui ainda em 'encerrado' por algum outro caminho.
-        if (! $moveu && $ticket->coluna_kanban === 'encerrado') {
+        if (! $moveu && KanbanColuna::papelDe($tenantId, $ticket->coluna_kanban) === PapelColunaKanban::Encerramento) {
             $ticket->update(['status' => 'encerrado']);
             Log::info('SdrResponder: ticket ainda em encerrado sem token de movimento, fechado de volta', ['ticket_id' => $ticket->id]);
         }
