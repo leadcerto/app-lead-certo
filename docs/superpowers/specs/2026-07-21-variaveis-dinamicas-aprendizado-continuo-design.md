@@ -82,9 +82,14 @@ Regras de execução: JSON inválido → até 2 retentativas → alerta admin; c
 
 ## 7. Timing variável (jitter)
 
-Trocar `delay_segundos` (fixo) por `delay_min_segundos` / `delay_max_segundos` em `SequenciaMensagem`.
-No dispatch do job, sortear um valor no intervalo a cada envio. Mudança isolada, não depende de
-nenhuma outra parte deste sistema — pode ser entregue em paralelo a qualquer fase.
+Decisão técnica (levantada ao mapear o código real, ver §10): em vez de substituir `delay_segundos`
+por dois campos min/max — o que exigiria alterar todo call site existente (model, controller, UI,
+`SequenciaService`) — adiciona-se **um** campo novo, `delay_jitter_segundos` (inteiro, default `0`),
+que representa o "±" em torno do `delay_segundos` já existente. Atende exatamente ao pedido original
+("uma média de 5 segundos, com variação de alguns segundos pra mais ou pra menos") com a menor
+superfície de mudança possível: `delay_segundos` continua sendo o valor base em todo o sistema,
+`delay_jitter_segundos = 0` (default) preserva o comportamento atual sem jitter para mensagens já
+cadastradas. Mudança isolada, pode ser entregue em paralelo a qualquer outra parte deste sistema.
 
 ## 8. Horário de funcionamento
 
