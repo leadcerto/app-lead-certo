@@ -14,7 +14,9 @@ class SequenciaService
             ->where('tenant_id', $ticket->tenant_id)
             ->where('coluna_kanban', $ticket->coluna_kanban)
             ->where('ativo', true)
-            ->with(['mensagens' => fn ($q) => $q->where('ativo', true)->orderBy('ordem')])
+            ->with(['mensagens' => fn ($q) => $q->where('ativo', true)->orderBy('ordem')->with([
+                'variacoes' => fn ($q2) => $q2->where('ativa', true),
+            ])])
             ->get();
 
         $disparou       = false;
@@ -24,9 +26,14 @@ class SequenciaService
             foreach ($sequencia->mensagens as $msg) {
                 $delayAcumulado += $msg->delay_segundos;
 
+                $variacao = $msg->variacoes->count() > 0
+                    ? $msg->variacoes->random()
+                    : null;
+                $conteudo = $variacao?->conteudo ?? $msg->conteudo;
+
                 SequenciaMensagemJob::dispatch(
                     $ticket->id,
-                    $msg->conteudo,
+                    $conteudo,
                     $msg->imagem_url,
                     $sequencia->coluna_kanban,
                     $msg->button_settings ?: null,
