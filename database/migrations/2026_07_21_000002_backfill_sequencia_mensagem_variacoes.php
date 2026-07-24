@@ -38,9 +38,13 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::table('sequencia_mensagem_variacoes')
-            ->where('origem', 'humano')
-            ->where('protegida', true)
-            ->delete();
+        // Backfill não-destrutivo — down() intencionalmente não remove as variações
+        // criadas. O critério origem='humano' + protegida=true não identifica só o
+        // que este backfill criou: a partir da Task 5, o fluxo normal de criar uma
+        // nova mensagem de sequência também gera uma variação com essas mesmas
+        // colunas (é o comportamento esperado da feature). Apagar por esse critério
+        // aqui apagaria também variações protegidas criadas por uso normal do
+        // sistema depois do backfill, violando a garantia de que protegida=true
+        // nunca é excluída.
     }
 };
