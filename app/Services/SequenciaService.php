@@ -24,7 +24,10 @@ class SequenciaService
 
         foreach ($sequencias as $sequencia) {
             foreach ($sequencia->mensagens as $msg) {
-                $delayAcumulado += $msg->delay_segundos;
+                $jitter = $msg->delay_jitter_segundos > 0
+                    ? random_int(-$msg->delay_jitter_segundos, $msg->delay_jitter_segundos)
+                    : 0;
+                $delayAcumulado += max(0, $msg->delay_segundos + $jitter);
 
                 $variacao = $msg->variacoes->count() > 0
                     ? $msg->variacoes->random()

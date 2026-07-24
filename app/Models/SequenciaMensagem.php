@@ -19,6 +19,7 @@ class SequenciaMensagem extends Model
         'button_settings',
         'obrigatorio',
         'delay_segundos',
+        'delay_jitter_segundos',
         'ativo',
     ];
 

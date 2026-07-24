@@ -109,6 +109,7 @@ class SequenciaController extends Controller
         $validated = $request->validate([
             'conteudo'                  => 'nullable|string|max:1000',
             'delay_segundos'            => 'required|integer|min:0|max:604800',
+            'delay_jitter_segundos'     => 'sometimes|integer|min:0|max:3600',
             'imagem'                    => 'nullable|file|image|max:5120',
             'button_settings'           => 'sometimes|array|max:3',
             'button_settings.*.text'    => 'required_with:button_settings|string|max:20',
@@ -138,6 +139,7 @@ class SequenciaController extends Controller
             'button_settings'  => $validated['button_settings'] ?? [],
             'obrigatorio'      => $validated['obrigatorio'] ?? false,
             'delay_segundos'   => $validated['delay_segundos'],
+            'delay_jitter_segundos' => $validated['delay_jitter_segundos'] ?? 0,
             'ativo'            => true,
         ]);
 
@@ -172,6 +174,7 @@ class SequenciaController extends Controller
         $validated = $request->validate([
             'conteudo'                  => 'sometimes|nullable|string|max:1000',
             'delay_segundos'            => 'sometimes|integer|min:0|max:604800',
+            'delay_jitter_segundos'     => 'sometimes|integer|min:0|max:3600',
             'ativo'                     => 'sometimes|boolean',
             'ordem'                     => 'sometimes|integer|min:1',
             'imagem'                    => 'sometimes|nullable|file|image|max:5120',
