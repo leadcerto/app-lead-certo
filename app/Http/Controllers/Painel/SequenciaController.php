@@ -31,10 +31,14 @@ class SequenciaController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'nome'          => 'required|string|max:100',
-            'descricao'     => 'nullable|string|max:300',
-            'coluna_kanban' => 'nullable|string|max:50',
-            'ativo'         => 'sometimes|boolean',
+            'nome'                  => 'required|string|max:100',
+            'descricao'             => 'nullable|string|max:300',
+            'coluna_kanban'         => 'nullable|string|max:50',
+            'ativo'                 => 'sometimes|boolean',
+            'horario_ativo'         => 'sometimes|boolean',
+            'horario_inicio'        => 'nullable|required_if:horario_ativo,true|date_format:H:i',
+            'horario_fim'           => 'nullable|required_if:horario_ativo,true|date_format:H:i',
+            'sequencia_repouso_id'  => 'nullable|integer|exists:sequencias,id',
         ]);
 
         $sequencia = Sequencia::create(array_merge($validated, [
@@ -51,10 +55,14 @@ class SequenciaController extends Controller
             ->firstOrFail();
 
         $validated = $request->validate([
-            'nome'          => 'sometimes|string|max:100',
-            'descricao'     => 'sometimes|nullable|string|max:300',
-            'coluna_kanban' => 'sometimes|nullable|string|max:50',
-            'ativo'         => 'sometimes|boolean',
+            'nome'                  => 'sometimes|string|max:100',
+            'descricao'             => 'sometimes|nullable|string|max:300',
+            'coluna_kanban'         => 'sometimes|nullable|string|max:50',
+            'ativo'                 => 'sometimes|boolean',
+            'horario_ativo'         => 'sometimes|boolean',
+            'horario_inicio'        => 'nullable|required_if:horario_ativo,true|date_format:H:i',
+            'horario_fim'           => 'nullable|required_if:horario_ativo,true|date_format:H:i',
+            'sequencia_repouso_id'  => 'nullable|integer|exists:sequencias,id',
         ]);
 
         $sequencia->update($validated);

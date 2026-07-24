@@ -22,10 +22,15 @@ class Sequencia extends Model
         'descricao',
         'coluna_kanban',
         'ativo',
+        'horario_ativo',
+        'horario_inicio',
+        'horario_fim',
+        'sequencia_repouso_id',
     ];
 
     protected $casts = [
-        'ativo' => 'boolean',
+        'ativo'         => 'boolean',
+        'horario_ativo' => 'boolean',
     ];
 
     public function tenant(): BelongsTo
@@ -36,5 +41,10 @@ class Sequencia extends Model
     public function mensagens(): HasMany
     {
         return $this->hasMany(SequenciaMensagem::class, 'sequencia_id')->orderBy('ordem');
+    }
+
+    public function sequenciaRepouso(): BelongsTo
+    {
+        return $this->belongsTo(Sequencia::class, 'sequencia_repouso_id');
     }
 }
