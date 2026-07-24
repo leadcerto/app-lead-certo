@@ -330,6 +330,7 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::post('/sequencias/{seq}/mensagens/{id}',        [SequenciaController::class, 'updateMensagem']); // spoofing
         Route::delete('/sequencias/{seq}/mensagens/{id}',      [SequenciaController::class, 'destroyMensagem']);
         Route::post('/sequencias/{id}/sugerir-variaveis',     [SequenciaController::class, 'sugerirVariaveis']);
+        Route::get('/sequencias/{seq}/mensagens/{msgId}/variacoes',   [SequenciaController::class, 'variacoes']);
     });
 
     // Contexto da IA — dono e admin (mantido para retrocompatibilidade)

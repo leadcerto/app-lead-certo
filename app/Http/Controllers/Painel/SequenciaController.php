@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Painel;
 use App\Http\Controllers\Controller;
 use App\Models\Sequencia;
 use App\Models\SequenciaMensagem;
+use App\Models\SequenciaMensagemVariacao;
 use App\Services\OpenRouterService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -305,5 +306,30 @@ PROMPT,
         });
 
         return response()->json(['sugestoes' => $sugestoes]);
+    }
+
+    private function mensagemDoTenant(Request $request, int $sequenciaId, int $mensagemId): SequenciaMensagem
+    {
+        Sequencia::where('id', $sequenciaId)
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->firstOrFail();
+
+        return SequenciaMensagem::where('id', $mensagemId)
+            ->where('sequencia_id', $sequenciaId)
+            ->firstOrFail();
+    }
+
+    // ── Variações por mensagem ────────────────────────────────────────────────
+
+    public function variacoes(Request $request, int $sequenciaId, int $msgId): JsonResponse
+    {
+        $msg = $this->mensagemDoTenant($request, $sequenciaId, $msgId);
+
+        $variacoes = $msg->variacoes()
+            ->orderByDesc('protegida')
+            ->orderBy('id')
+            ->get();
+
+        return response()->json($variacoes);
     }
 }
