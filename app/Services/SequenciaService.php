@@ -87,7 +87,7 @@ class SequenciaService
             return [$sequencia, now()];
         }
 
-        if ($sequencia->sequenciaRepouso) {
+        if ($sequencia->sequenciaRepouso && $sequencia->sequenciaRepouso->tenant_id === $sequencia->tenant_id) {
             return [$sequencia->sequenciaRepouso, now()];
         }
 

@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class SequenciaController extends Controller
 {
@@ -37,8 +38,12 @@ class SequenciaController extends Controller
             'ativo'                 => 'sometimes|boolean',
             'horario_ativo'         => 'sometimes|boolean',
             'horario_inicio'        => 'nullable|required_if:horario_ativo,true|date_format:H:i',
-            'horario_fim'           => 'nullable|required_if:horario_ativo,true|date_format:H:i',
-            'sequencia_repouso_id'  => 'nullable|integer|exists:sequencias,id',
+            'horario_fim'           => 'nullable|required_if:horario_ativo,true|date_format:H:i|after:horario_inicio',
+            'sequencia_repouso_id'  => [
+                'nullable',
+                'integer',
+                Rule::exists('sequencias', 'id')->where('tenant_id', $request->user()->tenant_id),
+            ],
         ]);
 
         $sequencia = Sequencia::create(array_merge($validated, [
@@ -61,8 +66,13 @@ class SequenciaController extends Controller
             'ativo'                 => 'sometimes|boolean',
             'horario_ativo'         => 'sometimes|boolean',
             'horario_inicio'        => 'nullable|required_if:horario_ativo,true|date_format:H:i',
-            'horario_fim'           => 'nullable|required_if:horario_ativo,true|date_format:H:i',
-            'sequencia_repouso_id'  => 'nullable|integer|exists:sequencias,id',
+            'horario_fim'           => 'nullable|required_if:horario_ativo,true|date_format:H:i|after:horario_inicio',
+            'sequencia_repouso_id'  => [
+                'nullable',
+                'integer',
+                Rule::exists('sequencias', 'id')->where('tenant_id', $request->user()->tenant_id),
+                Rule::notIn([$id]),
+            ],
         ]);
 
         $sequencia->update($validated);

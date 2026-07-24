@@ -10,6 +10,7 @@ use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use App\Services\SequenciaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -97,6 +98,43 @@ class SequenciaServiceHorarioFuncionamentoTest extends TestCase
         Queue::assertPushed(SequenciaMensagemJob::class, function ($job) {
             return $job->conteudo === 'Adiada pro próximo horário';
         });
+        Carbon::setTestNow();
+    }
+
+    public function test_repouso_de_outro_tenant_e_ignorado_por_dado_inconsistente(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-21 23:00:00', 'America/Sao_Paulo'));
+        Queue::fake();
+        $ticket = $this->criarTicket();
+
+        $outroTenant = Tenant::factory()->create(['uazapi_instance_token' => 'tok-outro']);
+        $repousoDeOutroTenant = Sequencia::create([
+            'tenant_id' => $outroTenant->id, 'nome' => 'Repouso de outro tenant', 'coluna_kanban' => 'lead_novo', 'ativo' => true,
+        ]);
+        SequenciaMensagem::create([
+            'tenant_id' => $outroTenant->id, 'sequencia_id' => $repousoDeOutroTenant->id, 'ordem' => 1,
+            'conteudo' => 'Vazamento de outro tenant', 'delay_segundos' => 0, 'ativo' => true,
+        ]);
+
+        $sequencia = Sequencia::create([
+            'tenant_id' => $ticket->tenant_id, 'nome' => 'Boas-vindas', 'coluna_kanban' => 'lead_novo', 'ativo' => true,
+            'horario_ativo' => true, 'horario_inicio' => '08:00:00', 'horario_fim' => '18:00:00',
+        ]);
+        SequenciaMensagem::create([
+            'tenant_id' => $ticket->tenant_id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,
+            'conteudo' => 'Adiada pro próximo horário', 'delay_segundos' => 0, 'ativo' => true,
+        ]);
+
+        // Simula dado inconsistente pré-existente: sequencia_repouso_id apontando pra sequência
+        // de OUTRO tenant, inserido direto no banco (contornando a validação da camada de aplicação).
+        DB::table('sequencias')->where('id', $sequencia->id)->update([
+            'sequencia_repouso_id' => $repousoDeOutroTenant->id,
+        ]);
+
+        app(SequenciaService::class)->iniciarParaTicket($ticket);
+
+        Queue::assertNotPushed(SequenciaMensagemJob::class, fn ($job) => $job->conteudo === 'Vazamento de outro tenant');
+        Queue::assertPushed(SequenciaMensagemJob::class, fn ($job) => $job->conteudo === 'Adiada pro próximo horário');
         Carbon::setTestNow();
     }
 }
