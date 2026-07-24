@@ -42,6 +42,30 @@ class SpintaxVariavel extends Model
             'label'  => 'Termo para o serviço',
             'opcoes' => "a sua mudança\no transporte dos seus móveis\no seu frete\na logística da sua casa\no seu serviço",
         ],
+        'saudacao' => [
+            'label'  => 'Saudação',
+            'opcoes' => "Olá\nBom te ver por aqui\nFala comigo\nOi\nOpa, tudo certo?\nTudo bem?",
+        ],
+        'despedida' => [
+            'label'  => 'Despedida',
+            'opcoes' => "Um abraço!\nAté logo!\nQualquer dúvida, me chama.\nFico à disposição.\nTamo junto!",
+        ],
+        'cta' => [
+            'label'  => 'Chamada para ação',
+            'opcoes' => "Clique aqui:\nAcesse o link:\nDá uma olhada aqui:\nVeja neste link:\nSegue o link de acesso:",
+        ],
+        'gancho' => [
+            'label'  => 'Gancho de abertura',
+            'opcoes' => "Vi que você se interessou\nNotei seu interesse\nRecebi seu contato\nQue legal ver seu interesse por aqui",
+        ],
+        'prova_social' => [
+            'label'  => 'Prova social',
+            'opcoes' => "Nossa equipe já atendeu centenas de clientes satisfeitos.\nSomos referência na região nesse serviço.\nTemos avaliação nota máxima dos nossos clientes.",
+        ],
+        'urgencia' => [
+            'label'  => 'Urgência',
+            'opcoes' => "Nossa agenda está se esgotando rápido.\nA disponibilidade pra essa semana está apertada.\nQuero garantir sua vaga antes que a agenda feche.",
+        ],
     ];
 
     public function sortear(): string
