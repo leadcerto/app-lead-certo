@@ -331,6 +331,9 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::delete('/sequencias/{seq}/mensagens/{id}',      [SequenciaController::class, 'destroyMensagem']);
         Route::post('/sequencias/{id}/sugerir-variaveis',     [SequenciaController::class, 'sugerirVariaveis']);
         Route::get('/sequencias/{seq}/mensagens/{msgId}/variacoes',   [SequenciaController::class, 'variacoes']);
+        Route::post('/sequencias/{seq}/mensagens/{msgId}/variacoes',          [SequenciaController::class, 'storeVariacao']);
+        Route::put('/sequencias/{seq}/mensagens/{msgId}/variacoes/{id}',      [SequenciaController::class, 'updateVariacao']);
+        Route::delete('/sequencias/{seq}/mensagens/{msgId}/variacoes/{id}',   [SequenciaController::class, 'destroyVariacao']);
     });
 
     // Contexto da IA — dono e admin (mantido para retrocompatibilidade)

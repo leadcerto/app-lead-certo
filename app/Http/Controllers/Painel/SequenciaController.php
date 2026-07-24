@@ -332,4 +332,63 @@ PROMPT,
 
         return response()->json($variacoes);
     }
+
+    public function storeVariacao(Request $request, int $sequenciaId, int $msgId): JsonResponse
+    {
+        $msg = $this->mensagemDoTenant($request, $sequenciaId, $msgId);
+
+        $validated = $request->validate([
+            'conteudo' => 'required|string|max:1000',
+        ]);
+
+        $variacao = SequenciaMensagemVariacao::create([
+            'tenant_id'             => $msg->tenant_id,
+            'sequencia_mensagem_id' => $msg->id,
+            'conteudo'              => $validated['conteudo'],
+            'origem'                => 'humano',
+            'protegida'             => false,
+            'ativa'                 => true,
+        ]);
+
+        return response()->json($variacao, 201);
+    }
+
+    public function updateVariacao(Request $request, int $sequenciaId, int $msgId, int $id): JsonResponse
+    {
+        $this->mensagemDoTenant($request, $sequenciaId, $msgId);
+
+        $variacao = SequenciaMensagemVariacao::where('id', $id)
+            ->where('sequencia_mensagem_id', $msgId)
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'conteudo' => 'sometimes|string|max:1000',
+            'ativa'    => 'sometimes|boolean',
+        ]);
+
+        if ($variacao->protegida && array_key_exists('ativa', $validated) && ! $validated['ativa']) {
+            return response()->json(['message' => 'A versão original não pode ser desativada.'], 422);
+        }
+
+        $variacao->update($validated);
+
+        return response()->json($variacao);
+    }
+
+    public function destroyVariacao(Request $request, int $sequenciaId, int $msgId, int $id): JsonResponse
+    {
+        $this->mensagemDoTenant($request, $sequenciaId, $msgId);
+
+        $variacao = SequenciaMensagemVariacao::where('id', $id)
+            ->where('sequencia_mensagem_id', $msgId)
+            ->firstOrFail();
+
+        if ($variacao->protegida) {
+            return response()->json(['message' => 'A versão original não pode ser excluída.'], 422);
+        }
+
+        $variacao->delete();
+
+        return response()->json(['ok' => true]);
+    }
 }
