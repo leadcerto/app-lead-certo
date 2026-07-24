@@ -7,6 +7,7 @@ use App\Models\Sequencia;
 use App\Models\SequenciaMensagem;
 use App\Models\SequenciaMensagemVariacao;
 use App\Services\OpenRouterService;
+use App\Services\SequenciaVariacaoIaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -97,7 +98,7 @@ class SequenciaController extends Controller
         }
     }
 
-    public function storeMensagem(Request $request, int $sequenciaId): JsonResponse
+    public function storeMensagem(Request $request, int $sequenciaId, SequenciaVariacaoIaService $variacaoIa): JsonResponse
     {
         $sequencia = Sequencia::where('id', $sequenciaId)
             ->where('tenant_id', $request->user()->tenant_id)
@@ -139,6 +140,19 @@ class SequenciaController extends Controller
             'delay_segundos'   => $validated['delay_segundos'],
             'ativo'            => true,
         ]);
+
+        if (! empty($validated['conteudo'])) {
+            SequenciaMensagemVariacao::create([
+                'tenant_id'             => $msg->tenant_id,
+                'sequencia_mensagem_id' => $msg->id,
+                'conteudo'              => $validated['conteudo'],
+                'origem'                => 'humano',
+                'protegida'             => true,
+                'ativa'                 => true,
+            ]);
+
+            $variacaoIa->gerarVariacoesIniciais($msg);
+        }
 
         return response()->json($msg, 201);
     }
@@ -390,5 +404,18 @@ PROMPT,
         $variacao->delete();
 
         return response()->json(['ok' => true]);
+    }
+
+    public function gerarVariacoes(Request $request, int $sequenciaId, int $msgId, SequenciaVariacaoIaService $variacaoIa): JsonResponse
+    {
+        $msg = $this->mensagemDoTenant($request, $sequenciaId, $msgId);
+
+        $criadas = $variacaoIa->regenerar($msg);
+
+        if ($criadas === 0) {
+            return response()->json(['message' => 'IA temporariamente indisponível. Tente novamente em instantes.'], 503);
+        }
+
+        return response()->json(['criadas' => $criadas]);
     }
 }
