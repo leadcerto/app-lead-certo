@@ -294,6 +294,13 @@
                                                                 <option value="hora">hora</option>
                                                             </select>
                                                         </div>
+                                                        <div class="flex items-center gap-1.5">
+                                                            <span class="text-xs text-gray-500">±</span>
+                                                            <input type="number" x-model.number="editMsgJitter" min="0"
+                                                                   class="w-14 text-xs border border-gray-300 rounded px-2 py-1"
+                                                                   title="Variação aleatória em segundos, pra mais ou pra menos, em torno do tempo de espera">
+                                                            <span class="text-xs text-gray-400">seg</span>
+                                                        </div>
                                                         <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-500" title="Envia mesmo se o lead já tiver respondido e a sequência normalmente seria cancelada">
                                                             <input type="checkbox" x-model="editMsgObrigatorio" class="w-3.5 h-3.5 accent-red-600">
                                                             Envio obrigatório
@@ -426,6 +433,16 @@
                                             <option value="min">min</option>
                                             <option value="hora">hora</option>
                                         </select>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-xs text-gray-500">±</span>
+                                        <input type="number"
+                                               :value="novoJitter[seq.id] || 0"
+                                               @input="novoJitter[seq.id] = parseInt($event.target.value) || 0"
+                                               min="0"
+                                               class="w-14 text-xs border border-gray-300 rounded px-2 py-1"
+                                               title="Variação aleatória em segundos, pra mais ou pra menos, em torno do tempo de espera">
+                                        <span class="text-xs text-gray-400">seg</span>
                                     </div>
                                     <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-500" title="Envia mesmo se o lead já tiver respondido e a sequência normalmente seria cancelada">
                                         <input type="checkbox"
@@ -969,6 +986,27 @@
                         <p class="text-sm text-gray-700 py-1.5 px-3 bg-gray-50 border border-gray-200 rounded-lg"
                            x-text="labelColuna(form.coluna_kanban)"></p>
                     </div>
+
+                    <div class="space-y-2 border-t border-gray-100 pt-2 mt-2">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" x-model="form.horario_ativo" class="w-3.5 h-3.5 accent-green-600">
+                            <span class="text-xs text-gray-600">Restringir a um horário de funcionamento</span>
+                        </label>
+                        <div x-show="form.horario_ativo" style="display:none" class="flex items-center gap-2 ml-5">
+                            <input type="time" x-model="form.horario_inicio" class="text-xs border border-gray-300 rounded px-2 py-1">
+                            <span class="text-xs text-gray-400">até</span>
+                            <input type="time" x-model="form.horario_fim" class="text-xs border border-gray-300 rounded px-2 py-1">
+                        </div>
+                        <div x-show="form.horario_ativo" style="display:none" class="ml-5">
+                            <label class="text-xs text-gray-500">Sequência de repouso (fora do horário)</label>
+                            <select x-model="form.sequencia_repouso_id" class="w-full text-xs border border-gray-300 rounded px-2 py-1 bg-white">
+                                <option :value="null">Nenhuma — só adia o envio pro próximo horário</option>
+                                <template x-for="s in lista.filter(s2 => s2.id !== editando?.id)" :key="s.id">
+                                    <option :value="s.id" x-text="s.nome"></option>
+                                </template>
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="flex gap-2 mt-5">
@@ -1078,11 +1116,12 @@ function kanbanConfig() {
         mensagensPor: {},
         modalAberto: false,
         editando: null,
-        form: { nome: '', descricao: '', coluna_kanban: '' },
+        form: { nome: '', descricao: '', coluna_kanban: '', horario_ativo: false, horario_inicio: null, horario_fim: null, sequencia_repouso_id: null },
 
         novoConteudo: {},
         novoDelay: {},
         novoDelayUnidade: {},
+        novoJitter: {},
         novaImagem: {},
         novaImagemPreview: {},
         novoBotoes: {},
@@ -1092,6 +1131,7 @@ function kanbanConfig() {
         editMsgConteudo: '',
         editMsgDelay: 0,
         editMsgDelayUnidade: 'min',
+        editMsgJitter: 0,
         editMsgImagem: null,
         editMsgImagemPreview: null,
         editMsgRemoverImagem: false,
@@ -1222,13 +1262,21 @@ function kanbanConfig() {
 
         novaSequencia(colunaKey) {
             this.editando = null;
-            this.form = { nome: '', descricao: '', coluna_kanban: colunaKey };
+            this.form = { nome: '', descricao: '', coluna_kanban: colunaKey, horario_ativo: false, horario_inicio: null, horario_fim: null, sequencia_repouso_id: null };
             this.modalAberto = true;
         },
 
         editarSeq(seq) {
             this.editando = seq;
-            this.form = { nome: seq.nome, descricao: seq.descricao || '', coluna_kanban: seq.coluna_kanban };
+            this.form = {
+                nome: seq.nome,
+                descricao: seq.descricao || '',
+                coluna_kanban: seq.coluna_kanban,
+                horario_ativo: !!seq.horario_ativo,
+                horario_inicio: seq.horario_inicio || null,
+                horario_fim: seq.horario_fim || null,
+                sequencia_repouso_id: seq.sequencia_repouso_id || null,
+            };
             this.modalAberto = true;
         },
 
@@ -1276,6 +1324,7 @@ function kanbanConfig() {
             const fd = new FormData();
             fd.append('conteudo', conteudo);
             fd.append('delay_segundos', this.delayParaSegundos(this.novoDelay[seqId] || 0, this.novoDelayUnidade[seqId] || 'min'));
+            fd.append('delay_jitter_segundos', this.novoJitter[seqId] || 0);
             if (imagem) fd.append('imagem', imagem);
             fd.append('button_settings', JSON.stringify(botoes));
             fd.append('obrigatorio', this.novoObrigatorio[seqId] ? '1' : '0');
@@ -1289,6 +1338,7 @@ function kanbanConfig() {
                 this.novoConteudo[seqId] = '';
                 this.novoDelay[seqId] = 0;
                 this.novoDelayUnidade[seqId] = 'min';
+                this.novoJitter[seqId] = 0;
                 this.novaImagem[seqId] = null;
                 this.novaImagemPreview[seqId] = null;
                 this.novoBotoes[seqId] = [];
@@ -1307,6 +1357,7 @@ function kanbanConfig() {
             const d = this.segundosParaDisplay(msg.delay_segundos);
             this.editMsgDelay        = d.valor;
             this.editMsgDelayUnidade = d.unidade;
+            this.editMsgJitter = msg.delay_jitter_segundos || 0;
             this.editMsgImagem    = null;
             this.editMsgImagemPreview = null;
             this.editMsgRemoverImagem = false;
@@ -1341,6 +1392,7 @@ function kanbanConfig() {
             fd.append('_method', 'PUT');
             fd.append('conteudo', this.editMsgConteudo);
             fd.append('delay_segundos', this.delayParaSegundos(this.editMsgDelay, this.editMsgDelayUnidade));
+            fd.append('delay_jitter_segundos', this.editMsgJitter || 0);
             if (this.editMsgImagem) fd.append('imagem', this.editMsgImagem);
             if (this.editMsgRemoverImagem) fd.append('remover_imagem', '1');
             fd.append('button_settings', JSON.stringify(botoes));
