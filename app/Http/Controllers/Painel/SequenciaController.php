@@ -99,7 +99,7 @@ class SequenciaController extends Controller
             ->firstOrFail();
 
         return response()->json(
-            $sequencia->mensagens()->get(['id', 'ordem', 'conteudo', 'imagem_url', 'button_settings', 'obrigatorio', 'delay_segundos', 'ativo'])
+            $sequencia->mensagens()->get(['id', 'ordem', 'conteudo', 'imagem_url', 'button_settings', 'obrigatorio', 'delay_segundos', 'delay_jitter_segundos', 'ativo'])
         );
     }
 
@@ -221,6 +221,10 @@ class SequenciaController extends Controller
 
         unset($validated['imagem'], $validated['remover_imagem']);
         $msg->update($validated);
+
+        if (array_key_exists('conteudo', $validated) && ! empty($validated['conteudo'])) {
+            $msg->variacoes()->where('protegida', true)->update(['conteudo' => $validated['conteudo']]);
+        }
 
         return response()->json($msg);
     }
@@ -403,6 +407,10 @@ PROMPT,
 
         if ($variacao->protegida && array_key_exists('ativa', $validated) && ! $validated['ativa']) {
             return response()->json(['message' => 'A versão original não pode ser desativada.'], 422);
+        }
+
+        if ($variacao->protegida && array_key_exists('conteudo', $validated)) {
+            return response()->json(['message' => 'A versão original não pode ser editada por esta rota.'], 422);
         }
 
         $variacao->update($validated);
