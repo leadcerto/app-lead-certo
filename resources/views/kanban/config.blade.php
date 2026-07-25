@@ -325,6 +325,52 @@
                                             </div>
                                         </template>
                                     </div>
+
+                                    <div class="mt-2 pt-2 border-t border-gray-100">
+                                        <button @click="toggleAbaVariacoes(seq.id, msg)"
+                                                class="text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1">
+                                            <span x-text="abaVariacaoAberta[msg.id] ? '▾' : '▸'"></span>
+                                            Variações
+                                            <span x-show="(variacoesPor[msg.id] || []).length"
+                                                  class="text-gray-400" x-text="'(' + (variacoesPor[msg.id] || []).length + ')'"></span>
+                                        </button>
+
+                                        <div x-show="abaVariacaoAberta[msg.id]" style="display:none" class="mt-2 space-y-2">
+                                            <template x-for="variacao in (variacoesPor[msg.id] || [])" :key="variacao.id">
+                                                <div class="flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-lg p-2">
+                                                    <span class="text-xs px-1.5 py-0.5 rounded-full flex-shrink-0"
+                                                          :class="variacao.protegida ? 'bg-green-100 text-green-700' : 'bg-purple-50 text-purple-600'"
+                                                          x-text="variacao.protegida ? 'original' : (variacao.origem === 'ia' ? 'IA' : 'manual')"></span>
+                                                    <p class="text-xs text-gray-700 flex-1 whitespace-pre-wrap break-words" x-text="variacao.conteudo"></p>
+                                                    <label class="flex items-center gap-1 flex-shrink-0" title="Ativa no sorteio de envio">
+                                                        <input type="checkbox" :checked="variacao.ativa"
+                                                               :disabled="variacao.protegida"
+                                                               @change="toggleAtivaVariacao(seq.id, msg, variacao)"
+                                                               class="w-3 h-3 accent-green-600">
+                                                    </label>
+                                                    <button x-show="!variacao.protegida"
+                                                            @click="excluirVariacao(seq.id, msg, variacao)"
+                                                            class="text-red-300 hover:text-red-500 flex-shrink-0 text-xs">✕</button>
+                                                </div>
+                                            </template>
+
+                                            <div class="flex items-center gap-2">
+                                                <input type="text" x-model="novaVariacaoTexto[msg.id]"
+                                                       @keydown.enter="adicionarVariacaoManual(seq.id, msg)"
+                                                       placeholder="Adicionar variação manual..."
+                                                       class="flex-1 text-xs border border-gray-300 rounded-lg px-2 py-1.5">
+                                                <button @click="adicionarVariacaoManual(seq.id, msg)"
+                                                        class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1.5 rounded-lg">+</button>
+                                            </div>
+
+                                            <button @click="gerarVariacoes(seq.id, msg)"
+                                                    :disabled="gerandoVariacoes[msg.id]"
+                                                    class="text-xs text-purple-600 hover:text-purple-700 disabled:opacity-40 font-medium">
+                                                <span x-show="!gerandoVariacoes[msg.id]">✨ Gerar variações com IA</span>
+                                                <span x-show="gerandoVariacoes[msg.id]">Gerando...</span>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </template>
 
@@ -1052,6 +1098,11 @@ function kanbanConfig() {
         editMsgBotoes: [],
         editMsgObrigatorio: false,
 
+        variacoesPor: {},       // { [mensagemId]: [ {id, conteudo, origem, protegida, ativa}, ... ] }
+        abaVariacaoAberta: {},  // { [mensagemId]: bool } — controla se o painel de variações está expandido
+        gerandoVariacoes: {},   // { [mensagemId]: bool } — spinner durante chamada IA
+        novaVariacaoTexto: {},  // { [mensagemId]: string } — campo de criação manual de variação
+
         // Objetivo da coluna
         objetivo: {},
         objetivoAlterado: {},
@@ -1320,6 +1371,65 @@ function kanbanConfig() {
             await this.api(`/api/painel/sequencias/${seqId}/mensagens/${id}`, 'DELETE');
             await this.carregarMsgs(seqId);
             await this.carregar();
+        },
+
+        async carregarVariacoes(seqId, msg) {
+            const res = await this.api(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}/variacoes`);
+            this.variacoesPor[msg.id] = res.ok ? await res.json() : [];
+        },
+
+        async toggleAbaVariacoes(seqId, msg) {
+            const abrindo = !this.abaVariacaoAberta[msg.id];
+            this.abaVariacaoAberta[msg.id] = abrindo;
+            if (abrindo && !this.variacoesPor[msg.id]) {
+                await this.carregarVariacoes(seqId, msg);
+            }
+        },
+
+        async gerarVariacoes(seqId, msg) {
+            this.gerandoVariacoes[msg.id] = true;
+            const res = await this.api(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}/variacoes/gerar`, 'POST');
+            this.gerandoVariacoes[msg.id] = false;
+            if (res.ok) {
+                await this.carregarVariacoes(seqId, msg);
+                this.mostrarToast('Variações geradas com sucesso!', 'sucesso');
+            } else {
+                const erro = await res.json().catch(() => null);
+                this.mostrarToast(erro?.message || 'Não foi possível gerar variações agora.', 'erro');
+            }
+        },
+
+        async adicionarVariacaoManual(seqId, msg) {
+            const conteudo = (this.novaVariacaoTexto[msg.id] || '').trim();
+            if (!conteudo) return;
+            const res = await this.api(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}/variacoes`, 'POST', { conteudo });
+            if (res.ok) {
+                this.novaVariacaoTexto[msg.id] = '';
+                await this.carregarVariacoes(seqId, msg);
+            } else {
+                this.mostrarToast('Não foi possível adicionar a variação.', 'erro');
+            }
+        },
+
+        async toggleAtivaVariacao(seqId, msg, variacao) {
+            const res = await this.api(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}/variacoes/${variacao.id}`, 'PUT', { ativa: !variacao.ativa });
+            if (res.ok) {
+                await this.carregarVariacoes(seqId, msg);
+            } else {
+                const erro = await res.json().catch(() => null);
+                this.mostrarToast(erro?.message || 'Esta versão não pode ser desativada.', 'erro');
+            }
+        },
+
+        async excluirVariacao(seqId, msg, variacao) {
+            if (!confirm('Excluir esta variação?')) return;
+            const res = await this.api(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}/variacoes/${variacao.id}`, 'DELETE');
+            if (res.ok) {
+                await this.carregarVariacoes(seqId, msg);
+            } else {
+                const erro = await res.json().catch(() => null);
+                this.mostrarToast(erro?.message || 'Esta versão não pode ser excluída.', 'erro');
+            }
         },
 
         formatDelay(s) {
