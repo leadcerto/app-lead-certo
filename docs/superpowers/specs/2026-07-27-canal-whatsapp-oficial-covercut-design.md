@@ -23,7 +23,7 @@ A prospecção continua sendo feita pelos números não-oficiais (Uazapi), que c
 
 Uazapi e Covercut são prestadoras de serviço para a Lead Certo — a Lead Certo mantém **uma conta em cada uma**, e cada franqueado (tenant) tem seus **próprios números exclusivos** dentro dessas contas compartilhadas (já é assim hoje com a Uazapi).
 
-Cada tenant **pode ter mais de um número**, seja oficial ou não-oficial. Multi-número **não-oficial** por tenant é uma capacidade futura (fora de escopo desta entrega — hoje continua 1 número não-oficial por tenant, como já é). O suporte a múltiplos números **oficiais** por tenant também não é construído agora, mas a modelagem abaixo não impõe nenhuma restrição de banco que precise ser desfeita depois para viabilizá-lo.
+**Cada tenant pode ter mais de um número, tanto oficial quanto não-oficial — isso entra nesta entrega.** Um tenant poderá conectar e gerenciar vários números não-oficiais (prospecção, distribuindo volume e respeitando limites anti-ban por número) e vários números oficiais (cada um recebendo o tráfego da(s) campanha(s) de anúncio que aponta(m) para ele).
 
 ---
 
@@ -56,7 +56,7 @@ Sem unique constraint de "1 por tipo por tenant" — é uma regra de aplicação
 + janela_origem_anuncio boolean, default false -- true = janela de 72h (veio de anúncio), false = 24h
 ```
 
-Cada ticket aponta para o canal específico que está sendo usado — a resolução de "qual canal enviar" nunca depende de uma suposição de singularidade no tenant, e sim do canal já registrado no ticket. Isso já é naturalmente compatível com multi-número futuro.
+Cada ticket aponta para o canal específico que está sendo usado — a resolução de "qual canal enviar" nunca depende de uma suposição de singularidade no tenant, e sim do canal já registrado no ticket. Isso é o que viabiliza vários números (oficiais e não-oficiais) por tenant coexistindo.
 
 ### 3.3 Alterações em `mensagens`
 
@@ -73,7 +73,7 @@ Em duas etapas, seguindo a mesma cautela do fluxo de deploy já documentado no `
 1. **Migration aditiva**: cria `whatsapp_canais`, popula 1 linha por tenant existente (`tipo = nao_oficial`, `provider = uazapi`) copiando os campos atuais (`uazapi_instance_token`, `uazapi_webhook_token`, `whatsapp_status`, `whatsapp_phone`, `whatsapp_connected_since`). Os campos antigos em `tenants` continuam existindo e sendo lidos — nada quebra.
 2. **Migration de limpeza** (só depois de validar em produção): remove os campos antigos de `tenants`, e os serviços que hoje leem `$tenant->uazapi_instance_token` diretamente passam a resolver o canal:
    - Quando há um ticket em mãos: via `$ticket->canal` (já aponta para a linha certa).
-   - Quando não há ticket (ex: geração de QR Code, importação de contatos, sincronização de agenda): via um método explícito e comentado como escolha temporária de hoje (ex: "pega o canal não-oficial mais recente do tenant"), não uma relação `hasOne` permanente — para não bakear a suposição de 1:1 na arquitetura.
+   - Quando não há ticket ainda (ex: primeira mensagem de prospecção pra um lead novo, geração de QR Code, importação de contatos): via a estratégia de seleção de canal descrita na seção 5.1 — nunca assumindo "o único número não-oficial do tenant", já que agora pode haver vários.
 
 ---
 
@@ -97,6 +97,10 @@ Introduzir uma interface pequena, `CanalWhatsappInterface`, com os métodos que 
 
 `HumanizacaoService`, `SdrResponderService` e demais consumidores passam a resolver o canal do ticket (`$ticket->canal`) e delegar à implementação correta, em vez de instanciar `UazapiService` diretamente.
 
+### 5.1 Dependência de decisão em aberto: seleção de número não-oficial para prospecção
+
+Com vários números não-oficiais por tenant, falta decidir **como o sistema escolhe qual número dispara uma nova prospecção** (quando ainda não existe ticket/canal associado ao lead) — por exemplo, rodízio automático respeitando os limites diários anti-ban por número (seção 8 de `regra-geral-de-envio-de-mensagens-no-whatsapp.md`), ou atribuição manual por campanha/lista. Essa decisão ficou em aberto propositalmente — não bloqueia o restante desta spec (canal oficial, migração, webhook), mas **bloqueia** a implementação de "múltiplos números não-oficiais operando de fato" e deve ser resolvida antes de codar essa parte específica. Enquanto isso, o comportamento de fallback é: se só houver 1 número não-oficial conectado (caso comum hoje), usa ele; se houver mais de 1 sem estratégia definida, o sistema deve recusar a operação de forma explícita em vez de escolher arbitrariamente.
+
 ---
 
 ## 6. Webhook de entrada
@@ -111,12 +115,12 @@ A lógica de negócio comum — criar/atualizar `Contato` e `TicketAtendimento`,
 
 ## 7. Fluxo de conexão (UI)
 
-Na página atual de configurações (`configuracoes/whatsapp.blade.php`):
+Como agora cada tenant pode ter vários números de cada tipo, a página deixa de ser "1 card de status" e passa a ser uma **lista de números conectados**, por seção:
 
-- A seção existente do QR Code ganha um rótulo explícito: **"WhatsApp Não-Oficial"** — conexão direta via QR Code (Baileys), para deixar claro ao usuário que este número não tem garantias da Meta.
-- Nova seção abaixo: **"WhatsApp Oficial (Business API)"**, com:
-  - Card de status (desconectado / conectado + telefone), no mesmo padrão visual da seção existente.
-  - Botão "Conectar número oficial", que abre o widget embutido da Covercut (janela customizável deles → fluxo de Embedded Signup da Meta, conforme descrito no manual `2026-07-25-cadastro-whatsapp-oficial-manual.md`, seção 2).
+- **Seção "WhatsApp Não-Oficial"** (rótulo explícito deixando claro que é conexão direta via QR Code/Baileys, sem garantias da Meta): lista dos números não-oficiais já conectados (nome/apelido, telefone, status) + botão "Conectar novo número" (repete o fluxo de QR Code já existente, criando uma nova linha em `whatsapp_canais`).
+- **Seção "WhatsApp Oficial (Business API)"**: lista dos números oficiais já conectados (telefone, status, e se a verificação de empresa está pendente/concluída — ver manual `2026-07-25-cadastro-whatsapp-oficial-manual.md`, seção 3.3) + botão "Conectar novo número oficial", que abre o widget embutido da Covercut (janela customizável deles → fluxo de Embedded Signup da Meta).
+
+Cada número da lista tem uma ação de desconectar/remover. Não há, nesta entrega, tela de "atribuir" um número a uma campanha específica — isso depende da decisão em aberto na seção 5.1.
 
 ### 7.1 Dependência técnica em aberto
 
@@ -127,8 +131,7 @@ A documentação pública da Covercut (`api.covercut.com.br/docs`) **não detalh
 ## 8. Fora de escopo (combinado nesta rodada)
 
 - Templates de mensagem (marketing/utilidade) para reengajamento fora da janela.
-- Múltiplos números não-oficiais por tenant (UI de gerenciar vários) — capacidade futura.
-- Múltiplos números oficiais por tenant — não bloqueado no schema, mas sem UI nesta entrega.
+- Estratégia de seleção automática de número não-oficial por campanha/lead (rodízio, atribuição manual etc.) — ver dependência em aberto na seção 5.1. A conexão/gestão de múltiplos números em si está em escopo; a lógica de qual número usar em cada envio de prospecção, não.
 - Migração completa para fora da Uazapi — Uazapi continua sendo a via de prospecção.
 
 ---
