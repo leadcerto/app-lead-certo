@@ -70,6 +70,33 @@
         </div>
     </div>
 
+    {{-- Canais de WhatsApp usados por este Kanban --}}
+    <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm mb-6">
+        <div class="mb-3">
+            <h2 class="font-bold text-gray-800 text-base">Canais de WhatsApp</h2>
+            <p class="text-xs text-gray-400 mt-0.5">Escolha quais números (oficiais e não-oficiais) este Kanban usa. A prospecção sorteia entre os não-oficiais marcados.</p>
+        </div>
+
+        <div class="space-y-2">
+            <template x-for="c in canaisDisponiveis" :key="c.id">
+                <label class="flex items-center gap-3 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 cursor-pointer">
+                    <input type="checkbox" :checked="c.vinculado" @change="toggleCanal(c)" class="rounded border-gray-300 text-green-600">
+                    <span class="text-xs font-medium px-1.5 py-0.5 rounded"
+                          :class="c.tipo === 'oficial' ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-600'"
+                          x-text="c.tipo === 'oficial' ? 'Oficial' : 'Não-Oficial'"></span>
+                    <span class="text-sm text-gray-700 flex-1" x-text="c.phone || '(ainda não conectado)'"></span>
+                    <span class="text-xs" :class="c.status === 'connected' ? 'text-green-600' : 'text-gray-400'" x-text="c.status"></span>
+                </label>
+            </template>
+
+            <template x-if="canaisDisponiveis.length === 0">
+                <div class="text-center py-4 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-xl">
+                    Nenhum canal de WhatsApp conectado ainda.
+                </div>
+            </template>
+        </div>
+    </div>
+
     {{-- Tabs de colunas --}}
     <div class="flex gap-1 bg-gray-100 p-1 rounded-xl mb-6 overflow-x-auto">
         <template x-for="col in colunas" :key="col.key">
@@ -1200,12 +1227,14 @@ function kanbanConfig() {
         colunaEditando: null,
         formColuna: { label: '', emoji: '', papel: '' },
         colunaDragIndex: null,
+        canaisDisponiveis: [],
 
         async carregar() {
             const resPapeis = await this.api('/api/painel/kanban/papeis');
             if (resPapeis.ok) this.papeisDisponiveis = await resPapeis.json();
 
             await this.carregarColunas();
+            await this.carregarCanais();
 
             const res = await this.api('/api/painel/sequencias');
             if (res.ok) this.lista = await res.json();
@@ -1238,6 +1267,21 @@ function kanbanConfig() {
             // tiver sido definida (primeiro carregamento), cai na primeira coluna.
             if (!this.colunas.some(c => c.key === this.abaAtiva)) {
                 this.abaAtiva = this.colunas[0]?.key ?? null;
+            }
+        },
+
+        async carregarCanais() {
+            const res = await this.api('/api/painel/kanban/canais');
+            if (res.ok) this.canaisDisponiveis = await res.json();
+        },
+
+        async toggleCanal(canal) {
+            canal.vinculado = !canal.vinculado;
+            const idsVinculados = this.canaisDisponiveis.filter(c => c.vinculado).map(c => c.id);
+            const res = await this.api('/api/painel/kanban/canais', 'PUT', { canal_ids: idsVinculados });
+            if (!res.ok) {
+                canal.vinculado = !canal.vinculado; // reverte em caso de erro
+                this.mostrarToast('Não foi possível atualizar o vínculo do canal.', 'erro');
             }
         },
 
