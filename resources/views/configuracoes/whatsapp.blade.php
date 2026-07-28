@@ -127,6 +127,12 @@
         Use para prospecção. Para o número que recebe leads de anúncios, veja a API Oficial (em breve nesta página).
     </p>
 
+    <template x-if="erro">
+        <div class="mb-4 p-3 rounded-lg bg-red-50 border border-red-200">
+            <p class="text-sm text-red-600" x-text="erro"></p>
+        </div>
+    </template>
+
     <div class="space-y-4">
         <template x-for="canal in canais" :key="canal.id">
             <div class="bg-white rounded-2xl shadow-sm p-5">
@@ -180,6 +186,7 @@ function whatsappCanais() {
     return {
         canais: [],
         conectando: false,
+        erro: null,
         intervalos: {},
 
         async carregar() {
@@ -191,6 +198,7 @@ function whatsappCanais() {
 
         async conectarNovo() {
             this.conectando = true;
+            this.erro = null;
             const res = await fetch('/api/painel/whatsapp/canais', {
                 method: 'POST',
                 headers: {
@@ -201,10 +209,18 @@ function whatsappCanais() {
             this.conectando = false;
             if (res.ok) {
                 await this.carregar();
+            } else {
+                try {
+                    const err = await res.json();
+                    this.erro = err.message || 'Erro ao conectar novo número. Tente novamente.';
+                } catch {
+                    this.erro = 'Erro ao conectar novo número. Tente novamente.';
+                }
             }
         },
 
         async gerarQr(canal) {
+            this.erro = null;
             const res = await fetch(`/api/painel/whatsapp/canais/${canal.id}/qrcode`, {
                 headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
             });
@@ -212,6 +228,13 @@ function whatsappCanais() {
                 const data = await res.json();
                 canal.qrcode = data.qrcode;
                 this.iniciarPolling(canal);
+            } else {
+                try {
+                    const err = await res.json();
+                    this.erro = err.message || 'Erro ao gerar QR Code. Tente novamente.';
+                } catch {
+                    this.erro = 'Erro ao gerar QR Code. Tente novamente.';
+                }
             }
         },
 
@@ -235,11 +258,23 @@ function whatsappCanais() {
 
         async excluirCanal(canal) {
             if (!confirm('Remover este número? Essa ação não pode ser desfeita.')) return;
+            this.erro = null;
+            clearInterval(this.intervalos[canal.id]);
+            delete this.intervalos[canal.id];
             const res = await fetch(`/api/painel/whatsapp/canais/${canal.id}`, {
                 method: 'DELETE',
                 headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
             });
-            if (res.ok) await this.carregar();
+            if (res.ok) {
+                await this.carregar();
+            } else {
+                try {
+                    const err = await res.json();
+                    this.erro = err.message || 'Erro ao remover número. Tente novamente.';
+                } catch {
+                    this.erro = 'Erro ao remover número. Tente novamente.';
+                }
+            }
         },
     };
 }
