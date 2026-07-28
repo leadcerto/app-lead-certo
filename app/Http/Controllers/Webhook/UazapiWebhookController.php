@@ -29,8 +29,28 @@ class UazapiWebhookController extends Controller
         $canal = \App\Models\WhatsappCanal::withoutGlobalScopes()->where('webhook_token', $webhookToken)->first();
 
         if (! $canal) {
-            Log::warning('Uazapi webhook: token inválido', ['token' => substr($webhookToken, 0, 8) . '...']);
-            abort(401);
+            // Fallback transitório: tenants que ainda não têm o token migrado pro
+            // registro em whatsapp_canais (lacuna no backfill do Task 3, ou algum
+            // caso não coberto) continuam autenticando pelo token legado salvo em
+            // tenants.uazapi_webhook_token. TODO(Task 15): remover este fallback
+            // depois de confirmar em produção que não é mais exercitado.
+            $tenantLegado = Tenant::where('uazapi_webhook_token', $webhookToken)->first();
+            $canal = $tenantLegado
+                ? \App\Models\WhatsappCanal::withoutGlobalScopes()
+                    ->where('tenant_id', $tenantLegado->id)
+                    ->where('provider', 'uazapi')
+                    ->first()
+                : null;
+
+            if (! $canal) {
+                Log::warning('Uazapi webhook: token inválido', ['token' => substr($webhookToken, 0, 8) . '...']);
+                abort(401);
+            }
+
+            Log::warning('Uazapi webhook: canal resolvido via fallback legado (tenants.uazapi_webhook_token)', [
+                'tenant' => $tenantLegado->id,
+                'canal'  => $canal->id,
+            ]);
         }
 
         $tenant = $canal->tenant;
@@ -204,6 +224,9 @@ class UazapiWebhookController extends Controller
                         'agente_responsavel'    => 'bot',
                         'coluna_kanban'         => $colunaRestaurada,
                         'coluna_antes_encerrar' => null,
+                        // Reflete qual número reativou o atendimento — o ticket
+                        // continua único por lead, mas o canal aponta pro mais recente.
+                        'whatsapp_canal_id'     => $canal->id,
                     ]);
                     Log::info("Webhook: ticket #{$ticketEncerrado->id} reativado, voltou pra coluna '{$colunaRestaurada}'");
                 } else {
@@ -618,10 +641,19 @@ class UazapiWebhookController extends Controller
             return;
         }
 
-        // Muda responsável para humano se ainda estava com o bot
+        // Mantém whatsapp_canal_id refletindo qual número tocou o ticket por último
+        // (sem dividir tickets por canal — continua um ticket único por lead) e
+        // muda responsável para humano se ainda estava com o bot.
+        $updates = [];
+        if ($ticket->whatsapp_canal_id !== $canal->id) {
+            $updates['whatsapp_canal_id'] = $canal->id;
+        }
         if ($ticket->agente_responsavel === 'bot') {
-            $ticket->update(['agente_responsavel' => 'humano']);
+            $updates['agente_responsavel'] = 'humano';
             Log::info("Ticket #{$ticket->id} transferido para humano (resposta pelo celular)");
+        }
+        if ($updates) {
+            $ticket->update($updates);
         }
 
         // Processa mídia (imagem/áudio/vídeo enviados pelo WhatsApp Web/celular) —

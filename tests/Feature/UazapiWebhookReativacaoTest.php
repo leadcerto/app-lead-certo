@@ -91,6 +91,51 @@ class UazapiWebhookReativacaoTest extends TestCase
         $this->assertSame('aberto', $ticket->status);
     }
 
+    public function test_ticket_reativado_por_mensagem_de_outro_canal_atualiza_whatsapp_canal_id(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+
+        $tenant  = Tenant::factory()->create([
+            'uazapi_webhook_token'  => 'wh-reativa-troca-canal',
+            'uazapi_instance_token' => 'instance-reativa-troca-canal',
+        ]);
+        $canalOriginal = $this->criarCanal($tenant, 'wh-reativa-troca-canal', 'instance-reativa-troca-canal');
+        $canalNovo     = WhatsappCanal::factory()->create([
+            'tenant_id'     => $tenant->id,
+            'webhook_token' => 'wh-reativa-troca-canal-numero-2',
+            'config'        => ['instance_token' => 'instance-reativa-troca-canal-2'],
+        ]);
+
+        $contato = Contato::factory()->create(['telefone' => '5511977778888']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'aguardando_orcamento', 'agente_responsavel' => 'humano',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'whatsapp_canal_id' => $canalOriginal->id,
+        ]);
+        $ticket->update($ticket->dadosParaEncerrar(['tag_desfecho' => 'sem_resposta', 'encerrado_em' => now()]));
+
+        // Lead escreve de novo, mas dessa vez o webhook chega pelo segundo número
+        // (franqueado trocou de canal) — não deve criar um segundo ticket, e o
+        // ticket único do lead deve passar a apontar pro canal que reativou.
+        $response = $this->postJson('/api/webhook/uazapi/wh-reativa-troca-canal-numero-2', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'  => false,
+                'isGroup' => false,
+                'chatid'  => '5511977778888@s.whatsapp.net',
+                'text'    => 'Oi, ainda quero fazer a mudança',
+            ],
+        ]);
+
+        $response->assertOk();
+        $ticket->refresh();
+        $this->assertSame('aberto', $ticket->status);
+        $this->assertSame($canalNovo->id, $ticket->whatsapp_canal_id);
+        // Continua um único ticket por lead — não duplicou por canal.
+        $this->assertSame(1, TicketAtendimento::withoutGlobalScopes()->where('contato_id', $contato->id)->count());
+    }
+
     private function fakeOpenRouterClassificacao(string $resposta): void
     {
         Http::fake([
