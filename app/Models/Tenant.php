@@ -54,4 +54,9 @@ class Tenant extends Model
     {
         return $this->hasMany(SdrPersona::class);
     }
+
+    public function canais(): HasMany
+    {
+        return $this->hasMany(WhatsappCanal::class);
+    }
 }
