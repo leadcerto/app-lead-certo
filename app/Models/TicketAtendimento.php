@@ -42,6 +42,7 @@ class TicketAtendimento extends Model
     protected $fillable = [
         'tenant_id',
         'contato_id',
+        'whatsapp_canal_id',
         'coluna_kanban',
         'coluna_antes_encerrar',
         'agente_responsavel',
@@ -90,6 +91,11 @@ class TicketAtendimento extends Model
     public function contato(): BelongsTo
     {
         return $this->belongsTo(Contato::class, 'contato_id');
+    }
+
+    public function canal(): BelongsTo
+    {
+        return $this->belongsTo(WhatsappCanal::class, 'whatsapp_canal_id');
     }
 
     public function vendedor(): BelongsTo
