@@ -187,8 +187,11 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'dados']);
 
     // WhatsApp / Config
-    Route::get('/whatsapp/status', [WhatsAppController::class, 'status']);
-    Route::get('/whatsapp/qrcode', [WhatsAppController::class, 'qrcode']);
+    Route::get('/whatsapp/canais', [\App\Http\Controllers\Painel\WhatsappCanalController::class, 'index']);
+    Route::post('/whatsapp/canais', [\App\Http\Controllers\Painel\WhatsappCanalController::class, 'store']);
+    Route::get('/whatsapp/canais/{canal}/status', [\App\Http\Controllers\Painel\WhatsappCanalController::class, 'status']);
+    Route::get('/whatsapp/canais/{canal}/qrcode', [\App\Http\Controllers\Painel\WhatsappCanalController::class, 'qrcode']);
+    Route::delete('/whatsapp/canais/{canal}', [\App\Http\Controllers\Painel\WhatsappCanalController::class, 'destroy']);
     Route::put('/whatsapp/retencao', [WhatsAppController::class, 'salvarRetencao'])
         ->middleware('role:admin,dono');
 
