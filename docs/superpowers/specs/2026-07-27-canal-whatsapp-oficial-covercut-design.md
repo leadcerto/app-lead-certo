@@ -66,7 +66,19 @@ uazapi_message_id  →  provider_message_id
 
 Generalização do campo de deduplicação de eventos de webhook, hoje nomeado especificamente para Uazapi, para servir aos dois provedores.
 
-### 3.4 Estratégia de migração (produção já usa Uazapi ativamente)
+### 3.4 Nova tabela pivot `kanban_whatsapp_canais`
+
+```
+kanban_whatsapp_canais
+  id
+  kanban_id          FK -> kanbans
+  whatsapp_canal_id  FK -> whatsapp_canais
+  timestamps
+```
+
+Muitos-para-muitos: um canal pode estar vinculado a mais de um Kanban, um Kanban pode ter vários canais. É a partir daqui que a tela de configuração do Kanban lista/edita quais canais aquele Kanban usa (seção 5.1).
+
+### 3.5 Estratégia de migração (produção já usa Uazapi ativamente)
 
 Em duas etapas, seguindo a mesma cautela do fluxo de deploy já documentado no `CLAUDE.md` do projeto (histórico de quebra de produção por migration mal planejada em julho/2026):
 
@@ -97,9 +109,16 @@ Introduzir uma interface pequena, `CanalWhatsappInterface`, com os métodos que 
 
 `HumanizacaoService`, `SdrResponderService` e demais consumidores passam a resolver o canal do ticket (`$ticket->canal`) e delegar à implementação correta, em vez de instanciar `UazapiService` diretamente.
 
-### 5.1 Dependência de decisão em aberto: seleção de número não-oficial para prospecção
+### 5.1 Seleção de número: vínculo por Kanban + rodízio aleatório (v1)
 
-Com vários números não-oficiais por tenant, falta decidir **como o sistema escolhe qual número dispara uma nova prospecção** (quando ainda não existe ticket/canal associado ao lead) — por exemplo, rodízio automático respeitando os limites diários anti-ban por número (seção 8 de `regra-geral-de-envio-de-mensagens-no-whatsapp.md`), ou atribuição manual por campanha/lista. Essa decisão ficou em aberto propositalmente — não bloqueia o restante desta spec (canal oficial, migração, webhook), mas **bloqueia** a implementação de "múltiplos números não-oficiais operando de fato" e deve ser resolvida antes de codar essa parte específica. Enquanto isso, o comportamento de fallback é: se só houver 1 número não-oficial conectado (caso comum hoje), usa ele; se houver mais de 1 sem estratégia definida, o sistema deve recusar a operação de forma explícita em vez de escolher arbitrariamente.
+Decisão: a seleção de número não é global no tenant, é **por Kanban**. A tela de configuração do Kanban (`kanban.config`, já existente) ganha uma nova seção onde o franqueado escolhe **quais canais (oficiais e não-oficiais) esse Kanban usa** — um canal pode estar vinculado a um ou mais Kanbans.
+
+Regra de envio v1 (simples, deliberadamente não-otimizada):
+- **Não-oficial**: a cada novo envio de prospecção, o sistema sorteia aleatoriamente um dos canais não-oficiais vinculados àquele Kanban.
+- **Oficial**: como o canal oficial só responde (nunca prospecta), o vínculo aqui serve para **rotear** a mensagem inbound recebida por aquele número para o Kanban correto, quando o tenant tiver mais de um Kanban.
+- Se o Kanban não tiver nenhum canal não-oficial vinculado, ou o canal sorteado estiver desconectado, o envio é bloqueado e logado — sem fallback silencioso para "qualquer número do tenant".
+
+**Reconhecidamente uma v1**: a maturidade de cada número (capacidade de envio, histórico de bloqueios, aquecimento) varia e hoje não entra no sorteio — é puramente aleatório entre os vinculados. Uma lógica de rodízio ponderado por maturidade/limites do número fica para uma iteração futura, fora desta entrega.
 
 ---
 
@@ -120,7 +139,7 @@ Como agora cada tenant pode ter vários números de cada tipo, a página deixa d
 - **Seção "WhatsApp Não-Oficial"** (rótulo explícito deixando claro que é conexão direta via QR Code/Baileys, sem garantias da Meta): lista dos números não-oficiais já conectados (nome/apelido, telefone, status) + botão "Conectar novo número" (repete o fluxo de QR Code já existente, criando uma nova linha em `whatsapp_canais`).
 - **Seção "WhatsApp Oficial (Business API)"**: lista dos números oficiais já conectados (telefone, status, e se a verificação de empresa está pendente/concluída — ver manual `2026-07-25-cadastro-whatsapp-oficial-manual.md`, seção 3.3) + botão "Conectar novo número oficial", que abre o widget embutido da Covercut (janela customizável deles → fluxo de Embedded Signup da Meta).
 
-Cada número da lista tem uma ação de desconectar/remover. Não há, nesta entrega, tela de "atribuir" um número a uma campanha específica — isso depende da decisão em aberto na seção 5.1.
+Cada número da lista tem uma ação de desconectar/remover. A atribuição de qual(is) número(s) cada Kanban usa não acontece nesta tela — acontece na configuração do próprio Kanban (`kanban.config`, ver seção 5.1).
 
 ### 7.1 Dependência técnica em aberto
 
@@ -131,7 +150,7 @@ A documentação pública da Covercut (`api.covercut.com.br/docs`) **não detalh
 ## 8. Fora de escopo (combinado nesta rodada)
 
 - Templates de mensagem (marketing/utilidade) para reengajamento fora da janela.
-- Estratégia de seleção automática de número não-oficial por campanha/lead (rodízio, atribuição manual etc.) — ver dependência em aberto na seção 5.1. A conexão/gestão de múltiplos números em si está em escopo; a lógica de qual número usar em cada envio de prospecção, não.
+- Rodízio ponderado por maturidade/capacidade de cada número não-oficial (histórico de bloqueios, aquecimento, limites diferenciados por número) — v1 usa sorteio puramente aleatório entre os canais vinculados ao Kanban (seção 5.1); a lógica mais profunda fica para depois.
 - Migração completa para fora da Uazapi — Uazapi continua sendo a via de prospecção.
 
 ---
