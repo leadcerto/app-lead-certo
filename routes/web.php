@@ -360,6 +360,9 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::put('/kanban/colunas/{coluna}',    [KanbanColunaController::class, 'update']);
         Route::delete('/kanban/colunas/{coluna}', [KanbanColunaController::class, 'destroy']);
         Route::post('/kanban/colunas/reordenar',  [KanbanColunaController::class, 'reordenar']);
+        // Vínculo de canais WhatsApp por Kanban
+        Route::get('/kanban/canais', [\App\Http\Controllers\Painel\KanbanCanalController::class, 'index']);
+        Route::put('/kanban/canais', [\App\Http\Controllers\Painel\KanbanCanalController::class, 'update']);
         // Variáveis de sorteio (spintax)
         Route::get('/kanban/variaveis',           [SpintaxVariavelController::class, 'index']);
         Route::get('/kanban/variaveis/listar',    [SpintaxVariavelController::class, 'listar']);
