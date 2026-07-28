@@ -3,17 +3,17 @@
 namespace App\Jobs;
 
 use App\Models\Contato;
-use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
+use App\Models\WhatsappCanal;
 use App\Services\UazapiService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Disparado automaticamente quando um tenant conecta o WhatsApp pela primeira vez.
- * Importa todos os contatos da agenda do celular → CRM + Google + ticket.
+ * Disparado automaticamente quando um canal WhatsApp não-oficial conecta pela
+ * primeira vez. Importa todos os contatos da agenda do celular → CRM + Google + ticket.
  */
 class SincronizarAgendaWhatsAppJob implements ShouldQueue
 {
@@ -22,20 +22,22 @@ class SincronizarAgendaWhatsAppJob implements ShouldQueue
     public int $tries   = 2;
     public int $timeout = 300;
 
-    public function __construct(public int $tenantId) {}
+    public function __construct(public int $whatsappCanalId) {}
 
     public function handle(UazapiService $uazapi): void
     {
-        $tenant = Tenant::find($this->tenantId);
+        $canal = WhatsappCanal::withoutGlobalScopes()->find($this->whatsappCanalId);
 
-        if (! $tenant || ! $tenant->uazapi_instance_token) {
+        if (! $canal || ! $canal->tokenUazapi()) {
             return;
         }
 
-        $contatos = $uazapi->listarContatos($tenant->uazapi_instance_token);
+        $tenant = $canal->tenant;
+
+        $contatos = $uazapi->listarContatos($canal->tokenUazapi());
 
         if (empty($contatos)) {
-            Log::info("SincronizarAgendaWhatsApp: sem contatos para tenant #{$this->tenantId}");
+            Log::info("SincronizarAgendaWhatsApp: sem contatos para canal #{$this->whatsappCanalId}");
             return;
         }
 
@@ -61,7 +63,6 @@ class SincronizarAgendaWhatsAppJob implements ShouldQueue
                 ->first();
 
             if ($contato) {
-                // Só atualiza vínculo e Google se não tiver resource
                 VinculoContatoTenant::firstOrCreate([
                     'contato_id' => $contato->id,
                     'tenant_id'  => $tenant->id,
@@ -81,10 +82,8 @@ class SincronizarAgendaWhatsAppJob implements ShouldQueue
                 'tenant_id'  => $tenant->id,
             ]);
 
-            // Sincroniza com Google apenas novos
             PushContatoParaGoogleJob::dispatch($contato->id, $tenant->id);
 
-            // Cria ticket se não existe
             $temTicket = TicketAtendimento::withoutGlobalScopes()
                 ->where('tenant_id', $tenant->id)
                 ->where('contato_id', $contato->id)
@@ -95,6 +94,7 @@ class SincronizarAgendaWhatsAppJob implements ShouldQueue
                 TicketAtendimento::withoutGlobalScopes()->create([
                     'tenant_id'          => $tenant->id,
                     'contato_id'         => $contato->id,
+                    'whatsapp_canal_id'  => $canal->id,
                     'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
                     'agente_responsavel' => 'humano',
                     'sdr_persona_id'     => $personaId,
@@ -107,7 +107,7 @@ class SincronizarAgendaWhatsAppJob implements ShouldQueue
             $criados++;
         }
 
-        Log::info("SincronizarAgendaWhatsApp: tenant #{$this->tenantId} — {$criados} novos contatos importados");
+        Log::info("SincronizarAgendaWhatsApp: canal #{$this->whatsappCanalId} — {$criados} novos contatos importados");
     }
 
     private function limparNome(string $contactName, string $firstName): string
