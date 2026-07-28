@@ -49,4 +49,25 @@ class BackfillWhatsappCanaisTest extends TestCase
 
         $this->assertSame(0, WhatsappCanal::withoutGlobalScopes()->count());
     }
+
+    public function test_backfill_eh_idempotente_nao_cria_duplicatas(): void
+    {
+        $tenant = Tenant::factory()->create([
+            'uazapi_instance_name'      => 'tenant-idempotent',
+            'uazapi_instance_token'     => 'token-idempotent',
+            'uazapi_webhook_token'      => 'webhook-idempotent',
+            'whatsapp_status'           => 'connected',
+            'whatsapp_phone'            => '5511988888888',
+            'whatsapp_connected_since'  => now(),
+        ]);
+
+        // Executar a migration duas vezes (idempotency test)
+        $migration = require database_path('migrations/2026_07_27_000004_backfill_whatsapp_canais_from_tenants.php');
+        $migration->up();
+        $migration->up();
+
+        // Após duas execuções, deve haver exatamente 1 WhatsappCanal (não 2)
+        $canalCount = WhatsappCanal::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count();
+        $this->assertSame(1, $canalCount, 'Migration should be idempotent and not create duplicate WhatsappCanal rows');
+    }
 }
