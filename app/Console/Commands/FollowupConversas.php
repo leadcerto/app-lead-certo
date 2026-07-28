@@ -197,7 +197,7 @@ class FollowupConversas extends Command
     {
         if ($mensagem) {
             $telefone = $ticket->contato?->telefone;
-            $token    = $ticket->tenant?->uazapi_instance_token;
+            $token    = $ticket->canal?->tokenUazapi();
 
             if ($telefone && $token) {
                 $nomeContato = $ticket->contato?->nome;

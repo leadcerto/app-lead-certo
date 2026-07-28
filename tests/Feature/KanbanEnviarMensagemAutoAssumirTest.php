@@ -6,6 +6,7 @@ use App\Models\Contato;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use App\Models\User;
+use App\Models\WhatsappCanal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -23,10 +24,15 @@ class KanbanEnviarMensagemAutoAssumirTest extends TestCase
     public function test_enviar_mensagem_assume_o_ticket_automaticamente(): void
     {
         $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'token-teste']);
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id,
+            'config'    => ['instance_token' => 'token-teste'],
+        ]);
         $user    = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
         $contato = Contato::factory()->create();
         $ticket  = TicketAtendimento::create([
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
             'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
             'status' => 'aberto', 'aberto_em' => now(),
         ]);

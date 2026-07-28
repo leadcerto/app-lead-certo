@@ -233,14 +233,14 @@ class KanbanController extends Controller
     {
         $request->validate(['conteudo' => 'required|string|min:1']);
 
-        $model = TicketAtendimento::with(['contato', 'tenant'])->findOrFail($ticket);
+        $model = TicketAtendimento::with(['contato', 'tenant', 'canal'])->findOrFail($ticket);
 
         if ($conflito = $this->assumirAutomaticamente($model, $request->user())) {
             return $conflito;
         }
 
         $telefone = $model->contato->telefone;
-        $token    = $model->tenant->uazapi_instance_token;
+        $token    = $model->canal?->tokenUazapi();
 
         if (! $token) {
             return response()->json(['message' => 'Instância do WhatsApp não configurada para este tenant.'], 502);
@@ -397,7 +397,7 @@ class KanbanController extends Controller
             ],
         ]);
 
-        $model = TicketAtendimento::with(['contato', 'tenant'])->findOrFail($ticket);
+        $model = TicketAtendimento::with(['contato', 'tenant', 'canal'])->findOrFail($ticket);
 
         if ($conflito = $this->assumirAutomaticamente($model, $request->user())) {
             return $conflito;
@@ -406,7 +406,7 @@ class KanbanController extends Controller
         $arquivo  = $request->file('arquivo');
         $caption  = $request->input('caption', '');
         $telefone = $model->contato->telefone;
-        $token    = $model->tenant->uazapi_instance_token;
+        $token    = $model->canal?->tokenUazapi();
 
         $path     = $arquivo->store('kanban-midia', 'public');
         $url      = url('storage/' . $path);

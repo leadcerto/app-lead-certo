@@ -7,6 +7,7 @@ use App\Models\Mensagem;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use App\Models\User;
+use App\Models\WhatsappCanal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -18,10 +19,15 @@ class KanbanEnviarMensagemFalhaUazapiTest extends TestCase
     private function criarTicket(): TicketAtendimento
     {
         $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'token-teste']);
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id,
+            'config'    => ['instance_token' => 'token-teste'],
+        ]);
         $contato = Contato::factory()->create();
 
         return TicketAtendimento::create([
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
             'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'humano',
             'status' => 'aberto', 'aberto_em' => now(),
         ]);

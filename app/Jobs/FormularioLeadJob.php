@@ -33,17 +33,17 @@ class FormularioLeadJob implements ShouldQueue
 
         $formulario = $envio->formulario;
         $ticket     = TicketAtendimento::withoutGlobalScopes()
-            ->with('contato')
+            ->with(['contato', 'canal'])
             ->find($this->ticketId);
 
         if (! $ticket || ! $formulario) {
             return;
         }
 
-        $tenant   = $formulario->tenant;
         $telefone = $ticket->contato?->telefone;
+        $token    = $ticket->canal?->tokenUazapi();
 
-        if (! $telefone || ! $tenant?->uazapi_instance_token) {
+        if (! $telefone || ! $token) {
             Log::warning("FormularioLeadJob: sem telefone ou token Uazapi", ['envio' => $this->envioId]);
             return;
         }
@@ -51,7 +51,7 @@ class FormularioLeadJob implements ShouldQueue
         if ($formulario->double_optin) {
             // Double opt-in: envia confirmação antes de disparar o bot
             $humanizacao->processar(
-                $tenant->uazapi_instance_token,
+                $token,
                 $telefone,
                 "Olá! Recebemos seu cadastro. ✅\n\nResponda *SIM* para confirmar que foi você mesmo que preencheu."
             );
@@ -62,7 +62,7 @@ class FormularioLeadJob implements ShouldQueue
 
         if ($formulario->acao_pos_envio === 'mensagem_unica' && $formulario->mensagem_custom) {
             $humanizacao->processar(
-                $tenant->uazapi_instance_token,
+                $token,
                 $telefone,
                 $formulario->mensagem_custom
             );

@@ -24,7 +24,7 @@ class SdrResponderService
      */
     public function responder(TicketAtendimento $ticket, bool $origemLigacao = false, ?string $gatilho = null): ?string
     {
-        $ticket->loadMissing(['contato', 'persona', 'mensagens', 'tenant']);
+        $ticket->loadMissing(['contato', 'persona', 'mensagens', 'tenant', 'canal']);
 
         // ── 1. Selecionar/confirmar persona ─────────────────────────────────
         $persona = $ticket->persona;
@@ -84,20 +84,16 @@ class SdrResponderService
         $resposta = trim(str_replace($tokens, '', $resposta));
 
         // ── 5. Enviar via WhatsApp com humanização ───────────────────────────
-        $tenant   = $ticket->tenant;
         $telefone = $ticket->contato?->telefone;
+        $token    = $ticket->canal?->tokenUazapi();
 
-        if ($telefone && $tenant?->uazapi_instance_token) {
-            $this->humanizacao->processar(
-                $tenant->uazapi_instance_token,
-                $telefone,
-                $resposta
-            );
+        if ($telefone && $token) {
+            $this->humanizacao->processar($token, $telefone, $resposta);
         } else {
             Log::warning('SdrResponder: sem token ou telefone, mensagem não enviada', [
                 'ticket_id' => $ticket->id,
                 'telefone'  => $telefone,
-                'tem_token' => (bool) $tenant?->uazapi_instance_token,
+                'tem_token' => (bool) $token,
             ]);
         }
 

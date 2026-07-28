@@ -28,7 +28,7 @@ class SequenciaMensagemJob implements ShouldQueue
 
     public function handle(HumanizacaoService $humanizacao, UazapiService $uazapi): void
     {
-        $ticket = TicketAtendimento::with(['contato', 'tenant'])->find($this->ticketId);
+        $ticket = TicketAtendimento::with(['contato', 'tenant', 'canal'])->find($this->ticketId);
 
         if (! $ticket || \App\Models\KanbanColuna::papelDe($ticket->tenant_id, $ticket->coluna_kanban) === \App\Enums\PapelColunaKanban::Encerramento) {
             return;
@@ -60,13 +60,12 @@ class SequenciaMensagemJob implements ShouldQueue
 
         $telefone = $ticket->contato?->telefone;
         $tenant   = $ticket->tenant;
+        $token    = $ticket->canal?->tokenUazapi();
 
-        if (! $telefone || ! $tenant?->uazapi_instance_token) {
+        if (! $telefone || ! $token) {
             Log::warning('SequenciaMensagemJob: sem telefone ou token', ['ticket_id' => $this->ticketId]);
             return;
         }
-
-        $token = $tenant->uazapi_instance_token;
 
         // Resolve todas as variáveis
         $nomeContato = $ticket->contato?->nome;

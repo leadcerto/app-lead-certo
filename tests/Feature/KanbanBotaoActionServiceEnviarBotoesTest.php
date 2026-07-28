@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Contato;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
+use App\Models\WhatsappCanal;
 use App\Services\KanbanBotaoActionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -19,9 +20,14 @@ class KanbanBotaoActionServiceEnviarBotoesTest extends TestCase
         Http::fake(['*/send/menu' => Http::response(['id' => 'msg1'], 200)]);
 
         $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id,
+            'config'    => ['instance_token' => 'tok'],
+        ]);
         $contato = Contato::factory()->create(['telefone' => '5511999999999']);
         $ticket  = TicketAtendimento::create([
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
             'coluna_kanban' => 'aguardando_lead', 'agente_responsavel' => 'bot',
             'status' => 'aberto', 'aberto_em' => now(),
         ]);
@@ -45,9 +51,14 @@ class KanbanBotaoActionServiceEnviarBotoesTest extends TestCase
         Http::fake(['*/send/menu' => Http::response(['id' => 'msg1'], 200)]);
 
         $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id,
+            'config'    => ['instance_token' => 'tok'],
+        ]);
         $contato = Contato::factory()->create(['telefone' => '5511999999999']);
         $ticket  = TicketAtendimento::create([
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
             'coluna_kanban' => 'aguardando_lead', 'agente_responsavel' => 'bot',
             'status' => 'aberto', 'aberto_em' => now(),
         ]);

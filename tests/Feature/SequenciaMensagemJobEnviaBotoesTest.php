@@ -6,6 +6,7 @@ use App\Jobs\SequenciaMensagemJob;
 use App\Models\Contato;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
+use App\Models\WhatsappCanal;
 use App\Services\HumanizacaoService;
 use App\Services\UazapiService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,9 +20,14 @@ class SequenciaMensagemJobEnviaBotoesTest extends TestCase
     private function criarTicketETenant(): array
     {
         $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id,
+            'config'    => ['instance_token' => 'tok'],
+        ]);
         $contato = Contato::factory()->create(['telefone' => '5511999999999']);
         $ticket  = TicketAtendimento::create([
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
             'coluna_kanban' => 'aguardando_lead', 'agente_responsavel' => 'bot',
             'status' => 'aberto', 'aberto_em' => now(),
         ]);

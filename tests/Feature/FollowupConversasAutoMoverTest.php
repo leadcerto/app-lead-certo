@@ -7,6 +7,7 @@ use App\Models\KanbanColunaConfig;
 use App\Models\Mensagem;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
+use App\Models\WhatsappCanal;
 use App\Services\SdrResponderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -33,9 +34,14 @@ class FollowupConversasAutoMoverTest extends TestCase
     private function criarTicketSilencioso(int $diasAtras, string $coluna = 'aguardando_orcamento'): TicketAtendimento
     {
         $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id,
+            'config'    => ['instance_token' => 'tok'],
+        ]);
         $contato = Contato::factory()->create(['telefone' => '5511955556666']);
         $ticket  = TicketAtendimento::create([
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
             'coluna_kanban' => $coluna, 'agente_responsavel' => 'bot', 'etapa_ia' => 'etapa_1',
             'status' => 'aberto', 'aberto_em' => now(),
             'followup_estagio_enviado' => 3, // já passou de todos os estágios de mensagem
