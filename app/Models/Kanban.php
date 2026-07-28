@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Scopes\TenantScope;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Kanban extends Model
@@ -29,5 +30,10 @@ class Kanban extends Model
     public function colunas(): HasMany
     {
         return $this->hasMany(KanbanColuna::class)->orderBy('ordem');
+    }
+
+    public function canais(): BelongsToMany
+    {
+        return $this->belongsToMany(WhatsappCanal::class, 'kanban_whatsapp_canais');
     }
 }
