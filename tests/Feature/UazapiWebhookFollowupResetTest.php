@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Contato;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
+use App\Models\WhatsappCanal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -20,6 +21,11 @@ class UazapiWebhookFollowupResetTest extends TestCase
         $tenant = Tenant::factory()->create([
             'uazapi_webhook_token'  => 'wh-token-followup',
             'uazapi_instance_token' => 'instance-token-followup',
+        ]);
+        WhatsappCanal::factory()->create([
+            'tenant_id'     => $tenant->id,
+            'webhook_token' => 'wh-token-followup',
+            'config'        => ['instance_token' => 'instance-token-followup'],
         ]);
         $contato = Contato::factory()->create(['telefone' => '5511977776666']);
         $ticket = TicketAtendimento::create([

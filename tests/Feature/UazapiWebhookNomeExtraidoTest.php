@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Contato;
 use App\Models\Tenant;
+use App\Models\WhatsappCanal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -25,11 +26,21 @@ class UazapiWebhookNomeExtraidoTest extends TestCase
         ]);
     }
 
+    private function criarCanal(Tenant $tenant, string $webhookToken, string $instanceToken): WhatsappCanal
+    {
+        return WhatsappCanal::factory()->create([
+            'tenant_id'     => $tenant->id,
+            'webhook_token' => $webhookToken,
+            'config'        => ['instance_token' => $instanceToken],
+        ]);
+    }
+
     public function test_expressao_religiosa_nao_e_extraida_como_nome(): void
     {
         Http::fake(['*' => Http::response(['ok' => true], 200)]);
 
         $tenant = Tenant::factory()->create(['uazapi_webhook_token' => 'wh-nome-1', 'uazapi_instance_token' => 'inst-1']);
+        $this->criarCanal($tenant, 'wh-nome-1', 'inst-1');
 
         $this->enviarMensagem('wh-nome-1', '5511911112222', 'boa tarde, Deus é fiel');
 
@@ -42,7 +53,8 @@ class UazapiWebhookNomeExtraidoTest extends TestCase
     {
         Http::fake(['*' => Http::response(['ok' => true], 200)]);
 
-        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-nome-2', 'uazapi_instance_token' => 'inst-2']);
+        $tenant2 = Tenant::factory()->create(['uazapi_webhook_token' => 'wh-nome-2', 'uazapi_instance_token' => 'inst-2']);
+        $this->criarCanal($tenant2, 'wh-nome-2', 'inst-2');
 
         $this->enviarMensagem('wh-nome-2', '5511922223333', 'Meu nome é Fernanda');
 

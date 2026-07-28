@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Contato;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
+use App\Models\WhatsappCanal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -12,6 +13,15 @@ use Tests\TestCase;
 class UazapiWebhookReativacaoTest extends TestCase
 {
     use RefreshDatabase;
+
+    private function criarCanal(Tenant $tenant, string $webhookToken, string $instanceToken): WhatsappCanal
+    {
+        return WhatsappCanal::factory()->create([
+            'tenant_id'     => $tenant->id,
+            'webhook_token' => $webhookToken,
+            'config'        => ['instance_token' => $instanceToken],
+        ]);
+    }
 
     public function test_ticket_encerrado_reabre_na_coluna_de_antes_de_encerrar(): void
     {
@@ -21,6 +31,7 @@ class UazapiWebhookReativacaoTest extends TestCase
             'uazapi_webhook_token'  => 'wh-reativa-1',
             'uazapi_instance_token' => 'instance-reativa-1',
         ]);
+        $this->criarCanal($tenant, 'wh-reativa-1', 'instance-reativa-1');
         $contato = Contato::factory()->create(['telefone' => '5511911112222']);
         $ticket  = TicketAtendimento::create([
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
@@ -56,6 +67,7 @@ class UazapiWebhookReativacaoTest extends TestCase
             'uazapi_webhook_token'  => 'wh-reativa-2',
             'uazapi_instance_token' => 'instance-reativa-2',
         ]);
+        $this->criarCanal($tenant, 'wh-reativa-2', 'instance-reativa-2');
         $contato = Contato::factory()->create(['telefone' => '5511933334444']);
         // Ticket encerrado antes de coluna_antes_encerrar existir (dado legado): nulo.
         TicketAtendimento::create([
@@ -98,6 +110,7 @@ class UazapiWebhookReativacaoTest extends TestCase
             'uazapi_webhook_token'  => 'wh-reativa-3',
             'uazapi_instance_token' => 'instance-reativa-3',
         ]);
+        $this->criarCanal($tenant, 'wh-reativa-3', 'instance-reativa-3');
         $contato = Contato::factory()->create(['telefone' => '5511955556666']);
         $ticket  = TicketAtendimento::create([
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
@@ -130,6 +143,7 @@ class UazapiWebhookReativacaoTest extends TestCase
             'uazapi_webhook_token'  => 'wh-reativa-4',
             'uazapi_instance_token' => 'instance-reativa-4',
         ]);
+        $this->criarCanal($tenant, 'wh-reativa-4', 'instance-reativa-4');
         $contato = Contato::factory()->create(['telefone' => '5511966667777']);
         $ticket  = TicketAtendimento::create([
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,

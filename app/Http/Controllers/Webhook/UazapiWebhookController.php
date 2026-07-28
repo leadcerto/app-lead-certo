@@ -26,22 +26,24 @@ class UazapiWebhookController extends Controller
     public function handle(Request $request, string $webhookToken): JsonResponse
     {
         // Autentica pelo token opaco na URL — lookup por coluna unique
-        $tenant = Tenant::where('uazapi_webhook_token', $webhookToken)->first();
+        $canal = \App\Models\WhatsappCanal::withoutGlobalScopes()->where('webhook_token', $webhookToken)->first();
 
-        if (! $tenant) {
+        if (! $canal) {
             Log::warning('Uazapi webhook: token inválido', ['token' => substr($webhookToken, 0, 8) . '...']);
             abort(401);
         }
+
+        $tenant = $canal->tenant;
 
         $payload = $request->all();
 
         $tipo = $payload['EventType'] ?? null;
 
-        Log::debug('Uazapi webhook recebido', ['tenant' => $tenant->id, 'EventType' => $tipo]);
+        Log::debug('Uazapi webhook recebido', ['tenant' => $tenant->id, 'canal' => $canal->id, 'EventType' => $tipo]);
 
         match ($tipo) {
-            'messages'   => $this->handleMensagem($payload, $tenant),
-            'connection' => $this->handleConexao($payload, $tenant),
+            'messages'   => $this->handleMensagem($payload, $tenant, $canal),
+            'connection' => $this->handleConexao($payload, $canal),
             default      => null,
         };
 
@@ -52,7 +54,7 @@ class UazapiWebhookController extends Controller
     // Mensagem recebida / enviada
     // -----------------------------------------------------------------
 
-    private function handleMensagem(array $payload, Tenant $tenant): void
+    private function handleMensagem(array $payload, Tenant $tenant, \App\Models\WhatsappCanal $canal): void
     {
         $msg = $payload['message'] ?? [];
 
@@ -111,23 +113,23 @@ class UazapiWebhookController extends Controller
         // Chamada WhatsApp perdida — messageType vem como 'call_log' ou contém 'call'
         $messageType = $msg['messageType'] ?? '';
         if (! $fromMe && str_contains(strtolower($messageType), 'call')) {
-            $this->processarChamadaWhatsApp($tenant, $telefone, $pushName);
+            $this->processarChamadaWhatsApp($tenant, $telefone, $pushName, $canal);
             return;
         }
 
         if ($fromMe) {
             // Franqueado respondeu pelo celular físico — passa para humano
             if (! $viaApi) {
-                $this->transferirParaHumano($tenant, $telefone, $conteudo, $msg, $tenant->uazapi_instance_token);
+                $this->transferirParaHumano($tenant, $telefone, $conteudo, $msg, $canal);
             }
             return;
         }
 
         // Mensagem recebida do lead
-        $this->processarMensagemLead($tenant, $telefone, $conteudo, $pushName, $msg, $tenant->uazapi_instance_token);
+        $this->processarMensagemLead($tenant, $telefone, $conteudo, $pushName, $msg, $canal);
     }
 
-    private function processarMensagemLead(Tenant $tenant, string $telefone, ?string $conteudo, ?string $pushName, array $msg = [], string $instanceToken = ''): void
+    private function processarMensagemLead(Tenant $tenant, string $telefone, ?string $conteudo, ?string $pushName, array $msg, \App\Models\WhatsappCanal $canal): void
     {
         // Valida pushName — rejeita lixo como "~Deus", números, muito curto
         $nomeValido = $this->validarPushName($pushName) ? $pushName : null;
@@ -219,6 +221,7 @@ class UazapiWebhookController extends Controller
                 $ticket = TicketAtendimento::create([
                     'tenant_id'          => $tenant->id,
                     'contato_id'         => $contato->id,
+                    'whatsapp_canal_id'  => $canal->id,
                     'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
                     'agente_responsavel' => 'bot',
                     'sdr_persona_id'     => $persona?->id,
@@ -234,7 +237,7 @@ class UazapiWebhookController extends Controller
         $mediaType = $msg['mediaType'] ?? null;
         $tipoMensagem = 'texto';
         $midiaUrl = null;
-        if ($mediaType && $instanceToken) {
+        if ($mediaType && $canal->tokenUazapi()) {
             try {
                 $focoAnalise = $mediaType === 'image'
                     ? KanbanColunaConfig::withoutGlobalScopes()
@@ -243,20 +246,20 @@ class UazapiWebhookController extends Controller
                         ->value('foco_analise_imagem')
                     : null;
 
-                $processado = app(MediaProcessorService::class)->processar($msg, $instanceToken, $focoAnalise);
+                $processado = app(MediaProcessorService::class)->processar($msg, $canal->tokenUazapi(), $focoAnalise);
                 if ($processado !== null) {
                     $conteudo     = $processado;
                     $tipoMensagem = match ($mediaType) {
                         'image' => 'imagem', 'video' => 'video', 'audio' => 'audio', default => 'texto',
                     };
                     if (in_array($mediaType, ['image', 'audio', 'video'])) {
-                        $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrl($msg, $instanceToken, $mediaType);
+                        $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrl($msg, $canal->tokenUazapi(), $mediaType);
                     }
 
                     // Acumula os itens identificados na imagem no card, pra quem
                     // vende ver de relance o que já foi enviado sem reabrir cada foto.
                     if ($mediaType === 'image') {
-                        $itens = app(MediaProcessorService::class)->extrairItensImagem($msg, $instanceToken, $focoAnalise);
+                        $itens = app(MediaProcessorService::class)->extrairItensImagem($msg, $canal->tokenUazapi(), $focoAnalise);
                         if ($itens) {
                             $listaAtual = $ticket->lista_itens ? $ticket->lista_itens . "\n" : '';
                             $ticket->update(['lista_itens' => $listaAtual . $itens]);
@@ -340,7 +343,7 @@ class UazapiWebhookController extends Controller
         }
     }
 
-    private function processarChamadaWhatsApp(Tenant $tenant, string $telefone, ?string $pushName): void
+    private function processarChamadaWhatsApp(Tenant $tenant, string $telefone, ?string $pushName, \App\Models\WhatsappCanal $canal): void
     {
         // Ignora se já há ticket ativo (evita duplicar sequência)
         $contato = $this->buscarOuCriarContato($telefone, ['nome' => $pushName ?: 'Sem Nome', 'origem' => 'whatsapp']);
@@ -375,6 +378,7 @@ class UazapiWebhookController extends Controller
         $ticket = TicketAtendimento::create([
             'tenant_id'          => $tenant->id,
             'contato_id'         => $contato->id,
+            'whatsapp_canal_id'  => $canal->id,
             'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
             'agente_responsavel' => 'bot',
             'sdr_persona_id'     => $persona?->id,
@@ -596,7 +600,7 @@ class UazapiWebhookController extends Controller
         return 'whatsapp';
     }
 
-    private function transferirParaHumano(Tenant $tenant, string $telefone, ?string $conteudo, array $msg = [], string $instanceToken = ''): void
+    private function transferirParaHumano(Tenant $tenant, string $telefone, ?string $conteudo, array $msg, \App\Models\WhatsappCanal $canal): void
     {
         $contato = Contato::where('telefone', $telefone)->first();
         if (! $contato) {
@@ -625,9 +629,9 @@ class UazapiWebhookController extends Controller
         $mediaType = $msg['mediaType'] ?? null;
         $tipoMensagem = 'texto';
         $midiaUrl = null;
-        if ($mediaType && $instanceToken && in_array($mediaType, ['image', 'audio', 'video'])) {
+        if ($mediaType && $canal->tokenUazapi() && in_array($mediaType, ['image', 'audio', 'video'])) {
             try {
-                $midiaUrl     = app(MediaProcessorService::class)->baixarEPersistirUrl($msg, $instanceToken, $mediaType);
+                $midiaUrl     = app(MediaProcessorService::class)->baixarEPersistirUrl($msg, $canal->tokenUazapi(), $mediaType);
                 $tipoMensagem = match ($mediaType) {
                     'image' => 'imagem', 'video' => 'video', default => 'audio',
                 };
@@ -662,18 +666,18 @@ class UazapiWebhookController extends Controller
     // Atualização de conexão
     // -----------------------------------------------------------------
 
-    private function handleConexao(array $payload, Tenant $tenant): void
+    private function handleConexao(array $payload, \App\Models\WhatsappCanal $canal): void
     {
         $status = $payload['data']['status'] ?? null;
 
         if ($status === 'open') {
-            $tenant->update([
-                'whatsapp_status'          => 'connected',
-                'whatsapp_connected_since' => now(),
+            $canal->update([
+                'status'          => 'connected',
+                'connected_since' => now(),
             ]);
         } elseif (in_array($status, ['close', 'connecting', 'timeout'])) {
-            $tenant->update(['whatsapp_status' => 'disconnected']);
-            Log::warning("Tenant #{$tenant->id} WhatsApp desconectado", ['status' => $status]);
+            $canal->update(['status' => 'disconnected']);
+            Log::warning("Canal #{$canal->id} WhatsApp desconectado", ['status' => $status]);
         }
     }
 }

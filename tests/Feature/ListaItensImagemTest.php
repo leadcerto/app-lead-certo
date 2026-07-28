@@ -7,6 +7,7 @@ use App\Models\KanbanColunaConfig;
 use App\Models\Mensagem;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
+use App\Models\WhatsappCanal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -21,6 +22,20 @@ class ListaItensImagemTest extends TestCase
         parent::setUp();
         Storage::fake('public');
         config(['services.openrouter.key' => 'fake-openrouter-key']);
+    }
+
+    private function criarTenantComCanal(string $webhookToken, string $instanceToken): Tenant
+    {
+        $tenant = Tenant::factory()->create([
+            'uazapi_webhook_token'  => $webhookToken,
+            'uazapi_instance_token' => $instanceToken,
+        ]);
+        WhatsappCanal::factory()->create([
+            'tenant_id'     => $tenant->id,
+            'webhook_token' => $webhookToken,
+            'config'        => ['instance_token' => $instanceToken],
+        ]);
+        return $tenant;
     }
 
     private function fakeOpenRouterListaItens(string $texto): void
@@ -38,7 +53,7 @@ class ListaItensImagemTest extends TestCase
     {
         $this->fakeOpenRouterListaItens("- Sofá 3 lugares\n- Geladeira duplex\n- 4 caixas médias");
 
-        $tenant = Tenant::factory()->create(['uazapi_webhook_token' => 'wh-itens-1', 'uazapi_instance_token' => 'inst-itens-1']);
+        $tenant = $this->criarTenantComCanal('wh-itens-1', 'inst-itens-1');
         KanbanColunaConfig::create([
             'tenant_id'           => $tenant->id,
             'coluna_kanban'       => 'em_atendimento',
@@ -72,7 +87,7 @@ class ListaItensImagemTest extends TestCase
     {
         $this->fakeOpenRouterListaItens("- Mesa de jantar");
 
-        $tenant  = Tenant::factory()->create(['uazapi_webhook_token' => 'wh-itens-2', 'uazapi_instance_token' => 'inst-itens-2']);
+        $tenant  = $this->criarTenantComCanal('wh-itens-2', 'inst-itens-2');
         $contato = Contato::factory()->create(['telefone' => '5511922223333']);
         $ticket  = TicketAtendimento::create([
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
@@ -102,7 +117,7 @@ class ListaItensImagemTest extends TestCase
     {
         $this->fakeOpenRouterListaItens('Nada identificado');
 
-        $tenant  = Tenant::factory()->create(['uazapi_webhook_token' => 'wh-itens-3', 'uazapi_instance_token' => 'inst-itens-3']);
+        $tenant  = $this->criarTenantComCanal('wh-itens-3', 'inst-itens-3');
         $contato = Contato::factory()->create(['telefone' => '5511933334444']);
         $ticket  = TicketAtendimento::create([
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,

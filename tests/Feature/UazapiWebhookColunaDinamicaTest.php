@@ -7,6 +7,7 @@ use App\Models\Kanban;
 use App\Models\KanbanColuna;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
+use App\Models\WhatsappCanal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -14,6 +15,15 @@ use Tests\TestCase;
 class UazapiWebhookColunaDinamicaTest extends TestCase
 {
     use RefreshDatabase;
+
+    private function criarCanal(Tenant $tenant, string $webhookToken, string $instanceToken): WhatsappCanal
+    {
+        return WhatsappCanal::factory()->create([
+            'tenant_id'     => $tenant->id,
+            'webhook_token' => $webhookToken,
+            'config'        => ['instance_token' => $instanceToken],
+        ]);
+    }
 
     public function test_ticket_novo_criado_pelo_webhook_usa_a_coluna_de_entrada_do_tenant(): void
     {
@@ -23,6 +33,7 @@ class UazapiWebhookColunaDinamicaTest extends TestCase
             'uazapi_webhook_token'  => 'token-teste',
             'uazapi_instance_token' => 'instance-token-1',
         ]);
+        $this->criarCanal($tenant, 'token-teste', 'instance-token-1');
         $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
         // Franqueado renomeou a coluna de Entrada de 'lead_novo' para 'novo_contato'
         KanbanColuna::where('kanban_id', $kanban->id)->where('papel', PapelColunaKanban::Entrada)
@@ -51,6 +62,7 @@ class UazapiWebhookColunaDinamicaTest extends TestCase
             'uazapi_webhook_token'  => 'token-teste-2',
             'uazapi_instance_token' => 'instance-token-2',
         ]);
+        $this->criarCanal($tenant, 'token-teste-2', 'instance-token-2');
         $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
         KanbanColuna::where('kanban_id', $kanban->id)->where('papel', PapelColunaKanban::Entrada)
             ->update(['chave' => 'novo_contato']);
@@ -86,6 +98,7 @@ class UazapiWebhookColunaDinamicaTest extends TestCase
             'uazapi_webhook_token'  => 'token-teste-3',
             'uazapi_instance_token' => 'instance-token-3',
         ]);
+        $this->criarCanal($tenant, 'token-teste-3', 'instance-token-3');
         $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
         // Franqueado renomeou a coluna de Entrada de 'lead_novo' para 'novo_contato'
         KanbanColuna::where('kanban_id', $kanban->id)->where('papel', PapelColunaKanban::Entrada)
@@ -116,6 +129,7 @@ class UazapiWebhookColunaDinamicaTest extends TestCase
             'uazapi_webhook_token'  => 'token-teste-4',
             'uazapi_instance_token' => 'instance-token-4',
         ]);
+        $this->criarCanal($tenant, 'token-teste-4', 'instance-token-4');
         $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
         // Franqueado renomeou a coluna de Encerramento de 'encerrado' para 'finalizado'
         KanbanColuna::where('kanban_id', $kanban->id)->where('papel', PapelColunaKanban::Encerramento)

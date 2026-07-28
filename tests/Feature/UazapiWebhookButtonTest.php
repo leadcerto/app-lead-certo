@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Contato;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
+use App\Models\WhatsappCanal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -12,6 +13,15 @@ use Tests\TestCase;
 class UazapiWebhookButtonTest extends TestCase
 {
     use RefreshDatabase;
+
+    private function criarCanal(Tenant $tenant, string $webhookToken, string $instanceToken): WhatsappCanal
+    {
+        return WhatsappCanal::factory()->create([
+            'tenant_id'     => $tenant->id,
+            'webhook_token' => $webhookToken,
+            'config'        => ['instance_token' => $instanceToken],
+        ]);
+    }
 
     public function test_clique_no_botao_move_o_ticket_e_nao_processa_como_texto(): void
     {
@@ -21,6 +31,7 @@ class UazapiWebhookButtonTest extends TestCase
             'uazapi_webhook_token'   => 'wh-token-123',
             'uazapi_instance_token'  => 'instance-token-123',
         ]);
+        $this->criarCanal($tenant, 'wh-token-123', 'instance-token-123');
         $contato = Contato::factory()->create(['telefone' => '5511999999999']);
         $ticket = TicketAtendimento::create([
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
@@ -56,6 +67,7 @@ class UazapiWebhookButtonTest extends TestCase
             'uazapi_webhook_token'   => 'wh-token-456',
             'uazapi_instance_token'  => 'instance-token-456',
         ]);
+        $this->criarCanal($tenant, 'wh-token-456', 'instance-token-456');
 
         $response = $this->postJson('/api/webhook/uazapi/wh-token-456', [
             'EventType' => 'messages',

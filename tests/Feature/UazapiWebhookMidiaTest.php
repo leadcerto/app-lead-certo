@@ -6,6 +6,7 @@ use App\Models\Contato;
 use App\Models\Mensagem;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
+use App\Models\WhatsappCanal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -20,6 +21,20 @@ class UazapiWebhookMidiaTest extends TestCase
         parent::setUp();
         Storage::fake('public');
         config(['services.uazapi.base_url' => 'https://fake-uazapi.test']);
+    }
+
+    private function criarTenantComCanal(string $webhookToken, string $instanceToken): Tenant
+    {
+        $tenant = Tenant::factory()->create([
+            'uazapi_webhook_token'  => $webhookToken,
+            'uazapi_instance_token' => $instanceToken,
+        ]);
+        WhatsappCanal::factory()->create([
+            'tenant_id'     => $tenant->id,
+            'webhook_token' => $webhookToken,
+            'config'        => ['instance_token' => $instanceToken],
+        ]);
+        return $tenant;
     }
 
     private function fakeDownloadDeMidia(string $mimetype): void
@@ -37,7 +52,7 @@ class UazapiWebhookMidiaTest extends TestCase
     {
         $this->fakeDownloadDeMidia('image/jpeg');
 
-        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-1', 'uazapi_instance_token' => 'inst-1']);
+        $this->criarTenantComCanal('wh-midia-1', 'inst-1');
 
         $this->postJson('/api/webhook/uazapi/wh-midia-1', [
             'EventType' => 'messages',
@@ -66,7 +81,7 @@ class UazapiWebhookMidiaTest extends TestCase
     {
         $this->fakeDownloadDeMidia('audio/ogg');
 
-        $tenant  = Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-2', 'uazapi_instance_token' => 'inst-2']);
+        $tenant  = $this->criarTenantComCanal('wh-midia-2', 'inst-2');
         $contato = Contato::factory()->create(['telefone' => '5511944445555']);
         $ticket  = TicketAtendimento::create([
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
@@ -100,7 +115,7 @@ class UazapiWebhookMidiaTest extends TestCase
         // `content` — que chega como array já decodificado, não como string JSON.
         Http::fake(['*' => Http::response('method not allowed', 405)]);
 
-        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-3', 'uazapi_instance_token' => 'inst-3']);
+        $this->criarTenantComCanal('wh-midia-3', 'inst-3');
 
         $this->postJson('/api/webhook/uazapi/wh-midia-3', [
             'EventType' => 'messages',
@@ -127,7 +142,7 @@ class UazapiWebhookMidiaTest extends TestCase
     {
         Http::fake(['*' => Http::response('not found', 404)]);
 
-        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-4', 'uazapi_instance_token' => 'inst-4']);
+        $this->criarTenantComCanal('wh-midia-4', 'inst-4');
 
         $payload = [
             'EventType' => 'messages',
@@ -149,7 +164,7 @@ class UazapiWebhookMidiaTest extends TestCase
 
     public function test_album_placeholder_e_ignorado_e_nao_vira_mensagem(): void
     {
-        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-5', 'uazapi_instance_token' => 'inst-5']);
+        $this->criarTenantComCanal('wh-midia-5', 'inst-5');
 
         $this->postJson('/api/webhook/uazapi/wh-midia-5', [
             'EventType' => 'messages',
@@ -198,7 +213,7 @@ class UazapiWebhookMidiaTest extends TestCase
             '*'                  => Http::response('not found', 404), // Uazapi nunca deveria ser chamado aqui
         ]);
 
-        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-6', 'uazapi_instance_token' => 'inst-6']);
+        $this->criarTenantComCanal('wh-midia-6', 'inst-6');
 
         $this->postJson('/api/webhook/uazapi/wh-midia-6', [
             'EventType' => 'messages',
@@ -231,7 +246,7 @@ class UazapiWebhookMidiaTest extends TestCase
         // WhatsApp manda mensagem de voz com mediaType 'ptt', não 'audio'.
         Http::fake(['*' => Http::response('not found', 404)]);
 
-        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-7', 'uazapi_instance_token' => 'inst-7']);
+        $this->criarTenantComCanal('wh-midia-7', 'inst-7');
 
         $this->postJson('/api/webhook/uazapi/wh-midia-7', [
             'EventType' => 'messages',
@@ -260,7 +275,7 @@ class UazapiWebhookMidiaTest extends TestCase
             '*'                  => Http::response('not found', 404),
         ]);
 
-        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-8', 'uazapi_instance_token' => 'inst-8']);
+        $this->criarTenantComCanal('wh-midia-8', 'inst-8');
 
         $this->postJson('/api/webhook/uazapi/wh-midia-8', [
             'EventType' => 'messages',
@@ -288,7 +303,7 @@ class UazapiWebhookMidiaTest extends TestCase
     {
         Http::fake(['*' => Http::response('not found', 404)]);
 
-        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-9', 'uazapi_instance_token' => 'inst-9']);
+        $this->criarTenantComCanal('wh-midia-9', 'inst-9');
 
         $apagado = Contato::factory()->create(['telefone' => '5511922223333', 'nome' => 'Fulano Antigo']);
         $apagado->delete();
@@ -319,7 +334,7 @@ class UazapiWebhookMidiaTest extends TestCase
         // servidor buscar um endereco interno/arbitrario.
         Http::fake(['*' => Http::response('not found', 404)]);
 
-        Tenant::factory()->create(['uazapi_webhook_token' => 'wh-midia-10', 'uazapi_instance_token' => 'inst-10']);
+        $this->criarTenantComCanal('wh-midia-10', 'inst-10');
 
         $this->postJson('/api/webhook/uazapi/wh-midia-10', [
             'EventType' => 'messages',
