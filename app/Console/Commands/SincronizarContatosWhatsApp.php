@@ -9,6 +9,7 @@ use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
 use App\Services\UazapiService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 class SincronizarContatosWhatsApp extends Command
 {
@@ -35,6 +36,13 @@ class SincronizarContatosWhatsApp extends Command
         foreach ($canais as $canal) {
             $tenant = $canal->tenant;
             $this->info("Tenant #{$tenant->id} — {$tenant->nome} (canal #{$canal->id})");
+
+            if (! $canal->tokenUazapi()) {
+                $this->warn("  Canal #{$canal->id} sem token de instância configurado — pulando.");
+                Log::warning('SincronizarContatosWhatsApp: canal sem token', ['canal_id' => $canal->id, 'tenant_id' => $tenant->id]);
+                continue;
+            }
+
             $this->sincronizar($tenant, $canal, $uazapi);
         }
 

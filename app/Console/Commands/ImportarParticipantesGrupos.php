@@ -9,6 +9,7 @@ use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
 use App\Services\UazapiService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 class ImportarParticipantesGrupos extends Command
 {
@@ -28,6 +29,13 @@ class ImportarParticipantesGrupos extends Command
         foreach ($query->get() as $canal) {
             $tenant = $canal->tenant;
             $this->info("Tenant #{$tenant->id} — {$tenant->nome} (canal #{$canal->id})");
+
+            if (! $canal->tokenUazapi()) {
+                $this->warn("  Canal #{$canal->id} sem token de instância configurado — pulando.");
+                Log::warning('ImportarParticipantesGrupos: canal sem token', ['canal_id' => $canal->id, 'tenant_id' => $tenant->id]);
+                continue;
+            }
+
             $this->importar($tenant, $canal, $uazapi);
         }
 
