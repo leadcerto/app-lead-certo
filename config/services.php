@@ -33,6 +33,12 @@ return [
         'key'      => env('UAZAPI_KEY'),
     ],
 
+    'covercut' => [
+        'base_url'   => env('COVERCUT_BASE_URL', 'https://api.covercut.com.br/api/v1'),
+        'api_key'    => env('COVERCUT_API_KEY'),
+        'api_secret' => env('COVERCUT_API_SECRET'),
+    ],
+
     'openrouter' => [
         'key'             => env('OPENROUTER_KEY'),
         'modelo_simples'  => env('OPENROUTER_MODELO_SIMPLES', 'openai/gpt-4o-mini'),
