@@ -43,6 +43,8 @@ class TicketAtendimento extends Model
         'tenant_id',
         'contato_id',
         'whatsapp_canal_id',
+        'janela_expira_em',
+        'janela_origem_anuncio',
         'coluna_kanban',
         'coluna_antes_encerrar',
         'agente_responsavel',
@@ -80,6 +82,8 @@ class TicketAtendimento extends Model
             'followup_estagio_enviado' => 'integer',
             'pendente_desde'        => 'datetime',
             'visualizado_em'        => 'datetime',
+            'janela_expira_em'      => 'datetime',
+            'janela_origem_anuncio' => 'boolean',
         ];
     }
 
