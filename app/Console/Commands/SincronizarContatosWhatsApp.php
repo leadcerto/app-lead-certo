@@ -17,32 +17,35 @@ class SincronizarContatosWhatsApp extends Command
 
     public function handle(UazapiService $uazapi): int
     {
-        $query = Tenant::whereNotNull('uazapi_instance_token');
+        $query = \App\Models\WhatsappCanal::withoutGlobalScopes()
+            ->where('tipo', 'nao_oficial')
+            ->where('status', 'connected');
 
         if ($tenantId = $this->option('tenant')) {
-            $query->where('id', $tenantId);
+            $query->where('tenant_id', $tenantId);
         }
 
-        $tenants = $query->get();
+        $canais = $query->get();
 
-        if ($tenants->isEmpty()) {
-            $this->warn('Nenhum tenant com WhatsApp conectado.');
+        if ($canais->isEmpty()) {
+            $this->warn('Nenhum canal WhatsApp conectado.');
             return Command::SUCCESS;
         }
 
-        foreach ($tenants as $tenant) {
-            $this->info("Tenant #{$tenant->id} — {$tenant->nome}");
-            $this->sincronizar($tenant, $uazapi);
+        foreach ($canais as $canal) {
+            $tenant = $canal->tenant;
+            $this->info("Tenant #{$tenant->id} — {$tenant->nome} (canal #{$canal->id})");
+            $this->sincronizar($tenant, $canal, $uazapi);
         }
 
         return Command::SUCCESS;
     }
 
-    private function sincronizar(Tenant $tenant, UazapiService $uazapi): void
+    private function sincronizar(Tenant $tenant, \App\Models\WhatsappCanal $canal, UazapiService $uazapi): void
     {
         $this->line('  Buscando contatos do WhatsApp...');
 
-        $contatos = $uazapi->listarContatos($tenant->uazapi_instance_token);
+        $contatos = $uazapi->listarContatos($canal->tokenUazapi());
 
         if (empty($contatos)) {
             $this->warn('  Nenhum contato retornado pela API.');
@@ -134,6 +137,7 @@ class SincronizarContatosWhatsApp extends Command
                 TicketAtendimento::withoutGlobalScopes()->create([
                     'tenant_id'          => $tenant->id,
                     'contato_id'         => $contato->id,
+                    'whatsapp_canal_id'  => $canal->id,
                     'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
                     'agente_responsavel' => 'humano',
                     'sdr_persona_id'     => $personaId,

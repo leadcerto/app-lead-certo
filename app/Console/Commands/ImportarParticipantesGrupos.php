@@ -17,24 +17,27 @@ class ImportarParticipantesGrupos extends Command
 
     public function handle(UazapiService $uazapi): int
     {
-        $query = Tenant::whereNotNull('uazapi_instance_token');
+        $query = \App\Models\WhatsappCanal::withoutGlobalScopes()
+            ->where('tipo', 'nao_oficial')
+            ->where('status', 'connected');
 
         if ($tenantId = $this->option('tenant')) {
-            $query->where('id', $tenantId);
+            $query->where('tenant_id', $tenantId);
         }
 
-        foreach ($query->get() as $tenant) {
-            $this->info("Tenant #{$tenant->id} — {$tenant->nome}");
-            $this->importar($tenant, $uazapi);
+        foreach ($query->get() as $canal) {
+            $tenant = $canal->tenant;
+            $this->info("Tenant #{$tenant->id} — {$tenant->nome} (canal #{$canal->id})");
+            $this->importar($tenant, $canal, $uazapi);
         }
 
         return Command::SUCCESS;
     }
 
-    private function importar(Tenant $tenant, UazapiService $uazapi): void
+    private function importar(Tenant $tenant, \App\Models\WhatsappCanal $canal, UazapiService $uazapi): void
     {
         $this->line('  Buscando grupos...');
-        $grupos = $uazapi->listarGrupos($tenant->uazapi_instance_token);
+        $grupos = $uazapi->listarGrupos($canal->tokenUazapi());
 
         if (empty($grupos)) {
             $this->warn('  Nenhum grupo encontrado.');
@@ -45,7 +48,7 @@ class ImportarParticipantesGrupos extends Command
 
         // Monta índice nome → telefone a partir da agenda do WhatsApp
         $this->line('  Buscando agenda para cruzar nomes...');
-        $agenda = $uazapi->listarContatos($tenant->uazapi_instance_token);
+        $agenda = $uazapi->listarContatos($canal->tokenUazapi());
         $nomesPorTelefone = [];
         foreach ($agenda as $c) {
             $tel  = preg_replace('/@.+$/', '', $c['jid'] ?? '');
@@ -134,6 +137,7 @@ class ImportarParticipantesGrupos extends Command
                     TicketAtendimento::withoutGlobalScopes()->create([
                         'tenant_id'          => $tenant->id,
                         'contato_id'         => $contato->id,
+                        'whatsapp_canal_id'  => $canal->id,
                         'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
                         'agente_responsavel' => 'humano',
                         'sdr_persona_id'     => $personaId,
