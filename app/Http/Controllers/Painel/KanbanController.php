@@ -243,7 +243,7 @@ class KanbanController extends Controller
         $token    = $model->canal?->tokenUazapi();
 
         if (! $token) {
-            return response()->json(['message' => 'Instância do WhatsApp não configurada para este tenant.'], 502);
+            return response()->json(['message' => 'Nenhum canal de WhatsApp vinculado a este atendimento.'], 502);
         }
 
         $enviado = $this->uazapi->enviarTexto($token, $telefone, $request->conteudo);
@@ -407,6 +407,10 @@ class KanbanController extends Controller
         $caption  = $request->input('caption', '');
         $telefone = $model->contato->telefone;
         $token    = $model->canal?->tokenUazapi();
+
+        if (! $token) {
+            return response()->json(['message' => 'Nenhum canal de WhatsApp vinculado a este atendimento.'], 502);
+        }
 
         $path     = $arquivo->store('kanban-midia', 'public');
         $url      = url('storage/' . $path);

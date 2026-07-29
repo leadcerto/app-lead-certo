@@ -100,6 +100,40 @@ class FollowupConversasAutoMoverTest extends TestCase
         ]);
     }
 
+    public function test_envio_da_mensagem_de_auto_mover_usa_o_token_do_canal_do_ticket_nao_o_legado_do_tenant(): void
+    {
+        $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'token-legado-do-tenant']);
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id,
+            'config'    => ['instance_token' => 'token-do-canal-certo'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511955556666']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'aguardando_orcamento', 'agente_responsavel' => 'bot', 'etapa_ia' => 'etapa_1',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'followup_estagio_enviado' => 3,
+        ]);
+        Mensagem::create([
+            'ticket_id' => $ticket->id, 'tenant_id' => $tenant->id,
+            'remetente' => 'bot', 'tipo' => 'texto', 'conteudo' => 'Oi!',
+            'enviado_em' => now()->subDays(4),
+        ]);
+
+        KanbanColunaConfig::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'aguardando_orcamento',
+            'auto_mover_ativo' => true, 'auto_mover_coluna_destino' => 'encerrado',
+            'auto_mover_segundos' => 3 * 86400,
+            'auto_mover_mensagem' => 'Encerrando por falta de resposta.',
+        ]);
+
+        $this->artisan('conversas:followup')->assertExitCode(0);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/send/text')
+            && $request->hasHeader('token', 'token-do-canal-certo'));
+    }
+
     public function test_nao_move_quando_ainda_nao_atingiu_o_tempo_configurado(): void
     {
         $ticket = $this->criarTicketSilencioso(1); // só 1 dia, limite é 3

@@ -61,6 +61,30 @@ class SequenciaMensagemJobEnviaBotoesTest extends TestCase
         Http::assertNotSent(fn ($request) => str_contains($request->url(), '/send/menu'));
     }
 
+    public function test_envio_usa_o_token_do_canal_do_ticket_nao_o_legado_do_tenant(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+
+        $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'token-legado-do-tenant']);
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id,
+            'config'    => ['instance_token' => 'token-do-canal-certo'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511999999999']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'aguardando_lead', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        (new SequenciaMensagemJob($ticket->id, 'Última mensagem', null, 'aguardando_lead', null))
+            ->handle(app(HumanizacaoService::class), app(UazapiService::class));
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/send/text')
+            && $request->hasHeader('token', 'token-do-canal-certo'));
+    }
+
     public function test_o_texto_da_mensagem_e_o_conteudo_da_propria_mensagem_no_menu_de_botoes(): void
     {
         Http::fake(['*' => Http::response(['ok' => true], 200)]);

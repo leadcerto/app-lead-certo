@@ -72,6 +72,33 @@ class KanbanBotaoActionServiceEnviarBotoesTest extends TestCase
         $this->assertSame($botoes, $ticket->fresh()->botoes_ativos);
     }
 
+    public function test_envio_de_botoes_usa_o_token_do_canal_do_ticket_nao_o_legado_do_tenant(): void
+    {
+        Http::fake(['*/send/menu' => Http::response(['id' => 'msg1'], 200)]);
+
+        $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'token-legado-do-tenant']);
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id,
+            'config'    => ['instance_token' => 'token-do-canal-certo'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511999999999']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'aguardando_lead', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $botoes = [
+            ['text' => 'Falar com Humano', 'action' => 'move_column', 'target' => 'em_atendimento'],
+        ];
+
+        app(KanbanBotaoActionService::class)->enviarBotoes($ticket, 'Escolha uma opção', $botoes);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/send/menu')
+            && $request->hasHeader('token', 'token-do-canal-certo'));
+    }
+
     public function test_retorna_false_sem_botoes(): void
     {
         $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);

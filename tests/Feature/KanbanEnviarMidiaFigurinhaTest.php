@@ -74,4 +74,27 @@ class KanbanEnviarMidiaFigurinhaTest extends TestCase
 
         Http::assertSent(fn ($request) => $request['type'] === 'image');
     }
+
+    public function test_ticket_sem_canal_retorna_502_e_nao_deixa_arquivo_orfao_no_storage(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+        $user = User::factory()->create(['tenant_id' => $ticket->tenant_id, 'perfil' => 'dono', 'ativo' => true]);
+
+        $arquivo = UploadedFile::fake()->image('foto.jpg');
+
+        $response = $this->actingAs($user)->post("/api/painel/kanban/ticket/{$ticket->id}/midia", [
+            'tipo'    => 'imagem',
+            'arquivo' => $arquivo,
+        ]);
+
+        $response->assertStatus(502);
+        Http::assertNotSent(fn ($request) => true);
+        Storage::disk('public')->assertDirectoryEmpty('kanban-midia');
+    }
 }
