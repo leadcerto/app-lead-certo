@@ -49,4 +49,12 @@ class WhatsappCanal extends Model
     {
         return $this->config['instance_token'] ?? null;
     }
+
+    public function servico(): \App\Services\Canais\CanalWhatsappInterface
+    {
+        return match ($this->provider) {
+            'covercut' => app(\App\Services\Canais\CovercutChannelService::class),
+            default    => app(\App\Services\Canais\UazapiChannelService::class),
+        };
+    }
 }
