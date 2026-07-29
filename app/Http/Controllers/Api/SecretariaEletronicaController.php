@@ -109,9 +109,13 @@ class SecretariaEletronicaController extends Controller
         }
 
         // Cria ticket
+        $kanban = \App\Models\Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->first();
+        $canal  = $kanban ? app(\App\Services\SelecaoCanalWhatsappService::class)->naoOficialAleatorioParaKanban($kanban) : null;
+
         $ticket = TicketAtendimento::create([
             'tenant_id'          => $tenant->id,
             'contato_id'         => $contato->id,
+            'whatsapp_canal_id'  => $canal?->id,
             'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
             'agente_responsavel' => 'bot',
             'etapa_ia'           => 'etapa_1',
