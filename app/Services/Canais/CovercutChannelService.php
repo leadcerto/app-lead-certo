@@ -43,11 +43,14 @@ class CovercutChannelService implements CanalWhatsappInterface
 
         $baseUrl = config('services.covercut.base_url');
 
+        // Conforme api.covercut.com.br/docs/#configuracao: endpoint é /messages/send
+        // (não /messages) e text.body tem limite de 1024 caracteres — sem truncamento
+        // aqui, fora do escopo do MVP.
         $response = Http::withHeaders([
                 'X-API-Key'    => config('services.covercut.api_key'),
                 'X-API-Secret' => config('services.covercut.api_secret'),
             ])
-            ->post("{$baseUrl}/messages", [
+            ->post("{$baseUrl}/messages/send", [
                 'from' => $phoneNumberId,
                 'to'   => $telefone,
                 'type' => 'text',

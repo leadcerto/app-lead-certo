@@ -26,7 +26,7 @@ class CovercutChannelServiceTest extends TestCase
 
     public function test_envia_texto_via_covercut_dentro_da_janela(): void
     {
-        Http::fake(['*/messages' => Http::response(['id' => 'wamid.xyz'], 200)]);
+        Http::fake(['*/messages/send' => Http::response(['id' => 'wamid.xyz'], 200)]);
 
         $tenant  = Tenant::factory()->create();
         $canal   = $this->canalOficial($tenant->id);
@@ -43,7 +43,8 @@ class CovercutChannelServiceTest extends TestCase
 
         $this->assertTrue($enviado);
         Http::assertSent(function ($request) {
-            return $request->hasHeader('X-API-Key', config('services.covercut.api_key') ?? '')
+            return str_ends_with($request->url(), '/messages/send')
+                && $request->hasHeader('X-API-Key', config('services.covercut.api_key') ?? '')
                 && $request['to'] === '5511999999999'
                 && $request['text']['body'] === 'Oi!';
         });
@@ -77,7 +78,7 @@ class CovercutChannelServiceTest extends TestCase
         // Sem ticket em aberto para este telefone neste canal não há janela pra checar
         // (ex: primeiro contato antes de qualquer ticket existir) — não bloqueia;
         // a Covercut também respeita a janela do lado dela.
-        Http::fake(['*/messages' => Http::response(['id' => 'wamid.abc'], 200)]);
+        Http::fake(['*/messages/send' => Http::response(['id' => 'wamid.abc'], 200)]);
 
         $tenant = Tenant::factory()->create();
         $canal  = $this->canalOficial($tenant->id);
