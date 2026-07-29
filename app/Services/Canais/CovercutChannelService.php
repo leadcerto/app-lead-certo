@@ -46,16 +46,27 @@ class CovercutChannelService implements CanalWhatsappInterface
         // Conforme api.covercut.com.br/docs/#configuracao: endpoint é /messages/send
         // (não /messages) e text.body tem limite de 1024 caracteres — sem truncamento
         // aqui, fora do escopo do MVP.
-        $response = Http::withHeaders([
-                'X-API-Key'    => config('services.covercut.api_key'),
-                'X-API-Secret' => config('services.covercut.api_secret'),
-            ])
-            ->post("{$baseUrl}/messages/send", [
-                'from' => $phoneNumberId,
-                'to'   => $telefone,
-                'type' => 'text',
-                'text' => ['body' => $texto],
+        try {
+            $response = Http::withHeaders([
+                    'X-API-Key'    => config('services.covercut.api_key'),
+                    'X-API-Secret' => config('services.covercut.api_secret'),
+                ])
+                ->post("{$baseUrl}/messages/send", [
+                    'from' => $phoneNumberId,
+                    'to'   => $telefone,
+                    'type' => 'text',
+                    'text' => ['body' => $texto],
+                ]);
+        } catch (\Throwable $e) {
+            // Http::post lança ConnectionException em falhas de rede (DNS, timeout, TLS,
+            // conexão recusada). A interface exige nunca lançar exceção — ver
+            // CanalWhatsappInterface::enviarTexto().
+            Log::warning('CovercutChannelService: exceção ao enviar texto', [
+                'canal_id' => $canal->id,
+                'erro'     => $e->getMessage(),
             ]);
+            return false;
+        }
 
         if (! $response->successful()) {
             Log::warning('CovercutChannelService: falha ao enviar texto', [

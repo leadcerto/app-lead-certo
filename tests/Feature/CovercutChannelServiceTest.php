@@ -87,4 +87,18 @@ class CovercutChannelServiceTest extends TestCase
 
         $this->assertTrue($enviado);
     }
+
+    public function test_retorna_false_sem_lancar_excecao_em_falha_de_conexao(): void
+    {
+        Http::fake(fn () => throw new \Illuminate\Http\Client\ConnectionException('timeout'));
+        Log::spy();
+
+        $tenant = Tenant::factory()->create();
+        $canal  = $this->canalOficial($tenant->id);
+
+        $enviado = app(CovercutChannelService::class)->enviarTexto($canal, '5511977777777', 'Oi!');
+
+        $this->assertFalse($enviado);
+        Log::shouldHaveReceived('warning')->once();
+    }
 }
