@@ -186,12 +186,17 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'dados']);
 
-    // WhatsApp / Config
-    Route::get('/whatsapp/canais', [\App\Http\Controllers\Painel\WhatsappCanalController::class, 'index']);
-    Route::post('/whatsapp/canais', [\App\Http\Controllers\Painel\WhatsappCanalController::class, 'store']);
-    Route::get('/whatsapp/canais/{canal}/status', [\App\Http\Controllers\Painel\WhatsappCanalController::class, 'status']);
-    Route::get('/whatsapp/canais/{canal}/qrcode', [\App\Http\Controllers\Painel\WhatsappCanalController::class, 'qrcode']);
-    Route::delete('/whatsapp/canais/{canal}', [\App\Http\Controllers\Painel\WhatsappCanalController::class, 'destroy']);
+    // WhatsApp / Config — apenas dono e admin (canal pode ser desconectado/excluído aqui)
+    Route::get('/whatsapp/canais', [\App\Http\Controllers\Painel\WhatsappCanalController::class, 'index'])
+        ->middleware('role:admin,dono');
+    Route::post('/whatsapp/canais', [\App\Http\Controllers\Painel\WhatsappCanalController::class, 'store'])
+        ->middleware('role:admin,dono');
+    Route::get('/whatsapp/canais/{canal}/status', [\App\Http\Controllers\Painel\WhatsappCanalController::class, 'status'])
+        ->middleware('role:admin,dono');
+    Route::get('/whatsapp/canais/{canal}/qrcode', [\App\Http\Controllers\Painel\WhatsappCanalController::class, 'qrcode'])
+        ->middleware('role:admin,dono');
+    Route::delete('/whatsapp/canais/{canal}', [\App\Http\Controllers\Painel\WhatsappCanalController::class, 'destroy'])
+        ->middleware('role:admin,dono');
     Route::put('/whatsapp/retencao', [WhatsAppController::class, 'salvarRetencao'])
         ->middleware('role:admin,dono');
 

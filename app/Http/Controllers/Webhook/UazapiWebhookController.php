@@ -201,7 +201,15 @@ class UazapiWebhookController extends Controller
             ->first();
 
         $ticketNovo = false;
-        if (! $ticket) {
+        if ($ticket) {
+            // Ticket já aberto recebeu mensagem por outro canal (número) — o ticket
+            // continua único por lead, mas o canal precisa refletir quem tocou por
+            // último, senão a resposta sai pelo número errado (mesmo padrão usado
+            // na reativação de ticket encerrado e em transferirParaHumano()).
+            if ($ticket->whatsapp_canal_id !== $canal->id) {
+                $ticket->update(['whatsapp_canal_id' => $canal->id]);
+            }
+        } else {
             // Verifica se há ticket encerrado: reativa para o Guardião classificar a mensagem
             $ticketEncerrado = TicketAtendimento::withoutGlobalScopes()
                 ->where('tenant_id', $tenant->id)

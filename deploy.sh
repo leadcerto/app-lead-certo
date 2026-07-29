@@ -9,6 +9,23 @@ SSH_KEY=~/.ssh/leadcerto_vps
 VPS_HOST=root@103.199.186.134
 VPS_PATH=/var/www/leadcerto
 
+# Modo de manutenção: fica marcado como "ligado" só depois que o `php artisan down`
+# via ssh realmente é executado com sucesso. O trap abaixo garante que, se qualquer
+# comando falhar depois disso (migration, build, cache), o site volta do ar sozinho
+# em vez de ficar preso em manutenção — sem isso, um erro no meio do deploy deixaria
+# todo mundo (inclusive os webhooks do WhatsApp) fora do ar até alguém notar e rodar
+# `php artisan up` manualmente.
+MANUTENCAO_LIGADA=0
+
+restaurar_site_em_caso_de_saida() {
+  if [ "$MANUTENCAO_LIGADA" -eq 1 ]; then
+    echo "==> Restaurando site (php artisan up) antes de sair..." >&2
+    ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && php artisan up" || true
+    MANUTENCAO_LIGADA=0
+  fi
+}
+trap restaurar_site_em_caso_de_saida EXIT
+
 echo "==> Verificando estado local..."
 if [ -n "$(git status --porcelain)" ]; then
   echo "ERRO: há mudanças não commitadas localmente. Commit antes de fazer deploy." >&2
@@ -30,6 +47,12 @@ if [ -n "$DIRTY" ]; then
   echo "  3. Se for lixo/teste: git checkout -- <arquivo> ou git clean -fd (com cuidado)" >&2
   exit 1
 fi
+
+echo "==> Colocando a VPS em modo de manutenção (php artisan down)..."
+# --retry=15 vai no header Retry-After da resposta 503 (instrução pros clientes/load
+# balancer tentarem de novo em 15s) — não bloqueia nem espera nada aqui no script.
+ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && php artisan down --retry=15"
+MANUTENCAO_LIGADA=1
 
 echo "==> Puxando na VPS..."
 ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && git pull origin main"
@@ -57,6 +80,10 @@ fi
 
 echo "==> Reconstruindo caches..."
 ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && php artisan config:cache && php artisan route:cache && php artisan view:cache"
+
+echo "==> Tirando a VPS do modo de manutenção (php artisan up)..."
+ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && php artisan up"
+MANUTENCAO_LIGADA=0
 
 echo "==> Deploy concluído:"
 ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && git log --oneline -1"

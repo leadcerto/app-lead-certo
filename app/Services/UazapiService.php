@@ -13,7 +13,10 @@ use Illuminate\Support\Facades\Log;
  *   - Operações por instância (enviar msg, status, webhook):  header "token: <instance_token>"
  *
  * O instance_token é único por instância e é devolvido ao criar a instância.
- * Deve ser armazenado na tabela tenants (campo uazapi_instance_token).
+ * Armazenado em WhatsappCanal.config (chave 'instance_token'), não mais na tabela
+ * tenants — os campos legados uazapi_instance_token/uazapi_webhook_token em
+ * tenants são obsoletos e não devem ser usados em código novo. Resolva sempre via
+ * $canal->tokenUazapi() (ou $ticket->canal->tokenUazapi()).
  *
  * Envio de mídia: endpoint único POST /send/media, body em JSON com
  * {number, type, file, ...}. Os antigos /send/image, /send/audio, /send/ptt,

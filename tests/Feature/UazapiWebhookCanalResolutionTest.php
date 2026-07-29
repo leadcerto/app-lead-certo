@@ -161,6 +161,53 @@ class UazapiWebhookCanalResolutionTest extends TestCase
         $this->assertNotNull($canal->connected_since);
     }
 
+    /**
+     * Item 2 do review final da branch: ticket já ABERTO (bot conversando) recebe
+     * mensagem de um número diferente do que está gravado nele — o canal precisa
+     * acompanhar quem tocou por último (mesma regra já valia pra reativação de
+     * ticket encerrado e pra transferirParaHumano()), senão as respostas continuam
+     * saindo pelo número errado. E continua sendo o MESMO ticket — nunca se separa
+     * atendimento por canal.
+     */
+    public function test_ticket_aberto_recebe_mensagem_de_outro_canal_e_atualiza_whatsapp_canal_id(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+
+        $tenant  = Tenant::factory()->create();
+        $canalA  = $this->criarCanal($tenant, 'token-canal-A-aberto', 'instance-canal-A');
+        $canalB  = $this->criarCanal($tenant, 'token-canal-B-aberto', 'instance-canal-B');
+
+        // Primeira mensagem chega pelo canal A — abre o ticket.
+        $this->postJson('/api/webhook/uazapi/token-canal-A-aberto', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'  => false,
+                'isGroup' => false,
+                'chatid'  => '5511955556666@s.whatsapp.net',
+                'text'    => 'Olá, quero um orçamento de frete',
+            ],
+        ])->assertOk();
+
+        $ticket = TicketAtendimento::where('tenant_id', $tenant->id)->firstOrFail();
+        $this->assertSame($canalA->id, $ticket->whatsapp_canal_id);
+
+        // Segunda mensagem do MESMO lead chega pelo canal B, com o ticket ainda aberto.
+        $this->postJson('/api/webhook/uazapi/token-canal-B-aberto', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'  => false,
+                'isGroup' => false,
+                'chatid'  => '5511955556666@s.whatsapp.net',
+                'text'    => 'Oi de novo, mudei de número',
+            ],
+        ])->assertOk();
+
+        $this->assertSame(1, TicketAtendimento::where('tenant_id', $tenant->id)->count());
+        $ticket->refresh();
+        $this->assertSame($ticket->id, TicketAtendimento::where('tenant_id', $tenant->id)->firstOrFail()->id);
+        $this->assertSame($canalB->id, $ticket->whatsapp_canal_id);
+    }
+
     public function test_evento_connection_close_marca_canal_desconectado(): void
     {
         $tenant = Tenant::factory()->create();

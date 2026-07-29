@@ -77,6 +77,15 @@ Rodar workers na VPS:
 php artisan queue:work --sleep=3 --tries=3 --max-time=3600
 ```
 
+### Token do WhatsApp/Uazapi
+
+Sempre resolva o token via `$ticket->canal->tokenUazapi()` (ou `$canal->tokenUazapi()`
+quando já tem o canal em mãos) — nunca `$tenant->uazapi_instance_token` diretamente.
+Os campos legados em `tenants` (`uazapi_instance_token`, `uazapi_webhook_token`,
+`uazapi_instance_name`, `whatsapp_status`, `whatsapp_phone`, `whatsapp_connected_since`)
+ainda existem no banco por um período de transição, mas são obsoletos e serão
+removidos numa limpeza futura — não leia deles em código novo.
+
 ### Rotas
 
 - `api/painel/*` — JSON API (retorna `JsonResponse`)

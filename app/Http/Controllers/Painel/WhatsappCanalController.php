@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Painel;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\SincronizarAgendaWhatsAppJob;
+use App\Models\Kanban;
 use App\Models\WhatsappCanal;
 use App\Services\UazapiService;
 use Illuminate\Http\JsonResponse;
@@ -51,6 +52,13 @@ class WhatsappCanalController extends Controller
 
         $webhookUrl = config('app.url') . '/api/webhook/uazapi/' . $webhookToken;
         $this->uazapi->configurarWebhook($result['token'], $webhookUrl, ['messages', 'connection']);
+
+        // Vincula o canal recém-conectado a TODOS os Kanbans do tenant — decisão
+        // do produto: um número novo já entra disponível pra prospecção, em vez de
+        // ficar invisível até alguém visitar /kanban/config e vincular manualmente
+        // (mesmo padrão da migration de backfill do Task 3).
+        $kanbanIds = Kanban::where('tenant_id', $tenantId)->pluck('id');
+        $canal->kanbans()->syncWithoutDetaching($kanbanIds);
 
         return response()->json(['id' => $canal->id, 'status' => $canal->status], 201);
     }
