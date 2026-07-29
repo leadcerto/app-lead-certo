@@ -26,7 +26,7 @@ class TicketController extends Controller
         $novo = false;
 
         if (! $ticket) {
-            $kanban = \App\Models\Kanban::where('tenant_id', $request->tenant_id)->where('tipo', 'vendas')->first();
+            $kanban = \App\Models\Kanban::withoutGlobalScopes()->where('tenant_id', $request->tenant_id)->where('tipo', 'vendas')->first();
             $canal  = $kanban ? app(\App\Services\SelecaoCanalWhatsappService::class)->naoOficialAleatorioParaKanban($kanban) : null;
 
             $ticket = TicketAtendimento::create([
