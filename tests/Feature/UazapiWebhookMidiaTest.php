@@ -159,7 +159,7 @@ class UazapiWebhookMidiaTest extends TestCase
         $this->postJson('/api/webhook/uazapi/wh-midia-4', $payload);
         $this->postJson('/api/webhook/uazapi/wh-midia-4', $payload);
 
-        $this->assertSame(1, Mensagem::where('uazapi_message_id', 'msg-duplicado')->count());
+        $this->assertSame(1, Mensagem::where('provider_message_id', 'msg-duplicado')->count());
     }
 
     public function test_album_placeholder_e_ignorado_e_nao_vira_mensagem(): void

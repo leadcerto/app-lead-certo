@@ -100,7 +100,7 @@ class UazapiWebhookController extends Controller
         // onde o segundo envio traz metadados completos) — sem essa trava, a mesma
         // mensagem do lead vira duas linhas e o bot pode responder duas vezes ao mesmo
         // conteúdo, dessincronizando o card em relação à conversa real do WhatsApp.
-        if ($messageId && Mensagem::withoutGlobalScopes()->where('uazapi_message_id', $messageId)->exists()) {
+        if ($messageId && Mensagem::withoutGlobalScopes()->where('provider_message_id', $messageId)->exists()) {
             Log::debug('Uazapi webhook: mensagem duplicada ignorada', ['messageid' => $messageId]);
             return;
         }
@@ -325,7 +325,7 @@ class UazapiWebhookController extends Controller
                 'tipo'              => $tipoMensagem,
                 'conteudo'          => $conteudo,
                 'midia_url'         => $midiaUrl,
-                'uazapi_message_id' => $msg['messageid'] ?? null,
+                'provider_message_id' => $msg['messageid'] ?? null,
                 'enviado_em'        => now(),
             ]);
         }
@@ -696,7 +696,7 @@ class UazapiWebhookController extends Controller
                 'tipo'              => $tipoMensagem,
                 'conteudo'          => $conteudo,
                 'midia_url'         => $midiaUrl,
-                'uazapi_message_id' => $msg['messageid'] ?? null,
+                'provider_message_id' => $msg['messageid'] ?? null,
                 'enviado_em'        => now(),
             ]);
         }

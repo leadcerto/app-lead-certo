@@ -24,7 +24,7 @@ class Mensagem extends Model
         'tipo',
         'conteudo',
         'midia_url',
-        'uazapi_message_id',
+        'provider_message_id',
         'enviado_em',
     ];
 
