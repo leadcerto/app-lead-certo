@@ -1,62 +1,75 @@
 # Canal WhatsApp Oficial via Covercut — Design Técnico
 
-> Complementa o manual funcional `2026-07-25-cadastro-whatsapp-oficial-manual.md` (fluxo genérico de Embedded Signup, sem schema/código). Este documento cobre a integração técnica concreta com a **Covercut** (`api.covercut.com.br`), parceira BSP da Meta escolhida para operar a API Oficial do WhatsApp da Lead Certo, e a mudança de modelagem necessária para o canal oficial coexistir com o não-oficial (Uazapi).
+> Complementa o manual funcional `2026-07-25-cadastro-whatsapp-oficial-manual.md` (fluxo genérico de Embedded Signup, sem schema/código). Este documento cobre a integração técnica concreta com a **Covercut** (`api.covercut.com.br`), parceira BSP da Meta escolhida para operar a API Oficial do WhatsApp da Lead Certo.
+>
+> **Atualizado em 2026-07-29**, depois da entrega do suporte a múltiplos números não-oficiais (`docs/superpowers/plans/2026-07-27-canal-whatsapp-multinumero-kanban.md`, já em produção) e de confirmação direta com o Leonardo + consulta à documentação real da Covercut (`api.covercut.com.br/docs/#configuracao` — ver memória `referencia-docs-covercut`). Substitui as suposições da versão anterior (fluxo de widget embutido) pelo mecanismo real, mais simples.
 
 ---
 
 ## 1. Contexto e objetivo
 
-Hoje a Lead Certo só tem um tipo de conexão de WhatsApp: a **API não-oficial** (Uazapi/Baileys), conectada via QR Code, usada tanto para prospecção quanto para atendimento. É urgente adicionar a **API Oficial do WhatsApp** (Meta Cloud API), operada através da Covercut, para receber os leads gerados por anúncios "clique para o WhatsApp".
+A Lead Certo já suporta múltiplos números de WhatsApp **não-oficiais** (Uazapi/Baileys, QR Code) por tenant, vinculados a Kanbans — entregue e em produção. Esta entrega adiciona o segundo tipo de canal já previsto na modelagem: a **API Oficial do WhatsApp** (Meta Cloud API), operada através da Covercut, para receber os leads gerados por anúncios "clique para o WhatsApp".
 
 ### Decisão estratégica de uso do canal oficial
 
 O canal oficial será usado **exclusivamente em modo de recepção/resposta**:
 - Nunca dispara mensagem proativamente (nem sequência automática, nem campanha).
 - Só responde quem iniciou a conversa (lead que clicou no anúncio ou mandou mensagem).
-- **Não usaremos templates pagos da Meta.** Isso significa que, uma vez fechada a janela de conversa (24h, ou 72h quando a conversa se origina de anúncio), o sistema **não tenta reabrir** — o envio é bloqueado e o ticket é sinalizado para atenção humana, se necessário, por outro canal.
+- **Não usaremos templates pagos da Meta.** Uma vez fechada a janela de conversa (24h, ou 72h quando a conversa se origina de anúncio), o sistema **não tenta reabrir** — o envio é bloqueado e o ticket é sinalizado para atenção humana, se necessário, por outro canal.
 
-A prospecção continua sendo feita pelos números não-oficiais (Uazapi), que continuam funcionando exatamente como hoje.
+A prospecção continua sendo feita pelos números não-oficiais (Uazapi), sem nenhuma mudança.
+
+### Escopo desta entrega (MVP)
+
+**Dentro do escopo:** conectar um número oficial já cadastrado na Covercut + receber mensagem real do lead + responder dentro da janela de conversa + rotear para o Kanban certo.
+
+**Fora do escopo — pendências explícitas, não esquecidas, só adiadas** (ver seção 8 para a lista completa):
+- Webhook de Alertas da Covercut (qualidade do número, suspensão, assinatura).
+- Buscar números automaticamente via API da Covercut (fica manual: colar `phone_number_id`).
+- Templates de mensagem, rodízio ponderado por maturidade de número, limpeza dos campos legados em `tenants`.
 
 ---
 
 ## 2. Modelo de negócio dos provedores (Uazapi e Covercut)
 
-Uazapi e Covercut são prestadoras de serviço para a Lead Certo — a Lead Certo mantém **uma conta em cada uma**, e cada franqueado (tenant) tem seus **próprios números exclusivos** dentro dessas contas compartilhadas (já é assim hoje com a Uazapi).
+Uazapi e Covercut são prestadoras de serviço para a Lead Certo — a Lead Certo mantém **uma conta em cada uma** (credenciais globais, no `.env`, iguais ao padrão já usado para `UAZAPI_KEY`), e cada franqueado (tenant) tem seus **próprios números exclusivos** dentro dessas contas compartilhadas.
 
-**Cada tenant pode ter mais de um número, tanto oficial quanto não-oficial — isso entra nesta entrega.** Um tenant poderá conectar e gerenciar vários números não-oficiais (prospecção, distribuindo volume e respeitando limites anti-ban por número) e vários números oficiais (cada um recebendo o tráfego da(s) campanha(s) de anúncio que aponta(m) para ele).
+**Confirmado com o Leonardo (2026-07-29): o cadastro de cada número oficial na Covercut é manual, feito por ele diretamente no painel deles** (`api.covercut.com.br/dashboard`) — não existe (nem é necessário construir) um fluxo de provisionamento programático a partir do Lead Certo. O papel do Lead Certo é **adotar** um número que já existe do lado da Covercut, não criá-lo.
 
 ---
 
 ## 3. Modelo de dados
 
-### 3.1 Nova tabela `whatsapp_canais`
+### 3.1 Tabela `whatsapp_canais` — já existe, sem migration nova aqui
+
+Criada na entrega anterior, já suporta os dois tipos:
 
 ```
 whatsapp_canais
   id
   tenant_id          FK -> tenants
-  tipo               enum('oficial', 'nao_oficial')
-  provider           enum('covercut', 'uazapi')
-  status             enum('connected', 'connecting', 'disconnected')
+  tipo               string('oficial' | 'nao_oficial')
+  provider            string('covercut' | 'uazapi')
+  status             string('connected' | 'connecting' | 'disconnected')
   phone              string, nullable
   connected_since    timestamp, nullable
   config             json   -- segredos/campos específicos do provider:
                              --   uazapi: instance_name, instance_token, webhook_token
-                             --   covercut: phone_number_id, waba_id, api_key, api_secret, webhook_secret
+                             --   covercut: phone_number_id, webhook_secret
+  webhook_token      string, nullable, unique  -- só usado por canais 'uazapi' (token na URL); canais 'covercut' não usam este campo, ver seção 6
   timestamps
 ```
 
-Sem unique constraint de "1 por tipo por tenant" — é uma regra de aplicação (hoje: no máximo 1 não-oficial + 1 oficial por tenant), não uma trava de schema. Isso evita uma migration futura para desfazer a constraint quando o multi-número for implementado.
+Nenhuma alteração de schema necessária nesta tabela. `tipo='oficial'` e `provider='covercut'` já são valores válidos, só nunca populados ainda.
 
-### 3.2 Alterações em `tickets_atendimento`
+### 3.2 Alterações em `tickets_atendimento` (migration nova, aditiva)
 
 ```
-+ whatsapp_canal_id     FK -> whatsapp_canais (nullable durante a migração, depois obrigatório)
 + janela_expira_em      timestamp, nullable   -- só usado quando canal.tipo === 'oficial'
 + janela_origem_anuncio boolean, default false -- true = janela de 72h (veio de anúncio), false = 24h
 ```
 
-Cada ticket aponta para o canal específico que está sendo usado — a resolução de "qual canal enviar" nunca depende de uma suposição de singularidade no tenant, e sim do canal já registrado no ticket. Isso é o que viabiliza vários números (oficiais e não-oficiais) por tenant coexistindo.
+`whatsapp_canal_id` já existe (entrega anterior) — é o mesmo campo que resolve o canal do ticket, oficial ou não-oficial.
 
 ### 3.3 Alterações em `mensagens`
 
@@ -66,26 +79,9 @@ uazapi_message_id  →  provider_message_id
 
 Generalização do campo de deduplicação de eventos de webhook, hoje nomeado especificamente para Uazapi, para servir aos dois provedores.
 
-### 3.4 Nova tabela pivot `kanban_whatsapp_canais`
+### 3.4 Tabela pivot `kanban_whatsapp_canais` — já existe, reaproveitada sem mudança
 
-```
-kanban_whatsapp_canais
-  id
-  kanban_id          FK -> kanbans
-  whatsapp_canal_id  FK -> whatsapp_canais
-  timestamps
-```
-
-Muitos-para-muitos: um canal pode estar vinculado a mais de um Kanban, um Kanban pode ter vários canais. É a partir daqui que a tela de configuração do Kanban lista/edita quais canais aquele Kanban usa (seção 5.1).
-
-### 3.5 Estratégia de migração (produção já usa Uazapi ativamente)
-
-Em duas etapas, seguindo a mesma cautela do fluxo de deploy já documentado no `CLAUDE.md` do projeto (histórico de quebra de produção por migration mal planejada em julho/2026):
-
-1. **Migration aditiva**: cria `whatsapp_canais`, popula 1 linha por tenant existente (`tipo = nao_oficial`, `provider = uazapi`) copiando os campos atuais (`uazapi_instance_token`, `uazapi_webhook_token`, `whatsapp_status`, `whatsapp_phone`, `whatsapp_connected_since`). Os campos antigos em `tenants` continuam existindo e sendo lidos — nada quebra.
-2. **Migration de limpeza** (só depois de validar em produção): remove os campos antigos de `tenants`, e os serviços que hoje leem `$tenant->uazapi_instance_token` diretamente passam a resolver o canal:
-   - Quando há um ticket em mãos: via `$ticket->canal` (já aponta para a linha certa).
-   - Quando não há ticket ainda (ex: primeira mensagem de prospecção pra um lead novo, geração de QR Code, importação de contatos): via a estratégia de seleção de canal descrita na seção 5.1 — nunca assumindo "o único número não-oficial do tenant", já que agora pode haver vários.
+Um canal oficial se vincula a um Kanban exatamente do mesmo jeito que um canal não-oficial já se vincula hoje (`kanban.config`, entrega anterior). Nenhuma mudança de schema ou de UI de vínculo — só passa a listar canais `tipo='oficial'` também, que hoje nunca existem.
 
 ---
 
@@ -95,38 +91,47 @@ Em duas etapas, seguindo a mesma cautela do fluxo de deploy já documentado no `
   - `+24h` por padrão.
   - `+72h` se o payload do webhook trouxer dados de referral de anúncio (ex: `ctwa_clid` / objeto `referral` do Cloud API) — nesse caso `janela_origem_anuncio = true`.
 - Cada nova mensagem do lead **reinicia** a contagem (recalcula `janela_expira_em` a partir de agora).
-- Qualquer tentativa de envio pelo canal oficial passa por uma checagem prévia: se `now() > janela_expira_em`, o envio é **bloqueado** — sem fallback de template, sem retry automático. Loga o bloqueio e sinaliza o ticket para atenção humana (mesmo espírito de "não tentar reconectar automaticamente" já usado hoje para instância Uazapi desconectada).
+- Qualquer tentativa de envio pelo canal oficial passa por uma checagem prévia: se `now() > janela_expira_em`, o envio é **bloqueado** — sem fallback de template, sem retry automático. Loga o bloqueio e sinaliza o ticket para atenção humana.
 - Não há, nesta entrega, nenhuma tela de configuração de templates — está fora de escopo porque a decisão de negócio é não usar templates.
 
 ---
 
 ## 5. Camada de serviço
 
-Introduzir uma interface pequena, `CanalWhatsappInterface`, com os métodos que hoje o `UazapiService` expõe para envio/presença (`enviarTexto`, `enviarMenuBotoes`, `setPresenca`, `status`), implementada por:
+Introduzir uma interface pequena, `CanalWhatsappInterface`, com os métodos que hoje o `UazapiService` expõe para envio (`enviarTexto` no mínimo — botões/mídia podem ficar para uma iteração seguinte se a Cloud API/Covercut exigir formato muito diferente, ver pendência na seção 8), implementada por:
 
-- `UazapiChannelService` — wrapper fino do `UazapiService` existente (comportamento inalterado).
-- `CovercutChannelService` — novo, fala com a Cloud API da Meta através dos endpoints da Covercut (`X-API-Key`/`X-API-Secret`, base `https://api.covercut.com.br/api/v1`), e aplica a checagem de janela (seção 4) antes de qualquer envio.
+- `UazapiChannelService` — wrapper fino do `UazapiService` existente (comportamento inalterado, usado pelos canais não-oficiais).
+- `CovercutChannelService` — novo, fala com a API da Covercut (`X-API-Key`/`X-API-Secret`, base `https://api.covercut.com.br/api/v1`), e aplica a checagem de janela (seção 4) antes de qualquer envio.
 
-`HumanizacaoService`, `SdrResponderService` e demais consumidores passam a resolver o canal do ticket (`$ticket->canal`) e delegar à implementação correta, em vez de instanciar `UazapiService` diretamente.
+Consumidores que hoje resolvem `$ticket->canal->tokenUazapi()` diretamente (`SdrResponderService`, `KanbanController::enviarMensagem`, etc. — lista completa dos pontos já migrados na entrega anterior) passam a resolver `$ticket->canal` e delegar à implementação correta pelo `provider` do canal, em vez de assumir Uazapi.
 
-### 5.1 Seleção de número: vínculo por Kanban + rodízio aleatório (v1)
+### 5.1 Seleção de número: vínculo por Kanban (reaproveitado sem mudança)
 
-Decisão: a seleção de número não é global no tenant, é **por Kanban**. A tela de configuração do Kanban (`kanban.config`, já existente) ganha uma nova seção onde o franqueado escolhe **quais canais (oficiais e não-oficiais) esse Kanban usa** — um canal pode estar vinculado a um ou mais Kanbans.
-
-Regra de envio v1 (simples, deliberadamente não-otimizada):
-- **Não-oficial**: a cada novo envio de prospecção, o sistema sorteia aleatoriamente um dos canais não-oficiais vinculados àquele Kanban.
-- **Oficial**: como o canal oficial só responde (nunca prospecta), o vínculo aqui serve para **rotear** a mensagem inbound recebida por aquele número para o Kanban correto, quando o tenant tiver mais de um Kanban.
-- Se o Kanban não tiver nenhum canal não-oficial vinculado, ou o canal sorteado estiver desconectado, o envio é bloqueado e logado — sem fallback silencioso para "qualquer número do tenant".
-
-**Reconhecidamente uma v1**: a maturidade de cada número (capacidade de envio, histórico de bloqueios, aquecimento) varia e hoje não entra no sorteio — é puramente aleatório entre os vinculados. Uma lógica de rodízio ponderado por maturidade/limites do número fica para uma iteração futura, fora desta entrega.
+- **Não-oficial**: sorteio aleatório entre os canais vinculados ao Kanban (já implementado).
+- **Oficial**: como o canal oficial só responde (nunca prospecta), o vínculo ao Kanban serve para **rotear** a mensagem inbound recebida por aquele número para o Kanban correto, quando o tenant tiver mais de um Kanban. Não participa do sorteio de prospecção.
 
 ---
 
 ## 6. Webhook de entrada
 
-Novo `CovercutWebhookController`, análogo ao `UazapiWebhookController` existente, mas:
-- Autenticação por assinatura HMAC-SHA256 (`webhook_secret` armazenado em `whatsapp_canais.config`), em vez do token opaco na URL usado pela Uazapi.
-- Parser próprio para o formato de payload da Cloud API/Covercut (diferente do formato Uazapi).
+**Confirmado em 2026-07-29 direto na documentação/painel da Covercut** (`api.covercut.com.br/docs/#configuracao`):
+
+- A Covercut expõe `POST /api/v1/numbers/webhook` (autenticado por `X-API-Key`/`X-API-Secret`) para registrar a URL de callback de um número específico: `{ "from": "<phone_number_id>", "webhook_url": "...", "enabled": true }`. A resposta traz o `webhook_secret` gerado para aquele número — vai para `whatsapp_canais.config.webhook_secret`.
+- Existe também `GET /api/v1/numbers/webhook?from=<phone_number_id>` (consultar) e remoção (`webhook_url` vazio ou `{"action":"delete"}`).
+- Existe uma "Configuração Geral (Fallback)" no painel da Covercut (URL usada por qualquer número sem URL específica) — **não usamos o fallback**: registramos explicitamente a mesma URL fixa (decisão da seção 6.1) em cada número, no momento em que ele é adotado no Lead Certo.
+- Autenticação de cada evento recebido: headers `X-BSP-Signature` (HMAC-SHA256 de `hash_hmac('sha256', $payload_bruto, $webhook_secret)`) + `X-BSP-Timestamp`.
+- Payload de mensagem inbound confirmado: `{ event: "message", direction: "inbound", contact: { wa_id, user_id, name }, message: { id, type, text } }`. A documentação pode ter mais campos por tipo de mensagem (mídia, botão, referral de anúncio) — conferir `api.covercut.com.br/docs/#configuracao` na hora de escrever o parser, não assumir do que está resumido aqui.
+
+### 6.1 Decisão: URL de webhook única para todo o sistema
+
+Ao contrário da Uazapi (token opaco embutido na própria URL, uma URL por instância), o canal oficial usa **uma única URL fixa** para todos os números oficiais, de todos os tenants (ex: `POST /api/webhook/covercut`). O `CovercutWebhookController`:
+
+1. Lê `phone_number_id` (campo `to`, ou equivalente — confirmar nome exato no payload real na hora de implementar) do evento recebido.
+2. Busca o `WhatsappCanal` cujo `config->phone_number_id` bate com esse valor (`provider='covercut'`).
+3. Só então valida `X-BSP-Signature` usando o `webhook_secret` **daquele canal específico** — a validação não pode rodar antes de saber qual canal é, já que o segredo é por número.
+4. Se nenhum canal corresponder, ou a assinatura não bater, rejeita (401/404) e loga — mesmo espírito do fallback/rejeição já usado no webhook da Uazapi.
+
+Menos pontos de configuração (a URL nunca muda, mesmo número novo), ao custo de resolver o canal pelo conteúdo do payload em vez de pela URL — igual ao trade-off já aceito na Uazapi quando um fallback de token legado foi adicionado.
 
 A lógica de negócio comum — criar/atualizar `Contato` e `TicketAtendimento`, salvar `Mensagem`, disparar SDR, avançar kanban — é extraída do `UazapiWebhookController` para um serviço compartilhado, chamado pelos dois controllers de webhook com o payload já normalizado. Evita duplicar a lógica de negócio entre os dois canais.
 
@@ -134,29 +139,33 @@ A lógica de negócio comum — criar/atualizar `Contato` e `TicketAtendimento`,
 
 ## 7. Fluxo de conexão (UI)
 
-Como agora cada tenant pode ter vários números de cada tipo, a página deixa de ser "1 card de status" e passa a ser uma **lista de números conectados**, por seção:
+Reaproveita a tela de Configurações → WhatsApp já reformulada na entrega anterior (lista de números, não mais "1 card de status"). Ganha uma nova seção:
 
-- **Seção "WhatsApp Não-Oficial"** (rótulo explícito deixando claro que é conexão direta via QR Code/Baileys, sem garantias da Meta): lista dos números não-oficiais já conectados (nome/apelido, telefone, status) + botão "Conectar novo número" (repete o fluxo de QR Code já existente, criando uma nova linha em `whatsapp_canais`).
-- **Seção "WhatsApp Oficial (Business API)"**: lista dos números oficiais já conectados (telefone, status, e se a verificação de empresa está pendente/concluída — ver manual `2026-07-25-cadastro-whatsapp-oficial-manual.md`, seção 3.3) + botão "Conectar novo número oficial", que abre o widget embutido da Covercut (janela customizável deles → fluxo de Embedded Signup da Meta).
+- **Seção "WhatsApp Oficial (Business API)"**: lista dos números oficiais já conectados (apelido, telefone, status) + botão "Conectar número oficial" → **formulário simples** (não widget): campos `phone_number_id` (colado do painel da Covercut), telefone, apelido. Ao salvar:
+  1. Backend chama `POST /api/v1/numbers/webhook` na Covercut com a URL fixa (seção 6.1) para aquele `phone_number_id`.
+  2. Guarda o `webhook_secret` retornado em `whatsapp_canais.config`.
+  3. Cria a linha em `whatsapp_canais` (`tipo='oficial'`, `provider='covercut'`, `status='connected'`).
+- Cada número da lista tem uma ação de remover, que desregistra o webhook na Covercut (`{"action":"delete"}`) e apaga a linha — **mesmo aviso reforçado de "isso é irreversível" que já foi identificado como pendência para o botão de remover não-oficial** (ver memória `arquitetura-canais-whatsapp`: o botão de remover hoje só tem um `confirm()` genérico do navegador).
 
-Cada número da lista tem uma ação de desconectar/remover. A atribuição de qual(is) número(s) cada Kanban usa não acontece nesta tela — acontece na configuração do próprio Kanban (`kanban.config`, ver seção 5.1).
-
-### 7.1 Dependência técnica em aberto
-
-A documentação pública da Covercut (`api.covercut.com.br/docs`) **não detalha** o mecanismo exato de retorno do widget embutido: como o `phone_number_id`/`waba_id` chegam de volta ao Lead Certo depois que o número conecta (webhook específico? redirect com parâmetros? postMessage?). Isso precisa ser confirmado com o Sandro (contato Covercut) ou na documentação privada de parceiro **antes** de iniciar a implementação desta seção. Não deve ser assumido/adivinhado no plano de implementação — é um bloqueador a resolver primeiro.
+A atribuição de qual(is) Kanban(ns) cada número oficial atende continua na tela `kanban.config` (seção 5.1), sem mudança nenhuma na UI de lá.
 
 ---
 
-## 8. Fora de escopo (combinado nesta rodada)
+## 8. Fora de escopo (combinado nesta rodada — pendências explícitas)
 
+- **Webhook de Alertas da Covercut** (qualidade do número, suspensão, assinatura — endpoint separado no painel deles). Fica para uma entrega futura, depois que o canal oficial estiver funcionando de verdade em produção.
+- **Buscar números automaticamente via API da Covercut** (dropdown em vez de colar `phone_number_id` manualmente) — só vale a pena se/quando confirmarmos que existe um endpoint de listagem; por ora, formulário manual resolve.
+- **Envio de mídia/botões pelo canal oficial** — o MVP cobre texto; se a Cloud API/Covercut exigir formato muito diferente do `UazapiService` para mídia/botões, essa parte pode virar uma iteration própria depois de validar texto em produção.
 - Templates de mensagem (marketing/utilidade) para reengajamento fora da janela.
-- Rodízio ponderado por maturidade/capacidade de cada número não-oficial (histórico de bloqueios, aquecimento, limites diferenciados por número) — v1 usa sorteio puramente aleatório entre os canais vinculados ao Kanban (seção 5.1); a lógica mais profunda fica para depois.
+- Rodízio ponderado por maturidade/capacidade de cada número não-oficial — já era pendência da entrega anterior, continua.
 - Migração completa para fora da Uazapi — Uazapi continua sendo a via de prospecção.
+- Reforço do aviso de confirmação no botão "Remover" (canal oficial e não-oficial) — pendência identificada, não bloqueia esta entrega.
 
 ---
 
 ## 9. Referências
 
 - Manual funcional: `docs/superpowers/specs/2026-07-25-cadastro-whatsapp-oficial-manual.md`
+- Plano da entrega anterior (não-oficial, já em produção): `docs/superpowers/plans/2026-07-27-canal-whatsapp-multinumero-kanban.md`
 - Regras de humanização/anti-ban (canal não-oficial): `leadcerto-whatsapp-regras/regra-geral-de-envio-de-mensagens-no-whatsapp.md`
-- Documentação técnica Covercut: `api.covercut.com.br/docs`
+- Documentação técnica Covercut (fonte viva, consultar sempre antes de implementar): `api.covercut.com.br/docs/#configuracao`
