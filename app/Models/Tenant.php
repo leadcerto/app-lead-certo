@@ -30,11 +30,9 @@ class Tenant extends Model
         'ia_contexto',
         'tabela_precos_pdf_path',
         'tabela_precos_texto',
-        'sdr_ativo',
     ];
 
     protected $casts = [
-        'sdr_ativo'               => 'boolean',
         'secretaria_envio_ativo'  => 'boolean',
     ];
 

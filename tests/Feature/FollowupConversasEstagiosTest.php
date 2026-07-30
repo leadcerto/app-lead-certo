@@ -29,7 +29,7 @@ class FollowupConversasEstagiosTest extends TestCase
         parent::tearDown();
     }
 
-    private function criarTicketComUltimaMensagemHaXMinutos(int $minutosAtras, int $followupEstagioEnviado = 0): TicketAtendimento
+    private function criarTicketComUltimaMensagemHaXMinutos(int $minutosAtras, int $followupEstagioEnviado = 0, array $config = []): TicketAtendimento
     {
         $tenant  = Tenant::factory()->create();
         $contato = Contato::factory()->create();
@@ -45,6 +45,12 @@ class FollowupConversasEstagiosTest extends TestCase
             'remetente' => 'bot', 'tipo' => 'texto', 'conteudo' => 'Oi!',
             'enviado_em' => now()->subMinutes($minutosAtras),
         ]);
+
+        // ia_ativo=true por padrão — os testes deste arquivo cobrem a lógica de
+        // TEMPO/estágio, não a checagem de IA ativa (coberta em arquivo próprio).
+        KanbanColunaConfig::create(array_merge([
+            'tenant_id' => $tenant->id, 'coluna_kanban' => 'lead_novo', 'ia_ativo' => true,
+        ], $config));
 
         return $ticket;
     }
@@ -93,12 +99,8 @@ class FollowupConversasEstagiosTest extends TestCase
 
     public function test_respeita_limites_customizados_por_coluna(): void
     {
-        $ticket = $this->criarTicketComUltimaMensagemHaXMinutos(2 * 60); // 2h de silêncio
-
-        KanbanColunaConfig::create([
-            'tenant_id'     => $ticket->tenant_id,
-            'coluna_kanban' => 'lead_novo',
-            // Estágio 1 customizado pra 3h — 2h de silêncio ainda não deve disparar
+        // Estágio 1 customizado pra 3h — 2h de silêncio ainda não deve disparar
+        $ticket = $this->criarTicketComUltimaMensagemHaXMinutos(2 * 60, config: [
             'followup_estagio1_segundos' => 3 * 3600,
             'followup_estagio2_segundos' => 5 * 3600,
             'followup_estagio3_segundos' => 8 * 3600,
@@ -117,6 +119,26 @@ class FollowupConversasEstagiosTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-07-10 23:00:00'));
         $ticket = $this->criarTicketComUltimaMensagemHaXMinutos(7 * 60);
+
+        $this->mock(SdrResponderService::class, function ($mock) {
+            $mock->shouldReceive('responder')->never();
+        });
+
+        $this->artisan('conversas:followup')->assertExitCode(0);
+
+        $this->assertSame(0, $ticket->fresh()->followup_estagio_enviado);
+    }
+
+    /**
+     * Bug real reportado pelo Leonardo (2026-07-30): desativar "Agente ativo
+     * nesta coluna" (ia_ativo) só bloqueava a resposta AO VIVO (SdrResponderJob)
+     * — os Estágios de silêncio continuavam disparando mesmo assim, porque
+     * FollowupConversas chamava SdrResponderService::responder() direto, sem
+     * checar ia_ativo. Corrigido pra respeitar o mesmo gate.
+     */
+    public function test_nao_dispara_quando_ia_ativo_e_falso(): void
+    {
+        $ticket = $this->criarTicketComUltimaMensagemHaXMinutos(90, config: ['ia_ativo' => false]);
 
         $this->mock(SdrResponderService::class, function ($mock) {
             $mock->shouldReceive('responder')->never();

@@ -20,47 +20,6 @@
         </a>
     </div>
 
-    {{-- Toggle IA SDR --}}
-    <div class="mb-6 bg-white rounded-2xl shadow-sm p-5"
-         x-data="{ sdrAtivo: {{ $sdrAtivo ? 'true' : 'false' }}, salvando: false }"
-         @change.stop>
-        <div class="flex items-center justify-between gap-4">
-            <div>
-                <p class="text-sm font-semibold text-gray-800">Agente IA (SDR)</p>
-                <p class="text-xs text-gray-500 mt-0.5">
-                    Quando ativado, a IA responde automaticamente após o cliente enviar mensagem.
-                    Desativado, apenas as mensagens de sequência são enviadas.
-                </p>
-            </div>
-            <button
-                @click="sdrAtivo = !sdrAtivo; toggleIa(sdrAtivo)"
-                :class="sdrAtivo ? 'bg-green-600' : 'bg-gray-300'"
-                class="relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 focus:outline-none"
-                :disabled="salvando">
-                <span
-                    :class="sdrAtivo ? 'translate-x-5' : 'translate-x-1'"
-                    class="inline-block h-5 w-5 mt-1 transform rounded-full bg-white shadow transition-transform duration-200">
-                </span>
-            </button>
-        </div>
-        <p class="mt-2 text-xs font-medium" :class="sdrAtivo ? 'text-green-600' : 'text-gray-400'"
-           x-text="sdrAtivo ? '✓ IA ativa — respondendo automaticamente' : '✗ IA pausada — apenas sequência automática'">
-        </p>
-    </div>
-
-    <script>
-    async function toggleIa(valor) {
-        await fetch('/api/painel/ia/sdr-ativo', {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-            },
-            body: JSON.stringify({ sdr_ativo: valor }),
-        });
-    }
-    </script>
-
     <div x-data="whatsappCanais()" x-init="carregar()">
 
     <div class="flex items-center justify-between mb-2">

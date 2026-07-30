@@ -55,6 +55,19 @@ class FollowupConversas extends Command
 
             if (! $ticket) continue;
 
+            // Achado real (Leonardo, 2026-07-30): desativar "Agente ativo nesta
+            // coluna" só bloqueava a resposta ao vivo (SdrResponderJob já checava
+            // isso) — o follow-up continuava disparando por chamar responder()
+            // direto. Mesmo gate aplicado aqui.
+            $configCurto = KanbanColunaConfig::withoutGlobalScopes()
+                ->where('tenant_id', $ticket->tenant_id)
+                ->where('coluna_kanban', $ticket->coluna_kanban)
+                ->first();
+
+            if (! $configCurto?->ia_ativo) {
+                continue;
+            }
+
             $this->line("  ↺ [curto] #{$ticket->id} — {$ticket->contato?->nome}");
 
             if (! $dry) {
@@ -123,7 +136,7 @@ class FollowupConversas extends Command
                     default => 0,
                 };
 
-                if ($estagioAlvo > 0 && $estagioAlvo > $row->followup_estagio_enviado) {
+                if ($estagioAlvo > 0 && $estagioAlvo > $row->followup_estagio_enviado && $config?->ia_ativo) {
                     $ticket ??= TicketAtendimento::withoutGlobalScopes()
                         ->with(['contato', 'mensagens', 'persona', 'tenant'])
                         ->find($row->id);

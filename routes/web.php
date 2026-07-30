@@ -324,7 +324,6 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::post('/secretaria-eletronica/token',      [SecretariaEletronicaController::class, 'rotacionarToken']);
         Route::post('/secretaria-eletronica/mensagem',   [SecretariaEletronicaController::class, 'salvarMensagem']);
         Route::post('/secretaria-eletronica/toggle',     [SecretariaEletronicaController::class, 'toggleEnvio']);
-        Route::put('/ia/sdr-ativo',                      [\App\Http\Controllers\Painel\WhatsAppController::class, 'toggleSdrAtivo']);
     });
 
     // Sequências — dono e admin
