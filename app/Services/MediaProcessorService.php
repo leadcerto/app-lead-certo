@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\WhatsappCanal;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -559,5 +560,118 @@ class MediaProcessorService
             $mediaType === 'audio' => 'ogg',
             default => 'bin',
         };
+    }
+
+    // -------------------------------------------------------------------------
+    // Canal Oficial (Covercut) — a Meta já entrega mídia descriptografada, sem
+    // precisar replicar a descriptografia E2E do WhatsApp (usada só no Uazapi).
+    // -------------------------------------------------------------------------
+
+    /**
+     * Processa mensagem de mídia recebida pelo canal Oficial (Covercut) e retorna
+     * texto descritivo pro contexto do bot. Retorna null se o tipo não é
+     * processado (ainda) ou a mídia não pôde ser buscada/analisada.
+     */
+    public function processarOficial(array $message, WhatsappCanal $canal, ?string $focoAnalise = null): ?string
+    {
+        $tipo = $message['type'] ?? null;
+
+        return match ($tipo) {
+            'audio' => $this->processarAudioOficial($message, $canal),
+            default => null,
+        };
+    }
+
+    private function processarAudioOficial(array $message, WhatsappCanal $canal): string
+    {
+        if (! $this->groqKey) {
+            return '[Áudio recebido — transcrição não configurada]';
+        }
+
+        $mediaId = $message['audio']['id'] ?? null;
+        if (! $mediaId) {
+            Log::warning('MediaProcessor: payload de áudio oficial sem audio.id', ['message' => $message]);
+            return '[Áudio recebido — não foi possível identificar o arquivo]';
+        }
+
+        $midia = $this->baixarMidiaCovercut($mediaId, $canal);
+        if (! $midia) {
+            return '[Áudio recebido — não foi possível transcrever]';
+        }
+
+        $transcricao = $this->transcreverAudioBase64(base64_encode($midia['bytes']), $midia['mime']);
+
+        return $transcricao
+            ? "[Áudio transcrito: {$transcricao}]"
+            : '[Áudio recebido — não foi possível transcrever]';
+    }
+
+    /**
+     * Baixa mídia recebida pelo canal Oficial via Covercut e salva permanentemente
+     * em storage/public, retornando uma URL própria (mesmo padrão de
+     * baixarEPersistirUrl(), usado pelo Uazapi) — pra exibir no card do Kanban.
+     * Retorna null se não conseguir baixar.
+     */
+    public function baixarEPersistirUrlOficial(array $message, WhatsappCanal $canal, string $mediaType): ?string
+    {
+        $mediaId = $message[$mediaType]['id'] ?? null;
+        if (! $mediaId) {
+            return null;
+        }
+
+        $midia = $this->baixarMidiaCovercut($mediaId, $canal);
+        if (! $midia) {
+            return null;
+        }
+
+        return $this->salvarBytes($midia['bytes'], $midia['mime'], $mediaType);
+    }
+
+    /**
+     * Busca os bytes de uma mídia via API da Covercut. Usa sempre mode=stream —
+     * o corpo da resposta é o arquivo bruto, mime-type no header Content-Type —
+     * evita ter que adivinhar o formato de um envelope JSON/base64 não
+     * documentado (ver design técnico, seção 3.1).
+     * Retorna ['bytes' => string, 'mime' => string] ou null em qualquer falha.
+     */
+    private function baixarMidiaCovercut(string $mediaId, WhatsappCanal $canal): ?array
+    {
+        $baseUrl       = config('services.covercut.base_url');
+        $phoneNumberId = $canal->config['phone_number_id'] ?? null;
+
+        if (! $baseUrl || ! $phoneNumberId) {
+            Log::warning('MediaProcessor: canal oficial sem base_url/phone_number_id', ['canal_id' => $canal->id]);
+            return null;
+        }
+
+        try {
+            $response = Http::withHeaders([
+                'X-API-Key'    => config('services.covercut.api_key'),
+                'X-API-Secret' => config('services.covercut.api_secret'),
+            ])->timeout(30)->get("{$baseUrl}/media/get", [
+                'id'   => $mediaId,
+                'from' => $phoneNumberId,
+                'mode' => 'stream',
+            ]);
+
+            if (! $response->successful()) {
+                Log::warning('MediaProcessor: falha ao baixar mídia da Covercut', [
+                    'media_id' => $mediaId,
+                    'status'   => $response->status(),
+                    'body'     => substr($response->body(), 0, 300),
+                ]);
+                return null;
+            }
+
+            return [
+                'bytes' => $response->body(),
+                'mime'  => $response->header('Content-Type') ?: 'application/octet-stream',
+            ];
+        } catch (\Exception $e) {
+            Log::error('MediaProcessor: exceção ao baixar mídia da Covercut', [
+                'media_id' => $mediaId, 'erro' => $e->getMessage(),
+            ]);
+            return null;
+        }
     }
 }

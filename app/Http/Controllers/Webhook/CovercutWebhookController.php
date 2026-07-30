@@ -10,6 +10,7 @@ use App\Models\Mensagem;
 use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
 use App\Models\WhatsappCanal;
+use App\Services\MediaProcessorService;
 use App\Services\SequenciaService;
 use App\Services\TelefoneService;
 use Illuminate\Http\JsonResponse;
@@ -17,8 +18,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Webhook do canal oficial (Covercut/Meta Cloud API). MVP: só texto — sem mídia,
- * sem botão, sem chamada de voz (fora de escopo, ver seção 8 do design técnico).
+ * Webhook do canal oficial (Covercut/Meta Cloud API). Texto e áudio (transcrito)
+ * já são processados; imagem/vídeo/documento ainda não (ver Tasks 2-3). Sem
+ * botão, sem chamada de voz (fora de escopo, ver seção 8 do design técnico).
  * Deliberadamente autocontido (não reusa UazapiWebhookController) — ver Architecture
  * no cabeçalho do plano.
  */
@@ -94,21 +96,7 @@ class CovercutWebhookController extends Controller
             return;
         }
         $telefone = $this->normalizarTelefone($telefoneRaw);
-
-        // `message.text` chega como STRING simples no payload real da Covercut
-        // (ex.: "text": "Ola"), não como objeto `{body: ...}` — o formato Meta
-        // Cloud API "cru" seria `text.body`, então a leitura tolera os dois.
-        $conteudo = $payload['message']['text']['body'] ?? ($payload['message']['text'] ?? null);
         $pushName = $payload['contact']['name'] ?? null;
-
-        if (! $conteudo) {
-            // MVP: só texto — mídia/áudio não tem tratamento nenhum ainda (ver
-            // cabeçalho da classe). Sem este log, a mensagem some sem rastro algum.
-            Log::info('Covercut webhook: mensagem não-texto ignorada (MVP)', [
-                'message_id' => $messageId,
-                'type'       => $payload['message']['type'] ?? null,
-            ]);
-        }
 
         $temReferralAnuncio = isset($payload['message']['referral']) || isset($payload['message']['ctwa_clid']);
         $janelaExpiraEm = $temReferralAnuncio ? now()->addHours(72) : now()->addHours(24);
@@ -151,13 +139,44 @@ class CovercutWebhookController extends Controller
             $ticketNovo = true;
         }
 
+        // `message.text` chega como STRING simples no payload real da Covercut
+        // (ex.: "text": "Ola"), não como objeto `{body: ...}` — o formato Meta
+        // Cloud API "cru" seria `text.body`, então a leitura tolera os dois.
+        $tipo         = $payload['message']['type'] ?? null;
+        $conteudo     = null;
+        $tipoMensagem = 'texto';
+        $midiaUrl     = null;
+
+        if ($tipo === 'text') {
+            $conteudo = $payload['message']['text']['body'] ?? ($payload['message']['text'] ?? null);
+        } elseif ($tipo === 'audio') {
+            try {
+                $conteudo = app(MediaProcessorService::class)->processarOficial($payload['message'], $canal);
+                if ($conteudo !== null) {
+                    $tipoMensagem = 'audio';
+                    $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrlOficial($payload['message'], $canal, 'audio');
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Covercut webhook: falha ao processar áudio', ['message_id' => $messageId, 'erro' => $e->getMessage()]);
+            }
+        }
+
+        if (! $conteudo) {
+            // MVP: image/video/document ainda não têm tratamento (ver Tasks 2-3).
+            Log::info('Covercut webhook: mensagem não-texto ignorada (MVP)', [
+                'message_id' => $messageId,
+                'type'       => $tipo,
+            ]);
+        }
+
         if ($conteudo) {
             Mensagem::create([
                 'ticket_id'            => $ticket->id,
                 'tenant_id'            => $tenant->id,
                 'remetente'            => 'lead',
-                'tipo'                 => 'texto',
+                'tipo'                 => $tipoMensagem,
                 'conteudo'             => $conteudo,
+                'midia_url'            => $midiaUrl,
                 'provider_message_id'  => $messageId,
                 'enviado_em'           => now(),
             ]);
