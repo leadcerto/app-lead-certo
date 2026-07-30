@@ -78,4 +78,14 @@ class CovercutChannelService implements CanalWhatsappInterface
 
         return $response->successful();
     }
+
+    /**
+     * Covercut não tem pipeline de humanização (isso é exclusivo do Uazapi) — o envio
+     * já é uma única mensagem imediata, então só delega para enviarTexto(). A checagem
+     * de janela de conversa continua valendo normalmente.
+     */
+    public function enviarTextoDireto(WhatsappCanal $canal, string $telefone, string $texto): bool
+    {
+        return $this->enviarTexto($canal, $telefone, $texto);
+    }
 }

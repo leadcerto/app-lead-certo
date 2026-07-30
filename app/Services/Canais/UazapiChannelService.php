@@ -4,6 +4,7 @@ namespace App\Services\Canais;
 
 use App\Models\WhatsappCanal;
 use App\Services\HumanizacaoService;
+use App\Services\UazapiService;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -13,7 +14,10 @@ use Illuminate\Support\Facades\Log;
  */
 class UazapiChannelService implements CanalWhatsappInterface
 {
-    public function __construct(private HumanizacaoService $humanizacao) {}
+    public function __construct(
+        private HumanizacaoService $humanizacao,
+        private UazapiService $uazapi,
+    ) {}
 
     public function enviarTexto(WhatsappCanal $canal, string $telefone, string $texto): bool
     {
@@ -25,5 +29,21 @@ class UazapiChannelService implements CanalWhatsappInterface
         }
 
         return $this->humanizacao->processar($token, $telefone, $texto);
+    }
+
+    /**
+     * Envio imediato, sem humanização — mesmo caminho que a resposta manual do
+     * Kanban já usava antes da Task 7 (chamada direta a UazapiService::enviarTexto()).
+     */
+    public function enviarTextoDireto(WhatsappCanal $canal, string $telefone, string $texto): bool
+    {
+        $token = $canal->tokenUazapi();
+
+        if (! $token) {
+            Log::warning('UazapiChannelService: canal sem token, mensagem não enviada', ['canal_id' => $canal->id]);
+            return false;
+        }
+
+        return $this->uazapi->enviarTexto($token, $telefone, $texto);
     }
 }

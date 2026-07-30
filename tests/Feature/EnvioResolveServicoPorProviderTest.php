@@ -18,6 +18,79 @@ class EnvioResolveServicoPorProviderTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Decisão de produto: resposta manual do atendente no card do Kanban continua
+     * INSTANTÂNEA — uma única mensagem, sem divisão em balões nem delay simulado de
+     * digitação (isso é exclusivo do bot/sequências/follow-up). Este teste usa um
+     * texto com parágrafos duplos — que o HumanizacaoService dividiria em vários
+     * balões — para provar que o caminho manual (enviarTextoDireto) não passa por
+     * essa divisão: uma única chamada HTTP, com o texto completo.
+     */
+    public function test_kanban_controller_envia_direto_sem_humanizacao_quando_canal_e_uazapi(): void
+    {
+        Http::fake(['*/send/text' => Http::response(['id' => 'msg-direto'], 200)]);
+
+        $tenant  = Tenant::factory()->create();
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, // provider padrão da factory = 'uazapi'
+            'config'    => ['instance_token' => 'token-do-canal'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511977777777']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'humano',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+        $user = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+
+        $textoLongo = "Primeiro parágrafo da resposta.\n\nSegundo parágrafo, que separado ativaria a divisão em balões do HumanizacaoService.";
+
+        $response = $this->actingAs($user)->postJson("/api/painel/kanban/ticket/{$ticket->id}/mensagem", [
+            'conteudo' => $textoLongo,
+        ]);
+
+        $response->assertCreated();
+
+        // Uma única chamada, com o texto inteiro — nada de balões separados.
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/send/text')
+            && $request->hasHeader('token', 'token-do-canal')
+            && $request['text'] === $textoLongo);
+    }
+
+    /**
+     * Achado da revisão: canal vinculado ao ticket mas sem instance_token configurado.
+     * Comportamento aceito: 502 genérico ("Falha ao enviar pelo WhatsApp"), sem
+     * nenhuma chamada HTTP de saída (o guard de token do UazapiChannelService barra
+     * antes de qualquer tentativa de envio).
+     */
+    public function test_kanban_controller_retorna_502_quando_canal_sem_instance_token(): void
+    {
+        Http::fake();
+
+        $tenant  = Tenant::factory()->create();
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id,
+            'config'    => [], // sem instance_token
+        ]);
+        $contato = Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'humano',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+        $user = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+
+        $response = $this->actingAs($user)->postJson("/api/painel/kanban/ticket/{$ticket->id}/mensagem", [
+            'conteudo' => 'Oi, tudo bem?',
+        ]);
+
+        $response->assertStatus(502);
+        Http::assertNothingSent();
+    }
+
     public function test_kanban_controller_envia_por_covercut_quando_canal_e_oficial(): void
     {
         // CovercutChannelService chama POST {base_url}/messages/send (não /messages).

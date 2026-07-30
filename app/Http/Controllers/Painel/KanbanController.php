@@ -246,7 +246,7 @@ class KanbanController extends Controller
             return response()->json(['message' => 'Nenhum canal de WhatsApp vinculado a este atendimento.'], 502);
         }
 
-        $enviado = $canal->servico()->enviarTexto($canal, $telefone, $request->conteudo);
+        $enviado = $canal->servico()->enviarTextoDireto($canal, $telefone, $request->conteudo);
 
         if (! $enviado) {
             return response()->json(['message' => 'Falha ao enviar pelo WhatsApp.'], 502);
