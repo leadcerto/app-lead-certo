@@ -195,4 +195,79 @@ class CovercutWebhookMidiaTest extends TestCase
         $this->assertSame('sem id aqui', $mensagem->conteudo);
         Http::assertNothingSent();
     }
+
+    public function test_video_e_salvo_com_tipo_video_e_midia_url(): void
+    {
+        Http::fake([
+            '*/media/get*' => Http::response('conteudo-binario-fake-video', 200, ['Content-Type' => 'video/mp4']),
+        ]);
+
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777'],
+            'message' => ['id' => 'wamid.vid1', 'type' => 'video', 'video' => ['id' => 'media-vid-1', 'caption' => 'olha isso']],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        $mensagem = Mensagem::where('provider_message_id', 'wamid.vid1')->first();
+        $this->assertNotNull($mensagem);
+        $this->assertSame('video', $mensagem->tipo);
+        $this->assertStringContainsString('olha isso', $mensagem->conteudo);
+        $this->assertNotNull($mensagem->midia_url);
+    }
+
+    public function test_documento_e_salvo_com_placeholder_sem_midia_url(): void
+    {
+        Http::fake(); // não deveria ser chamado — documento não baixa mídia
+
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777'],
+            'message' => ['id' => 'wamid.doc1', 'type' => 'document', 'document' => ['filename' => 'orcamento.pdf']],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        $mensagem = Mensagem::where('provider_message_id', 'wamid.doc1')->first();
+        $this->assertNotNull($mensagem);
+        $this->assertSame('texto', $mensagem->tipo);
+        $this->assertStringContainsString('orcamento.pdf', $mensagem->conteudo);
+        $this->assertNull($mensagem->midia_url);
+        Http::assertNothingSent();
+    }
+
+    public function test_tipo_unsupported_da_meta_continua_apenas_logado(): void
+    {
+        Http::fake();
+
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777'],
+            'message' => ['id' => 'wamid.unsup1', 'type' => 'unsupported', 'unsupported' => ['type' => 'unknown']],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        $this->assertDatabaseMissing('mensagens', ['provider_message_id' => 'wamid.unsup1']);
+        Http::assertNothingSent();
+    }
 }

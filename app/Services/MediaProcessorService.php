@@ -574,18 +574,39 @@ class MediaProcessorService
 
     /**
      * Processa mensagem de mídia recebida pelo canal Oficial (Covercut) e retorna
-     * texto descritivo pro contexto do bot. Retorna null se o tipo não é
-     * processado (ainda) ou a mídia não pôde ser buscada/analisada.
+     * texto descritivo pro contexto do bot. Cobre áudio, imagem, vídeo e
+     * documento; retorna null para tipos genuinamente não suportados (ex.:
+     * unsupported, sticker, poll).
      */
     public function processarOficial(array $message, WhatsappCanal $canal, ?string $focoAnalise = null): ?string
     {
         $tipo = $message['type'] ?? null;
 
         return match ($tipo) {
-            'audio' => $this->processarAudioOficial($message, $canal),
-            'image' => $this->processarImagemOficial($message, $canal, $focoAnalise),
-            default => null,
+            'audio'    => $this->processarAudioOficial($message, $canal),
+            'image'    => $this->processarImagemOficial($message, $canal, $focoAnalise),
+            'video'    => $this->processarVideoOficial($message),
+            'document' => $this->processarDocumentoOficial($message),
+            default    => null,
         };
+    }
+
+    private function processarVideoOficial(array $message): string
+    {
+        $caption = $message['video']['caption'] ?? '';
+        return $caption ? "[Vídeo recebido com legenda: {$caption}]" : '[Vídeo recebido]';
+    }
+
+    private function processarDocumentoOficial(array $message): string
+    {
+        $nomeArquivo = $message['document']['filename'] ?? null;
+        $caption     = $message['document']['caption'] ?? '';
+
+        if ($nomeArquivo) {
+            return "[Documento recebido: {$nomeArquivo}]" . ($caption ? " — {$caption}" : '');
+        }
+
+        return $caption ? "[Documento recebido: {$caption}]" : '[Documento recebido]';
     }
 
     private function processarImagemOficial(array $message, WhatsappCanal $canal, ?string $focoAnalise = null): string

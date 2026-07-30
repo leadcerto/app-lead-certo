@@ -19,11 +19,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Webhook do canal oficial (Covercut/Meta Cloud API). Texto e áudio (transcrito)
- * já são processados; imagem/vídeo/documento ainda não (ver Tasks 2-3). Sem
- * botão, sem chamada de voz (fora de escopo, ver seção 8 do design técnico).
- * Deliberadamente autocontido (não reusa UazapiWebhookController) — ver Architecture
- * no cabeçalho do plano.
+ * Webhook do canal oficial (Covercut/Meta Cloud API). Processa texto, áudio
+ * (transcrição) e imagem (descrição + itens identificados) — ver
+ * docs/superpowers/specs/2026-07-30-midia-canal-oficial-covercut-design.md.
+ * Vídeo/documento têm placeholder sem análise real (paridade com o Uazapi).
+ * Sem botão nem chamada de voz (fora de escopo). Deliberadamente autocontido
+ * (não reusa UazapiWebhookController) — ver Architecture no plano original
+ * (2026-07-29).
  */
 class CovercutWebhookController extends Controller
 {
@@ -181,10 +183,19 @@ class CovercutWebhookController extends Controller
             } catch (\Throwable $e) {
                 Log::warning('Covercut webhook: falha ao processar imagem', ['message_id' => $messageId, 'erro' => $e->getMessage()]);
             }
+        } elseif ($tipo === 'video') {
+            $conteudo = app(MediaProcessorService::class)->processarOficial($payload['message'], $canal);
+            $tipoMensagem = 'video';
+            $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrlOficial($payload['message'], $canal, 'video');
+        } elseif ($tipo === 'document') {
+            // Paridade com o Uazapi: documento nunca guarda midia_url nem usa o
+            // enum 'documento' de fato — sempre tipo 'texto' com placeholder.
+            $conteudo = app(MediaProcessorService::class)->processarOficial($payload['message'], $canal);
         }
 
         if (! $conteudo) {
-            // MVP: image/video/document ainda não têm tratamento (ver Tasks 2-3).
+            // Tipos genuinamente não tratados (ex.: unsupported, sticker, poll,
+            // location, contacts) continuam só logados aqui.
             Log::info('Covercut webhook: mensagem não-texto ignorada (MVP)', [
                 'message_id' => $messageId,
                 'type'       => $tipo,
