@@ -828,6 +828,52 @@
                                     Se o lead ficar em silêncio pelo tempo configurado acima (contado desde a última mensagem da conversa), o sistema move o atendimento sozinho pra coluna escolhida — independente dos Estágios de silêncio acima. Se o destino for <strong>Encerrado</strong>, o sistema também marca como encerrado automaticamente e gera os relatórios de IA (mesmo efeito do botão Encerrar); se o lead responder depois, o atendimento reabre normalmente. Se preencher a mensagem, ela é enviada ao lead exatamente antes de mover — use <code class="bg-white px-1 rounded">{nome}</code> pra personalizar. Roda junto com os Estágios de silêncio (5 em 5 minutos, horário comercial).
                                 </p>
                             </div>
+
+                            {{-- Exclusão definitiva --}}
+                            <div class="mt-3 pt-3 border-t border-gray-100">
+                                <label class="flex items-center gap-2 mb-2 cursor-pointer">
+                                    <input type="checkbox"
+                                           :checked="exclusaoDefinitivaAtivo[col.key]"
+                                           @change="exclusaoDefinitivaAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true"
+                                           class="w-3.5 h-3.5 accent-red-600">
+                                    <span class="text-xs font-semibold text-gray-500">Exclusão definitiva</span>
+                                </label>
+
+                                <template x-if="exclusaoDefinitivaSalvo[col.key]">
+                                    <div class="mb-2 p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+                                        <span class="font-semibold text-gray-700">✓ Confirmado salvo no sistema:</span>
+                                        <template x-if="exclusaoDefinitivaSalvo[col.key].ativo">
+                                            <span>
+                                                tickets encerrados nesta coluna há mais de
+                                                <strong x-text="exclusaoDefinitivaSalvo[col.key].dias + ' dias'"></strong>
+                                                são apagados definitivamente (conversa inteira, sem volta).
+                                            </span>
+                                        </template>
+                                        <template x-if="! exclusaoDefinitivaSalvo[col.key].ativo">
+                                            <span>desativado — nada é apagado automaticamente nesta coluna.</span>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <template x-if="exclusaoDefinitivaAtivo[col.key]">
+                                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                                        <span class="text-xs text-gray-500">Apagar tickets encerrados nesta coluna há mais de</span>
+                                        <input type="number" min="1"
+                                               :value="exclusaoDefinitivaDias[col.key] ?? 90"
+                                               @input="exclusaoDefinitivaDias[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true"
+                                               class="w-16 text-xs border border-gray-300 rounded px-2 py-1">
+                                        <span class="text-xs text-gray-500">dias</span>
+                                    </div>
+                                </template>
+
+                                <div class="mt-2 p-3 bg-red-50 border border-red-200 rounded-xl">
+                                    <p class="text-xs font-semibold text-red-800 mb-1">⚠ Ação irreversível</p>
+                                    <p class="text-xs text-red-700 leading-relaxed">
+                                        Roda toda madrugada. Conta a partir do momento em que o ticket foi <strong>encerrado</strong> nesta coluna (não de quando foi criado ou da última mensagem) — só tickets já encerrados entram na conta, nunca um atendimento em aberto. Apaga o ticket e todas as mensagens da conversa <strong>de vez, sem possibilidade de recuperação</strong>. Não envia nenhum aviso ao lead antes de apagar.
+                                    </p>
+                                </div>
+                            </div>
+
                             <div class="flex items-center justify-end gap-2 mt-2">
                                 <span x-show="iaSalvando[col.key]" class="text-xs text-gray-400">Salvando...</span>
                                 <span x-show="iaSalvo[col.key]" class="text-xs text-green-600">✓ Salvo</span>
@@ -1238,6 +1284,11 @@ function kanbanConfig() {
         // não salva, diferente dos campos acima (que são editáveis em tempo real).
         autoMoverSalvo: {},
 
+        // Exclusão definitiva de tickets encerrados (por coluna)
+        exclusaoDefinitivaAtivo: {},
+        exclusaoDefinitivaDias: {},
+        exclusaoDefinitivaSalvo: {},
+
         // ✨ Aplicar Variáveis IA
         analisandoSeqId: null,
         modalVar:        false,
@@ -1619,6 +1670,13 @@ function kanbanConfig() {
                     delayUnidade:  am.unidade,
                     mensagem:      this.autoMoverMensagem[key],
                 };
+
+                this.exclusaoDefinitivaAtivo[key] = json.exclusao_definitiva_ativo ?? false;
+                this.exclusaoDefinitivaDias[key]  = json.exclusao_definitiva_dias  ?? 90;
+                this.exclusaoDefinitivaSalvo[key] = {
+                    ativo: this.exclusaoDefinitivaAtivo[key],
+                    dias:  this.exclusaoDefinitivaDias[key],
+                };
             }
         },
 
@@ -1670,6 +1728,8 @@ function kanbanConfig() {
                 auto_mover_coluna_destino:  this.autoMoverDestino[key] || 'encerrado',
                 auto_mover_segundos:        this.delayParaSegundos(this.autoMoverDelay[key] ?? 3, this.autoMoverDelayUnidade[key] || 'dia'),
                 auto_mover_mensagem:        this.autoMoverMensagem[key] ?? '',
+                exclusao_definitiva_ativo:  this.exclusaoDefinitivaAtivo[key] ?? false,
+                exclusao_definitiva_dias:   this.exclusaoDefinitivaDias[key]  ?? 90,
             });
             this.iaSalvando[key] = false;
             if (res.ok) {

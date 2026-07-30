@@ -33,6 +33,8 @@ class KanbanColunaConfigController extends Controller
             'auto_mover_coluna_destino'   => $config?->auto_mover_coluna_destino   ?? '',
             'auto_mover_segundos'         => $config?->auto_mover_segundos         ?? 259200,
             'auto_mover_mensagem'         => $config?->auto_mover_mensagem         ?? '',
+            'exclusao_definitiva_ativo'   => $config?->exclusao_definitiva_ativo   ?? false,
+            'exclusao_definitiva_dias'    => $config?->exclusao_definitiva_dias    ?? 90,
         ]);
     }
 
@@ -56,6 +58,8 @@ class KanbanColunaConfigController extends Controller
             ],
             'auto_mover_segundos'         => 'sometimes|integer|min:60|max:31536000',
             'auto_mover_mensagem'         => 'nullable|string|max:1000',
+            'exclusao_definitiva_ativo'   => 'sometimes|boolean',
+            'exclusao_definitiva_dias'    => 'sometimes|integer|min:1|max:3650',
         ]);
 
         $update = array_filter($validated, fn($v) => $v !== null);

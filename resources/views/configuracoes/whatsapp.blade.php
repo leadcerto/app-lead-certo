@@ -61,58 +61,6 @@
     }
     </script>
 
-    {{-- Retenção de conversas --}}
-    <div class="mb-6 bg-white rounded-2xl shadow-sm p-5"
-         x-data="{
-             dias: {{ $retencaoDias ?? 'null' }},
-             salvando: false,
-             mensagem: null,
-             async salvar() {
-                 this.salvando = true;
-                 this.mensagem = null;
-                 const res = await fetch('/api/painel/whatsapp/retencao', {
-                     method: 'PUT',
-                     headers: {
-                         'Content-Type': 'application/json',
-                         'X-CSRF-TOKEN': document.querySelector('meta[name=\'csrf-token\']').content,
-                     },
-                     body: JSON.stringify({ dias: this.dias ? parseInt(this.dias) : null }),
-                 });
-                 this.salvando = false;
-                 this.mensagem = res.ok ? 'Salvo!' : 'Erro ao salvar.';
-                 setTimeout(() => this.mensagem = null, 3000);
-             }
-         }">
-        <p class="text-sm font-semibold text-gray-800 mb-1">Retenção de conversas</p>
-        <p class="text-xs text-gray-500 mb-3">
-            Conversas mais antigas que o prazo definido são apagadas automaticamente toda madrugada.
-            Deixe em branco para nunca apagar.
-        </p>
-        <div class="flex items-center gap-3">
-            <input
-                type="number"
-                x-model="dias"
-                min="1"
-                max="3650"
-                placeholder="Ex: 90"
-                class="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none">
-            <span class="text-sm text-gray-500">dias</span>
-            <button
-                @click="salvar()"
-                :disabled="salvando"
-                class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors disabled:opacity-50">
-                <span x-show="!salvando">Salvar</span>
-                <span x-show="salvando">Salvando...</span>
-            </button>
-            <span x-show="mensagem" x-text="mensagem"
-                  :class="mensagem === 'Salvo!' ? 'text-green-600' : 'text-red-500'"
-                  class="text-sm font-medium"></span>
-        </div>
-        <p x-show="dias" class="mt-2 text-xs text-amber-600">
-            ⚠ Conversas com mais de <span x-text="dias"></span> dias serão apagadas permanentemente.
-        </p>
-    </div>
-
     <div x-data="whatsappCanais()" x-init="carregar()">
 
     <div class="flex items-center justify-between mb-2">

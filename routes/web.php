@@ -203,9 +203,6 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         ->middleware('role:admin,dono');
     Route::delete('/whatsapp/canais-oficiais/{canal}', [\App\Http\Controllers\Painel\WhatsappCanalOficialController::class, 'destroy'])
         ->middleware('role:admin,dono');
-    Route::put('/whatsapp/retencao', [WhatsAppController::class, 'salvarRetencao'])
-        ->middleware('role:admin,dono');
-
     // Kanban
     Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda')->group(function () {
         Route::get('/kanban/tickets', [KanbanController::class, 'index']);

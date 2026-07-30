@@ -31,13 +31,11 @@ class Tenant extends Model
         'tabela_precos_pdf_path',
         'tabela_precos_texto',
         'sdr_ativo',
-        'retencao_conversas_dias',
     ];
 
     protected $casts = [
         'sdr_ativo'               => 'boolean',
         'secretaria_envio_ativo'  => 'boolean',
-        'retencao_conversas_dias' => 'integer',
     ];
 
     public function users(): HasMany

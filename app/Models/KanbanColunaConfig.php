@@ -33,10 +33,13 @@ class KanbanColunaConfig extends Model
         'auto_mover_coluna_destino',
         'auto_mover_segundos',
         'auto_mover_mensagem',
+        'exclusao_definitiva_ativo',
+        'exclusao_definitiva_dias',
     ];
 
     protected $casts = [
-        'ia_ativo'         => 'boolean',
-        'auto_mover_ativo' => 'boolean',
+        'ia_ativo'                  => 'boolean',
+        'auto_mover_ativo'          => 'boolean',
+        'exclusao_definitiva_ativo' => 'boolean',
     ];
 }
