@@ -766,6 +766,30 @@
                                        class="w-3.5 h-3.5 accent-red-600">
                                 <span class="text-xs font-semibold text-gray-500">Transferência automática por silêncio</span>
                             </label>
+
+                            {{-- Resumo do que está REALMENTE salvo no banco agora — nunca reflete
+                                 edição em andamento, só o que carregarIa()/salvarIa() confirmaram
+                                 com o servidor. Pedido do Leonardo: os campos editáveis logo acima
+                                 não dão nenhuma certeza visual do que está gravado de verdade. --}}
+                            <template x-if="autoMoverSalvo[col.key]">
+                                <div class="mb-2 p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+                                    <span class="font-semibold text-gray-700">✓ Confirmado salvo no sistema:</span>
+                                    <template x-if="autoMoverSalvo[col.key].ativo">
+                                        <span>
+                                            depois de
+                                            <strong x-text="autoMoverSalvo[col.key].delay + ' ' + autoMoverSalvo[col.key].delayUnidade"></strong>
+                                            de silêncio, mover para
+                                            <strong x-text="labelColuna(autoMoverSalvo[col.key].destino)"></strong>.
+                                            Mensagem:
+                                            <em x-text="autoMoverSalvo[col.key].mensagem ? '« ' + autoMoverSalvo[col.key].mensagem + ' »' : '(nenhuma — move sem avisar)'"></em>
+                                        </span>
+                                    </template>
+                                    <template x-if="! autoMoverSalvo[col.key].ativo">
+                                        <span>desativado.</span>
+                                    </template>
+                                </div>
+                            </template>
+
                             <template x-if="autoMoverAtivo[col.key]">
                                 <div>
                                     <div class="flex flex-wrap items-center gap-2 mb-2">
@@ -1209,6 +1233,10 @@ function kanbanConfig() {
         autoMoverDelayUnidade: {},
         autoMoverDestino: {},
         autoMoverMensagem: {},
+        // Snapshot do que está REALMENTE salvo no banco agora — só muda ao carregar
+        // do servidor ou logo após um salvamento confirmado. Nunca reflete edição
+        // não salva, diferente dos campos acima (que são editáveis em tempo real).
+        autoMoverSalvo: {},
 
         // ✨ Aplicar Variáveis IA
         analisandoSeqId: null,
@@ -1583,6 +1611,14 @@ function kanbanConfig() {
                 const am = this.segundosParaDisplay(json.auto_mover_segundos ?? 259200);
                 this.autoMoverDelay[key]        = am.valor;
                 this.autoMoverDelayUnidade[key] = am.unidade;
+
+                this.autoMoverSalvo[key] = {
+                    ativo:         this.autoMoverAtivo[key],
+                    destino:       this.autoMoverDestino[key],
+                    delay:         am.valor,
+                    delayUnidade:  am.unidade,
+                    mensagem:      this.autoMoverMensagem[key],
+                };
             }
         },
 
@@ -1640,6 +1676,10 @@ function kanbanConfig() {
                 this.iaAlterado[key] = false;
                 this.iaSalvo[key]    = true;
                 setTimeout(() => { this.iaSalvo[key] = false; }, 3000);
+                // Recarrega do servidor (não confia só no que foi enviado) — garante
+                // que o resumo "Confirmado salvo" abaixo reflete exatamente o valor
+                // gravado no banco, mesmo se o backend arredondar/normalizar algo.
+                await this.carregarIa(key);
             }
         },
 
