@@ -240,13 +240,13 @@ class KanbanController extends Controller
         }
 
         $telefone = $model->contato->telefone;
-        $token    = $model->canal?->tokenUazapi();
+        $canal    = $model->canal;
 
-        if (! $token) {
+        if (! $canal) {
             return response()->json(['message' => 'Nenhum canal de WhatsApp vinculado a este atendimento.'], 502);
         }
 
-        $enviado = $this->uazapi->enviarTexto($token, $telefone, $request->conteudo);
+        $enviado = $canal->servico()->enviarTexto($canal, $telefone, $request->conteudo);
 
         if (! $enviado) {
             return response()->json(['message' => 'Falha ao enviar pelo WhatsApp.'], 502);

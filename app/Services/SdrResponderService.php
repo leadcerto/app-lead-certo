@@ -13,9 +13,8 @@ use Illuminate\Support\Facades\Log;
 class SdrResponderService
 {
     public function __construct(
-        private LeadRouterService  $router,
-        private OpenRouterService  $openRouter,
-        private HumanizacaoService $humanizacao,
+        private LeadRouterService $router,
+        private OpenRouterService $openRouter,
     ) {}
 
     /**
@@ -83,17 +82,22 @@ class SdrResponderService
         $tokens   = array_map(fn (string $chave) => '[' . mb_strtoupper($chave) . ']', $chaves);
         $resposta = trim(str_replace($tokens, '', $resposta));
 
-        // ── 5. Enviar via WhatsApp com humanização ───────────────────────────
+        // ── 5. Enviar pelo canal certo (Uazapi ou Covercut, resolvido pelo ticket) ──
         $telefone = $ticket->contato?->telefone;
-        $token    = $ticket->canal?->tokenUazapi();
+        $canal    = $ticket->canal;
 
-        if ($telefone && $token) {
-            $this->humanizacao->processar($token, $telefone, $resposta);
+        if ($telefone && $canal) {
+            $enviado = $canal->servico()->enviarTexto($canal, $telefone, $resposta);
+            if (! $enviado) {
+                Log::warning('SdrResponder: envio não confirmado pelo canal', [
+                    'ticket_id' => $ticket->id, 'canal_id' => $canal->id,
+                ]);
+            }
         } else {
-            Log::warning('SdrResponder: sem token ou telefone, mensagem não enviada', [
+            Log::warning('SdrResponder: sem canal ou telefone, mensagem não enviada', [
                 'ticket_id' => $ticket->id,
                 'telefone'  => $telefone,
-                'tem_token' => (bool) $token,
+                'tem_canal' => (bool) $canal,
             ]);
         }
 

@@ -24,8 +24,6 @@ class UazapiChannelService implements CanalWhatsappInterface
             return false;
         }
 
-        $this->humanizacao->processar($token, $telefone, $texto);
-
-        return true;
+        return $this->humanizacao->processar($token, $telefone, $texto);
     }
 }

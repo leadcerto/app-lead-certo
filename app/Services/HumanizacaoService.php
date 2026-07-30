@@ -26,11 +26,13 @@ class HumanizacaoService
      * @param string $instanceToken  Token da instância Uazapi do tenant
      * @param string $numero         Telefone do destinatário (55119...)
      * @param string $texto          Resposta completa do LLM
+     * @return bool true se todos os balões foram enviados com sucesso
      */
-    public function processar(string $instanceToken, string $numero, string $texto): void
+    public function processar(string $instanceToken, string $numero, string $texto): bool
     {
-        $baloes = $this->dividirEmBaloes($texto);
-        $jid    = $numero . '@s.whatsapp.net';
+        $baloes  = $this->dividirEmBaloes($texto);
+        $jid     = $numero . '@s.whatsapp.net';
+        $sucesso = true;
 
         foreach ($baloes as $i => $balao) {
             // Simula digitando
@@ -44,6 +46,7 @@ class HumanizacaoService
             $ok = $this->uazapi->enviarTexto($instanceToken, $numero, $balao);
 
             if (! $ok) {
+                $sucesso = false;
                 Log::warning('HumanizacaoService: falha ao enviar balão', [
                     'numero' => $numero,
                     'balao'  => $i + 1,
@@ -59,6 +62,8 @@ class HumanizacaoService
 
         // Volta ao estado disponível após enviar tudo
         $this->uazapi->setPresenca($instanceToken, 'available');
+
+        return $sucesso;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
