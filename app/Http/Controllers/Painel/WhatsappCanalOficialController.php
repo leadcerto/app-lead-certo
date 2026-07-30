@@ -83,7 +83,10 @@ class WhatsappCanalOficialController extends Controller
             return response()->json(['message' => 'Erro ao registrar o webhook na Covercut. Confira o phone_number_id.'], 502);
         }
 
-        $webhookSecret = $response->json('webhook_secret');
+        // A resposta real da Covercut aninha o segredo dentro de "webhook" (confirmado
+        // em produção 2026-07-30 via chamada direta — os docs sugeriam nível raiz, mas
+        // o payload de verdade é {"success":true,"webhook":{"webhook_secret":"..."}}).
+        $webhookSecret = $response->json('webhook.webhook_secret');
 
         // Achado Importante 4 da revisão final: se a Covercut responder 200 sem
         // webhook_secret, o canal ficava criado com segredo null pra sempre — toda

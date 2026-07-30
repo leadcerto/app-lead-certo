@@ -22,8 +22,10 @@ class WhatsappCanalOficialControllerTest extends TestCase
 
     public function test_adota_numero_oficial_e_registra_webhook_na_covercut(): void
     {
+        // Formato real da resposta da Covercut (confirmado em produção 2026-07-30): o
+        // segredo vem aninhado dentro de "webhook", não no nível raiz do JSON.
         Http::fake([
-            '*/numbers/webhook' => Http::response(['webhook_secret' => 'segredo-gerado'], 200),
+            '*/numbers/webhook' => Http::response(['success' => true, 'webhook' => ['webhook_secret' => 'segredo-gerado']], 200),
         ]);
 
         $tenant = Tenant::factory()->create();
@@ -52,7 +54,7 @@ class WhatsappCanalOficialControllerTest extends TestCase
 
     public function test_nao_adota_o_mesmo_numero_duas_vezes(): void
     {
-        Http::fake(['*/numbers/webhook' => Http::response(['webhook_secret' => 'x'], 200)]);
+        Http::fake(['*/numbers/webhook' => Http::response(['success' => true, 'webhook' => ['webhook_secret' => 'x']], 200)]);
 
         $tenant = Tenant::factory()->create();
         $user   = $this->usuarioDono($tenant);
