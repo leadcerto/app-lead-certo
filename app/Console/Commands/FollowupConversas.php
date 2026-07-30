@@ -197,22 +197,37 @@ class FollowupConversas extends Command
     {
         if ($mensagem) {
             $telefone = $ticket->contato?->telefone;
-            $token    = $ticket->canal?->tokenUazapi();
+            $canal    = $ticket->canal;
 
-            if ($telefone && $token) {
+            // Achado Importante 5 da revisão final: resolvia o token via tokenUazapi()
+            // direto, que é sempre null pra um canal Covercut — a despedida configurada
+            // era silenciosamente descartada (sem log nenhum) e o ticket movia mesmo
+            // assim. Roteando por $canal->servico()->enviarTexto(), o Covercut também
+            // ganha de graça a checagem de janela de conversa (bloqueia se expirada).
+            if ($telefone && $canal) {
                 $nomeContato = $ticket->contato?->nome;
                 $temNome     = $nomeContato && $nomeContato !== $telefone;
                 $texto       = str_replace('{nome}', $temNome ? $nomeContato : '', $mensagem);
 
-                $humanizacao->processar($token, $telefone, $texto);
+                $enviado = $canal->servico()->enviarTexto($canal, $telefone, $texto);
 
-                Mensagem::create([
-                    'ticket_id'  => $ticket->id,
-                    'tenant_id'  => $ticket->tenant_id,
-                    'remetente'  => 'bot',
-                    'tipo'       => 'texto',
-                    'conteudo'   => $texto,
-                    'enviado_em' => now(),
+                if ($enviado) {
+                    Mensagem::create([
+                        'ticket_id'  => $ticket->id,
+                        'tenant_id'  => $ticket->tenant_id,
+                        'remetente'  => 'bot',
+                        'tipo'       => 'texto',
+                        'conteudo'   => $texto,
+                        'enviado_em' => now(),
+                    ]);
+                } else {
+                    Log::warning('FollowupConversas: envio da mensagem de auto-mover falhou ou foi bloqueado, ticket move sem enviar', [
+                        'ticket_id' => $ticket->id,
+                    ]);
+                }
+            } else {
+                Log::warning('FollowupConversas: sem canal ou telefone, mensagem de auto-mover não enviada', [
+                    'ticket_id' => $ticket->id,
                 ]);
             }
         }

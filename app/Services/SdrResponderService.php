@@ -89,9 +89,16 @@ class SdrResponderService
         if ($telefone && $canal) {
             $enviado = $canal->servico()->enviarTexto($canal, $telefone, $resposta);
             if (! $enviado) {
-                Log::warning('SdrResponder: envio não confirmado pelo canal', [
+                // Achado Importante 3 da revisão final: um bloqueio determinístico
+                // (ex: janela expirada no Covercut) não pode gravar uma Mensagem "bot"
+                // no histórico — o lead nunca recebeu, e o FollowupConversas avançaria
+                // followup_estagio_enviado achando que a mensagem saiu. Sem persistir e
+                // sem mover coluna aqui: melhor a IA tentar de novo no próximo gatilho.
+                Log::warning('SdrResponder: envio não confirmado pelo canal, resposta não persistida', [
                     'ticket_id' => $ticket->id, 'canal_id' => $canal->id,
                 ]);
+
+                return null;
             }
         } else {
             Log::warning('SdrResponder: sem canal ou telefone, mensagem não enviada', [

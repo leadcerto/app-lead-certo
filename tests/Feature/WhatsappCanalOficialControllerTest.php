@@ -69,6 +69,64 @@ class WhatsappCanalOficialControllerTest extends TestCase
         $response->assertStatus(422);
     }
 
+    /**
+     * Achado Crítico 2 da revisão final: a checagem de duplicidade era escopada por
+     * tenant_id, mas as credenciais da Covercut são globais — outro tenant podia
+     * "adotar" o mesmo phone_number_id de outro franqueado, rotacionando o
+     * webhook_secret na Covercut e derrubando (sequestrando) o canal original. A
+     * checagem GLOBAL barra isso: nenhum canal é criado, e a Covercut nunca chega a
+     * ser chamada de novo pra re-registrar o webhook.
+     */
+    public function test_outro_tenant_nao_consegue_adotar_numero_ja_conectado_por_outro_tenant(): void
+    {
+        Http::fake(['*/numbers/webhook' => Http::response(['webhook_secret' => 'x'], 200)]);
+
+        $tenantDono = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenantDono->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '123456789', 'webhook_secret' => 'segredo-original'],
+        ]);
+
+        $tenantInvasor = Tenant::factory()->create();
+        $userInvasor    = $this->usuarioDono($tenantInvasor);
+
+        $response = $this->actingAs($userInvasor)->postJson('/api/painel/whatsapp/canais-oficiais', [
+            'phone_number_id' => '123456789',
+            'telefone'        => '5521981813106',
+        ]);
+
+        $response->assertStatus(422);
+
+        $this->assertSame(1, WhatsappCanal::withoutGlobalScopes()
+            ->where('provider', 'covercut')
+            ->whereJsonContains('config->phone_number_id', '123456789')
+            ->count());
+        $this->assertDatabaseMissing('whatsapp_canais', ['tenant_id' => $tenantInvasor->id]);
+        Http::assertNothingSent();
+    }
+
+    /**
+     * Achado Importante 4 da revisão final: se a Covercut responder 200 sem
+     * webhook_secret no corpo, o canal era criado com segredo null e todo inbound
+     * ia 401 pra sempre (canal morto, sem forma de recuperar). O fix barra ANTES de
+     * criar a linha.
+     */
+    public function test_retorna_502_quando_covercut_responde_200_sem_webhook_secret(): void
+    {
+        Http::fake(['*/numbers/webhook' => Http::response(['ok' => true], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+
+        $response = $this->actingAs($user)->postJson('/api/painel/whatsapp/canais-oficiais', [
+            'phone_number_id' => '123456789',
+            'telefone'        => '5521981813106',
+        ]);
+
+        $response->assertStatus(502);
+        $this->assertDatabaseMissing('whatsapp_canais', ['tenant_id' => $tenant->id, 'tipo' => 'oficial']);
+    }
+
     public function test_retorna_502_quando_covercut_responde_erro(): void
     {
         Http::fake(['*/numbers/webhook' => Http::response(['message' => 'unauthorized'], 401)]);

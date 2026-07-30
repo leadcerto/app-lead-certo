@@ -5,11 +5,15 @@ namespace Tests\Feature;
 use App\Jobs\SdrResponderJob;
 use App\Models\Contato;
 use App\Models\Mensagem;
+use App\Models\Sequencia;
+use App\Models\SequenciaMensagem;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use App\Models\WhatsappCanal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 class CovercutWebhookControllerTest extends TestCase
@@ -78,6 +82,82 @@ class CovercutWebhookControllerTest extends TestCase
 
         $this->assertTrue($ticket->janela_origem_anuncio);
         $this->assertTrue($ticket->janela_expira_em->between(now()->addHours(71), now()->addHours(73)));
+    }
+
+    /**
+     * Achado Crítico 1 da revisão final: um lead novo pelo canal oficial nunca
+     * recebia a primeira mensagem da sequência porque SequenciaMensagemJob resolvia
+     * o token via tokenUazapi() (sempre null pra um canal Covercut). Este teste
+     * prova o caminho fim-a-fim: webhook cria ticket novo → SequenciaService dispara
+     * o job → o job efetivamente faz o POST em /messages/send (sem Bus::fake(),
+     * pra rodar a fila sync de verdade).
+     */
+    public function test_lead_novo_via_covercut_dispara_sequencia_que_realmente_envia_a_mensagem(): void
+    {
+        Http::fake(['*/messages/send' => Http::response(['id' => 'wamid.seq'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $sequencia = Sequencia::create([
+            'tenant_id' => $tenant->id, 'nome' => 'Boas-vindas', 'coluna_kanban' => 'lead_novo', 'ativo' => true,
+        ]);
+        SequenciaMensagem::create([
+            'tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,
+            'conteudo' => 'Oi! Recebemos sua mensagem.', 'delay_segundos' => 0, 'ativo' => true,
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777', 'name' => 'Sandro'],
+            'message' => ['id' => 'wamid.novolead', 'type' => 'text', 'text' => 'Oi'],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/messages/send')
+            && $request['to'] === '5521988887777'
+            && $request['text']['body'] === 'Oi! Recebemos sua mensagem.');
+    }
+
+    public function test_webhook_com_phone_number_id_desconhecido_retorna_401_e_nao_404(): void
+    {
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => 'inexistente',
+            'contact' => ['wa_id' => '5511999999999'],
+            'message' => ['id' => 'x', 'type' => 'text', 'text' => 'oi'],
+        ];
+
+        $response = $this->postComAssinatura($payload, 'nao-importa');
+
+        $response->assertStatus(401);
+    }
+
+    public function test_mensagem_inbound_nao_textual_e_logada_e_ignorada(): void
+    {
+        Bus::fake();
+        Log::spy();
+
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777', 'name' => 'Sandro'],
+            'message' => ['id' => 'wamid.midia', 'type' => 'image'],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        Log::shouldHaveReceived('info')
+            ->withArgs(fn ($message) => str_contains($message, 'mensagem não-texto ignorada'))
+            ->once();
     }
 
     public function test_rejeita_assinatura_invalida(): void

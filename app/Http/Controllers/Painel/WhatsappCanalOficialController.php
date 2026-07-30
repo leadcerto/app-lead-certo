@@ -40,13 +40,19 @@ class WhatsappCanalOficialController extends Controller
 
         $tenantId = $request->user()->tenant_id;
 
-        $jaExiste = WhatsappCanal::where('tenant_id', $tenantId)
-            ->where('tipo', 'oficial')
+        // Achado Crítico 2 da revisão final: as credenciais da Covercut são globais
+        // (um phone_number_id só pode estar registrado com UM webhook_secret por vez
+        // do lado da Covercut), então a checagem de duplicidade tem que ser GLOBAL
+        // entre todos os tenants — nunca escopada por tenant_id. Sem isso, outro
+        // tenant podia "adotar" o número de outro franqueado, rotacionando o
+        // webhook_secret na Covercut e derrubando o canal original (sequestro).
+        $jaExiste = WhatsappCanal::withoutGlobalScopes()
+            ->where('provider', 'covercut')
             ->whereJsonContains('config->phone_number_id', $validated['phone_number_id'])
             ->exists();
 
         if ($jaExiste) {
-            return response()->json(['message' => 'Este número já está conectado neste tenant.'], 422);
+            return response()->json(['message' => 'Este número já está em uso por outra conta.'], 422);
         }
 
         $webhookUrl = config('app.url') . '/api/webhook/covercut';
@@ -78,6 +84,19 @@ class WhatsappCanalOficialController extends Controller
         }
 
         $webhookSecret = $response->json('webhook_secret');
+
+        // Achado Importante 4 da revisão final: se a Covercut responder 200 sem
+        // webhook_secret, o canal ficava criado com segredo null pra sempre — toda
+        // assinatura de webhook inbound falharia (validarAssinatura() retorna false
+        // quando $segredo é null), um canal morto sem retorno possível. Barra ANTES
+        // de criar a linha.
+        if (empty($webhookSecret)) {
+            Log::warning('WhatsappCanalOficialController: Covercut respondeu sem webhook_secret', [
+                'phone_number_id' => $validated['phone_number_id'],
+            ]);
+
+            return response()->json(['message' => 'Erro ao registrar o webhook na Covercut. Confira o phone_number_id.'], 502);
+        }
 
         $canal = WhatsappCanal::create([
             'tenant_id' => $tenantId,

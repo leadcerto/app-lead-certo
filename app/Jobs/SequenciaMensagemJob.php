@@ -60,9 +60,17 @@ class SequenciaMensagemJob implements ShouldQueue
 
         $telefone = $ticket->contato?->telefone;
         $tenant   = $ticket->tenant;
-        $token    = $ticket->canal?->tokenUazapi();
+        $canal    = $ticket->canal;
 
-        if (! $telefone || ! $token) {
+        // Achado Crítico 1 da revisão final: o texto passa pela abstração
+        // $canal->servico()->enviarTexto() pra funcionar nos dois provedores — pra um
+        // canal Covercut, tokenUazapi() é sempre null, então o guard abaixo não pode
+        // exigir token nesse caso (só telefone). O caminho Uazapi abaixo continua
+        // usando $token normalmente, sem nenhuma mudança de comportamento.
+        $ehCovercut = $canal?->provider === 'covercut';
+        $token      = $ehCovercut ? null : $canal?->tokenUazapi();
+
+        if (! $telefone || (! $ehCovercut && ! $token)) {
             Log::warning('SequenciaMensagemJob: sem telefone ou token', ['ticket_id' => $this->ticketId]);
             return;
         }
@@ -103,6 +111,41 @@ class SequenciaMensagemJob implements ShouldQueue
         // existir (ou com o antigo enviarBotoes: bool) não têm botoesSettings no
         // payload, e o unserialize não roda o construtor.
         $botoesSettings = $this->botoesSettings ?? null;
+
+        if ($ehCovercut) {
+            // MVP text-only (ver cabeçalho de CovercutWebhookController): botões e
+            // imagem não têm implementação nenhuma no canal oficial — pular em vez
+            // de tentar enviar (silenciosamente) só o texto, que mudaria o conteúdo
+            // combinado na sequência sem avisar ninguém.
+            if (! empty($botoesSettings) || $this->imagemUrl) {
+                Log::info('Sequência: mídia/botões não suportados no canal oficial, mensagem pulada', [
+                    'ticket_id' => $this->ticketId,
+                    'tem_botoes' => ! empty($botoesSettings),
+                    'tem_imagem' => (bool) $this->imagemUrl,
+                ]);
+                return;
+            }
+
+            $enviado = $canal->servico()->enviarTexto($canal, $telefone, $texto);
+
+            if ($enviado) {
+                Mensagem::create([
+                    'ticket_id'  => $ticket->id,
+                    'tenant_id'  => $ticket->tenant_id,
+                    'remetente'  => 'bot',
+                    'tipo'       => 'texto',
+                    'conteudo'   => $texto,
+                    'enviado_em' => now(),
+                ]);
+            } else {
+                Log::warning('SequenciaMensagemJob: envio via canal oficial falhou ou foi bloqueado (janela expirada)', [
+                    'ticket_id' => $this->ticketId,
+                ]);
+            }
+
+            return;
+        }
+
         if (! empty($botoesSettings)) {
             $enviadoComBotoes = app(KanbanBotaoActionService::class)->enviarBotoes($ticket, $texto, $botoesSettings);
 

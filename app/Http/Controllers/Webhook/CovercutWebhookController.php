@@ -44,8 +44,10 @@ class CovercutWebhookController extends Controller
             ->first();
 
         if (! $canal) {
+            // 401 (não 404): não expor via enumeração se um phone_number_id existe ou
+            // não — mesmo status de assinatura inválida, ver validarAssinatura() abaixo.
             Log::warning('Covercut webhook: nenhum canal encontrado para phone_number_id', ['phone_number_id' => $phoneNumberId]);
-            abort(404);
+            abort(401);
         }
 
         $assinaturaValida = $this->validarAssinatura($request, $canal);
@@ -98,6 +100,15 @@ class CovercutWebhookController extends Controller
         // Cloud API "cru" seria `text.body`, então a leitura tolera os dois.
         $conteudo = $payload['message']['text']['body'] ?? ($payload['message']['text'] ?? null);
         $pushName = $payload['contact']['name'] ?? null;
+
+        if (! $conteudo) {
+            // MVP: só texto — mídia/áudio não tem tratamento nenhum ainda (ver
+            // cabeçalho da classe). Sem este log, a mensagem some sem rastro algum.
+            Log::info('Covercut webhook: mensagem não-texto ignorada (MVP)', [
+                'message_id' => $messageId,
+                'type'       => $payload['message']['type'] ?? null,
+            ]);
+        }
 
         $temReferralAnuncio = isset($payload['message']['referral']) || isset($payload['message']['ctwa_clid']);
         $janelaExpiraEm = $temReferralAnuncio ? now()->addHours(72) : now()->addHours(24);

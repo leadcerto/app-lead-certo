@@ -222,6 +222,110 @@ class FollowupConversasAutoMoverTest extends TestCase
         $this->assertSame('humano', $ticket->fresh()->agente_responsavel);
     }
 
+    /**
+     * Achado Importante 5 da revisão final: aplicarMovimentoAutomatico() resolvia o
+     * token via tokenUazapi() direto — sempre null pra um canal Covercut — e a
+     * despedida configurada era descartada silenciosamente (ticket movia mesmo
+     * assim, sem log nenhum). Roteando por $canal->servico()->enviarTexto(), o
+     * Covercut passa a mandar a mensagem de verdade via POST /messages/send.
+     */
+    public function test_auto_mover_com_canal_covercut_envia_mensagem_via_servico_do_canal(): void
+    {
+        Http::fake(['*/messages/send' => Http::response(['id' => 'wamid.despedida'], 200)]);
+
+        $tenant  = Tenant::factory()->create();
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '123456'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511955556666']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'aguardando_orcamento', 'agente_responsavel' => 'bot', 'etapa_ia' => 'etapa_1',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'followup_estagio_enviado' => 3,
+            'janela_expira_em' => now()->addHours(5),
+        ]);
+        Mensagem::create([
+            'ticket_id' => $ticket->id, 'tenant_id' => $tenant->id,
+            'remetente' => 'bot', 'tipo' => 'texto', 'conteudo' => 'Oi!',
+            'enviado_em' => now()->subDays(4),
+        ]);
+
+        KanbanColunaConfig::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'aguardando_orcamento',
+            'auto_mover_ativo' => true, 'auto_mover_coluna_destino' => 'encerrado',
+            'auto_mover_segundos' => 3 * 86400,
+            'auto_mover_mensagem' => 'Encerrando por falta de resposta.',
+        ]);
+
+        $this->artisan('conversas:followup')->assertExitCode(0);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/messages/send')
+            && $request['to'] === '5511955556666'
+            && $request['text']['body'] === 'Encerrando por falta de resposta.');
+
+        $ticket->refresh();
+        $this->assertSame('encerrado', $ticket->coluna_kanban);
+        $this->assertDatabaseHas('mensagens', [
+            'ticket_id' => $ticket->id,
+            'conteudo'  => 'Encerrando por falta de resposta.',
+        ]);
+    }
+
+    /**
+     * Janela expirada no Covercut: CovercutChannelService bloqueia o envio
+     * (retorna false) — o ticket ainda tem que mover, mas nenhuma chamada HTTP
+     * pode acontecer e a mensagem não pode ser gravada como enviada.
+     */
+    public function test_auto_mover_com_canal_covercut_e_janela_expirada_nao_envia_mas_move_o_ticket(): void
+    {
+        Http::fake(['*/messages/send' => Http::response(['id' => 'wamid.nao-deveria'], 200)]);
+
+        $tenant  = Tenant::factory()->create();
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '123456'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511955556666']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'aguardando_orcamento', 'agente_responsavel' => 'bot', 'etapa_ia' => 'etapa_1',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'followup_estagio_enviado' => 3,
+            'janela_expira_em' => now()->subHour(), // expirada
+        ]);
+        Mensagem::create([
+            'ticket_id' => $ticket->id, 'tenant_id' => $tenant->id,
+            'remetente' => 'bot', 'tipo' => 'texto', 'conteudo' => 'Oi!',
+            'enviado_em' => now()->subDays(4),
+        ]);
+
+        KanbanColunaConfig::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'aguardando_orcamento',
+            'auto_mover_ativo' => true, 'auto_mover_coluna_destino' => 'encerrado',
+            'auto_mover_segundos' => 3 * 86400,
+            'auto_mover_mensagem' => 'Encerrando por falta de resposta.',
+        ]);
+
+        $this->artisan('conversas:followup')->assertExitCode(0);
+
+        // Não usa Http::assertNothingSent(): o movimento pra 'encerrado' dispara
+        // ConversationQAJob/GerarResumoTicketJob em fila sync, que chamam a IA via
+        // HTTP normalmente — o que importa aqui é que NENHUMA chamada ao canal
+        // (/messages/send) aconteceu, já que a janela expirou.
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/messages/send'));
+
+        $ticket->refresh();
+        $this->assertSame('encerrado', $ticket->coluna_kanban);
+        $this->assertDatabaseMissing('mensagens', [
+            'ticket_id' => $ticket->id,
+            'conteudo'  => 'Encerrando por falta de resposta.',
+        ]);
+    }
+
     public function test_mover_para_coluna_de_papel_encerramento_renomeada_encerra_o_ticket(): void
     {
         $tenant = \App\Models\Tenant::factory()->create();
