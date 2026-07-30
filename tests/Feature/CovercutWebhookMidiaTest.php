@@ -127,8 +127,18 @@ class CovercutWebhookMidiaTest extends TestCase
 
     public function test_imagem_recebida_e_descrita_e_salva_com_midia_url_e_itens(): void
     {
+        // openrouter.key não está configurado por padrão no ambiente de teste (é assim
+        // que as outras chamadas de IA no resto da suíte fazem short-circuit sem bater na
+        // rede) — aqui precisamos de uma chave fake pra extrairItensImagemOficial() de
+        // fato tentar a chamada de visão, senão ela nem chega a bater no endpoint fakeado.
+        config(['services.openrouter.key' => 'fake-openrouter-key']);
+
         Http::fake([
-            '*/media/get*' => Http::response('conteudo-binario-fake-imagem', 200, ['Content-Type' => 'image/jpeg']),
+            '*/media/get*'    => Http::response('conteudo-binario-fake-imagem', 200, ['Content-Type' => 'image/jpeg']),
+            'openrouter.ai/*' => Http::response([
+                'model'   => 'modelo-fake',
+                'choices' => [['message' => ['content' => "- Sofá 3 lugares\n- Mesa de jantar"]]],
+            ], 200),
         ]);
 
         $tenant = Tenant::factory()->create();
@@ -151,7 +161,14 @@ class CovercutWebhookMidiaTest extends TestCase
         $this->assertNotNull($mensagem->midia_url);
         $this->assertStringContainsString('minha sala', $mensagem->conteudo);
 
+        $ticket = TicketAtendimento::withoutGlobalScopes()->find($mensagem->ticket_id);
+        $this->assertNotNull($ticket);
+        $this->assertNotNull($ticket->lista_itens, 'lista_itens do ticket deveria ter sido populada com os itens extraídos');
+        $this->assertStringContainsString('Sofá 3 lugares', $ticket->lista_itens);
+        $this->assertStringContainsString('Mesa de jantar', $ticket->lista_itens);
+
         Http::assertSent(fn ($request) => str_contains($request->url(), '/media/get') && $request['id'] === 'media-img-1');
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'openrouter.ai'));
     }
 
     public function test_imagem_sem_id_no_payload_e_tratada_sem_quebrar(): void
