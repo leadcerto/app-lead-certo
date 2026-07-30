@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\SdrResponderJob;
 use App\Models\Contato;
 use App\Models\KanbanColuna;
+use App\Models\KanbanColunaConfig;
 use App\Models\Mensagem;
 use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
@@ -158,6 +159,27 @@ class CovercutWebhookController extends Controller
                 }
             } catch (\Throwable $e) {
                 Log::warning('Covercut webhook: falha ao processar áudio', ['message_id' => $messageId, 'erro' => $e->getMessage()]);
+            }
+        } elseif ($tipo === 'image') {
+            try {
+                $focoAnalise = KanbanColunaConfig::withoutGlobalScopes()
+                    ->where('tenant_id', $tenant->id)
+                    ->where('coluna_kanban', $ticket->coluna_kanban)
+                    ->value('foco_analise_imagem');
+
+                $conteudo = app(MediaProcessorService::class)->processarOficial($payload['message'], $canal, $focoAnalise);
+                if ($conteudo !== null) {
+                    $tipoMensagem = 'imagem';
+                    $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrlOficial($payload['message'], $canal, 'image');
+
+                    $itens = app(MediaProcessorService::class)->extrairItensImagemOficial($payload['message'], $canal, $focoAnalise);
+                    if ($itens) {
+                        $listaAtual = $ticket->lista_itens ? $ticket->lista_itens . "\n" : '';
+                        $ticket->update(['lista_itens' => $listaAtual . $itens]);
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Covercut webhook: falha ao processar imagem', ['message_id' => $messageId, 'erro' => $e->getMessage()]);
             }
         }
 

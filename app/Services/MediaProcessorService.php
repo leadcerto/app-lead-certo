@@ -80,6 +80,11 @@ class MediaProcessorService
             return null;
         }
 
+        return $this->chamarVisaoParaItens($mediaUrl, $focoAnalise);
+    }
+
+    private function chamarVisaoParaItens(string $mediaUrl, ?string $focoAnalise = null): ?string
+    {
         $foco = trim($focoAnalise ?: self::FOCO_PADRAO);
 
         $modelosVision = FreeModelsService::vision();
@@ -578,8 +583,52 @@ class MediaProcessorService
 
         return match ($tipo) {
             'audio' => $this->processarAudioOficial($message, $canal),
+            'image' => $this->processarImagemOficial($message, $canal, $focoAnalise),
             default => null,
         };
+    }
+
+    private function processarImagemOficial(array $message, WhatsappCanal $canal, ?string $focoAnalise = null): string
+    {
+        $caption = $message['image']['caption'] ?? '';
+        $mediaId = $message['image']['id'] ?? null;
+
+        if (! $mediaId) {
+            Log::warning('MediaProcessor: payload de imagem oficial sem image.id', ['message' => $message]);
+            return $caption ?: '[Imagem recebida]';
+        }
+
+        $midia = $this->baixarMidiaCovercut($mediaId, $canal);
+        if (! $midia) {
+            return $caption ? "[Imagem: {$caption}]" : '[Imagem recebida — não foi possível analisar o conteúdo]';
+        }
+
+        $dataUri   = 'data:' . ($midia['mime'] ?: 'image/jpeg') . ';base64,' . base64_encode($midia['bytes']);
+        $descricao = $this->descreverImagemComVisao($dataUri, $caption, $focoAnalise);
+        $prefixo   = $caption ? "[Imagem: {$caption}] " : '[Imagem] ';
+
+        return $prefixo . $descricao;
+    }
+
+    public function extrairItensImagemOficial(array $message, WhatsappCanal $canal, ?string $focoAnalise = null): ?string
+    {
+        if (! $this->openRouterKey) {
+            return null;
+        }
+
+        $mediaId = $message['image']['id'] ?? null;
+        if (! $mediaId) {
+            return null;
+        }
+
+        $midia = $this->baixarMidiaCovercut($mediaId, $canal);
+        if (! $midia) {
+            return null;
+        }
+
+        $dataUri = 'data:' . ($midia['mime'] ?: 'image/jpeg') . ';base64,' . base64_encode($midia['bytes']);
+
+        return $this->chamarVisaoParaItens($dataUri, $focoAnalise);
     }
 
     private function processarAudioOficial(array $message, WhatsappCanal $canal): string

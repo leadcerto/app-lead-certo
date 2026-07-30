@@ -124,4 +124,58 @@ class CovercutWebhookMidiaTest extends TestCase
         $this->assertSame('[Áudio recebido — não foi possível transcrever]', $mensagem->conteudo);
         $this->assertNull($mensagem->midia_url);
     }
+
+    public function test_imagem_recebida_e_descrita_e_salva_com_midia_url_e_itens(): void
+    {
+        Http::fake([
+            '*/media/get*' => Http::response('conteudo-binario-fake-imagem', 200, ['Content-Type' => 'image/jpeg']),
+        ]);
+
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777', 'name' => 'Sandro'],
+            'message' => ['id' => 'wamid.img1', 'type' => 'image', 'image' => ['id' => 'media-img-1', 'mime_type' => 'image/jpeg', 'caption' => 'minha sala']],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        $mensagem = Mensagem::where('provider_message_id', 'wamid.img1')->first();
+        $this->assertNotNull($mensagem, 'Mensagem de imagem deveria ter sido criada');
+        $this->assertSame('imagem', $mensagem->tipo);
+        $this->assertNotNull($mensagem->midia_url);
+        $this->assertStringContainsString('minha sala', $mensagem->conteudo);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/media/get') && $request['id'] === 'media-img-1');
+    }
+
+    public function test_imagem_sem_id_no_payload_e_tratada_sem_quebrar(): void
+    {
+        Http::fake();
+
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777'],
+            'message' => ['id' => 'wamid.img2', 'type' => 'image', 'image' => ['caption' => 'sem id aqui']],
+        ];
+
+        $response = $this->postComAssinatura($payload, 'segredo-abc');
+
+        $response->assertOk();
+        $mensagem = Mensagem::where('provider_message_id', 'wamid.img2')->first();
+        $this->assertNotNull($mensagem);
+        $this->assertSame('sem id aqui', $mensagem->conteudo);
+        Http::assertNothingSent();
+    }
 }

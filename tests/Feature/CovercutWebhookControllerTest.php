@@ -150,7 +150,7 @@ class CovercutWebhookControllerTest extends TestCase
         $payload = [
             'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
             'contact' => ['wa_id' => '5521988887777', 'name' => 'Sandro'],
-            'message' => ['id' => 'wamid.midia', 'type' => 'image'],
+            'message' => ['id' => 'wamid.midia', 'type' => 'sticker'],
         ];
 
         $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
