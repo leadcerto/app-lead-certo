@@ -793,9 +793,9 @@
                                     </div>
                                     <textarea :value="autoMoverMensagem[col.key] || ''"
                                               @input="autoMoverMensagem[col.key] = $event.target.value; iaAlterado[col.key] = true"
-                                              rows="2"
+                                              rows="5"
                                               placeholder="Mensagem opcional pra avisar o lead antes de mover (ex: Por falta de comunicação, estamos encerrando seu atendimento e ficamos à disposição caso queira retomar o assunto). Deixe em branco pra mover sem avisar."
-                                              class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"></textarea>
+                                              class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-red-400 resize-y"></textarea>
                                 </div>
                             </template>
                             <div class="mt-2 p-3 bg-red-50 border border-red-200 rounded-xl">
