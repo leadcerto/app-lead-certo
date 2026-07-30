@@ -8,6 +8,7 @@ use App\Models\WhatsappCanal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class WhatsappCanalOficialController extends Controller
 {
@@ -51,15 +52,26 @@ class WhatsappCanalOficialController extends Controller
         $webhookUrl = config('app.url') . '/api/webhook/covercut';
         $baseUrl    = config('services.covercut.base_url');
 
-        $response = Http::withHeaders([
-                'X-API-Key'    => config('services.covercut.api_key'),
-                'X-API-Secret' => config('services.covercut.api_secret'),
-            ])
-            ->post("{$baseUrl}/numbers/webhook", [
-                'from'        => $validated['phone_number_id'],
-                'webhook_url' => $webhookUrl,
-                'enabled'     => true,
+        try {
+            $response = Http::withHeaders([
+                    'X-API-Key'    => config('services.covercut.api_key'),
+                    'X-API-Secret' => config('services.covercut.api_secret'),
+                ])
+                ->post("{$baseUrl}/numbers/webhook", [
+                    'from'        => $validated['phone_number_id'],
+                    'webhook_url' => $webhookUrl,
+                    'enabled'     => true,
+                ]);
+        } catch (\Throwable $e) {
+            // Http::post lança ConnectionException em falhas de rede (DNS, timeout, TLS,
+            // conexão recusada) — mesmo tratamento de CovercutChannelService::enviarTexto().
+            Log::warning('WhatsappCanalOficialController: exceção ao registrar webhook na Covercut', [
+                'phone_number_id' => $validated['phone_number_id'],
+                'erro'            => $e->getMessage(),
             ]);
+
+            return response()->json(['message' => 'Erro ao registrar o webhook na Covercut. Confira o phone_number_id.'], 502);
+        }
 
         if (! $response->successful()) {
             return response()->json(['message' => 'Erro ao registrar o webhook na Covercut. Confira o phone_number_id.'], 502);
@@ -98,11 +110,21 @@ class WhatsappCanalOficialController extends Controller
         $phoneNumberId = $canal->config['phone_number_id'] ?? null;
 
         if ($phoneNumberId) {
-            Http::withHeaders([
-                    'X-API-Key'    => config('services.covercut.api_key'),
-                    'X-API-Secret' => config('services.covercut.api_secret'),
-                ])
-                ->post("{$baseUrl}/numbers/webhook", ['from' => $phoneNumberId, 'action' => 'delete']);
+            try {
+                Http::withHeaders([
+                        'X-API-Key'    => config('services.covercut.api_key'),
+                        'X-API-Secret' => config('services.covercut.api_secret'),
+                    ])
+                    ->post("{$baseUrl}/numbers/webhook", ['from' => $phoneNumberId, 'action' => 'delete']);
+            } catch (\Throwable $e) {
+                // Best-effort: a remoção do canal local não pode ficar refém da Covercut
+                // estar fora do ar. Loga e segue para excluir a linha local mesmo assim.
+                Log::warning('WhatsappCanalOficialController: exceção ao desregistrar webhook na Covercut', [
+                    'canal_id'        => $canal->id,
+                    'phone_number_id' => $phoneNumberId,
+                    'erro'            => $e->getMessage(),
+                ]);
+            }
         }
 
         $canal->delete();

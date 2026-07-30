@@ -7,6 +7,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WhatsappCanal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -68,6 +69,38 @@ class WhatsappCanalOficialControllerTest extends TestCase
         $response->assertStatus(422);
     }
 
+    public function test_retorna_502_quando_covercut_responde_erro(): void
+    {
+        Http::fake(['*/numbers/webhook' => Http::response(['message' => 'unauthorized'], 401)]);
+
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+
+        $response = $this->actingAs($user)->postJson('/api/painel/whatsapp/canais-oficiais', [
+            'phone_number_id' => '123456789',
+            'telefone'        => '5521981813106',
+        ]);
+
+        $response->assertStatus(502);
+        $this->assertDatabaseMissing('whatsapp_canais', ['tenant_id' => $tenant->id, 'tipo' => 'oficial']);
+    }
+
+    public function test_retorna_502_quando_covercut_esta_fora_do_ar(): void
+    {
+        Http::fake(['*/numbers/webhook' => fn () => throw new ConnectionException('Connection timed out')]);
+
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+
+        $response = $this->actingAs($user)->postJson('/api/painel/whatsapp/canais-oficiais', [
+            'phone_number_id' => '123456789',
+            'telefone'        => '5521981813106',
+        ]);
+
+        $response->assertStatus(502);
+        $this->assertDatabaseMissing('whatsapp_canais', ['tenant_id' => $tenant->id, 'tipo' => 'oficial']);
+    }
+
     public function test_vendedor_nao_acessa_rotas_de_canal_oficial(): void
     {
         $tenant = Tenant::factory()->create();
@@ -96,5 +129,22 @@ class WhatsappCanalOficialControllerTest extends TestCase
         $response->assertOk();
         $this->assertDatabaseMissing('whatsapp_canais', ['id' => $canal->id]);
         Http::assertSent(fn ($request) => $request['from'] === '999' && $request['action'] === 'delete');
+    }
+
+    public function test_remove_numero_local_mesmo_com_covercut_fora_do_ar(): void
+    {
+        Http::fake(['*/numbers/webhook' => fn () => throw new ConnectionException('Connection timed out')]);
+
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '999'],
+        ]);
+
+        $response = $this->actingAs($user)->deleteJson("/api/painel/whatsapp/canais-oficiais/{$canal->id}");
+
+        $response->assertOk();
+        $this->assertDatabaseMissing('whatsapp_canais', ['id' => $canal->id]);
     }
 }
