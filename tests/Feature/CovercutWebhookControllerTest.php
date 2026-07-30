@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SdrResponderJob;
 use App\Models\Contato;
 use App\Models\Mensagem;
 use App\Models\Tenant;
@@ -144,5 +145,66 @@ class CovercutWebhookControllerTest extends TestCase
         $this->assertSame(1, TicketAtendimento::withoutGlobalScopes()->where('contato_id', $contato->id)->count());
         $ticketExistente->refresh();
         $this->assertTrue($ticketExistente->janela_expira_em->isFuture());
+    }
+
+    public function test_contato_soft_deletado_com_telefone_e_restaurado_sem_estourar_excecao(): void
+    {
+        Bus::fake();
+
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $contatoApagado = Contato::factory()->create(['telefone' => '5521988887777']);
+        $contatoApagado->delete();
+        $this->assertTrue($contatoApagado->trashed());
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777', 'name' => 'Fulano'],
+            'message' => ['id' => 'wamid.restaura', 'type' => 'text', 'text' => 'voltei'],
+        ];
+
+        $response = $this->postComAssinatura($payload, 'segredo-abc');
+
+        $response->assertOk();
+
+        $this->assertSame(1, Contato::where('telefone', '5521988887777')->count());
+        $contatoApagado->refresh();
+        $this->assertFalse($contatoApagado->trashed());
+
+        $ticket = TicketAtendimento::withoutGlobalScopes()->where('contato_id', $contatoApagado->id)->firstOrFail();
+        $this->assertDatabaseHas('mensagens', ['ticket_id' => $ticket->id, 'conteudo' => 'voltei', 'provider_message_id' => 'wamid.restaura']);
+    }
+
+    public function test_dispara_sdr_responder_job_quando_ticket_existente_com_bot(): void
+    {
+        Bus::fake();
+
+        $tenant  = Tenant::factory()->create();
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5521988887777']);
+        TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'janela_expira_em' => now()->addHours(10),
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777'],
+            'message' => ['id' => 'wamid.bot', 'type' => 'text', 'text' => 'quero saber o valor'],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        Bus::assertDispatched(SdrResponderJob::class);
     }
 }

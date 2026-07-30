@@ -102,7 +102,7 @@ class CovercutWebhookController extends Controller
         $temReferralAnuncio = isset($payload['message']['referral']) || isset($payload['message']['ctwa_clid']);
         $janelaExpiraEm = $temReferralAnuncio ? now()->addHours(72) : now()->addHours(24);
 
-        $contato = Contato::firstOrCreate(['telefone' => $telefone], ['nome' => $pushName ?: 'Sem Nome', 'origem' => 'whatsapp']);
+        $contato = $this->buscarOuCriarContato($telefone, ['nome' => $pushName ?: 'Sem Nome', 'origem' => 'whatsapp']);
 
         VinculoContatoTenant::firstOrCreate(['contato_id' => $contato->id, 'tenant_id' => $tenant->id]);
 
@@ -163,6 +163,36 @@ class CovercutWebhookController extends Controller
         }
     }
 
+    /**
+     * Busca um contato pelo telefone ou cria um novo — tolerante à corrida com o
+     * job `contatos:sincronizar-google` (roda a cada 6h), que pode inserir o mesmo
+     * telefone entre o SELECT e o INSERT do firstOrCreate normal. Sem essa proteção,
+     * a exceção de chave duplicada derrubava a requisição inteira do webhook e a
+     * mensagem do lead nunca chegava a ser salva. Mesma semântica de
+     * UazapiWebhookController::buscarOuCriarContato() — duplicada aqui de propósito
+     * (controller autocontido, não reusa código do UazapiWebhookController).
+     */
+    private function buscarOuCriarContato(string $telefone, array $atributos): Contato
+    {
+        try {
+            return Contato::firstOrCreate(['telefone' => $telefone], $atributos);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            // O telefone pode pertencer a um contato apagado (soft delete) — a
+            // restrição única do banco continua valendo mesmo apagado, então
+            // firstOrCreate() bate de frente com ele sem nunca encontrá-lo
+            // (a busca padrão ignora registros apagados). Sem isso, o webhook
+            // ficava preso pra sempre nesse telefone.
+            $contato = Contato::withTrashed()->where('telefone', $telefone)->first();
+            if (! $contato) {
+                throw $e;
+            }
+            if ($contato->trashed()) {
+                $contato->restore();
+            }
+            return $contato;
+        }
+    }
+
     private function normalizarTelefone(string $telefone): string
     {
         $normalizado = app(TelefoneService::class)->normalizar($telefone);
@@ -173,6 +203,7 @@ class CovercutWebhookController extends Controller
         if (strlen($digits) >= 10 && strlen($digits) <= 11) {
             $digits = '55' . $digits;
         }
+        Log::warning('Covercut webhook: telefone não normalizável', ['raw' => $telefone, 'fallback' => $digits]);
         return $digits;
     }
 }
