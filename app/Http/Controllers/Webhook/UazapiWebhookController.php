@@ -64,7 +64,20 @@ class UazapiWebhookController extends Controller
         match ($tipo) {
             'messages'   => $this->handleMensagem($payload, $tenant, $canal),
             'connection' => $this->handleConexao($payload, $canal),
-            default      => null,
+            // Investigação em andamento (2026-07-30): não sabemos se a Uazapi manda
+            // algum evento de histórico/backfill ao reconectar após queda de sessão
+            // (ex: sincronização de mensagens perdidas, no estilo do WhatsApp Web).
+            // Antes disso, o default era silencioso — se algum dia esse evento
+            // chegou, nunca teríamos como saber. Loga em warning (nível já capturado
+            // em produção) pra pegar a próxima ocorrência real com o payload
+            // completo. Remover este log assim que o tipo de evento for identificado
+            // e tratado de verdade (ou confirmado que não existe).
+            default      => Log::warning('Uazapi webhook: EventType não tratado — payload completo abaixo', [
+                'tenant_id' => $tenant->id,
+                'canal_id'  => $canal->id,
+                'EventType' => $tipo,
+                'payload'   => $payload,
+            ]),
         };
 
         return response()->json(['ok' => true]);
