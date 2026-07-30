@@ -81,6 +81,13 @@ fi
 echo "==> Reconstruindo caches..."
 ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && php artisan config:cache && php artisan route:cache && php artisan view:cache"
 
+echo "==> Reiniciando workers da fila (código novo só vale depois disso)..."
+# Workers do Supervisor são processos PHP de longa duração: sem restart, continuam
+# rodando o código de ANTES do deploy (já causou job quebrado por assinatura antiga).
+# queue:restart sinaliza cada worker a encerrar após o job atual; o Supervisor sobe
+# de novo com o código atualizado.
+ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && php artisan queue:restart"
+
 echo "==> Tirando a VPS do modo de manutenção (php artisan up)..."
 ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && php artisan up"
 MANUTENCAO_LIGADA=0
