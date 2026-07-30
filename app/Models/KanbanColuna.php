@@ -7,13 +7,10 @@ use App\Scopes\TenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
 
 class KanbanColuna extends Model
 {
     protected $table = 'kanban_colunas';
-
-    private const CACHE_TTL_SEGUNDOS = 3600;
 
     protected static function booted(): void
     {
@@ -48,24 +45,27 @@ class KanbanColuna extends Model
 
     public static function limparCache(int $tenantId): void
     {
-        Cache::forget("kanban_colunas:{$tenantId}");
+        // Sem-efeito desde o incidente de 2026-07-30: ver nota em doTenant().
     }
 
     /**
-     * Aviso: cache invalidado apenas em mutações de instância (->save(), ->update(), ->delete()).
-     * Operações em lote via query-builder (::where(...)->update(), ::whereIn(...)->delete())
-     * não disparam eventos e deixam o cache inválido — chame limparCache() manualmente nesses casos.
+     * Incidente 2026-07-30: cachear a Collection de models via Cache::remember() (Redis)
+     * corrompia a classe na releitura — Cache::get() voltava __PHP_Incomplete_Class em vez
+     * de KanbanColuna, com TODOS os atributos intactos (não era perda de dado, só a
+     * identidade da classe). Reproduzido isolado com Cache::put()/get() direto, fora do
+     * fluxo da aplicação. Causa exata não investigada a fundo (suspeita: serialização de
+     * Collection+Enum via driver Redis nesta versão do stack) — a correção aplicada foi
+     * parar de cachear instâncias de model. Tabela tem ~8 linhas por tenant; custo da
+     * consulta direta é irrisório perto do risco de corromper o board de Kanban inteiro.
      *
      * @return Collection<int, self>
      */
     protected static function doTenant(int $tenantId): Collection
     {
-        return Cache::remember("kanban_colunas:{$tenantId}", self::CACHE_TTL_SEGUNDOS, function () use ($tenantId) {
-            return static::withoutGlobalScope(TenantScope::class)
-                ->where('tenant_id', $tenantId)
-                ->orderBy('ordem')
-                ->get();
-        });
+        return static::withoutGlobalScope(TenantScope::class)
+            ->where('tenant_id', $tenantId)
+            ->orderBy('ordem')
+            ->get();
     }
 
     public static function chavesDoTenant(int $tenantId): array
