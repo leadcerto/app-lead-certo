@@ -38,6 +38,10 @@ Route::prefix('minerador')->middleware('minerador')->group(function () {
 // Webhook Uazapi — token por tenant na URL (sem sessão, validado no controller)
 Route::post('/webhook/uazapi/{webhookToken}', [UazapiWebhookController::class, 'handle']);
 
+// Webhook Covercut (canal oficial) — URL fixa, sem token na rota; assinatura
+// HMAC (X-BSP-Signature) validada no controller usando o webhook_secret do canal.
+Route::post('/webhook/covercut', [\App\Http\Controllers\Webhook\CovercutWebhookController::class, 'handle']);
+
 // Secretária Eletrônica — token por tenant na URL (sem sessão, validado no controller)
 Route::post('/secretaria/{secretariaToken}', [SecretariaEletronicaController::class, 'receber']);
 
