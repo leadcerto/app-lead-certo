@@ -8,75 +8,21 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Envia mensagens de texto pelo canal oficial (Meta Cloud API, via Covercut).
+ * Envia mensagens pelo canal oficial (Meta Cloud API, via Covercut).
  * Nunca dispara proativamente — só responde dentro da janela de conversa (seção 4
  * do design, docs/superpowers/specs/2026-07-27-canal-whatsapp-oficial-covercut-design.md).
  * Sem templates pagos: fora da janela, o envio é bloqueado, sem fallback.
+ * Mídia (imagem/áudio/documento/sticker) é enviada via link público — nunca faz
+ * upload prévio pra Meta (ver docs/superpowers/specs/2026-07-31-envio-midia-canal-oficial-design.md).
  */
 class CovercutChannelService implements CanalWhatsappInterface
 {
     public function enviarTexto(WhatsappCanal $canal, string $telefone, string $texto): bool
     {
-        $ticket = TicketAtendimento::withoutGlobalScopes()
-            ->where('tenant_id', $canal->tenant_id)
-            ->where('whatsapp_canal_id', $canal->id)
-            ->whereHas('contato', fn ($q) => $q->where('telefone', $telefone))
-            ->whereIn('status', ['aberto', 'aguardando'])
-            ->latest()
-            ->first();
-
-        if ($ticket && $ticket->janela_expira_em && now()->greaterThan($ticket->janela_expira_em)) {
-            Log::warning('CovercutChannelService: envio bloqueado, janela de conversa expirada', [
-                'canal_id'  => $canal->id,
-                'ticket_id' => $ticket->id,
-                'expirou_em' => $ticket->janela_expira_em->toIso8601String(),
-            ]);
-            return false;
-        }
-
-        $phoneNumberId = $canal->config['phone_number_id'] ?? null;
-
-        if (! $phoneNumberId) {
-            Log::warning('CovercutChannelService: canal sem phone_number_id configurado', ['canal_id' => $canal->id]);
-            return false;
-        }
-
-        $baseUrl = config('services.covercut.base_url');
-
-        // Conforme api.covercut.com.br/docs/#configuracao: endpoint é /messages/send
-        // (não /messages) e text.body tem limite de 1024 caracteres — sem truncamento
-        // aqui, fora do escopo do MVP.
-        try {
-            $response = Http::withHeaders([
-                    'X-API-Key'    => config('services.covercut.api_key'),
-                    'X-API-Secret' => config('services.covercut.api_secret'),
-                ])
-                ->post("{$baseUrl}/messages/send", [
-                    'from' => $phoneNumberId,
-                    'to'   => $telefone,
-                    'type' => 'text',
-                    'text' => ['body' => $texto],
-                ]);
-        } catch (\Throwable $e) {
-            // Http::post lança ConnectionException em falhas de rede (DNS, timeout, TLS,
-            // conexão recusada). A interface exige nunca lançar exceção — ver
-            // CanalWhatsappInterface::enviarTexto().
-            Log::warning('CovercutChannelService: exceção ao enviar texto', [
-                'canal_id' => $canal->id,
-                'erro'     => $e->getMessage(),
-            ]);
-            return false;
-        }
-
-        if (! $response->successful()) {
-            Log::warning('CovercutChannelService: falha ao enviar texto', [
-                'canal_id' => $canal->id,
-                'status'   => $response->status(),
-                'body'     => $response->body(),
-            ]);
-        }
-
-        return $response->successful();
+        return $this->enviar($canal, $telefone, [
+            'type' => 'text',
+            'text' => ['body' => $texto],
+        ]);
     }
 
     /**
@@ -91,25 +37,125 @@ class CovercutChannelService implements CanalWhatsappInterface
 
     public function enviarImagem(WhatsappCanal $canal, string $telefone, string $url, string $caption = ''): bool
     {
-        // Implementado em Task 2
-        return false;
+        $imagem = ['link' => $url];
+        if ($caption !== '') {
+            $imagem['caption'] = $caption;
+        }
+
+        return $this->enviar($canal, $telefone, ['type' => 'image', 'image' => $imagem]);
     }
 
+    /**
+     * $ptt = true pede nota de voz, mas só marca 'voice' quando o arquivo é .ogg —
+     * a Covercut/Meta exige esse formato (codec opus) pra renderizar como nota de
+     * voz de verdade; outro formato marcado como voice pode ser rejeitado ou
+     * renderizado errado do lado do WhatsApp.
+     */
     public function enviarAudio(WhatsappCanal $canal, string $telefone, string $url, bool $ptt = true): bool
     {
-        // Implementado em Task 2
-        return false;
+        $audio = ['link' => $url];
+        if ($ptt && strtolower(pathinfo($url, PATHINFO_EXTENSION)) === 'ogg') {
+            $audio['voice'] = true;
+        }
+
+        return $this->enviar($canal, $telefone, ['type' => 'audio', 'audio' => $audio]);
     }
 
     public function enviarDocumento(WhatsappCanal $canal, string $telefone, string $url, string $filename = '', string $caption = ''): bool
     {
-        // Implementado em Task 2
-        return false;
+        $documento = ['link' => $url];
+        if ($filename !== '') {
+            $documento['filename'] = $filename;
+        }
+        if ($caption !== '') {
+            $documento['caption'] = $caption;
+        }
+
+        return $this->enviar($canal, $telefone, ['type' => 'document', 'document' => $documento]);
     }
 
     public function enviarSticker(WhatsappCanal $canal, string $telefone, string $url): bool
     {
-        // Implementado em Task 2
-        return false;
+        return $this->enviar($canal, $telefone, ['type' => 'sticker', 'sticker' => ['link' => $url]]);
+    }
+
+    /**
+     * Monta e envia qualquer tipo de mensagem via POST /messages/send — checa
+     * janela de conversa e phone_number_id, nunca lança exceção. $corpo já deve
+     * trazer 'type' e o campo de conteúdo específico do tipo (text/image/audio/...).
+     */
+    private function enviar(WhatsappCanal $canal, string $telefone, array $corpo): bool
+    {
+        if (! $this->dentroDaJanela($canal, $telefone)) {
+            return false;
+        }
+
+        $phoneNumberId = $canal->config['phone_number_id'] ?? null;
+
+        if (! $phoneNumberId) {
+            Log::warning('CovercutChannelService: canal sem phone_number_id configurado', ['canal_id' => $canal->id]);
+            return false;
+        }
+
+        $baseUrl = config('services.covercut.base_url');
+
+        try {
+            $response = Http::withHeaders([
+                    'X-API-Key'    => config('services.covercut.api_key'),
+                    'X-API-Secret' => config('services.covercut.api_secret'),
+                ])
+                ->post("{$baseUrl}/messages/send", array_merge([
+                    'from' => $phoneNumberId,
+                    'to'   => $telefone,
+                ], $corpo));
+        } catch (\Throwable $e) {
+            // Http::post lança ConnectionException em falhas de rede (DNS, timeout, TLS,
+            // conexão recusada). A interface exige nunca lançar exceção.
+            Log::warning('CovercutChannelService: exceção ao enviar mensagem', [
+                'canal_id' => $canal->id,
+                'tipo'     => $corpo['type'] ?? 'desconhecido',
+                'erro'     => $e->getMessage(),
+            ]);
+            return false;
+        }
+
+        if (! $response->successful()) {
+            Log::warning('CovercutChannelService: falha ao enviar mensagem', [
+                'canal_id' => $canal->id,
+                'tipo'     => $corpo['type'] ?? 'desconhecido',
+                'status'   => $response->status(),
+                'body'     => $response->body(),
+            ]);
+        }
+
+        return $response->successful();
+    }
+
+    /**
+     * Checa se ainda existe janela de conversa aberta (24h, ou 72h se veio de
+     * anúncio) pro telefone neste canal. Sem ticket em aberto pro telefone, não há
+     * janela pra checar — não bloqueia (ex: primeiro contato antes de qualquer
+     * ticket existir); a Covercut também valida a janela do lado dela.
+     */
+    private function dentroDaJanela(WhatsappCanal $canal, string $telefone): bool
+    {
+        $ticket = TicketAtendimento::withoutGlobalScopes()
+            ->where('tenant_id', $canal->tenant_id)
+            ->where('whatsapp_canal_id', $canal->id)
+            ->whereHas('contato', fn ($q) => $q->where('telefone', $telefone))
+            ->whereIn('status', ['aberto', 'aguardando'])
+            ->latest()
+            ->first();
+
+        if ($ticket && $ticket->janela_expira_em && now()->greaterThan($ticket->janela_expira_em)) {
+            Log::warning('CovercutChannelService: envio bloqueado, janela de conversa expirada', [
+                'canal_id'   => $canal->id,
+                'ticket_id'  => $ticket->id,
+                'expirou_em' => $ticket->janela_expira_em->toIso8601String(),
+            ]);
+            return false;
+        }
+
+        return true;
     }
 }

@@ -101,4 +101,109 @@ class CovercutChannelServiceTest extends TestCase
         $this->assertFalse($enviado);
         Log::shouldHaveReceived('warning')->once();
     }
+
+    public function test_envia_imagem_via_covercut_com_legenda(): void
+    {
+        Http::fake(['*/messages/send' => Http::response(['id' => 'wamid.img'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = $this->canalOficial($tenant->id);
+
+        $enviado = app(CovercutChannelService::class)->enviarImagem($canal, '5511999999999', 'https://app.leadcerto.app.br/storage/foto.jpg', 'legenda');
+
+        $this->assertTrue($enviado);
+        Http::assertSent(fn ($request) =>
+            $request['type'] === 'image'
+            && $request['image']['link'] === 'https://app.leadcerto.app.br/storage/foto.jpg'
+            && $request['image']['caption'] === 'legenda'
+        );
+    }
+
+    public function test_envia_audio_ogg_como_nota_de_voz(): void
+    {
+        Http::fake(['*/messages/send' => Http::response(['id' => 'wamid.audio'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = $this->canalOficial($tenant->id);
+
+        $enviado = app(CovercutChannelService::class)->enviarAudio($canal, '5511999999999', 'https://app.leadcerto.app.br/storage/audio.ogg');
+
+        $this->assertTrue($enviado);
+        Http::assertSent(fn ($request) =>
+            $request['type'] === 'audio'
+            && $request['audio']['link'] === 'https://app.leadcerto.app.br/storage/audio.ogg'
+            && $request['audio']['voice'] === true
+        );
+    }
+
+    public function test_envia_audio_mp3_sem_marcar_como_nota_de_voz(): void
+    {
+        Http::fake(['*/messages/send' => Http::response(['id' => 'wamid.audio'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = $this->canalOficial($tenant->id);
+
+        $enviado = app(CovercutChannelService::class)->enviarAudio($canal, '5511999999999', 'https://app.leadcerto.app.br/storage/audio.mp3');
+
+        $this->assertTrue($enviado);
+        Http::assertSent(fn ($request) =>
+            $request['type'] === 'audio'
+            && ! isset($request['audio']['voice'])
+        );
+    }
+
+    public function test_envia_documento_com_nome_de_arquivo(): void
+    {
+        Http::fake(['*/messages/send' => Http::response(['id' => 'wamid.doc'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = $this->canalOficial($tenant->id);
+
+        $enviado = app(CovercutChannelService::class)->enviarDocumento($canal, '5511999999999', 'https://app.leadcerto.app.br/storage/arquivo.pdf', 'boleto.pdf');
+
+        $this->assertTrue($enviado);
+        Http::assertSent(fn ($request) =>
+            $request['type'] === 'document'
+            && $request['document']['link'] === 'https://app.leadcerto.app.br/storage/arquivo.pdf'
+            && $request['document']['filename'] === 'boleto.pdf'
+        );
+    }
+
+    public function test_envia_sticker_via_covercut(): void
+    {
+        Http::fake(['*/messages/send' => Http::response(['id' => 'wamid.sticker'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = $this->canalOficial($tenant->id);
+
+        $enviado = app(CovercutChannelService::class)->enviarSticker($canal, '5511999999999', 'https://app.leadcerto.app.br/storage/fig.webp');
+
+        $this->assertTrue($enviado);
+        Http::assertSent(fn ($request) =>
+            $request['type'] === 'sticker'
+            && $request['sticker']['link'] === 'https://app.leadcerto.app.br/storage/fig.webp'
+        );
+    }
+
+    public function test_bloqueia_envio_de_imagem_fora_da_janela(): void
+    {
+        Http::fake();
+        Log::spy();
+
+        $tenant  = Tenant::factory()->create();
+        $canal   = $this->canalOficial($tenant->id);
+        $contato = Contato::factory()->create(['telefone' => '5511988888888']);
+        TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'janela_expira_em' => now()->subHour(),
+        ]);
+
+        $enviado = app(CovercutChannelService::class)->enviarImagem($canal, '5511988888888', 'https://app.leadcerto.app.br/storage/foto.jpg');
+
+        $this->assertFalse($enviado);
+        Http::assertNothingSent();
+    }
 }
