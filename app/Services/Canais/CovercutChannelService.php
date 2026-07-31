@@ -88,4 +88,28 @@ class CovercutChannelService implements CanalWhatsappInterface
     {
         return $this->enviarTexto($canal, $telefone, $texto);
     }
+
+    public function enviarImagem(WhatsappCanal $canal, string $telefone, string $url, string $caption = ''): bool
+    {
+        // Implementado em Task 2
+        return false;
+    }
+
+    public function enviarAudio(WhatsappCanal $canal, string $telefone, string $url, bool $ptt = true): bool
+    {
+        // Implementado em Task 2
+        return false;
+    }
+
+    public function enviarDocumento(WhatsappCanal $canal, string $telefone, string $url, string $filename = '', string $caption = ''): bool
+    {
+        // Implementado em Task 2
+        return false;
+    }
+
+    public function enviarSticker(WhatsappCanal $canal, string $telefone, string $url): bool
+    {
+        // Implementado em Task 2
+        return false;
+    }
 }

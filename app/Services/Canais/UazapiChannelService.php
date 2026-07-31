@@ -46,4 +46,52 @@ class UazapiChannelService implements CanalWhatsappInterface
 
         return $this->uazapi->enviarTexto($token, $telefone, $texto);
     }
+
+    public function enviarImagem(WhatsappCanal $canal, string $telefone, string $url, string $caption = ''): bool
+    {
+        $token = $canal->tokenUazapi();
+
+        if (! $token) {
+            Log::warning('UazapiChannelService: canal sem token, mensagem não enviada', ['canal_id' => $canal->id]);
+            return false;
+        }
+
+        return $this->uazapi->enviarImagem($token, $telefone, $url, $caption);
+    }
+
+    public function enviarAudio(WhatsappCanal $canal, string $telefone, string $url, bool $ptt = true): bool
+    {
+        $token = $canal->tokenUazapi();
+
+        if (! $token) {
+            Log::warning('UazapiChannelService: canal sem token, mensagem não enviada', ['canal_id' => $canal->id]);
+            return false;
+        }
+
+        return $this->uazapi->enviarAudio($token, $telefone, $url, $ptt);
+    }
+
+    public function enviarDocumento(WhatsappCanal $canal, string $telefone, string $url, string $filename = '', string $caption = ''): bool
+    {
+        $token = $canal->tokenUazapi();
+
+        if (! $token) {
+            Log::warning('UazapiChannelService: canal sem token, mensagem não enviada', ['canal_id' => $canal->id]);
+            return false;
+        }
+
+        return $this->uazapi->enviarDocumento($token, $telefone, $url, $filename, $caption);
+    }
+
+    public function enviarSticker(WhatsappCanal $canal, string $telefone, string $url): bool
+    {
+        $token = $canal->tokenUazapi();
+
+        if (! $token) {
+            Log::warning('UazapiChannelService: canal sem token, mensagem não enviada', ['canal_id' => $canal->id]);
+            return false;
+        }
+
+        return $this->uazapi->enviarSticker($token, $telefone, $url);
+    }
 }

@@ -46,4 +46,78 @@ class UazapiChannelServiceTest extends TestCase
 
         $this->assertInstanceOf(UazapiChannelService::class, $canal->servico());
     }
+
+    public function test_envia_imagem_via_uazapi_usando_token_do_canal(): void
+    {
+        Http::fake(['*/send/media' => Http::response(['id' => 'abc'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'nao_oficial', 'provider' => 'uazapi',
+            'config' => ['instance_token' => 'token-canal-uazapi'],
+        ]);
+
+        $enviado = app(UazapiChannelService::class)->enviarImagem($canal, '5511999999999', 'https://exemplo.com/foto.jpg', 'legenda');
+
+        $this->assertTrue($enviado);
+        Http::assertSent(fn ($request) => $request->hasHeader('token', 'token-canal-uazapi') && $request['type'] === 'image');
+    }
+
+    public function test_envia_audio_via_uazapi_usando_token_do_canal(): void
+    {
+        Http::fake(['*/send/media' => Http::response(['id' => 'abc'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'nao_oficial', 'provider' => 'uazapi',
+            'config' => ['instance_token' => 'token-canal-uazapi'],
+        ]);
+
+        $enviado = app(UazapiChannelService::class)->enviarAudio($canal, '5511999999999', 'https://exemplo.com/audio.ogg');
+
+        $this->assertTrue($enviado);
+        Http::assertSent(fn ($request) => $request['type'] === 'ptt');
+    }
+
+    public function test_envia_documento_via_uazapi_usando_token_do_canal(): void
+    {
+        Http::fake(['*/send/media' => Http::response(['id' => 'abc'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'nao_oficial', 'provider' => 'uazapi',
+            'config' => ['instance_token' => 'token-canal-uazapi'],
+        ]);
+
+        $enviado = app(UazapiChannelService::class)->enviarDocumento($canal, '5511999999999', 'https://exemplo.com/arquivo.pdf', 'arquivo.pdf');
+
+        $this->assertTrue($enviado);
+        Http::assertSent(fn ($request) => $request['type'] === 'document' && $request['docName'] === 'arquivo.pdf');
+    }
+
+    public function test_envia_sticker_via_uazapi_usando_token_do_canal(): void
+    {
+        Http::fake(['*/send/media' => Http::response(['id' => 'abc'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'nao_oficial', 'provider' => 'uazapi',
+            'config' => ['instance_token' => 'token-canal-uazapi'],
+        ]);
+
+        $enviado = app(UazapiChannelService::class)->enviarSticker($canal, '5511999999999', 'https://exemplo.com/fig.webp');
+
+        $this->assertTrue($enviado);
+        Http::assertSent(fn ($request) => $request['type'] === 'sticker');
+    }
+
+    public function test_enviar_imagem_retorna_false_quando_canal_sem_token(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $canal  = WhatsappCanal::factory()->create(['tenant_id' => $tenant->id, 'config' => []]);
+
+        $enviado = app(UazapiChannelService::class)->enviarImagem($canal, '5511999999999', 'https://exemplo.com/foto.jpg');
+
+        $this->assertFalse($enviado);
+    }
 }
