@@ -54,7 +54,8 @@ class CovercutChannelService implements CanalWhatsappInterface
     public function enviarAudio(WhatsappCanal $canal, string $telefone, string $url, bool $ptt = true): bool
     {
         $audio = ['link' => $url];
-        if ($ptt && strtolower(pathinfo($url, PATHINFO_EXTENSION)) === 'ogg') {
+        $caminho = parse_url($url, PHP_URL_PATH) ?? $url;
+        if ($ptt && strtolower(pathinfo($caminho, PATHINFO_EXTENSION)) === 'ogg') {
             $audio['voice'] = true;
         }
 

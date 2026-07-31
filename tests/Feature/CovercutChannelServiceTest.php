@@ -136,6 +136,23 @@ class CovercutChannelServiceTest extends TestCase
         );
     }
 
+    public function test_envia_audio_ogg_com_query_string_como_nota_de_voz(): void
+    {
+        Http::fake(['*/messages/send' => Http::response(['id' => 'wamid.audio'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = $this->canalOficial($tenant->id);
+
+        $enviado = app(CovercutChannelService::class)->enviarAudio($canal, '5511999999999', 'https://app.leadcerto.app.br/storage/audio.ogg?token=abc123');
+
+        $this->assertTrue($enviado);
+        Http::assertSent(fn ($request) =>
+            $request['type'] === 'audio'
+            && $request['audio']['link'] === 'https://app.leadcerto.app.br/storage/audio.ogg?token=abc123'
+            && $request['audio']['voice'] === true
+        );
+    }
+
     public function test_envia_audio_mp3_sem_marcar_como_nota_de_voz(): void
     {
         Http::fake(['*/messages/send' => Http::response(['id' => 'wamid.audio'], 200)]);
