@@ -11,7 +11,6 @@ use App\Models\Mensagem;
 use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
 use App\Services\SequenciaService;
-use App\Services\UazapiService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,10 +19,6 @@ use Illuminate\Validation\Rule;
 
 class KanbanController extends Controller
 {
-    public function __construct(
-        private UazapiService $uazapi,
-    ) {}
-
     public function view(): View
     {
         return view('kanban.index');
@@ -406,9 +401,9 @@ class KanbanController extends Controller
         $arquivo  = $request->file('arquivo');
         $caption  = $request->input('caption', '');
         $telefone = $model->contato->telefone;
-        $token    = $model->canal?->tokenUazapi();
+        $canal    = $model->canal;
 
-        if (! $token) {
+        if (! $canal) {
             return response()->json(['message' => 'Nenhum canal de WhatsApp vinculado a este atendimento.'], 502);
         }
 
@@ -417,12 +412,13 @@ class KanbanController extends Controller
         $filename = $arquivo->getClientOriginalName();
 
         $ehFigurinha = $tipo === 'imagem' && strtolower($arquivo->getClientOriginalExtension()) === 'webp';
+        $servico     = $canal->servico();
 
         $enviado = match (true) {
-            $ehFigurinha          => $this->uazapi->enviarSticker($token, $telefone, $url),
-            $tipo === 'imagem'    => $this->uazapi->enviarImagem($token, $telefone, $url, $caption),
-            $tipo === 'audio'     => $this->uazapi->enviarAudio($token, $telefone, $url, true),
-            $tipo === 'documento' => $this->uazapi->enviarDocumento($token, $telefone, $url, $filename, $caption),
+            $ehFigurinha          => $servico->enviarSticker($canal, $telefone, $url),
+            $tipo === 'imagem'    => $servico->enviarImagem($canal, $telefone, $url, $caption),
+            $tipo === 'audio'     => $servico->enviarAudio($canal, $telefone, $url, true),
+            $tipo === 'documento' => $servico->enviarDocumento($canal, $telefone, $url, $filename, $caption),
             default               => false,
         };
 
