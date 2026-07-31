@@ -125,6 +125,74 @@ class CovercutWebhookMidiaTest extends TestCase
         $this->assertNull($mensagem->midia_url);
     }
 
+    /**
+     * Achado Importante 2 da revisão final: baixarMidiaCovercut() só checava
+     * successful(), sem validar corpo vazio nem content-type inesperado (a
+     * Covercut poderia ignorar mode=stream e devolver o envelope JSON dela).
+     * Simula exatamente esse cenário — 200 OK mas corpo vazio — e prova que o
+     * fluxo de áudio degrada pro placeholder em vez de tentar transcrever bytes
+     * vazios/JSON como se fossem áudio.
+     */
+    public function test_resposta_de_midia_com_corpo_vazio_degrada_para_placeholder(): void
+    {
+        Http::fake([
+            '*/media/get*' => Http::response('', 200, ['Content-Type' => 'audio/ogg']),
+        ]);
+
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777'],
+            'message' => ['id' => 'wamid.audio4', 'type' => 'audio', 'audio' => ['id' => 'media-vazio']],
+        ];
+
+        $response = $this->postComAssinatura($payload, 'segredo-abc');
+
+        $response->assertOk();
+        $mensagem = Mensagem::where('provider_message_id', 'wamid.audio4')->first();
+        $this->assertNotNull($mensagem);
+        $this->assertSame('[Áudio recebido — não foi possível transcrever]', $mensagem->conteudo);
+        $this->assertNull($mensagem->midia_url);
+    }
+
+    /**
+     * Mesmo achado, mas cobrindo o outro sintoma citado no doc de design: a
+     * Covercut ignora mode=stream e devolve o envelope JSON dela em vez do
+     * arquivo bruto. Sem a checagem de content-type, esses bytes JSON seriam
+     * tratados como se fossem o áudio.
+     */
+    public function test_resposta_de_midia_em_json_inesperado_degrada_para_placeholder(): void
+    {
+        Http::fake([
+            '*/media/get*' => Http::response(json_encode(['status' => 'ok', 'url' => 'https://exemplo.com/x.ogg']), 200, ['Content-Type' => 'application/json']),
+        ]);
+
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777'],
+            'message' => ['id' => 'wamid.audio5', 'type' => 'audio', 'audio' => ['id' => 'media-json']],
+        ];
+
+        $response = $this->postComAssinatura($payload, 'segredo-abc');
+
+        $response->assertOk();
+        $mensagem = Mensagem::where('provider_message_id', 'wamid.audio5')->first();
+        $this->assertNotNull($mensagem);
+        $this->assertSame('[Áudio recebido — não foi possível transcrever]', $mensagem->conteudo);
+        $this->assertNull($mensagem->midia_url);
+    }
+
     public function test_imagem_recebida_e_descrita_e_salva_com_midia_url_e_itens(): void
     {
         // openrouter.key não está configurado por padrão no ambiente de teste (é assim
@@ -221,6 +289,49 @@ class CovercutWebhookMidiaTest extends TestCase
         $this->assertSame('video', $mensagem->tipo);
         $this->assertStringContainsString('olha isso', $mensagem->conteudo);
         $this->assertNotNull($mensagem->midia_url);
+    }
+
+    /**
+     * Achado Importante 1 da revisão final: o branch de vídeo não tinha
+     * try/catch (diferente de áudio e imagem), então uma falha ao PERSISTIR a
+     * mídia já baixada (ex.: Storage::put() lançando por disco cheio/permissão
+     * — exceção que não é capturada dentro de baixarMidiaCovercut(), pois essa
+     * acontece depois do download já ter tido sucesso) escapava sem tratamento
+     * e derrubava o webhook inteiro com 500, fazendo a Covercut re-tentar e a
+     * mensagem nunca ser salva. Prova que agora ela é capturada e a mensagem
+     * ainda é criada com o placeholder textual (só sem midia_url).
+     */
+    public function test_falha_ao_persistir_video_e_capturada_sem_quebrar_webhook(): void
+    {
+        Http::fake([
+            '*/media/get*' => Http::response('conteudo-binario-fake-video', 200, ['Content-Type' => 'video/mp4']),
+        ]);
+
+        Storage::shouldReceive('disk')->with('public')->andReturnSelf();
+        Storage::shouldReceive('put')->andThrow(new \RuntimeException('disco cheio'));
+
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777'],
+            'message' => ['id' => 'wamid.vid-falha', 'type' => 'video', 'video' => ['id' => 'media-vid-falha', 'caption' => 'olha isso']],
+        ];
+
+        $response = $this->postComAssinatura($payload, 'segredo-abc');
+
+        $response->assertOk();
+        $response->assertJson(['ok' => true]);
+
+        $mensagem = Mensagem::where('provider_message_id', 'wamid.vid-falha')->first();
+        $this->assertNotNull($mensagem, 'Mensagem de vídeo deveria ter sido criada mesmo com falha ao persistir a mídia');
+        $this->assertSame('video', $mensagem->tipo);
+        $this->assertStringContainsString('olha isso', $mensagem->conteudo);
+        $this->assertNull($mensagem->midia_url);
     }
 
     public function test_documento_e_salvo_com_placeholder_sem_midia_url(): void

@@ -184,13 +184,25 @@ class CovercutWebhookController extends Controller
                 Log::warning('Covercut webhook: falha ao processar imagem', ['message_id' => $messageId, 'erro' => $e->getMessage()]);
             }
         } elseif ($tipo === 'video') {
-            $conteudo = app(MediaProcessorService::class)->processarOficial($payload['message'], $canal);
-            $tipoMensagem = 'video';
-            $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrlOficial($payload['message'], $canal, 'video');
+            try {
+                $conteudo = app(MediaProcessorService::class)->processarOficial($payload['message'], $canal);
+                $tipoMensagem = 'video';
+                $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrlOficial($payload['message'], $canal, 'video');
+            } catch (\Throwable $e) {
+                Log::warning('Covercut webhook: falha ao processar vídeo', ['message_id' => $messageId, 'erro' => $e->getMessage()]);
+            }
         } elseif ($tipo === 'document') {
             // Paridade com o Uazapi: documento nunca guarda midia_url nem usa o
             // enum 'documento' de fato — sempre tipo 'texto' com placeholder.
             $conteudo = app(MediaProcessorService::class)->processarOficial($payload['message'], $canal);
+        }
+
+        if ($conteudo === null && ! in_array($tipo, ['audio', 'image', 'video', 'document'], true)) {
+            // Restaura a semântica pré-Task-1: message.text era lido incondicionalmente,
+            // independente de message.type. Cobre payloads reais onde o type vem
+            // ausente, com grafia diferente, ou um valor não previsto — sticker/
+            // unsupported continuam sem message.text, então nada muda pra eles.
+            $conteudo = $payload['message']['text']['body'] ?? ($payload['message']['text'] ?? null);
         }
 
         if (! $conteudo) {

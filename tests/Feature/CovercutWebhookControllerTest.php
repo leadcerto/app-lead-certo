@@ -160,6 +160,42 @@ class CovercutWebhookControllerTest extends TestCase
             ->once();
     }
 
+    /**
+     * Achado Importante 3 da revisão final: antes do branch por tipo existir, a
+     * leitura de message.text era INCONDICIONAL — lida independente de
+     * message.type. Depois virou condicionada a `$tipo === 'text'`, o que
+     * significa que uma mensagem de produção real com message.type ausente,
+     * com grafia diferente, ou um valor não previsto, passaria a cair
+     * silenciosamente em "mensagem não-texto ignorada" em vez de ser lida como
+     * antes. Este teste prova que o fallback de restauração recupera
+     * message.text mesmo quando message.type não é nenhum dos tipos
+     * conhecidos (aqui: ausente).
+     */
+    public function test_texto_e_lido_mesmo_com_message_type_ausente(): void
+    {
+        Bus::fake();
+
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777', 'name' => 'Sandro'],
+            // sem 'type' — payload real diferente do documentado
+            'message' => ['id' => 'wamid.semtipo', 'text' => 'mensagem sem type declarado'],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        $mensagem = Mensagem::withoutGlobalScopes()->where('provider_message_id', 'wamid.semtipo')->first();
+        $this->assertNotNull($mensagem, 'Mensagem deveria ter sido salva mesmo sem message.type');
+        $this->assertSame('texto', $mensagem->tipo);
+        $this->assertSame('mensagem sem type declarado', $mensagem->conteudo);
+    }
+
     public function test_rejeita_assinatura_invalida(): void
     {
         $tenant = Tenant::factory()->create();

@@ -733,11 +733,26 @@ class MediaProcessorService
                 return null;
             }
 
+            $bytes = $response->body();
+            $mime  = $response->header('Content-Type') ?: 'application/octet-stream';
+
+            if ($bytes === '' || str_contains($mime, 'application/json')) {
+                // A Covercut pode ignorar mode=stream e devolver o envelope JSON dela
+                // (não documentado) em vez do arquivo bruto, ou simplesmente um corpo
+                // vazio — nos dois casos não há bytes de mídia de verdade pra usar.
+                Log::warning('MediaProcessor: resposta de mídia da Covercut vazia ou em formato inesperado', [
+                    'media_id'     => $mediaId,
+                    'mime'         => $mime,
+                    'body_preview' => substr($bytes, 0, 300),
+                ]);
+                return null;
+            }
+
             return [
-                'bytes' => $response->body(),
-                'mime'  => $response->header('Content-Type') ?: 'application/octet-stream',
+                'bytes' => $bytes,
+                'mime'  => $mime,
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('MediaProcessor: exceção ao baixar mídia da Covercut', [
                 'media_id' => $mediaId, 'erro' => $e->getMessage(),
             ]);
