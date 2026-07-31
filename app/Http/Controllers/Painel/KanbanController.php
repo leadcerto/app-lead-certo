@@ -377,6 +377,13 @@ class KanbanController extends Controller
         return response()->json(['ticket_id' => $ticket, 'coluna_kanban' => $colunaDepois]);
     }
 
+    // Formatos de áudio que a Meta Cloud API aceita pra mensagens (aac/amr/mpeg/mp4/ogg,
+    // ver docs/superpowers/specs/2026-07-31-erro-formato-audio-canal-oficial-design.md) —
+    // subconjunto do que a validação de upload abaixo aceita (mp3,ogg,webm,m4a,wav).
+    // webm/wav são aceitos pelo upload mas rejeitados pela Meta — daí a checagem extra
+    // só pro canal Covercut logo abaixo.
+    private const AUDIO_EXTENSOES_ACEITAS_COVERCUT = ['mp3', 'ogg', 'm4a'];
+
     public function enviarMidia(Request $request, int $ticket): JsonResponse
     {
         $tipo = $request->input('tipo');
@@ -405,6 +412,15 @@ class KanbanController extends Controller
 
         if (! $canal) {
             return response()->json(['message' => 'Nenhum canal de WhatsApp vinculado a este atendimento.'], 502);
+        }
+
+        if ($tipo === 'audio' && $canal->provider === 'covercut') {
+            $extensao = strtolower($arquivo->getClientOriginalExtension());
+            if (! in_array($extensao, self::AUDIO_EXTENSOES_ACEITAS_COVERCUT, true)) {
+                return response()->json([
+                    'message' => "O canal Oficial (WhatsApp Business) não aceita áudio nesse formato (.{$extensao}). Grave por outro navegador (o Firefox costuma gravar em .ogg) ou anexe um arquivo .mp3/.ogg/.m4a.",
+                ], 422);
+            }
         }
 
         $path     = $arquivo->store('kanban-midia', 'public');
