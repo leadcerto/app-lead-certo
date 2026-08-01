@@ -415,10 +415,10 @@ class KanbanController extends Controller
         }
 
         if ($tipo === 'audio' && $canal->provider === 'covercut') {
-            $extensao = strtolower($arquivo->getClientOriginalExtension());
+            $extensao = $arquivo->guessExtension() ?: strtolower($arquivo->getClientOriginalExtension());
             if (! in_array($extensao, self::AUDIO_EXTENSOES_ACEITAS_COVERCUT, true)) {
                 return response()->json([
-                    'message' => "O canal Oficial (WhatsApp Business) não aceita áudio nesse formato (.{$extensao}). Grave por outro navegador (o Firefox costuma gravar em .ogg) ou anexe um arquivo .mp3/.ogg/.m4a.",
+                    'message' => "O canal Oficial (WhatsApp Business) não aceita áudio nesse formato (.{$extensao}). Anexe um arquivo de áudio nos formatos .mp3, .ogg ou .m4a.",
                 ], 422);
             }
         }

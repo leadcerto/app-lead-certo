@@ -123,7 +123,7 @@ class KanbanEnviarMidiaCanalOficialTest extends TestCase
         ]);
 
         $response->assertStatus(422);
-        $response->assertJsonFragment(['message' => 'O canal Oficial (WhatsApp Business) não aceita áudio nesse formato (.webm). Grave por outro navegador (o Firefox costuma gravar em .ogg) ou anexe um arquivo .mp3/.ogg/.m4a.']);
+        $response->assertJsonFragment(['message' => 'O canal Oficial (WhatsApp Business) não aceita áudio nesse formato (.webm). Anexe um arquivo de áudio nos formatos .mp3, .ogg ou .m4a.']);
         Http::assertNothingSent();
         Storage::disk('public')->assertDirectoryEmpty('kanban-midia');
     }

@@ -75,6 +75,30 @@ class KanbanEnviarMidiaFigurinhaTest extends TestCase
         Http::assertSent(fn ($request) => $request['type'] === 'image');
     }
 
+    public function test_audio_webm_e_enviado_normalmente_pelo_canal_uazapi(): void
+    {
+        // Regressão: a validação extra de formato de áudio (.webm/.wav) adicionada pro
+        // canal Covercut/Oficial não deve afetar o Uazapi, que continua aceitando
+        // qualquer formato de áudio aprovado pela validação de upload existente.
+        $ticket = $this->criarTicket();
+        $user   = User::factory()->create(['tenant_id' => $ticket->tenant_id, 'perfil' => 'dono', 'ativo' => true]);
+
+        // mimeType declarado como 'video/webm' (não 'audio/webm'): é o que o
+        // guessExtension() do Symfony resolve pra extensão 'webm' — o mapeamento
+        // reverso de 'audio/webm' cai em 'weba', que não bate com a validação
+        // 'mimes:mp3,ogg,webm,m4a,wav' existente (ver mesmo ajuste feito no teste
+        // equivalente do canal Covercut, em KanbanEnviarMidiaCanalOficialTest).
+        $arquivo = UploadedFile::fake()->create('audio.webm', 10, 'video/webm');
+
+        $response = $this->actingAs($user)->post("/api/painel/kanban/ticket/{$ticket->id}/midia", [
+            'tipo'    => 'audio',
+            'arquivo' => $arquivo,
+        ]);
+
+        $response->assertCreated();
+        Http::assertSent(fn ($request) => $request['type'] === 'ptt');
+    }
+
     public function test_ticket_sem_canal_retorna_502_e_nao_deixa_arquivo_orfao_no_storage(): void
     {
         $tenant  = Tenant::factory()->create();

@@ -31,7 +31,7 @@ private const AUDIO_EXTENSOES_ACEITAS_COVERCUT = ['mp3', 'ogg', 'm4a'];
 ## 4. Mensagem de erro
 
 ```
-"O canal Oficial (WhatsApp Business) não aceita áudio nesse formato (.{ext}). Grave por outro navegador (o Firefox costuma gravar em .ogg) ou anexe um arquivo .mp3/.ogg/.m4a."
+"O canal Oficial (WhatsApp Business) não aceita áudio nesse formato (.{ext}). Anexe um arquivo de áudio nos formatos .mp3, .ogg ou .m4a."
 ```
 
 Retornada como `response()->json(['message' => ...], 422)` — o frontend já exibe `json.message` num `alert()` (linha 1103 de `kanban/index.blade.php`), nenhuma mudança de JS necessária.
