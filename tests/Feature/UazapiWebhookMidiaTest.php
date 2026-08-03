@@ -354,4 +354,123 @@ class UazapiWebhookMidiaTest extends TestCase
 
         Http::assertNotSent(fn ($request) => str_contains($request->url(), '169.254.169.254'));
     }
+
+    /**
+     * Nova funcionalidade (2026-08-03): além de transcrever pro contexto do bot,
+     * a transcrição também é ecoada como mensagem de texto na própria conversa
+     * do WhatsApp — quem lê pelo app (sem abrir o painel) consegue ler sem tocar
+     * o áudio. Ver CovercutWebhookMidiaTest para o mesmo comportamento no canal
+     * oficial.
+     */
+    public function test_audio_do_lead_e_transcrito_e_ecoado_na_conversa(): void
+    {
+        config(['services.groq.key' => 'fake-groq-key']);
+
+        $pacote = $this->criptografarComoWhatsApp('conteudo-audio-fake', 'WhatsApp Audio Keys');
+
+        Http::fake([
+            'mmg.whatsapp.net/*' => Http::response($pacote['arquivo_criptografado'], 200),
+            'api.groq.com/*'     => Http::response(['text' => 'oi, quero saber o valor do frete'], 200),
+            '*/send/text'        => Http::response(['ok' => true], 200),
+            '*'                  => Http::response('not found', 404),
+        ]);
+
+        $this->criarTenantComCanal('wh-eco-1', 'inst-eco-1');
+
+        $this->postJson('/api/webhook/uazapi/wh-eco-1', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'    => false,
+                'isGroup'   => false,
+                'chatid'    => '5511900001234@s.whatsapp.net',
+                'mediaType' => 'audio',
+                'messageid' => 'msg-eco-1',
+                'content'   => [
+                    'URL'      => 'https://mmg.whatsapp.net/v/t62/fake-audio.enc',
+                    'mimetype' => 'audio/ogg; codecs=opus',
+                    'mediaKey' => $pacote['media_key_base64'],
+                ],
+            ],
+        ]);
+
+        $mensagemLead = Mensagem::where('remetente', 'lead')->latest()->first();
+        $this->assertNotNull($mensagemLead);
+        $this->assertSame('audio', $mensagemLead->tipo);
+        $this->assertStringContainsString('oi, quero saber o valor do frete', $mensagemLead->conteudo);
+
+        $eco = Mensagem::where('remetente', 'bot')->latest()->first();
+        $this->assertNotNull($eco, 'Eco da transcrição deveria ter sido salvo');
+        $this->assertSame(
+            "[Segue a transcrição do áudio enviado pelo Cliente]\n\noi, quero saber o valor do frete",
+            $eco->conteudo
+        );
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/send/text')
+            && str_contains($request['text'] ?? '', 'Segue a transcrição do áudio enviado pelo Cliente'));
+    }
+
+    /**
+     * Mensagem enviada pelo atendente via WhatsApp Web/celular (fromMe &&
+     * !wasSentByApi) — antes desta correção nem sequer era transcrita (só
+     * baixava a URL e usava o placeholder "[Áudio]"). Agora transcreve de
+     * verdade e ecoa na conversa com o nome da persona no lugar de "Cliente".
+     */
+    public function test_audio_do_atendente_via_whatsapp_web_e_transcrito_e_ecoado_com_nome_da_persona(): void
+    {
+        config(['services.groq.key' => 'fake-groq-key']);
+
+        $pacote = $this->criptografarComoWhatsApp('resposta em audio do atendente', 'WhatsApp Audio Keys');
+
+        Http::fake([
+            'mmg.whatsapp.net/*' => Http::response($pacote['arquivo_criptografado'], 200),
+            'api.groq.com/*'     => Http::response(['text' => 'pode deixar que eu confirmo o horario'], 200),
+            '*/send/text'        => Http::response(['ok' => true], 200),
+            '*'                  => Http::response('not found', 404),
+        ]);
+
+        $tenant  = $this->criarTenantComCanal('wh-eco-2', 'inst-eco-2');
+        $persona = \App\Models\SdrPersona::create([
+            'tenant_id' => $tenant->id, 'nome_interno' => 'padrao', 'nome_display' => 'Leonardo',
+            'system_prompt' => 'Você é o Leonardo, atendente da empresa.',
+            'ativo' => true, 'is_default' => true,
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511955559999']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'sdr_persona_id' => $persona->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $this->postJson('/api/webhook/uazapi/wh-eco-2', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'       => true,
+                'wasSentByApi' => false,
+                'isGroup'      => false,
+                'chatid'       => '5511955559999@s.whatsapp.net',
+                'mediaType'    => 'audio',
+                'messageid'    => 'msg-eco-2',
+                'content'      => [
+                    'URL'      => 'https://mmg.whatsapp.net/v/t62/fake-audio2.enc',
+                    'mimetype' => 'audio/ogg; codecs=opus',
+                    'mediaKey' => $pacote['media_key_base64'],
+                ],
+            ],
+        ]);
+
+        $mensagemHumano = Mensagem::where('remetente', 'humano')->latest()->first();
+        $this->assertNotNull($mensagemHumano);
+        $this->assertStringContainsString('pode deixar que eu confirmo o horario', $mensagemHumano->conteudo);
+
+        $eco = Mensagem::where('remetente', 'bot')->latest()->first();
+        $this->assertNotNull($eco);
+        $this->assertSame(
+            "[Segue a transcrição do áudio enviado pelo Leonardo]\n\npode deixar que eu confirmo o horario",
+            $eco->conteudo
+        );
+
+        $ticket->refresh();
+        $this->assertSame('humano', $ticket->agente_responsavel);
+    }
 }

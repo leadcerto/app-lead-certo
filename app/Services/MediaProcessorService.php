@@ -262,6 +262,24 @@ class MediaProcessorService
         return null;
     }
 
+    /**
+     * Extrai o texto puro de uma transcrição já formatada por processar()/
+     * processarOficial() (ex.: "[Áudio transcrito: oi tudo bem]") — evita
+     * re-transcrever o mesmo áudio (custo duplo de chamada ao Groq) só pra obter
+     * o texto sem o wrapper usado no contexto do bot. Usado tanto pro Uazapi
+     * quanto pra Covercut, pra ecoar a transcrição de volta na conversa.
+     * Retorna null se não havia transcrição real (áudio não configurado, falha
+     * ao transcrever, tipo de mídia diferente de áudio, etc.).
+     */
+    public function extrairTranscricaoBruta(?string $conteudoProcessado): ?string
+    {
+        if ($conteudoProcessado && preg_match('/^\[Áudio transcrito: (.+)\]$/su', $conteudoProcessado, $m)) {
+            return trim($m[1]);
+        }
+
+        return null;
+    }
+
     // -------------------------------------------------------------------------
     // Vídeo
     // -------------------------------------------------------------------------

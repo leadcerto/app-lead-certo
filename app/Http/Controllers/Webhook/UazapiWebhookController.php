@@ -318,6 +318,17 @@ class UazapiWebhookController extends Controller
             }
         }
 
+        // Ecoa a transcrição do áudio de volta na própria conversa do WhatsApp —
+        // quem estiver lendo pelo app (sem abrir o painel) consegue ler sem
+        // precisar tocar o áudio. Só dispara se a transcrição de fato aconteceu
+        // (extrairTranscricaoBruta retorna null em qualquer falha).
+        if ($mediaType === 'audio' && $tipoMensagem === 'audio') {
+            $transcricaoBruta = app(MediaProcessorService::class)->extrairTranscricaoBruta($conteudo);
+            if ($transcricaoBruta) {
+                $this->enviarEcoTranscricao($canal, $ticket, $telefone, $transcricaoBruta, 'Cliente');
+            }
+        }
+
         // Extração progressiva de nome a partir do conteúdo (texto ou transcrição de áudio)
         // Roda sempre que o contato ainda não tem nome real (usa telefone como nome)
         if ($conteudo && ($contato->nome === $contato->telefone || ! $contato->nome || ! $nomeValido)) {
@@ -688,6 +699,17 @@ class UazapiWebhookController extends Controller
                 $tipoMensagem = match ($mediaType) {
                     'image' => 'imagem', 'video' => 'video', default => 'audio',
                 };
+
+                if ($mediaType === 'audio') {
+                    // Transcreve de verdade — antes só baixava a URL e usava o
+                    // placeholder "[Áudio]" abaixo, sem passar pelo Whisper. Mesma
+                    // cobertura que já existia pro áudio do lead.
+                    $processado = app(MediaProcessorService::class)->processar($msg, $canal->tokenUazapi());
+                    if ($processado !== null) {
+                        $conteudo = $processado;
+                    }
+                }
+
                 if (! $conteudo) {
                     $conteudo = match ($mediaType) {
                         'image' => '[Imagem]', 'video' => '[Vídeo]', default => '[Áudio]',
@@ -697,6 +719,17 @@ class UazapiWebhookController extends Controller
                 Log::warning('transferirParaHumano: falha ao processar mídia', [
                     'mediaType' => $mediaType, 'erro' => $e->getMessage(),
                 ]);
+            }
+        }
+
+        // Ecoa a transcrição do áudio de volta na própria conversa do WhatsApp,
+        // igual ao áudio do lead — mesmo que o atendente tenha gravado pelo
+        // WhatsApp Web/celular, quem estiver acompanhando a conversa pelo app
+        // (sem abrir o painel) consegue ler sem precisar tocar o áudio.
+        if ($mediaType === 'audio' && $tipoMensagem === 'audio') {
+            $transcricaoBruta = app(MediaProcessorService::class)->extrairTranscricaoBruta($conteudo);
+            if ($transcricaoBruta) {
+                $this->enviarEcoTranscricao($canal, $ticket, $telefone, $transcricaoBruta, $ticket->nomePersonaDisplay());
             }
         }
 
@@ -740,6 +773,38 @@ class UazapiWebhookController extends Controller
                 'enviado_em'        => now(),
             ]);
         }
+    }
+
+    /**
+     * Envia a transcrição de um áudio de volta pra própria conversa do WhatsApp
+     * (não só como nota interna do card) e registra a mensagem enviada. Usado
+     * tanto pro áudio do lead (`$remetenteLabel = 'Cliente'`) quanto pro áudio do
+     * atendente enviado fora do painel (`$remetenteLabel` = nome da persona) —
+     * ver CovercutWebhookController::enviarEcoTranscricao() pra mesma lógica no
+     * canal oficial.
+     */
+    private function enviarEcoTranscricao(\App\Models\WhatsappCanal $canal, TicketAtendimento $ticket, string $telefone, string $transcricao, string $remetenteLabel): void
+    {
+        $texto = "[Segue a transcrição do áudio enviado pelo {$remetenteLabel}]\n\n{$transcricao}";
+
+        $enviado = $canal->servico()->enviarTextoDireto($canal, $telefone, $texto);
+
+        if (! $enviado) {
+            Log::warning('Webhook: falha ao enviar eco de transcrição de áudio pro WhatsApp', [
+                'ticket_id' => $ticket->id,
+                'telefone'  => $telefone,
+            ]);
+            return;
+        }
+
+        Mensagem::create([
+            'ticket_id'  => $ticket->id,
+            'tenant_id'  => $ticket->tenant_id,
+            'remetente'  => 'bot',
+            'tipo'       => 'texto',
+            'conteudo'   => $texto,
+            'enviado_em' => now(),
+        ]);
     }
 
     // -----------------------------------------------------------------

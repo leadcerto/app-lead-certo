@@ -118,6 +118,20 @@ class TicketAtendimento extends Model
     }
 
     /**
+     * Nome de exibição pro atendente deste ticket — usado, por ex., pra
+     * identificar quem "enviou" o eco automático de transcrição de áudio no
+     * WhatsApp (UazapiWebhookController/CovercutWebhookController). Cai pra
+     * persona padrão do tenant se o ticket não tiver uma associada, e por
+     * fim pro rótulo genérico "Atendente" se nem isso existir.
+     */
+    public function nomePersonaDisplay(): string
+    {
+        return $this->persona?->nome_display
+            ?? $this->tenant->personas()->where('is_default', true)->where('ativo', true)->value('nome_display')
+            ?? 'Atendente';
+    }
+
+    /**
      * Monta os campos pra encerrar o ticket guardando a coluna em que ele estava,
      * pra poder voltar pra lá se o lead reabrir a conversa depois — independente
      * de quem encerrou (humano, silêncio automático ou a própria IA).
