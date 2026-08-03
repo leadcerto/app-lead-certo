@@ -700,6 +700,33 @@ class UazapiWebhookController extends Controller
             }
         }
 
+        // Sem mediaType reconhecido e sem texto: caso confirmado em produção
+        // (2026-08-03, ticket #2709) de uma mensagem de orçamento com preview de
+        // imagem carregada de link (extendedTextMessage) que nunca apareceu no
+        // card — a Uazapi aparentemente não popula `msg.text` pra esse tipo.
+        // Loga o payload bruto pra mapear o formato exato na próxima ocorrência.
+        //
+        // Não cria mensagem-placeholder pra QUALQUER evento vazio, porque reação de
+        // emoji, edição e exclusão de mensagem no WhatsApp também chegam como
+        // `fromMe` sem mediaType/texto — um placeholder ali viraria spam no card a
+        // cada 👍 do vendedor. Só cria placeholder quando o messageType não bate
+        // com um desses tipos "sem conteúdo por design" conhecidos.
+        if (! $conteudo && ! $mediaType) {
+            Log::warning('transferirParaHumano: mensagem fromMe sem mediaType e sem texto reconhecido — payload completo abaixo', [
+                'tenant_id' => $tenant->id,
+                'ticket_id' => $ticket->id,
+                'telefone'  => $telefone,
+                'msg'       => $msg,
+            ]);
+
+            $messageType = mb_strtolower($msg['messageType'] ?? '');
+            $semConteudoPorDesign = preg_match('/reaction|protocol|revoke|delete|receipt|presence|pin|poll|star/', $messageType);
+
+            if (! $semConteudoPorDesign) {
+                $conteudo = '[Mensagem sem conteúdo reconhecido]';
+            }
+        }
+
         // Salva a mensagem enviada pelo franqueado
         if ($conteudo) {
             Mensagem::create([
