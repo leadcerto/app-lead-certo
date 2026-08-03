@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Contato;
+use App\Models\Mensagem;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use App\Models\User;
@@ -72,6 +73,47 @@ class KanbanEnviarMidiaCanalOficialTest extends TestCase
 
         $response->assertCreated();
         Http::assertSent(fn ($request) => $request['type'] === 'audio' && $request['audio']['voice'] === true);
+    }
+
+    /**
+     * Nova funcionalidade (2026-08-03): áudio gravado/anexado direto no painel
+     * (fora do WhatsApp) também é transcrito e ecoado como mensagem de texto na
+     * conversa — mesma cobertura que o áudio do lead e do atendente via
+     * WhatsApp Web já têm (ver EcoTranscricaoService).
+     */
+    public function test_audio_do_painel_e_transcrito_e_ecoado_na_conversa(): void
+    {
+        config(['services.groq.key' => 'fake-groq-key']);
+        Http::fake([
+            '*/messages/send' => Http::response(['id' => 'wamid.xyz'], 200),
+            'api.groq.com/*'  => Http::response(['text' => 'aqui é o atendente confirmando o horário'], 200),
+        ]);
+
+        $ticket = $this->criarTicketOficial();
+        $user   = User::factory()->create(['tenant_id' => $ticket->tenant_id, 'perfil' => 'dono', 'ativo' => true]);
+
+        $arquivo = UploadedFile::fake()->create('audio.ogg', 10, 'audio/ogg');
+
+        $response = $this->actingAs($user)->post("/api/painel/kanban/ticket/{$ticket->id}/midia", [
+            'tipo'    => 'audio',
+            'arquivo' => $arquivo,
+        ]);
+
+        $response->assertCreated();
+
+        $mensagemAudio = Mensagem::where('ticket_id', $ticket->id)->where('tipo', 'audio')->first();
+        $this->assertNotNull($mensagemAudio);
+        $this->assertSame('[Áudio transcrito: aqui é o atendente confirmando o horário]', $mensagemAudio->conteudo);
+
+        $eco = Mensagem::where('ticket_id', $ticket->id)->where('remetente', 'bot')->latest()->first();
+        $this->assertNotNull($eco, 'Eco da transcrição deveria ter sido salvo');
+        $this->assertSame(
+            "[Segue a transcrição do áudio enviado pelo Atendente]\n\naqui é o atendente confirmando o horário",
+            $eco->conteudo
+        );
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/messages/send')
+            && str_contains($request['text']['body'] ?? '', 'Segue a transcrição do áudio enviado pelo Atendente'));
     }
 
     public function test_envia_documento_pelo_canal_oficial(): void

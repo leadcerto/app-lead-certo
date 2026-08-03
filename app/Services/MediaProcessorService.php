@@ -228,6 +228,21 @@ class MediaProcessorService
             : '[Áudio recebido — não foi possível transcrever]';
     }
 
+    /**
+     * Transcreve um arquivo de áudio já em mãos (bytes brutos), sem passar pelo
+     * download/descriptografia do WhatsApp — usado quando o atendente grava ou
+     * anexa o áudio direto no painel (KanbanController::enviarMidia()), onde o
+     * arquivo já está em disco, não vem de um payload de webhook.
+     */
+    public function transcreverArquivo(string $bytes, string $mime): ?string
+    {
+        if (! $this->groqKey) {
+            return null;
+        }
+
+        return $this->transcreverAudioBase64(base64_encode($bytes), $mime);
+    }
+
     private function transcreverAudioBase64(string $base64, string $mime): ?string
     {
         try {

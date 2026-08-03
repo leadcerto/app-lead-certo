@@ -10,10 +10,13 @@ use App\Models\KanbanColuna;
 use App\Models\Mensagem;
 use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
+use App\Services\EcoTranscricaoService;
+use App\Services\MediaProcessorService;
 use App\Services\SequenciaService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -427,15 +430,42 @@ class KanbanController extends Controller
             return response()->json(['message' => 'Falha ao enviar pelo WhatsApp.'], 502);
         }
 
+        // Transcreve o áudio gravado/anexado direto no painel — sem isso ficava só
+        // com o placeholder "[Áudio]", diferente do áudio do lead e do atendente
+        // via WhatsApp Web, que já são transcritos de verdade.
+        $transcricaoBruta = null;
+        if ($tipo === 'audio') {
+            try {
+                $transcricaoBruta = app(MediaProcessorService::class)->transcreverArquivo(
+                    Storage::disk('public')->get($path),
+                    $arquivo->getMimeType()
+                );
+            } catch (\Throwable $e) {
+                Log::warning('KanbanController: falha ao transcrever áudio enviado pelo painel', [
+                    'ticket_id' => $ticket,
+                    'erro'      => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $conteudoAudio = $transcricaoBruta ? "[Áudio transcrito: {$transcricaoBruta}]" : '[Áudio]';
+
         $mensagem = Mensagem::create([
             'ticket_id'  => $ticket,
             'tenant_id'  => $model->tenant_id,
             'remetente'  => 'humano',
             'tipo'       => $tipo,
-            'conteudo'   => $caption ?: ($tipo === 'audio' ? '[Áudio]' : $filename),
+            'conteudo'   => $caption ?: ($tipo === 'audio' ? $conteudoAudio : $filename),
             'midia_url'  => $url,
             'enviado_em' => now(),
         ]);
+
+        // Ecoa a transcrição como mensagem de texto separada na conversa, igual
+        // ao áudio do lead e do atendente via WhatsApp Web — mesma cobertura,
+        // ver EcoTranscricaoService.
+        if ($transcricaoBruta) {
+            app(EcoTranscricaoService::class)->enviar($canal, $model, $telefone, $transcricaoBruta, $model->nomePersonaDisplay());
+        }
 
         return response()->json(['mensagem_id' => $mensagem->id, 'enviado' => true], 201);
     }

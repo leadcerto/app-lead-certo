@@ -11,6 +11,7 @@ use App\Models\Mensagem;
 use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
 use App\Models\WhatsappCanal;
+use App\Services\EcoTranscricaoService;
 use App\Services\MediaProcessorService;
 use App\Services\SequenciaService;
 use App\Services\TelefoneService;
@@ -183,7 +184,7 @@ class CovercutWebhookController extends Controller
         if ($tipoMensagem === 'audio') {
             $transcricaoBruta = app(MediaProcessorService::class)->extrairTranscricaoBruta($conteudo);
             if ($transcricaoBruta) {
-                $this->enviarEcoTranscricao($canal, $ticket, $telefone, $transcricaoBruta, 'Cliente');
+                app(EcoTranscricaoService::class)->enviar($canal, $ticket, $telefone, $transcricaoBruta, 'Cliente');
             }
         }
 
@@ -366,41 +367,9 @@ class CovercutWebhookController extends Controller
         if ($tipoMensagem === 'audio') {
             $transcricaoBruta = app(MediaProcessorService::class)->extrairTranscricaoBruta($conteudo);
             if ($transcricaoBruta) {
-                $this->enviarEcoTranscricao($canal, $ticket, $telefone, $transcricaoBruta, $ticket->nomePersonaDisplay());
+                app(EcoTranscricaoService::class)->enviar($canal, $ticket, $telefone, $transcricaoBruta, $ticket->nomePersonaDisplay());
             }
         }
-    }
-
-    /**
-     * Envia a transcrição de um áudio de volta pra própria conversa do WhatsApp
-     * (não só como nota interna do card) e registra a mensagem enviada. Usado
-     * tanto pro áudio do lead (`$remetenteLabel = 'Cliente'`) quanto pro áudio do
-     * atendente enviado fora da API (`$remetenteLabel` = nome da persona) — ver
-     * UazapiWebhookController::enviarEcoTranscricao() pra mesma lógica no canal
-     * não-oficial.
-     */
-    private function enviarEcoTranscricao(WhatsappCanal $canal, TicketAtendimento $ticket, string $telefone, string $transcricao, string $remetenteLabel): void
-    {
-        $texto = "[Segue a transcrição do áudio enviado pelo {$remetenteLabel}]\n\n{$transcricao}";
-
-        $enviado = $canal->servico()->enviarTextoDireto($canal, $telefone, $texto);
-
-        if (! $enviado) {
-            Log::warning('Covercut webhook: falha ao enviar eco de transcrição de áudio pro WhatsApp', [
-                'ticket_id' => $ticket->id,
-                'telefone'  => $telefone,
-            ]);
-            return;
-        }
-
-        Mensagem::create([
-            'ticket_id'  => $ticket->id,
-            'tenant_id'  => $ticket->tenant_id,
-            'remetente'  => 'bot',
-            'tipo'       => 'texto',
-            'conteudo'   => $texto,
-            'enviado_em' => now(),
-        ]);
     }
 
     /**
