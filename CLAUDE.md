@@ -6,6 +6,48 @@
 - VPS: `app.leadcerto.app.br` · SSH: `root@103.199.186.134` · Chave: `~/.ssh/leadcerto_vps`
 - Repositório GitHub: `https://github.com/leadcerto/app-lead-certo.git`
 
+## Regra fundamental: paridade entre canais WhatsApp (Uazapi + Covercut)
+
+O Lead Certo tem **dois canais WhatsApp em produção, ao mesmo tempo, para o mesmo
+tenant**: `UazapiChannelService`/`UazapiWebhookController` (não oficial, QR code) e
+`CovercutChannelService`/`CovercutWebhookController` (oficial, Meta Cloud API).
+Qualquer funcionalidade de sincronização de conversa — criação de mensagem, edição
+de ticket, processamento de mídia, transferência bot↔humano, o que for — **tem que
+existir e se comportar igual nos dois canais**. Um cliente não pode ter uma
+experiência diferente (ou pior) dependendo de qual canal está conectado.
+
+**Por quê:** em 2026-08-03 uma mensagem de orçamento sumiu do card porque o
+`UazapiWebhookController` descartava silenciosamente mensagens enviadas pelo
+atendente direto no app do celular (`fromMe && !viaApi`) sem `mediaType`
+reconhecido. Ao corrigir, percebemos que o `CovercutWebhookController` tinha o
+**mesmo problema, só que pior**: ele ignorava por completo qualquer mensagem
+enviada pelo atendente via WhatsApp Business App no modo Coexistence
+(`event: echo`, `direction: outbound`, `echo_source: phone`) — a funcionalidade
+nem existia nesse lado. Se tivéssemos corrigido só o Uazapi, o mesmo buraco
+continuaria aberto no canal oficial sem ninguém notar.
+
+**Como aplicar:**
+
+1. Antes de fechar qualquer tarefa que mexe no webhook, no envio de mensagem ou em
+   qualquer fluxo de sincronização de um dos canais, pare e pergunte: *"isso
+   também precisa acontecer no outro canal?"* — a resposta quase sempre é sim.
+2. Ache o método equivalente no outro controller/service e confirme que o
+   comportamento está espelhado. Os pares principais:
+   - `UazapiWebhookController::handleMensagem/processarMensagemLead/transferirParaHumano`
+     ↔ `CovercutWebhookController::processarMensagem/processarMensagemHumana`
+   - `UazapiChannelService` ↔ `CovercutChannelService` (implementam
+     `CanalWhatsappInterface`)
+3. Se a paridade genuinamente não se aplica (ex.: botão interativo e chamada de voz
+   não existem na API oficial; janela de 24h/72h só existe no canal oficial),
+   **documente o porquê no código** — não deixe a ausência parecer um esquecimento.
+4. Ao escrever teste para um comportamento novo num canal, escreva (ou confirme que
+   já existe) o teste espelhado no outro canal na mesma tarefa — não numa tarefa
+   futura.
+5. Antes de implementar algo no canal oficial, consulte
+   `api.covercut.com.br/docs/#configuracao` (ver [[referencia-docs-covercut]] na
+   memória) — o formato de payload muda entre provedores e suposições por analogia
+   já causaram bug (ex.: achar que `message.text` é sempre um objeto `{body}`).
+
 ## Fluxo obrigatório de deploy
 
 **NUNCA altere arquivos diretamente na VPS.** O fluxo é sempre:

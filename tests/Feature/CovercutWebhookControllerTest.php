@@ -323,4 +323,92 @@ class CovercutWebhookControllerTest extends TestCase
 
         Bus::assertDispatched(SdrResponderJob::class);
     }
+
+    /**
+     * Modo Coexistence: atendente responde direto pelo WhatsApp Business App,
+     * fora da API — a Covercut manda isso como `event: echo`,
+     * `direction: outbound`, `echo_source: phone`. Antes desta correção
+     * (2026-08-03), esse evento não era tratado e a mensagem sumia do card —
+     * mesmo problema encontrado e corrigido primeiro no Uazapi
+     * (transferirParaHumano).
+     */
+    public function test_echo_phone_salva_mensagem_como_humano_e_transfere_ticket(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5521988887777']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'janela_expira_em' => now()->addHours(10),
+        ]);
+
+        $payload = [
+            'event' => 'echo', 'direction' => 'outbound', 'echo_source' => 'phone', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777'],
+            'message' => ['id' => 'wamid.echo1', 'type' => 'text', 'text' => 'Mensagem enviada pelo app'],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        $mensagem = Mensagem::withoutGlobalScopes()->where('provider_message_id', 'wamid.echo1')->first();
+        $this->assertNotNull($mensagem, 'Mensagem do echo/phone deveria ter sido salva');
+        $this->assertSame('humano', $mensagem->remetente);
+        $this->assertSame('Mensagem enviada pelo app', $mensagem->conteudo);
+
+        $ticket->refresh();
+        $this->assertSame('humano', $ticket->agente_responsavel);
+    }
+
+    public function test_echo_api_e_ignorado_pois_ja_foi_salvo_no_envio(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5521988887777']);
+        TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'janela_expira_em' => now()->addHours(10),
+        ]);
+
+        $payload = [
+            'event' => 'echo', 'direction' => 'outbound', 'echo_source' => 'api', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777'],
+            'message' => ['id' => 'wamid.echoapi', 'type' => 'text', 'text' => 'Mensagem enviada pela nossa API'],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        $this->assertNull(Mensagem::withoutGlobalScopes()->where('provider_message_id', 'wamid.echoapi')->first());
+    }
+
+    public function test_echo_phone_sem_ticket_aberto_nao_quebra(): void
+    {
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+        Contato::factory()->create(['telefone' => '5521988887777']);
+
+        $payload = [
+            'event' => 'echo', 'direction' => 'outbound', 'echo_source' => 'phone', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777'],
+            'message' => ['id' => 'wamid.echosemticket', 'type' => 'text', 'text' => 'oi'],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        $this->assertNull(Mensagem::withoutGlobalScopes()->where('provider_message_id', 'wamid.echosemticket')->first());
+    }
 }

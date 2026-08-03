@@ -23,6 +23,12 @@ use Illuminate\Support\Facades\Log;
  * (transcrição) e imagem (descrição + itens identificados) — ver
  * docs/superpowers/specs/2026-07-30-midia-canal-oficial-covercut-design.md.
  * Vídeo/documento têm placeholder sem análise real (paridade com o Uazapi).
+ * Também processa mensagens enviadas pelo atendente direto pelo WhatsApp
+ * Business App (modo Coexistence — `event: echo`, `direction: outbound`,
+ * `echo_source: phone`), equivalente ao `fromMe && !viaApi` do Uazapi — ver
+ * UazapiWebhookController::transferirParaHumano(). Echo com
+ * `echo_source: api` é ignorado (mensagem já foi salva quando nós mesmos
+ * chamamos a API de envio).
  * Sem botão nem chamada de voz (fora de escopo). Deliberadamente autocontido
  * (não reusa UazapiWebhookController) — ver Architecture no plano original
  * (2026-07-29).
@@ -61,11 +67,16 @@ class CovercutWebhookController extends Controller
             abort(401);
         }
 
-        if (($payload['event'] ?? null) !== 'message' || ($payload['direction'] ?? null) !== 'inbound') {
-            return response()->json(['ok' => true]); // evento que não é mensagem de entrada — ignora silenciosamente
-        }
+        $event     = $payload['event'] ?? null;
+        $direction = $payload['direction'] ?? null;
 
-        $this->processarMensagem($payload, $canal);
+        if ($event === 'message' && $direction === 'inbound') {
+            $this->processarMensagem($payload, $canal);
+        } elseif ($event === 'echo' && $direction === 'outbound' && ($payload['echo_source'] ?? null) === 'phone') {
+            $this->processarMensagemHumana($payload, $canal);
+        }
+        // Outros eventos (echo/api — já registrado no envio pela nossa própria API;
+        // status de entrega/leitura; etc.) — ignorados silenciosamente.
 
         return response()->json(['ok' => true]);
     }
@@ -142,75 +153,14 @@ class CovercutWebhookController extends Controller
             $ticketNovo = true;
         }
 
-        // `message.text` chega como STRING simples no payload real da Covercut
-        // (ex.: "text": "Ola"), não como objeto `{body: ...}` — o formato Meta
-        // Cloud API "cru" seria `text.body`, então a leitura tolera os dois.
-        $tipo         = $payload['message']['type'] ?? null;
-        $conteudo     = null;
-        $tipoMensagem = 'texto';
-        $midiaUrl     = null;
-
-        if ($tipo === 'text') {
-            $conteudo = $payload['message']['text']['body'] ?? ($payload['message']['text'] ?? null);
-        } elseif ($tipo === 'audio') {
-            try {
-                $conteudo = app(MediaProcessorService::class)->processarOficial($payload['message'], $canal);
-                if ($conteudo !== null) {
-                    $tipoMensagem = 'audio';
-                    $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrlOficial($payload['message'], $canal, 'audio');
-                }
-            } catch (\Throwable $e) {
-                Log::warning('Covercut webhook: falha ao processar áudio', ['message_id' => $messageId, 'erro' => $e->getMessage()]);
-            }
-        } elseif ($tipo === 'image') {
-            try {
-                $focoAnalise = KanbanColunaConfig::withoutGlobalScopes()
-                    ->where('tenant_id', $tenant->id)
-                    ->where('coluna_kanban', $ticket->coluna_kanban)
-                    ->value('foco_analise_imagem');
-
-                $conteudo = app(MediaProcessorService::class)->processarOficial($payload['message'], $canal, $focoAnalise);
-                if ($conteudo !== null) {
-                    $tipoMensagem = 'imagem';
-                    $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrlOficial($payload['message'], $canal, 'image');
-
-                    $itens = app(MediaProcessorService::class)->extrairItensImagemOficial($payload['message'], $canal, $focoAnalise);
-                    if ($itens) {
-                        $listaAtual = $ticket->lista_itens ? $ticket->lista_itens . "\n" : '';
-                        $ticket->update(['lista_itens' => $listaAtual . $itens]);
-                    }
-                }
-            } catch (\Throwable $e) {
-                Log::warning('Covercut webhook: falha ao processar imagem', ['message_id' => $messageId, 'erro' => $e->getMessage()]);
-            }
-        } elseif ($tipo === 'video') {
-            try {
-                $conteudo = app(MediaProcessorService::class)->processarOficial($payload['message'], $canal);
-                $tipoMensagem = 'video';
-                $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrlOficial($payload['message'], $canal, 'video');
-            } catch (\Throwable $e) {
-                Log::warning('Covercut webhook: falha ao processar vídeo', ['message_id' => $messageId, 'erro' => $e->getMessage()]);
-            }
-        } elseif ($tipo === 'document') {
-            // Paridade com o Uazapi: documento nunca guarda midia_url nem usa o
-            // enum 'documento' de fato — sempre tipo 'texto' com placeholder.
-            $conteudo = app(MediaProcessorService::class)->processarOficial($payload['message'], $canal);
-        }
-
-        if ($conteudo === null && ! in_array($tipo, ['audio', 'image', 'video', 'document'], true)) {
-            // Restaura a semântica pré-Task-1: message.text era lido incondicionalmente,
-            // independente de message.type. Cobre payloads reais onde o type vem
-            // ausente, com grafia diferente, ou um valor não previsto — sticker/
-            // unsupported continuam sem message.text, então nada muda pra eles.
-            $conteudo = $payload['message']['text']['body'] ?? ($payload['message']['text'] ?? null);
-        }
+        [$conteudo, $tipoMensagem, $midiaUrl] = $this->resolverConteudoEMidia($payload['message'] ?? [], $canal, $ticket, $messageId);
 
         if (! $conteudo) {
             // Tipos genuinamente não tratados (ex.: unsupported, sticker, poll,
             // location, contacts) continuam só logados aqui.
             Log::info('Covercut webhook: mensagem não-texto ignorada (MVP)', [
                 'message_id' => $messageId,
-                'type'       => $tipo,
+                'type'       => $payload['message']['type'] ?? null,
             ]);
         }
 
@@ -236,6 +186,168 @@ class CovercutWebhookController extends Controller
         } elseif ($ticket->agente_responsavel === 'bot' && $conteudo) {
             dispatch(new SdrResponderJob($ticket->id, $conteudo, false, false, 0));
         }
+    }
+
+    /**
+     * Resolve conteúdo, tipo de mensagem e URL de mídia a partir de `message.type`
+     * — usado tanto para mensagens do lead (inbound) quanto para mensagens do
+     * atendente enviadas pelo WhatsApp Business App (echo/outbound/phone), já
+     * que a Covercut usa exatamente o mesmo formato de `message` nos dois casos.
+     * Extraído pra um lugar só justamente pra evitar o tipo de divergência que
+     * causou o card ficar sem a mensagem de orçamento do André Inácio no Uazapi
+     * (2026-08-03): se cada fluxo reimplementasse essa leitura por conta própria,
+     * uma correção de tipo de mídia feita num lado facilmente esqueceria do outro.
+     *
+     * @return array{0: ?string, 1: string, 2: ?string} [conteudo, tipoMensagem, midiaUrl]
+     */
+    private function resolverConteudoEMidia(array $message, WhatsappCanal $canal, TicketAtendimento $ticket, ?string $messageId): array
+    {
+        // `message.text` chega como STRING simples no payload real da Covercut
+        // (ex.: "text": "Ola"), não como objeto `{body: ...}` — o formato Meta
+        // Cloud API "cru" seria `text.body`, então a leitura tolera os dois.
+        $tipo         = $message['type'] ?? null;
+        $conteudo     = null;
+        $tipoMensagem = 'texto';
+        $midiaUrl     = null;
+
+        if ($tipo === 'text') {
+            $conteudo = $message['text']['body'] ?? ($message['text'] ?? null);
+        } elseif ($tipo === 'audio') {
+            try {
+                $conteudo = app(MediaProcessorService::class)->processarOficial($message, $canal);
+                if ($conteudo !== null) {
+                    $tipoMensagem = 'audio';
+                    $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrlOficial($message, $canal, 'audio');
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Covercut webhook: falha ao processar áudio', ['message_id' => $messageId, 'erro' => $e->getMessage()]);
+            }
+        } elseif ($tipo === 'image') {
+            try {
+                $focoAnalise = KanbanColunaConfig::withoutGlobalScopes()
+                    ->where('tenant_id', $ticket->tenant_id)
+                    ->where('coluna_kanban', $ticket->coluna_kanban)
+                    ->value('foco_analise_imagem');
+
+                $conteudo = app(MediaProcessorService::class)->processarOficial($message, $canal, $focoAnalise);
+                if ($conteudo !== null) {
+                    $tipoMensagem = 'imagem';
+                    $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrlOficial($message, $canal, 'image');
+
+                    $itens = app(MediaProcessorService::class)->extrairItensImagemOficial($message, $canal, $focoAnalise);
+                    if ($itens) {
+                        $listaAtual = $ticket->lista_itens ? $ticket->lista_itens . "\n" : '';
+                        $ticket->update(['lista_itens' => $listaAtual . $itens]);
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Covercut webhook: falha ao processar imagem', ['message_id' => $messageId, 'erro' => $e->getMessage()]);
+            }
+        } elseif ($tipo === 'video') {
+            try {
+                $conteudo = app(MediaProcessorService::class)->processarOficial($message, $canal);
+                $tipoMensagem = 'video';
+                $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrlOficial($message, $canal, 'video');
+            } catch (\Throwable $e) {
+                Log::warning('Covercut webhook: falha ao processar vídeo', ['message_id' => $messageId, 'erro' => $e->getMessage()]);
+            }
+        } elseif ($tipo === 'document') {
+            // Paridade com o Uazapi: documento nunca guarda midia_url nem usa o
+            // enum 'documento' de fato — sempre tipo 'texto' com placeholder.
+            $conteudo = app(MediaProcessorService::class)->processarOficial($message, $canal);
+        }
+
+        if ($conteudo === null && ! in_array($tipo, ['audio', 'image', 'video', 'document'], true)) {
+            // Restaura a semântica pré-Task-1: message.text era lido incondicionalmente,
+            // independente de message.type. Cobre payloads reais onde o type vem
+            // ausente, com grafia diferente, ou um valor não previsto — sticker/
+            // unsupported continuam sem message.text, então nada muda pra eles.
+            $conteudo = $message['text']['body'] ?? ($message['text'] ?? null);
+        }
+
+        return [$conteudo, $tipoMensagem, $midiaUrl];
+    }
+
+    /**
+     * Mensagem enviada pelo atendente direto pelo WhatsApp Business App (modo
+     * Coexistence), fora da API — equivalente ao fluxo `fromMe && !viaApi` do
+     * UazapiWebhookController::transferirParaHumano(). Sem isso, toda resposta
+     * manual pelo celular no número oficial desaparecia da conversa do card
+     * (achado em 2026-08-03 ao investigar o mesmo problema no Uazapi).
+     */
+    private function processarMensagemHumana(array $payload, WhatsappCanal $canal): void
+    {
+        $messageId = $payload['message']['id'] ?? null;
+
+        if ($messageId && Mensagem::withoutGlobalScopes()->where('provider_message_id', $messageId)->exists()) {
+            Log::debug('Covercut webhook: mensagem (echo/phone) duplicada ignorada', ['id' => $messageId]);
+            return;
+        }
+
+        $telefoneRaw = $payload['contact']['wa_id'] ?? null;
+        if (! $telefoneRaw) {
+            return;
+        }
+        $telefone = $this->normalizarTelefone($telefoneRaw);
+
+        $contato = Contato::where('telefone', $telefone)->first();
+        if (! $contato) {
+            return;
+        }
+
+        $tenant = $canal->tenant;
+
+        $ticket = TicketAtendimento::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('contato_id', $contato->id)
+            ->whereIn('status', ['aberto', 'aguardando'])
+            ->latest()
+            ->first();
+
+        if (! $ticket) {
+            return;
+        }
+
+        // Mantém whatsapp_canal_id refletindo qual número tocou o ticket por último
+        // e muda responsável para humano se ainda estava com o bot — mesma
+        // semântica de UazapiWebhookController::transferirParaHumano().
+        $updates = [];
+        if ($ticket->whatsapp_canal_id !== $canal->id) {
+            $updates['whatsapp_canal_id'] = $canal->id;
+        }
+        if ($ticket->agente_responsavel === 'bot') {
+            $updates['agente_responsavel'] = 'humano';
+            Log::info("Ticket #{$ticket->id} transferido para humano (resposta pelo WhatsApp Business App / Coexistence)");
+        }
+        if ($updates) {
+            $ticket->update($updates);
+        }
+
+        [$conteudo, $tipoMensagem, $midiaUrl] = $this->resolverConteudoEMidia($payload['message'] ?? [], $canal, $ticket, $messageId);
+
+        if (! $conteudo) {
+            // Não usa placeholder aqui (diferente do Uazapi): tipos sem conteúdo
+            // aqui costumam ser reação/status, não algo digno de virar linha na
+            // conversa — mas loga o payload bruto pra confirmar isso na prática.
+            Log::warning('Covercut webhook: mensagem (echo/phone) sem conteúdo reconhecido — payload completo abaixo', [
+                'tenant_id' => $tenant->id,
+                'ticket_id' => $ticket->id,
+                'telefone'  => $telefone,
+                'message'   => $payload['message'] ?? null,
+            ]);
+            return;
+        }
+
+        Mensagem::create([
+            'ticket_id'           => $ticket->id,
+            'tenant_id'           => $tenant->id,
+            'remetente'           => 'humano',
+            'tipo'                => $tipoMensagem,
+            'conteudo'            => $conteudo,
+            'midia_url'           => $midiaUrl,
+            'provider_message_id' => $messageId,
+            'enviado_em'          => now(),
+        ]);
     }
 
     /**
