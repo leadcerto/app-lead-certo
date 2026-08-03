@@ -26,6 +26,12 @@ class CovercutWebhookMidiaTest extends TestCase
             'services.covercut.base_url'   => 'https://fake-covercut.test/api/v1',
             'services.covercut.api_key'    => 'fake-key',
             'services.covercut.api_secret' => 'fake-secret',
+            // Testes de áudio deste arquivo cobrem cenários DEPOIS da checagem de
+            // chave (mediaId ausente, falha de download, corpo vazio/inesperado) —
+            // sem uma chave fake aqui, phpunit.xml zera GROQ_KEY e todos caem no
+            // placeholder "transcrição não configurada" antes de chegar no cenário
+            // que cada teste realmente quer exercitar.
+            'services.groq.key'            => 'fake-groq-key',
         ]);
     }
 

@@ -39,7 +39,29 @@ class SelecaoCanalWhatsappServiceTest extends TestCase
         $this->assertNull($selecionado);
     }
 
-    public function test_ignora_canais_oficiais_na_selecao_de_prospeccao(): void
+    public function test_prefere_canal_nao_oficial_quando_os_dois_tipos_estao_conectados(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+
+        $naoOficial = WhatsappCanal::factory()->create(['tenant_id' => $tenant->id, 'tipo' => 'nao_oficial', 'status' => 'connected']);
+        $oficial    = WhatsappCanal::factory()->create(['tenant_id' => $tenant->id, 'tipo' => 'oficial', 'status' => 'connected']);
+        $kanban->canais()->attach([$naoOficial->id, $oficial->id]);
+
+        $selecionado = app(SelecaoCanalWhatsappService::class)->naoOficialAleatorioParaKanban($kanban);
+
+        $this->assertSame($naoOficial->id, $selecionado->id);
+    }
+
+    /**
+     * Achado em 2026-08-03: quando o único canal não-oficial de um tenant é
+     * desconectado (ex.: botão "Remover"), as chamadas proativas (ligação
+     * perdida, formulário) passavam a sempre receber null aqui e o ticket
+     * ficava sem NENHUM canal vinculado — nem dava pra responder manualmente
+     * depois. Cair pro canal oficial evita esse buraco, mesmo que a Meta possa
+     * rejeitar o envio por estar fora da janela de 24h.
+     */
+    public function test_cai_pro_canal_oficial_quando_nao_ha_canal_nao_oficial_conectado(): void
     {
         $tenant = Tenant::factory()->create();
         $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
@@ -49,6 +71,7 @@ class SelecaoCanalWhatsappServiceTest extends TestCase
 
         $selecionado = app(SelecaoCanalWhatsappService::class)->naoOficialAleatorioParaKanban($kanban);
 
-        $this->assertNull($selecionado);
+        $this->assertNotNull($selecionado, 'Deveria cair pro canal oficial em vez de retornar null');
+        $this->assertSame($oficial->id, $selecionado->id);
     }
 }
