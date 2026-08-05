@@ -111,4 +111,51 @@ class SdrResponderServiceHistoricoTest extends TestCase
         $conteudos = array_column($mensagensCapturadas, 'content');
         $this->assertContains('Oi! Vou te ajudar com o orçamento.', $conteudos);
     }
+
+    /**
+     * Pedido do Leonardo (2026-08-05): o agente precisa saber explicitamente
+     * quando foi o atendente humano que falou, não ele mesmo — sem isso, o
+     * histórico mandado ao LLM tratava mensagens de 'bot' e 'humano' como o
+     * mesmo papel "assistant", sem diferenciar quem realmente disse o quê.
+     */
+    public function test_mensagem_de_humano_e_marcada_no_historico_para_o_llm_distinguir(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $ticket = $this->criarTicketComPersona();
+
+        Mensagem::create([
+            'ticket_id' => $ticket->id, 'tenant_id' => $ticket->tenant_id,
+            'remetente' => 'humano', 'tipo' => 'texto',
+            'conteudo' => 'Pode deixar, eu confirmo o horário com você.',
+            'enviado_em' => now()->subMinutes(2),
+        ]);
+        Mensagem::create([
+            'ticket_id' => $ticket->id, 'tenant_id' => $ticket->tenant_id,
+            'remetente' => 'bot', 'tipo' => 'texto',
+            'conteudo' => 'Oi! Vou te ajudar com o orçamento.',
+            'enviado_em' => now()->subMinutes(1),
+        ]);
+
+        $mensagensCapturadas = null;
+        $this->mock(OpenRouterService::class, function ($mock) use (&$mensagensCapturadas) {
+            $mock->shouldReceive('chat')
+                ->once()
+                ->withArgs(function ($messages) use (&$mensagensCapturadas) {
+                    $mensagensCapturadas = $messages;
+                    return true;
+                })
+                ->andReturn('Perfeito, me conta mais...');
+        });
+
+        app(SdrResponderService::class)->responder($ticket);
+
+        $conteudos = array_column($mensagensCapturadas, 'content');
+        $doHumano = array_values(array_filter($conteudos, fn ($c) => str_contains($c, 'Pode deixar, eu confirmo o horário com você.')))[0] ?? null;
+        $doBot    = array_values(array_filter($conteudos, fn ($c) => str_contains($c, 'Oi! Vou te ajudar com o orçamento.')))[0] ?? null;
+
+        $this->assertNotNull($doHumano);
+        $this->assertStringContainsString('[Atendente humano respondeu]', $doHumano, 'Mensagem do humano deveria estar marcada');
+        $this->assertNotNull($doBot);
+        $this->assertStringNotContainsString('[Atendente humano respondeu]', $doBot, 'Mensagem do próprio bot não deveria ser marcada como humano');
+    }
 }

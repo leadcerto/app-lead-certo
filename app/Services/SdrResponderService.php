@@ -284,6 +284,16 @@ class SdrResponderService
             . "Use apenas quando tiver certeza do estado do lead. Se a conversa não mudou de estado, NÃO inclua nenhum token."
             . "\n===";
 
+        // Explica o marcador "[Atendente humano respondeu]" que aparece no
+        // histórico abaixo — sem isso o modelo não teria como saber que aquele
+        // turno específico não foi ele mesmo quem escreveu.
+        $iaContexto .= "\n\n=== SOBRE O HISTÓRICO DA CONVERSA ===\n"
+            . "Mensagens marcadas com \"[Atendente humano respondeu]:\" foram escritas por um atendente "
+            . "humano de verdade, não por você. Use-as pra entender como a conversa evoluiu e se alinhar "
+            . "com o que já foi combinado ou informado — não repita nem contradiga o que o atendente já disse. "
+            . "NUNCA inclua esse marcador nas suas próprias respostas."
+            . "\n===";
+
         $contextoHistorico = $this->contextoHistoricoCliente($ticket);
         $checklistState    = $this->derivarChecklist($ticket);
 
@@ -322,11 +332,22 @@ class SdrResponderService
             ->reverse()->take(30)->reverse();
 
         foreach ($historico as $mensagem) {
-            // 'contato' e 'lead' → 'user' / 'bot' e 'agente' → 'assistant'
-            $role       = in_array($mensagem->remetente, ['contato', 'lead']) ? 'user' : 'assistant';
+            // 'contato' e 'lead' → 'user' / 'bot' e 'humano' → 'assistant'.
+            // A API de chat não tem um papel próprio pra "colega humano" — só
+            // system/user/assistant — então a forma de o agente saber que NÃO foi
+            // ele quem disse aquilo é marcar no próprio texto. Sem isso (achado
+            // 2026-08-05, pedido do Leonardo), o agente tratava resposta do
+            // atendente humano como se tivesse sido ele mesmo que respondeu,
+            // sem aprender/se orientar pelo que um humano de verdade decidiu
+            // dizer naquele momento da conversa.
+            $role    = in_array($mensagem->remetente, ['contato', 'lead']) ? 'user' : 'assistant';
+            $conteudo = $mensagem->conteudo ?? '';
+            if ($mensagem->remetente === 'humano') {
+                $conteudo = "[Atendente humano respondeu]: {$conteudo}";
+            }
             $messages[] = [
                 'role'    => $role,
-                'content' => $mensagem->conteudo ?? '',
+                'content' => $conteudo,
             ];
         }
 
