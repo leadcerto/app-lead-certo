@@ -68,6 +68,7 @@ class TicketAtendimento extends Model
         'followup_estagio_enviado',
         'pendente_desde',
         'visualizado_em',
+        'objetivos_cumpridos',
     ];
 
     protected function casts(): array
@@ -84,6 +85,7 @@ class TicketAtendimento extends Model
             'visualizado_em'        => 'datetime',
             'janela_expira_em'      => 'datetime',
             'janela_origem_anuncio' => 'boolean',
+            'objetivos_cumpridos'   => 'array',
         ];
     }
 

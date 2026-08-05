@@ -21,6 +21,7 @@ class Kanban extends Model
         'tipo',
         'nome',
         'ordem',
+        'conhecimento_geral',
     ];
 
     protected $casts = [
