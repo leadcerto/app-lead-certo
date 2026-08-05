@@ -46,6 +46,21 @@ class SequenciaMensagemJob implements ShouldQueue
             return;
         }
 
+        // Mensagens de uma sequência são todas enfileiradas de uma vez (com delay
+        // acumulado) quando o lead entra na coluna — se um humano assumir o ticket
+        // no meio do caminho, as mensagens que já estavam na fila continuavam
+        // disparando por cima da conversa dele, porque nada aqui revalidava o
+        // responsável no momento do envio (achado em 2026-08-05; SdrResponderJob e
+        // FollowupConversas já faziam essa checagem, esta era a lacuna). Não é
+        // ignorado pelo "envio obrigatório" — esse flag existe pra sobreviver a
+        // mudança de coluna, não pra atropelar um humano que já assumiu.
+        if ($ticket->agente_responsavel !== 'bot') {
+            Log::info('SequenciaMensagemJob: ticket já assumido por humano, envio cancelado', [
+                'ticket_id' => $this->ticketId,
+            ]);
+            return;
+        }
+
         // Se a sequência foi vinculada a uma coluna específica, cancelar se o lead saiu dela —
         // a menos que a mensagem seja marcada como "envio obrigatório" (obrigatorio = true),
         // que ignora essa checagem e envia mesmo assim.
