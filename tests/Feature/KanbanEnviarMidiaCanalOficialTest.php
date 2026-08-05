@@ -147,4 +147,35 @@ class KanbanEnviarMidiaCanalOficialTest extends TestCase
         $response->assertCreated();
         Http::assertSent(fn ($request) => $request['type'] === 'sticker');
     }
+
+    /**
+     * Pedido do Leonardo (2026-08-05): poder ligar/desligar a transcrição por
+     * coluna do Kanban — vale também pro áudio gravado direto no painel.
+     */
+    public function test_transcricao_desativada_na_coluna_nao_transcreve_audio_do_painel(): void
+    {
+        config(['services.groq.key' => 'fake-groq-key']);
+        Http::fake([
+            '*/messages/send' => Http::response(['id' => 'wamid.xyz'], 200),
+            'api.groq.com/*'  => Http::response(['text' => 'não deveria chegar aqui'], 200),
+        ]);
+
+        $ticket = $this->criarTicketOficial();
+        $user   = User::factory()->create(['tenant_id' => $ticket->tenant_id, 'perfil' => 'dono', 'ativo' => true]);
+        \App\Models\KanbanColunaConfig::withoutGlobalScopes()->create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento', 'transcricao_ativa' => false,
+        ]);
+
+        $arquivo = UploadedFile::fake()->create('audio.ogg', 10, 'audio/ogg');
+
+        $response = $this->actingAs($user)->post("/api/painel/kanban/ticket/{$ticket->id}/midia", [
+            'tipo'    => 'audio',
+            'arquivo' => $arquivo,
+        ]);
+
+        $response->assertCreated();
+        $this->assertDatabaseHas('mensagens', ['ticket_id' => $ticket->id, 'conteudo' => '[Áudio]']);
+        $this->assertDatabaseMissing('mensagens', ['ticket_id' => $ticket->id, 'remetente' => 'bot']);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'groq'));
+    }
 }

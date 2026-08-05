@@ -46,15 +46,22 @@ class SequenciaMensagemJob implements ShouldQueue
             return;
         }
 
+        // Acesso via ?? por segurança: jobs enfileirados antes destas propriedades existirem
+        // não as têm no payload serializado, e o unserialize não roda o construtor (então o
+        // default do parâmetro nunca é aplicado nesses jobs antigos).
+        $colunaKanban = $this->colunaKanban ?? null;
+        $obrigatorio  = $this->obrigatorio  ?? false;
+
         // Mensagens de uma sequência são todas enfileiradas de uma vez (com delay
         // acumulado) quando o lead entra na coluna — se um humano assumir o ticket
         // no meio do caminho, as mensagens que já estavam na fila continuavam
         // disparando por cima da conversa dele, porque nada aqui revalidava o
         // responsável no momento do envio (achado em 2026-08-05; SdrResponderJob e
-        // FollowupConversas já faziam essa checagem, esta era a lacuna). Não é
-        // ignorado pelo "envio obrigatório" — esse flag existe pra sobreviver a
-        // mudança de coluna, não pra atropelar um humano que já assumiu.
-        if ($ticket->agente_responsavel !== 'bot') {
+        // FollowupConversas já faziam essa checagem, esta era a lacuna).
+        // Decisão do Leonardo (2026-08-05): só a mensagem marcada como "envio
+        // obrigatório" deve sair independente de quem assumiu a conversa — as
+        // demais respeitam o humano, igual às outras automações.
+        if (! $obrigatorio && $ticket->agente_responsavel !== 'bot') {
             Log::info('SequenciaMensagemJob: ticket já assumido por humano, envio cancelado', [
                 'ticket_id' => $this->ticketId,
             ]);
@@ -64,11 +71,6 @@ class SequenciaMensagemJob implements ShouldQueue
         // Se a sequência foi vinculada a uma coluna específica, cancelar se o lead saiu dela —
         // a menos que a mensagem seja marcada como "envio obrigatório" (obrigatorio = true),
         // que ignora essa checagem e envia mesmo assim.
-        // Acesso via ?? por segurança: jobs enfileirados antes destas propriedades existirem
-        // não as têm no payload serializado, e o unserialize não roda o construtor (então o
-        // default do parâmetro nunca é aplicado nesses jobs antigos).
-        $colunaKanban = $this->colunaKanban ?? null;
-        $obrigatorio  = $this->obrigatorio  ?? false;
         if ($colunaKanban && $ticket->coluna_kanban !== $colunaKanban && ! $obrigatorio) {
             return;
         }

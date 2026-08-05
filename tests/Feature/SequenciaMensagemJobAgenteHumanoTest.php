@@ -59,11 +59,12 @@ class SequenciaMensagemJobAgenteHumanoTest extends TestCase
     }
 
     /**
-     * "Envio obrigatório" existe pra ignorar o cancelamento por MUDANÇA DE
-     * COLUNA (ver SequenciaMensagemJobObrigatorioTest) — não deve virar uma
-     * forma de a automação atropelar um humano que já assumiu a conversa.
+     * Decisão do Leonardo (2026-08-05): "envio obrigatório" é a exceção — essa
+     * mensagem específica deve sair mesmo que um humano já tenha assumido a
+     * conversa. As demais mensagens da sequência (teste acima) continuam
+     * respeitando o humano normalmente.
      */
-    public function test_mensagem_obrigatoria_tambem_nao_e_enviada_se_humano_ja_assumiu(): void
+    public function test_mensagem_obrigatoria_e_enviada_mesmo_com_humano_ja_assumido(): void
     {
         Http::fake(['*' => Http::response(['ok' => true], 200)]);
 
@@ -72,8 +73,8 @@ class SequenciaMensagemJobAgenteHumanoTest extends TestCase
         (new SequenciaMensagemJob($ticket->id, 'Mensagem obrigatória', null, 'lead_novo', null, true))
             ->handle(app(HumanizacaoService::class), app(UazapiService::class));
 
-        Http::assertNothingSent();
-        $this->assertDatabaseMissing('mensagens', ['ticket_id' => $ticket->id]);
+        Http::assertSent(fn ($request) => true);
+        $this->assertDatabaseHas('mensagens', ['ticket_id' => $ticket->id, 'conteudo' => 'Mensagem obrigatória']);
     }
 
     public function test_mensagem_de_sequencia_ainda_e_enviada_quando_bot_continua_responsavel(): void

@@ -221,11 +221,17 @@ class CovercutWebhookController extends Controller
         $tipoMensagem = 'texto';
         $midiaUrl     = null;
 
+        $colunaConfig     = KanbanColunaConfig::withoutGlobalScopes()
+            ->where('tenant_id', $ticket->tenant_id)
+            ->where('coluna_kanban', $ticket->coluna_kanban)
+            ->first();
+        $transcricaoAtiva = $colunaConfig?->transcricao_ativa ?? true;
+
         if ($tipo === 'text') {
             $conteudo = $message['text']['body'] ?? ($message['text'] ?? null);
         } elseif ($tipo === 'audio') {
             try {
-                $conteudo = app(MediaProcessorService::class)->processarOficial($message, $canal);
+                $conteudo = app(MediaProcessorService::class)->processarOficial($message, $canal, null, $transcricaoAtiva);
                 if ($conteudo !== null) {
                     $tipoMensagem = 'audio';
                     $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrlOficial($message, $canal, 'audio');
@@ -235,17 +241,14 @@ class CovercutWebhookController extends Controller
             }
         } elseif ($tipo === 'image') {
             try {
-                $focoAnalise = KanbanColunaConfig::withoutGlobalScopes()
-                    ->where('tenant_id', $ticket->tenant_id)
-                    ->where('coluna_kanban', $ticket->coluna_kanban)
-                    ->value('foco_analise_imagem');
+                $focoAnalise = $colunaConfig?->foco_analise_imagem;
 
-                $conteudo = app(MediaProcessorService::class)->processarOficial($message, $canal, $focoAnalise);
+                $conteudo = app(MediaProcessorService::class)->processarOficial($message, $canal, $focoAnalise, $transcricaoAtiva);
                 if ($conteudo !== null) {
                     $tipoMensagem = 'imagem';
                     $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrlOficial($message, $canal, 'image');
 
-                    $itens = app(MediaProcessorService::class)->extrairItensImagemOficial($message, $canal, $focoAnalise);
+                    $itens = app(MediaProcessorService::class)->extrairItensImagemOficial($message, $canal, $focoAnalise, $transcricaoAtiva);
                     if ($itens) {
                         $listaAtual = $ticket->lista_itens ? $ticket->lista_itens . "\n" : '';
                         $ticket->update(['lista_itens' => $listaAtual . $itens]);

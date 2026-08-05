@@ -24,13 +24,23 @@ class MediaProcessorService
      * Retorna null se não há mídia ou não conseguiu processar.
      * $focoAnalise vem da configuração da coluna (foco_analise_imagem) — o que a
      * IA deve procurar na imagem varia por negócio (móveis, placas, cores, etc.).
+     * $transcricaoAtiva vem de kanban_coluna_configs.transcricao_ativa — quando
+     * false, pula a chamada de IA (Whisper/visão) mas ainda retorna um
+     * placeholder não-nulo, pra mídia continuar sendo baixada e salva no card
+     * normalmente (só a análise de conteúdo é que é pulada).
      */
-    public function processar(array $msg, string $instanceToken, ?string $focoAnalise = null): ?string
+    public function processar(array $msg, string $instanceToken, ?string $focoAnalise = null, bool $transcricaoAtiva = true): ?string
     {
         $mediaType = $msg['mediaType'] ?? null;
 
         if (! $mediaType) {
             return null;
+        }
+
+        if (! $transcricaoAtiva && in_array($mediaType, ['image', 'audio'], true)) {
+            return $mediaType === 'image'
+                ? '[Imagem recebida — transcrição desativada para esta coluna]'
+                : '[Áudio recebido — transcrição desativada para esta coluna]';
         }
 
         return match ($mediaType) {
@@ -69,9 +79,9 @@ class MediaProcessorService
      * o campo "Itens identificados" do card, separado da descrição narrativa que
      * vai pro contexto do agente. Retorna null se não conseguir processar.
      */
-    public function extrairItensImagem(array $msg, string $instanceToken, ?string $focoAnalise = null): ?string
+    public function extrairItensImagem(array $msg, string $instanceToken, ?string $focoAnalise = null, bool $transcricaoAtiva = true): ?string
     {
-        if (! $this->openRouterKey) {
+        if (! $transcricaoAtiva || ! $this->openRouterKey) {
             return null;
         }
 
@@ -234,9 +244,9 @@ class MediaProcessorService
      * anexa o áudio direto no painel (KanbanController::enviarMidia()), onde o
      * arquivo já está em disco, não vem de um payload de webhook.
      */
-    public function transcreverArquivo(string $bytes, string $mime): ?string
+    public function transcreverArquivo(string $bytes, string $mime, bool $transcricaoAtiva = true): ?string
     {
-        if (! $this->groqKey) {
+        if (! $transcricaoAtiva || ! $this->groqKey) {
             return null;
         }
 
@@ -611,9 +621,15 @@ class MediaProcessorService
      * documento; retorna null para tipos genuinamente não suportados (ex.:
      * unsupported, sticker, poll).
      */
-    public function processarOficial(array $message, WhatsappCanal $canal, ?string $focoAnalise = null): ?string
+    public function processarOficial(array $message, WhatsappCanal $canal, ?string $focoAnalise = null, bool $transcricaoAtiva = true): ?string
     {
         $tipo = $message['type'] ?? null;
+
+        if (! $transcricaoAtiva && in_array($tipo, ['image', 'audio'], true)) {
+            return $tipo === 'image'
+                ? '[Imagem recebida — transcrição desativada para esta coluna]'
+                : '[Áudio recebido — transcrição desativada para esta coluna]';
+        }
 
         return match ($tipo) {
             'audio'    => $this->processarAudioOficial($message, $canal),
@@ -664,9 +680,9 @@ class MediaProcessorService
         return $prefixo . $descricao;
     }
 
-    public function extrairItensImagemOficial(array $message, WhatsappCanal $canal, ?string $focoAnalise = null): ?string
+    public function extrairItensImagemOficial(array $message, WhatsappCanal $canal, ?string $focoAnalise = null, bool $transcricaoAtiva = true): ?string
     {
-        if (! $this->openRouterKey) {
+        if (! $transcricaoAtiva || ! $this->openRouterKey) {
             return null;
         }
 

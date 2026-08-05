@@ -473,4 +473,40 @@ class UazapiWebhookMidiaTest extends TestCase
         $ticket->refresh();
         $this->assertSame('humano', $ticket->agente_responsavel);
     }
+
+    /**
+     * Pedido do Leonardo (2026-08-05): poder ligar/desligar a transcrição de
+     * áudio e a análise de imagem por coluna do Kanban. Desligado: a mídia
+     * ainda é baixada e salva no card normalmente, só a chamada de IA é
+     * pulada (custo zero de Whisper/visão).
+     */
+    public function test_transcricao_desativada_na_coluna_pula_ia_mas_ainda_salva_midia(): void
+    {
+        $this->fakeDownloadDeMidia('image/jpeg');
+
+        $tenant = $this->criarTenantComCanal('wh-midia-transc-off', 'inst-transc-off');
+        \App\Models\KanbanColunaConfig::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id, 'coluna_kanban' => 'lead_novo', 'transcricao_ativa' => false,
+        ]);
+
+        $this->postJson('/api/webhook/uazapi/wh-midia-transc-off', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'      => false,
+                'isGroup'     => false,
+                'chatid'      => '5511933339999@s.whatsapp.net',
+                'mediaType'   => 'image',
+                'messageid'   => 'msg-transc-off',
+                'content'     => '{}',
+            ],
+        ]);
+
+        $mensagem = Mensagem::where('remetente', 'lead')->latest()->first();
+        $this->assertNotNull($mensagem);
+        $this->assertSame('imagem', $mensagem->tipo);
+        $this->assertNotNull($mensagem->midia_url, 'A imagem ainda deveria ser baixada e salva');
+        $this->assertSame('[Imagem recebida — transcrição desativada para esta coluna]', $mensagem->conteudo);
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'openrouter'));
+    }
 }

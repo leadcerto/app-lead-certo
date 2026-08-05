@@ -657,6 +657,17 @@
                             <p class="text-xs text-gray-400 mt-1">Usado tanto na descrição da imagem pro agente quanto na lista de itens identificados no card. Cada negócio pode focar em algo diferente — móveis, placas de carro, cores, o que fizer sentido.</p>
                         </div>
 
+                        <div class="mt-3">
+                            <label class="flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox"
+                                       :checked="transcricaoAtiva[col.key] ?? true"
+                                       @change="transcricaoAtiva[col.key] = $event.target.checked; iaAlterado[col.key] = true"
+                                       class="w-3.5 h-3.5 accent-purple-600">
+                                <span class="text-xs text-gray-500">Transcrever áudio e analisar imagens/documentos nesta coluna</span>
+                            </label>
+                            <p class="text-xs text-gray-400 mt-1 ml-5">Desligado: áudio e imagem ainda chegam e ficam salvos no card, só sem a transcrição/descrição automática por IA.</p>
+                        </div>
+
                         <div class="mt-3 flex items-center justify-between">
                             <div class="flex items-center gap-4">
                                 <label class="flex items-center gap-1.5 cursor-pointer">
@@ -1257,6 +1268,7 @@ function kanbanConfig() {
         // Contexto completo da IA
         iaContexto: {},
         focoAnaliseImagem: {},
+        transcricaoAtiva: {},
         iaAtivo: {},
         iaDelay: {},
         iaDelayUnidade: {},
@@ -1641,6 +1653,7 @@ function kanbanConfig() {
                 this.iaObjetivo[key]    = json.ia_objetivo    ?? '';
                 this.iaContexto[key]    = json.ia_contexto        ?? '';
                 this.focoAnaliseImagem[key] = json.foco_analise_imagem ?? '';
+                this.transcricaoAtiva[key] = json.transcricao_ativa ?? true;
                 this.iaAtivo[key]       = json.ia_ativo           ?? false;
                 const delay             = this.segundosParaDisplay(json.sdr_delay_segundos ?? 45);
                 this.iaDelay[key]       = delay.valor;
@@ -1719,6 +1732,7 @@ function kanbanConfig() {
             const res = await this.api(`/api/painel/kanban/coluna-config/${key}`, 'PUT', {
                 ia_contexto:         this.iaContexto[key] ?? '',
                 foco_analise_imagem: this.focoAnaliseImagem[key] ?? '',
+                transcricao_ativa:   this.transcricaoAtiva[key] ?? true,
                 ia_ativo:            this.iaAtivo[key]    ?? false,
                 sdr_delay_segundos:  this.delayParaSegundos(this.iaDelay[key] ?? 45, this.iaDelayUnidade[key] || 'seg'),
                 followup_estagio1_segundos: this.delayParaSegundos(this.estagio1Delay[key] ?? 1, this.estagio1DelayUnidade[key] || 'hora'),

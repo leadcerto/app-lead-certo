@@ -490,4 +490,41 @@ class CovercutWebhookMidiaTest extends TestCase
         $ticket->refresh();
         $this->assertSame('humano', $ticket->agente_responsavel);
     }
+
+    /**
+     * Pedido do Leonardo (2026-08-05): poder ligar/desligar a transcrição de
+     * áudio e a análise de imagem por coluna do Kanban — mesma cobertura no
+     * canal oficial que no Uazapi (ver UazapiWebhookMidiaTest).
+     */
+    public function test_transcricao_desativada_na_coluna_pula_ia_mas_ainda_salva_midia(): void
+    {
+        Http::fake([
+            '*/media/get*' => Http::response('conteudo-binario-fake-audio', 200, ['Content-Type' => 'audio/ogg']),
+        ]);
+
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+        \App\Models\KanbanColunaConfig::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id, 'coluna_kanban' => 'lead_novo', 'transcricao_ativa' => false,
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777', 'name' => 'Sandro'],
+            'message' => ['id' => 'wamid.transcoff', 'type' => 'audio', 'audio' => ['id' => 'media-transc-off', 'mime_type' => 'audio/ogg']],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        $mensagem = Mensagem::where('provider_message_id', 'wamid.transcoff')->first();
+        $this->assertNotNull($mensagem);
+        $this->assertSame('audio', $mensagem->tipo);
+        $this->assertNotNull($mensagem->midia_url, 'O áudio ainda deveria ser baixado e salvo');
+        $this->assertSame('[Áudio recebido — transcrição desativada para esta coluna]', $mensagem->conteudo);
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'groq'));
+    }
 }

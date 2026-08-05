@@ -24,6 +24,7 @@ class KanbanColunaConfig extends Model
         'ia_contexto',
         'etapa_ia_ao_mover',
         'foco_analise_imagem',
+        'transcricao_ativa',
         'ia_ativo',
         'sdr_delay_segundos',
         'followup_estagio1_segundos',
@@ -39,6 +40,7 @@ class KanbanColunaConfig extends Model
 
     protected $casts = [
         'ia_ativo'                  => 'boolean',
+        'transcricao_ativa'         => 'boolean',
         'auto_mover_ativo'          => 'boolean',
         'exclusao_definitiva_ativo' => 'boolean',
     ];

@@ -284,14 +284,14 @@ class UazapiWebhookController extends Controller
         $midiaUrl = null;
         if ($mediaType && $canal->tokenUazapi()) {
             try {
-                $focoAnalise = $mediaType === 'image'
-                    ? KanbanColunaConfig::withoutGlobalScopes()
-                        ->where('tenant_id', $tenant->id)
-                        ->where('coluna_kanban', $ticket->coluna_kanban)
-                        ->value('foco_analise_imagem')
-                    : null;
+                $colunaConfig = KanbanColunaConfig::withoutGlobalScopes()
+                    ->where('tenant_id', $tenant->id)
+                    ->where('coluna_kanban', $ticket->coluna_kanban)
+                    ->first();
+                $focoAnalise      = $mediaType === 'image' ? $colunaConfig?->foco_analise_imagem : null;
+                $transcricaoAtiva = $colunaConfig?->transcricao_ativa ?? true;
 
-                $processado = app(MediaProcessorService::class)->processar($msg, $canal->tokenUazapi(), $focoAnalise);
+                $processado = app(MediaProcessorService::class)->processar($msg, $canal->tokenUazapi(), $focoAnalise, $transcricaoAtiva);
                 if ($processado !== null) {
                     $conteudo     = $processado;
                     $tipoMensagem = match ($mediaType) {
@@ -304,7 +304,7 @@ class UazapiWebhookController extends Controller
                     // Acumula os itens identificados na imagem no card, pra quem
                     // vende ver de relance o que já foi enviado sem reabrir cada foto.
                     if ($mediaType === 'image') {
-                        $itens = app(MediaProcessorService::class)->extrairItensImagem($msg, $canal->tokenUazapi(), $focoAnalise);
+                        $itens = app(MediaProcessorService::class)->extrairItensImagem($msg, $canal->tokenUazapi(), $focoAnalise, $transcricaoAtiva);
                         if ($itens) {
                             $listaAtual = $ticket->lista_itens ? $ticket->lista_itens . "\n" : '';
                             $ticket->update(['lista_itens' => $listaAtual . $itens]);
@@ -705,7 +705,12 @@ class UazapiWebhookController extends Controller
                     // Transcreve de verdade — antes só baixava a URL e usava o
                     // placeholder "[Áudio]" abaixo, sem passar pelo Whisper. Mesma
                     // cobertura que já existia pro áudio do lead.
-                    $processado = app(MediaProcessorService::class)->processar($msg, $canal->tokenUazapi());
+                    $transcricaoAtiva = KanbanColunaConfig::withoutGlobalScopes()
+                        ->where('tenant_id', $ticket->tenant_id)
+                        ->where('coluna_kanban', $ticket->coluna_kanban)
+                        ->value('transcricao_ativa') ?? true;
+
+                    $processado = app(MediaProcessorService::class)->processar($msg, $canal->tokenUazapi(), null, $transcricaoAtiva);
                     if ($processado !== null) {
                         $conteudo = $processado;
                     }

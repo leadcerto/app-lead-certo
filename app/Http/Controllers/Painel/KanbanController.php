@@ -436,9 +436,15 @@ class KanbanController extends Controller
         $transcricaoBruta = null;
         if ($tipo === 'audio') {
             try {
+                $transcricaoAtiva = \App\Models\KanbanColunaConfig::withoutGlobalScopes()
+                    ->where('tenant_id', $model->tenant_id)
+                    ->where('coluna_kanban', $model->coluna_kanban)
+                    ->value('transcricao_ativa') ?? true;
+
                 $transcricaoBruta = app(MediaProcessorService::class)->transcreverArquivo(
                     Storage::disk('public')->get($path),
-                    $arquivo->getMimeType()
+                    $arquivo->getMimeType(),
+                    $transcricaoAtiva
                 );
             } catch (\Throwable $e) {
                 Log::warning('KanbanController: falha ao transcrever áudio enviado pelo painel', [
