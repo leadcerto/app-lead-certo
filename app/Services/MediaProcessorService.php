@@ -149,10 +149,11 @@ class MediaProcessorService
     // Modelo pago de visão — último recurso se todos os gratuitos falharem
     private const VISAO_PAGO_FALLBACK = 'google/gemini-flash-1.5-8b';
 
-    // Foco padrão quando a coluna não configura foco_analise_imagem — mantém o
-    // comportamento original (voltado a frete/mudança) pra não mudar nada de
-    // quem já usa o sistema sem configurar esse campo novo.
-    private const FOCO_PADRAO = 'móveis, volumes, caixas, dimensões estimadas, quantidade de itens, condição dos objetos';
+    // Foco padrão quando a coluna não configura foco_analise_imagem — precisa
+    // ser genérico (2026-08-05, achado pelo Leonardo): o sistema é multi-tenant,
+    // cada negócio tem seu próprio foco (frete/mudança é só a empresa usada
+    // hoje como referência de teste, não deve ficar hardcoded no padrão).
+    private const FOCO_PADRAO = 'os itens, objetos ou elementos que aparecem em destaque na imagem';
 
     private function descreverImagemComVisao(string $imageUrl, string $caption = '', ?string $focoAnalise = null): string
     {

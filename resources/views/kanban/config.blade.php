@@ -370,21 +370,42 @@
                                         </button>
 
                                         <div x-show="abaVariacaoAberta[msg.id]" style="display:none" class="mt-2 space-y-2">
-                                            <template x-for="variacao in (variacoesPor[msg.id] || [])" :key="variacao.id">
-                                                <div class="flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-lg p-2">
-                                                    <span class="text-xs px-1.5 py-0.5 rounded-full flex-shrink-0"
-                                                          :class="variacao.protegida ? 'bg-green-100 text-green-700' : 'bg-purple-50 text-purple-600'"
-                                                          x-text="variacao.protegida ? 'original' : (variacao.origem === 'ia' ? 'IA' : 'manual')"></span>
-                                                    <p class="text-xs text-gray-700 flex-1 whitespace-pre-wrap break-words" x-text="variacao.conteudo"></p>
-                                                    <label class="flex items-center gap-1 flex-shrink-0" title="Ativa no sorteio de envio">
-                                                        <input type="checkbox" :checked="variacao.ativa"
-                                                               :disabled="variacao.protegida"
-                                                               @change="toggleAtivaVariacao(seq.id, msg, variacao)"
-                                                               class="w-3 h-3 accent-green-600">
-                                                    </label>
-                                                    <button x-show="!variacao.protegida"
-                                                            @click="excluirVariacao(seq.id, msg, variacao)"
-                                                            class="text-red-300 hover:text-red-500 flex-shrink-0 text-xs">✕</button>
+                                            <!-- Abas de variação (original + cada versão gerada), estilo navegador -->
+                                            <div x-show="(variacoesPor[msg.id] || []).length"
+                                                 class="flex items-center gap-0.5 border-b border-gray-200 overflow-x-auto">
+                                                <template x-for="(variacao, idx) in (variacoesPor[msg.id] || [])" :key="variacao.id">
+                                                    <button @click="variacaoAbaAtiva[msg.id] = variacao.id"
+                                                            class="px-3 py-1.5 text-xs whitespace-nowrap border-b-2 -mb-px transition-colors"
+                                                            :class="(variacaoAbaAtiva[msg.id] ?? (variacoesPor[msg.id] || [])[0]?.id) === variacao.id
+                                                                ? 'border-purple-500 text-purple-700 font-medium bg-purple-50/50'
+                                                                : 'border-transparent text-gray-400 hover:text-gray-600'">
+                                                        <span x-text="variacao.protegida ? 'Original' : ('Variação ' + idx)"></span>
+                                                        <span x-show="!variacao.protegida && !variacao.ativa" class="text-gray-300"> (inativa)</span>
+                                                    </button>
+                                                </template>
+                                            </div>
+
+                                            <!-- Conteúdo da aba selecionada -->
+                                            <template x-for="variacao in (variacoesPor[msg.id] || [])" :key="'painel-' + variacao.id">
+                                                <div x-show="(variacaoAbaAtiva[msg.id] ?? (variacoesPor[msg.id] || [])[0]?.id) === variacao.id"
+                                                     style="display:none"
+                                                     class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                                    <div class="flex items-center gap-2 mb-2">
+                                                        <span class="text-xs px-1.5 py-0.5 rounded-full flex-shrink-0"
+                                                              :class="variacao.protegida ? 'bg-green-100 text-green-700' : 'bg-purple-50 text-purple-600'"
+                                                              x-text="variacao.protegida ? 'original' : (variacao.origem === 'ia' ? 'IA' : 'manual')"></span>
+                                                        <label class="flex items-center gap-1 ml-auto flex-shrink-0" title="Ativa no sorteio de envio">
+                                                            <span class="text-xs text-gray-500">Ativa no sorteio</span>
+                                                            <input type="checkbox" :checked="variacao.ativa"
+                                                                   :disabled="variacao.protegida"
+                                                                   @change="toggleAtivaVariacao(seq.id, msg, variacao)"
+                                                                   class="w-3 h-3 accent-green-600">
+                                                        </label>
+                                                        <button x-show="!variacao.protegida"
+                                                                @click="excluirVariacao(seq.id, msg, variacao)"
+                                                                class="text-red-300 hover:text-red-500 flex-shrink-0 text-xs">✕ excluir</button>
+                                                    </div>
+                                                    <p class="text-xs text-gray-700 whitespace-pre-wrap break-words" x-text="variacao.conteudo"></p>
                                                 </div>
                                             </template>
 
@@ -1248,6 +1269,7 @@ function kanbanConfig() {
 
         variacoesPor: {},       // { [mensagemId]: [ {id, conteudo, origem, protegida, ativa}, ... ] }
         abaVariacaoAberta: {},  // { [mensagemId]: bool } — controla se o painel de variações está expandido
+        variacaoAbaAtiva: {},   // { [mensagemId]: variacaoId } — qual aba de variação está selecionada (null = primeira/original)
         gerandoVariacoes: {},   // { [mensagemId]: bool } — spinner durante chamada IA
         novaVariacaoTexto: {},  // { [mensagemId]: string } — campo de criação manual de variação
 
@@ -1563,6 +1585,10 @@ function kanbanConfig() {
         async carregarVariacoes(seqId, msg) {
             const res = await this.api(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}/variacoes`);
             this.variacoesPor[msg.id] = res.ok ? await res.json() : [];
+            // Volta pra primeira aba (original) sempre que a lista recarrega — evita
+            // ficar preso numa aba cujo id não existe mais (ex: depois de gerar
+            // variações novas, que substituem as antigas).
+            this.variacaoAbaAtiva[msg.id] = null;
         },
 
         async toggleAbaVariacoes(seqId, msg) {
