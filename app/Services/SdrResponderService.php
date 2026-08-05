@@ -311,8 +311,15 @@ class SdrResponderService
             ])),
         ]];
 
-        // Últimas 30 mensagens do histórico
-        $historico = $ticket->mensagens->reverse()->take(30)->reverse();
+        // Últimas 30 mensagens do histórico — exclui ecos de transcrição de
+        // áudio (EcoTranscricaoService): são só pro humano ler na conversa do
+        // WhatsApp, não algo que o próprio agente "disse". Sem isso, o LLM via
+        // no histórico como se ele mesmo tivesse repetido de volta a
+        // transcrição do lead, duplicando informação e confundindo o contexto.
+        $historico = $ticket->mensagens
+            ->reject(fn ($m) => str_starts_with($m->conteudo ?? '', \App\Services\EcoTranscricaoService::PREFIXO))
+            ->values()
+            ->reverse()->take(30)->reverse();
 
         foreach ($historico as $mensagem) {
             // 'contato' e 'lead' → 'user' / 'bot' e 'agente' → 'assistant'

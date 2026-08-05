@@ -18,9 +18,17 @@ use Illuminate\Support\Facades\Log;
  */
 class EcoTranscricaoService
 {
+    /**
+     * Prefixo fixo de toda mensagem de eco — usado tanto pra montar o texto
+     * quanto (por SdrResponderService::montarHistorico()) pra identificar e
+     * excluir esses ecos do histórico mandado ao LLM: são só pro humano ler
+     * na conversa, não algo que o próprio agente "disse".
+     */
+    public const PREFIXO = '[Segue a transcrição do áudio enviado pelo ';
+
     public function enviar(WhatsappCanal $canal, TicketAtendimento $ticket, string $telefone, string $transcricao, string $remetenteLabel): void
     {
-        $texto = "[Segue a transcrição do áudio enviado pelo {$remetenteLabel}]\n\n{$transcricao}";
+        $texto = self::PREFIXO . "{$remetenteLabel}]\n\n{$transcricao}";
 
         $enviado = $canal->servico()->enviarTextoDireto($canal, $telefone, $texto);
 
