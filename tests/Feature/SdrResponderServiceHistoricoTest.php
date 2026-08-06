@@ -158,4 +158,28 @@ class SdrResponderServiceHistoricoTest extends TestCase
         $this->assertNotNull($doBot);
         $this->assertStringNotContainsString('[Atendente humano respondeu]', $doBot, 'Mensagem do próprio bot não deveria ser marcada como humano');
     }
+
+    public function test_conhecimento_geral_do_kanban_entra_no_prompt(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $ticket = $this->criarTicketComPersona();
+
+        \App\Models\Kanban::where('tenant_id', $ticket->tenant_id)->where('tipo', 'vendas')
+            ->update(['conhecimento_geral' => 'Este Kanban atende só clientes da Zona Sul do Rio.']);
+
+        $mensagensCapturadas = null;
+        $this->mock(OpenRouterService::class, function ($mock) use (&$mensagensCapturadas) {
+            $mock->shouldReceive('chat')
+                ->once()
+                ->withArgs(function ($messages) use (&$mensagensCapturadas) {
+                    $mensagensCapturadas = $messages;
+                    return true;
+                })
+                ->andReturn('Oi! Vamos começar.');
+        });
+
+        app(SdrResponderService::class)->responder($ticket);
+
+        $this->assertStringContainsString('Este Kanban atende só clientes da Zona Sul do Rio.', $mensagensCapturadas[0]['content']);
+    }
 }

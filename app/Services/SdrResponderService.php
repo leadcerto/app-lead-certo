@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\PapelColunaKanban;
 use App\Models\KanbanColuna;
 use App\Models\KanbanColunaConfig;
+use App\Models\KanbanColunaObjetivo;
 use App\Models\Mensagem;
 use App\Models\SdrPersona;
 use App\Models\TicketAtendimento;
@@ -72,6 +73,9 @@ class SdrResponderService
                 $updates = $papel === \App\Enums\PapelColunaKanban::Encerramento
                     ? $ticket->dadosParaEncerrar(['etapa_ia' => $etapa], $chave)
                     : ['coluna_kanban' => $chave, 'etapa_ia' => $etapa];
+                // objetivos_cumpridos é zerado automaticamente pelo hook do model
+                // (TicketAtendimento::saving) sempre que coluna_kanban muda e este
+                // update não o define explicitamente — ver Achado 2 da revisão final.
 
                 $ticket->update($updates);
                 Log::info("SdrResponder: → {$chave} via token {$token}", ['ticket_id' => $ticket->id]);
@@ -81,6 +85,45 @@ class SdrResponderService
         }
         $tokens   = array_map(fn (string $chave) => '[' . mb_strtoupper($chave) . ']', $chaves);
         $resposta = trim(str_replace($tokens, '', $resposta));
+
+        // ── 4.5. Detectar tokens de objetivo cumprido e aplicar ─────────────
+        // Mesmo padrão dos tokens de movimento acima — o agente reporta na
+        // própria resposta quais objetivos do checklist da coluna considera
+        // cumpridos, e o sistema persiste isso no ticket antes de mandar a
+        // mensagem pro lead sem o marcador.
+        preg_match_all('/\[OBJETIVO_CUMPRIDO:(\d+)\]/', $resposta, $matchesObjetivos);
+        if (! empty($matchesObjetivos[1])) {
+            // Só aceita ids que realmente existem pra esse tenant/coluna — um
+            // objetivo pode ter sido excluído entre a config ser lida (início
+            // da chamada) e a resposta chegar, ou o modelo pode alucinar um id.
+            // Sem essa validação, um id órfão infla pra sempre o "X/Y cumpridos"
+            // do card sem corresponder a nenhum objetivo visível.
+            $idsValidos = KanbanColunaObjetivo::withoutGlobalScopes()
+                ->where('tenant_id', $ticket->tenant_id)
+                ->where('coluna_kanban', $ticket->coluna_kanban)
+                ->where('ativo', true)
+                ->pluck('id')
+                ->all();
+
+            $cumpridos = $ticket->objetivos_cumpridos ?? [];
+            foreach ($matchesObjetivos[1] as $idTexto) {
+                $id = (int) $idTexto;
+                if (! in_array($id, $idsValidos, true)) {
+                    Log::debug('SdrResponder: token de objetivo com id inexistente, ignorado', [
+                        'ticket_id' => $ticket->id, 'id' => $id,
+                    ]);
+                    continue;
+                }
+                if (! in_array($id, $cumpridos, true)) {
+                    $cumpridos[] = $id;
+                }
+            }
+            $ticket->update(['objetivos_cumpridos' => $cumpridos]);
+            Log::info('SdrResponder: objetivos marcados como cumpridos', [
+                'ticket_id' => $ticket->id, 'ids' => $matchesObjetivos[1],
+            ]);
+        }
+        $resposta = trim(preg_replace('/\[OBJETIVO_CUMPRIDO:\d+\]/', '', $resposta));
 
         // ── 5. Enviar pelo canal certo (Uazapi ou Covercut, resolvido pelo ticket) ──
         $telefone = $ticket->contato?->telefone;
@@ -173,50 +216,32 @@ class SdrResponderService
         return $tags;
     }
 
-    private function derivarChecklist(TicketAtendimento $ticket): string
+    private function montarBlocoObjetivos(TicketAtendimento $ticket): ?string
     {
-        $mensagensLead = $ticket->mensagens
-            ->where('remetente', 'lead')
-            ->pluck('conteudo')
-            ->filter()
-            ->implode(' ');
+        $objetivos = KanbanColunaObjetivo::withoutGlobalScopes()
+            ->where('tenant_id', $ticket->tenant_id)
+            ->where('coluna_kanban', $ticket->coluna_kanban)
+            ->where('ativo', true)
+            ->orderBy('ordem')
+            ->get();
 
-        $ok  = fn(string $s) => "✅ {$s}";
-        $nok = fn(string $s) => "❌ {$s}: pendente";
+        if ($objetivos->isEmpty()) {
+            return null;
+        }
 
-        $items = [];
+        $cumpridos = $ticket->objetivos_cumpridos ?? [];
 
-        // Endereços (salvos no ticket após handoff ou por n8n)
-        $items[] = $ticket->endereco_saida
-            ? $ok("Endereço de embarque: {$ticket->endereco_saida}")
-            : (preg_match('/\b(rua|av\.|avenida|estrada|travessa|praça)\b/i', $mensagensLead)
-                ? "⚠️ Endereço de embarque: mencionado parcialmente — confirmar"
-                : $nok("Endereço de embarque"));
+        $linhas = $objetivos->map(function ($objetivo) use ($cumpridos) {
+            $feito = in_array($objetivo->id, $cumpridos, true);
+            return ($feito ? '✅ ' : '❌ ') . "[id:{$objetivo->id}] " . $objetivo->texto . ($feito ? '' : ': pendente');
+        });
 
-        $items[] = $ticket->endereco_destino
-            ? $ok("Endereço de destino: {$ticket->endereco_destino}")
-            : $nok("Endereço de destino");
-
-        // Lista de itens
-        $items[] = $ticket->lista_itens
-            ? $ok("Lista de itens: coletada")
-            : (preg_match('/\b(geladeira|sofá|cama|mesa|armário|guarda.roupa|fogão|máquina|tv|freezer|buffet)\b/i', $mensagensLead)
-                ? "⚠️ Lista de itens: parcialmente mencionada — auditar com fotos"
-                : $nok("Lista de itens"));
-
-        // Data
-        $temData = preg_match('/\b\d{1,2}[\/\-]\d{1,2}|\b(segunda|terça|quarta|quinta|sexta|sábado|domingo|amanhã|hoje|semana que vem)\b/i', $mensagensLead);
-        $items[] = $temData ? "⚠️ Data: mencionada — confirmar dia e horário exatos" : $nok("Data e horário");
-
-        // Escadas (detectar menção)
-        $temEscada = preg_match('/\b(escada|lance|andar|elevador|sem elevador|com elevador)\b/i', $mensagensLead);
-        $items[] = $temEscada ? "⚠️ Escadas: mencionado — confirmar lances reais" : $nok("Escadas (lances reais)");
-
-        // Serviços extras
-        $temExtra = preg_match('/\b(desmont|mont|embala|plástico|papelão|caixa)\b/i', $mensagensLead);
-        $items[] = $temExtra ? "⚠️ Serviços extras: mencionados — detalhar" : $nok("Desmontagem / Embalagem");
-
-        return "[STATUS_CHECKLIST]\n" . implode("\n", $items);
+        return "=== OBJETIVOS DESTA ETAPA (marque quando cumprir) ===\n"
+            . $linhas->implode("\n")
+            . "\n\nPra marcar um objetivo como cumprido, inclua no final da sua resposta um token "
+            . "[OBJETIVO_CUMPRIDO:<id>] — pode incluir mais de um na mesma resposta, um por linha. "
+            . "NUNCA mencione ou explique esses tokens ao lead."
+            . "\n===";
     }
 
     private function montarHistorico(SdrPersona $persona, TicketAtendimento $ticket, bool $origemLigacao = false, ?string $gatilho = null): array
@@ -259,6 +284,15 @@ class SdrResponderService
             $iaContexto .= ($iaContexto ? "\n\n" : '') . "=== TABELA DE PREÇOS ===\n" . $ticket->tenant->tabela_precos_texto . "\n===";
         }
 
+        $kanban = \App\Models\Kanban::withoutGlobalScopes()
+            ->where('tenant_id', $ticket->tenant_id)
+            ->where('tipo', 'vendas')
+            ->first();
+
+        if ($kanban?->conhecimento_geral) {
+            $iaContexto .= ($iaContexto ? "\n\n" : '') . "=== CONHECIMENTO GERAL DESTE KANBAN ===\n" . $kanban->conhecimento_geral . "\n===";
+        }
+
         // Contexto específico da coluna atual (ex: em_atendimento)
         $colunaConfig = KanbanColunaConfig::withoutGlobalScopes()
             ->where('tenant_id', $ticket->tenant_id)
@@ -295,7 +329,7 @@ class SdrResponderService
             . "\n===";
 
         $contextoHistorico = $this->contextoHistoricoCliente($ticket);
-        $checklistState    = $this->derivarChecklist($ticket);
+        $checklistState    = $this->montarBlocoObjetivos($ticket);
 
         // Gatilho de follow-up injetado no contexto
         $contextoGatilho = match ($gatilho) {

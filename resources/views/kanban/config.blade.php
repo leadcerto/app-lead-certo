@@ -97,6 +97,33 @@
         </div>
     </div>
 
+    {{-- Base de conhecimento geral do Kanban --}}
+    <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-6">
+        <div class="flex items-center gap-2 mb-2">
+            <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s4.332.477 5.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+            </svg>
+            <span class="text-sm font-semibold text-gray-700">Base de Conhecimento do Kanban</span>
+        </div>
+        <p class="text-xs text-gray-400 mb-3">O que a IA precisa saber sobre este Kanban como um todo — visão geral, estratégia, restrições que valem em qualquer coluna.</p>
+        <textarea
+            @input="conhecimentoGeral = $event.target.value; conhecimentoGeralAlterado = true"
+            :value="conhecimentoGeral"
+            placeholder="Ex: Este Kanban atende só clientes da Zona Sul do Rio de Janeiro."
+            rows="4"
+            class="w-full text-sm border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none bg-gray-50"
+        ></textarea>
+        <div class="flex items-center justify-end gap-2 mt-2">
+            <span x-show="conhecimentoGeralSalvando" class="text-xs text-gray-400">Salvando...</span>
+            <span x-show="conhecimentoGeralSalvo" class="text-xs text-green-600">✓ Salvo</span>
+            <button @click="salvarConhecimentoGeral()"
+                    :disabled="!conhecimentoGeralAlterado"
+                    class="text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
+                Salvar
+            </button>
+        </div>
+    </div>
+
     {{-- Tabs de colunas --}}
     <div class="flex gap-1 bg-gray-100 p-1 rounded-xl mb-6 overflow-x-auto">
         <template x-for="col in colunas" :key="col.key">
@@ -689,6 +716,36 @@
                             <p class="text-xs text-gray-400 mt-1 ml-5">Desligado: áudio e imagem ainda chegam e ficam salvos no card, só sem a transcrição/descrição automática por IA.</p>
                         </div>
 
+                        <div class="mt-3 pt-3 border-t border-gray-100" x-init="carregarObjetivos(col.key)">
+                            <label class="text-xs font-semibold text-gray-500 mb-1 block">Objetivos para avançar desta coluna</label>
+                            <p class="text-xs text-gray-400 mb-2">O que o lead precisa ter respondido/confirmado antes de sair desta etapa. O agente marca sozinho conforme a conversa evolui.</p>
+
+                            <div class="space-y-1.5 mb-2">
+                                <template x-for="objetivo in (objetivosPor[col.key] || [])" :key="objetivo.id">
+                                    <div class="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5">
+                                        <span class="text-xs text-gray-700 flex-1" x-text="objetivo.texto"></span>
+                                        <label class="flex items-center gap-1 flex-shrink-0" title="Objetivo ativo">
+                                            <input type="checkbox" :checked="objetivo.ativo"
+                                                   @change="toggleAtivoObjetivo(col.key, objetivo)"
+                                                   class="w-3 h-3 accent-purple-600">
+                                        </label>
+                                        <button @click="excluirObjetivo(col.key, objetivo)"
+                                                class="text-red-300 hover:text-red-500 flex-shrink-0 text-xs">✕</button>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <input type="text" :value="novoObjetivoTexto[col.key] || ''"
+                                       @input="novoObjetivoTexto[col.key] = $event.target.value"
+                                       @keydown.enter="adicionarObjetivo(col.key)"
+                                       placeholder="Ex: Endereço de origem confirmado"
+                                       class="flex-1 text-xs border border-gray-300 rounded-lg px-2 py-1.5">
+                                <button @click="adicionarObjetivo(col.key)"
+                                        class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1.5 rounded-lg">+</button>
+                            </div>
+                        </div>
+
                         <div class="mt-3 flex items-center justify-between">
                             <div class="flex items-center gap-4">
                                 <label class="flex items-center gap-1.5 cursor-pointer">
@@ -1267,11 +1324,21 @@ function kanbanConfig() {
         editMsgBotoes: [],
         editMsgObrigatorio: false,
 
+        objetivosPor: {},        // { [colunaKey]: [ {id, texto, ordem, ativo}, ... ] }
+        objetivosCarregado: {},  // { [colunaKey]: bool } — evita recarregar toda vez que abre a seção
+        novoObjetivoTexto: {},   // { [colunaKey]: string } — input de "adicionar objetivo"
+
         variacoesPor: {},       // { [mensagemId]: [ {id, conteudo, origem, protegida, ativa}, ... ] }
         abaVariacaoAberta: {},  // { [mensagemId]: bool } — controla se o painel de variações está expandido
         variacaoAbaAtiva: {},   // { [mensagemId]: variacaoId } — qual aba de variação está selecionada (null = primeira/original)
         gerandoVariacoes: {},   // { [mensagemId]: bool } — spinner durante chamada IA
         novaVariacaoTexto: {},  // { [mensagemId]: string } — campo de criação manual de variação
+
+        // Base de conhecimento geral do Kanban (não por coluna)
+        conhecimentoGeral: '',
+        conhecimentoGeralAlterado: false,
+        conhecimentoGeralSalvando: false,
+        conhecimentoGeralSalvo: false,
 
         // Objetivo da coluna
         objetivo: {},
@@ -1348,11 +1415,33 @@ function kanbanConfig() {
 
             await this.carregarColunas();
             await this.carregarCanais();
+            await this.carregarConhecimentoGeral();
 
             const res = await this.api('/api/painel/sequencias');
             if (res.ok) this.lista = await res.json();
             // Pré-carrega IA da aba inicial
             if (this.abaAtiva) await this.carregarIa(this.abaAtiva);
+        },
+
+        async carregarConhecimentoGeral() {
+            const res = await this.api('/api/painel/kanban/info');
+            if (res.ok) {
+                const json = await res.json();
+                this.conhecimentoGeral = json.conhecimento_geral ?? '';
+            }
+        },
+
+        async salvarConhecimentoGeral() {
+            this.conhecimentoGeralSalvando = true;
+            const res = await this.api('/api/painel/kanban/info', 'PUT', {
+                conhecimento_geral: this.conhecimentoGeral,
+            });
+            this.conhecimentoGeralSalvando = false;
+            if (res.ok) {
+                this.conhecimentoGeralAlterado = false;
+                this.conhecimentoGeralSalvo = true;
+                setTimeout(() => { this.conhecimentoGeralSalvo = false; }, 3000);
+            }
         },
 
         async carregarColunas() {
@@ -1580,6 +1669,41 @@ function kanbanConfig() {
             await this.api(`/api/painel/sequencias/${seqId}/mensagens/${id}`, 'DELETE');
             await this.carregarMsgs(seqId);
             await this.carregar();
+        },
+
+        async carregarObjetivos(colunaKey) {
+            if (this.objetivosCarregado[colunaKey]) return;
+            this.objetivosCarregado[colunaKey] = true;
+            const res = await this.api(`/api/painel/kanban/coluna-objetivos/${colunaKey}`);
+            this.objetivosPor[colunaKey] = res.ok ? await res.json() : [];
+        },
+
+        async adicionarObjetivo(colunaKey) {
+            const texto = (this.novoObjetivoTexto[colunaKey] || '').trim();
+            if (!texto) return;
+            const res = await this.api(`/api/painel/kanban/coluna-objetivos/${colunaKey}`, 'POST', { texto });
+            if (res.ok) {
+                this.novoObjetivoTexto[colunaKey] = '';
+                this.objetivosCarregado[colunaKey] = false;
+                await this.carregarObjetivos(colunaKey);
+            }
+        },
+
+        async toggleAtivoObjetivo(colunaKey, objetivo) {
+            const res = await this.api(`/api/painel/kanban/coluna-objetivos/${colunaKey}/${objetivo.id}`, 'PUT', { ativo: !objetivo.ativo });
+            if (res.ok) {
+                this.objetivosCarregado[colunaKey] = false;
+                await this.carregarObjetivos(colunaKey);
+            }
+        },
+
+        async excluirObjetivo(colunaKey, objetivo) {
+            if (!confirm('Excluir este objetivo?')) return;
+            const res = await this.api(`/api/painel/kanban/coluna-objetivos/${colunaKey}/${objetivo.id}`, 'DELETE');
+            if (res.ok) {
+                this.objetivosCarregado[colunaKey] = false;
+                await this.carregarObjetivos(colunaKey);
+            }
         },
 
         async carregarVariacoes(seqId, msg) {

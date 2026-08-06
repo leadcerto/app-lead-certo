@@ -102,6 +102,25 @@ class KanbanControllerMoverTest extends TestCase
         $this->assertSame('aguardando', $ticket->fresh()->status);
     }
 
+    public function test_mover_zera_objetivos_cumpridos_da_coluna_anterior(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $user    = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $contato = Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'lead_novo', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(), 'objetivos_cumpridos' => [1, 2],
+        ]);
+
+        $response = $this->actingAs($user)->postJson("/api/painel/kanban/ticket/{$ticket->id}/mover", [
+            'coluna' => 'em_atendimento',
+        ]);
+
+        $response->assertOk();
+        $this->assertSame([], $ticket->fresh()->objetivos_cumpridos);
+    }
+
     public function test_rejeita_coluna_invalida(): void
     {
         $tenant  = Tenant::factory()->create();

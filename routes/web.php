@@ -206,6 +206,7 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
     // Kanban
     Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda')->group(function () {
         Route::get('/kanban/tickets', [KanbanController::class, 'index']);
+        Route::get('/kanban/coluna-objetivos/{coluna}', [\App\Http\Controllers\Painel\KanbanColunaObjetivoController::class, 'index']);
         Route::get('/kanban/ticket/{ticket}', [KanbanController::class, 'show']);
         Route::get('/kanban/motivos-desfecho', [MotivoDesfechoController::class, 'index']);
         Route::get('/kanban/ticket/{ticket}/mensagens', [KanbanController::class, 'mensagens']);
@@ -360,6 +361,14 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
     Route::middleware('role:admin,dono')->group(function () {
         Route::get('/kanban/coluna-config/{coluna}', [KanbanColunaConfigController::class, 'show']);
         Route::put('/kanban/coluna-config/{coluna}', [KanbanColunaConfigController::class, 'update']);
+        // Base de conhecimento geral do Kanban
+        Route::get('/kanban/info', [\App\Http\Controllers\Painel\KanbanInfoController::class, 'show']);
+        Route::put('/kanban/info', [\App\Http\Controllers\Painel\KanbanInfoController::class, 'update']);
+        // Checklist de objetivos por coluna
+        Route::post('/kanban/coluna-objetivos/{coluna}',              [\App\Http\Controllers\Painel\KanbanColunaObjetivoController::class, 'store']);
+        Route::put('/kanban/coluna-objetivos/{coluna}/{id}',          [\App\Http\Controllers\Painel\KanbanColunaObjetivoController::class, 'update']);
+        Route::delete('/kanban/coluna-objetivos/{coluna}/{id}',       [\App\Http\Controllers\Painel\KanbanColunaObjetivoController::class, 'destroy']);
+        Route::post('/kanban/coluna-objetivos/{coluna}/reordenar',    [\App\Http\Controllers\Painel\KanbanColunaObjetivoController::class, 'reordenar']);
         // CRUD self-service de colunas do Kanban
         Route::get('/kanban/colunas',             [KanbanColunaController::class, 'index']);
         Route::get('/kanban/papeis',              [KanbanColunaController::class, 'papeis']);
