@@ -73,6 +73,7 @@ class SdrResponderService
                 $updates = $papel === \App\Enums\PapelColunaKanban::Encerramento
                     ? $ticket->dadosParaEncerrar(['etapa_ia' => $etapa], $chave)
                     : ['coluna_kanban' => $chave, 'etapa_ia' => $etapa];
+                $updates['objetivos_cumpridos'] = [];
 
                 $ticket->update($updates);
                 Log::info("SdrResponder: → {$chave} via token {$token}", ['ticket_id' => $ticket->id]);
@@ -82,6 +83,44 @@ class SdrResponderService
         }
         $tokens   = array_map(fn (string $chave) => '[' . mb_strtoupper($chave) . ']', $chaves);
         $resposta = trim(str_replace($tokens, '', $resposta));
+
+        // ── 4.5. Detectar tokens de objetivo cumprido e aplicar ─────────────
+        // Mesmo padrão dos tokens de movimento acima — o agente reporta na
+        // própria resposta quais objetivos do checklist da coluna considera
+        // cumpridos, e o sistema persiste isso no ticket antes de mandar a
+        // mensagem pro lead sem o marcador.
+        preg_match_all('/\[OBJETIVO_CUMPRIDO:(\d+)\]/', $resposta, $matchesObjetivos);
+        if (! empty($matchesObjetivos[1])) {
+            // Só aceita ids que realmente existem pra esse tenant/coluna — um
+            // objetivo pode ter sido excluído entre a config ser lida (início
+            // da chamada) e a resposta chegar, ou o modelo pode alucinar um id.
+            // Sem essa validação, um id órfão infla pra sempre o "X/Y cumpridos"
+            // do card sem corresponder a nenhum objetivo visível.
+            $idsValidos = KanbanColunaObjetivo::withoutGlobalScopes()
+                ->where('tenant_id', $ticket->tenant_id)
+                ->where('coluna_kanban', $ticket->coluna_kanban)
+                ->pluck('id')
+                ->all();
+
+            $cumpridos = $ticket->objetivos_cumpridos ?? [];
+            foreach ($matchesObjetivos[1] as $idTexto) {
+                $id = (int) $idTexto;
+                if (! in_array($id, $idsValidos, true)) {
+                    Log::debug('SdrResponder: token de objetivo com id inexistente, ignorado', [
+                        'ticket_id' => $ticket->id, 'id' => $id,
+                    ]);
+                    continue;
+                }
+                if (! in_array($id, $cumpridos, true)) {
+                    $cumpridos[] = $id;
+                }
+            }
+            $ticket->update(['objetivos_cumpridos' => $cumpridos]);
+            Log::info('SdrResponder: objetivos marcados como cumpridos', [
+                'ticket_id' => $ticket->id, 'ids' => $matchesObjetivos[1],
+            ]);
+        }
+        $resposta = trim(preg_replace('/\[OBJETIVO_CUMPRIDO:\d+\]/', '', $resposta));
 
         // ── 5. Enviar pelo canal certo (Uazapi ou Covercut, resolvido pelo ticket) ──
         $telefone = $ticket->contato?->telefone;
