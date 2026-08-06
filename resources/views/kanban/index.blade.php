@@ -364,6 +364,34 @@
                     </div>
                 </template>
 
+                {{-- Progresso do checklist de objetivos da coluna --}}
+                <template x-if="(objetivosColuna || []).length">
+                    <div class="border-b">
+                        <button @click="objetivosAberto = !objetivosAberto"
+                                class="w-full flex items-center justify-between px-5 py-2 text-xs text-gray-500 hover:bg-gray-50 transition-colors">
+                            <span class="flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <span x-text="'Objetivos (' + (ticketAtivo.objetivos_cumpridos || []).length + '/' + objetivosColuna.length + ')'"></span>
+                            </span>
+                            <svg class="w-3.5 h-3.5 transition-transform duration-200" :class="objetivosAberto ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <template x-if="objetivosAberto">
+                            <div class="px-5 pb-3 space-y-1">
+                                <template x-for="objetivo in objetivosColuna" :key="objetivo.id">
+                                    <p class="text-xs text-gray-600 flex items-center gap-1.5">
+                                        <span x-text="(ticketAtivo.objetivos_cumpridos || []).includes(objetivo.id) ? '✅' : '❌'"></span>
+                                        <span x-text="objetivo.texto"></span>
+                                    </p>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
                 {{-- Mensagens --}}
                 <div class="flex-1 overflow-y-auto px-5 py-4 space-y-2" x-ref="msgBox">
                     <template x-for="msg in mensagens" :key="msg.id">
@@ -632,6 +660,8 @@ function kanban() {
         notasAberto:       false,
         resumoAberto:      false,
         itensAberto:       false,
+        objetivosColuna:   [],
+        objetivosAberto:   false,
         novaNota:          '',
         salvandoNota:      false,
         dragCard:          null,
@@ -836,8 +866,11 @@ function kanban() {
             this.novaNota     = '';
             this.moverColunaAlvo = ticket.coluna_kanban;
             this.limparMidia();
+            this.objetivosColuna = [];
+            this.objetivosAberto = false;
             this.mensagens = [];
             await this.sincronizarTicketAtivo();
+            await this.carregarObjetivosColuna(ticket.coluna_kanban);
             await this.carregarMensagens(ticket.id);
             if (ticket.contato?.id) await this.carregarNotas(ticket.contato.id);
             this.$nextTick(() => {
@@ -849,6 +882,11 @@ function kanban() {
             // — otimista aqui, o próximo poll confirma com o servidor.
             if (ticket.precisa_resposta) ticket.precisa_resposta = false;
             this.api(`/api/painel/kanban/ticket/${ticket.id}/visualizar`, 'POST');
+        },
+
+        async carregarObjetivosColuna(colunaKey) {
+            const res = await this.api(`/api/painel/kanban/coluna-objetivos/${colunaKey}`);
+            this.objetivosColuna = res.ok ? await res.json() : [];
         },
 
         async carregarNotas(contatoId) {
