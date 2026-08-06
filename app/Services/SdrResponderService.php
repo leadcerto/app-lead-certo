@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\PapelColunaKanban;
 use App\Models\KanbanColuna;
 use App\Models\KanbanColunaConfig;
+use App\Models\KanbanColunaObjetivo;
 use App\Models\Mensagem;
 use App\Models\SdrPersona;
 use App\Models\TicketAtendimento;
@@ -173,50 +174,32 @@ class SdrResponderService
         return $tags;
     }
 
-    private function derivarChecklist(TicketAtendimento $ticket): string
+    private function montarBlocoObjetivos(TicketAtendimento $ticket): ?string
     {
-        $mensagensLead = $ticket->mensagens
-            ->where('remetente', 'lead')
-            ->pluck('conteudo')
-            ->filter()
-            ->implode(' ');
+        $objetivos = KanbanColunaObjetivo::withoutGlobalScopes()
+            ->where('tenant_id', $ticket->tenant_id)
+            ->where('coluna_kanban', $ticket->coluna_kanban)
+            ->where('ativo', true)
+            ->orderBy('ordem')
+            ->get();
 
-        $ok  = fn(string $s) => "✅ {$s}";
-        $nok = fn(string $s) => "❌ {$s}: pendente";
+        if ($objetivos->isEmpty()) {
+            return null;
+        }
 
-        $items = [];
+        $cumpridos = $ticket->objetivos_cumpridos ?? [];
 
-        // Endereços (salvos no ticket após handoff ou por n8n)
-        $items[] = $ticket->endereco_saida
-            ? $ok("Endereço de embarque: {$ticket->endereco_saida}")
-            : (preg_match('/\b(rua|av\.|avenida|estrada|travessa|praça)\b/i', $mensagensLead)
-                ? "⚠️ Endereço de embarque: mencionado parcialmente — confirmar"
-                : $nok("Endereço de embarque"));
+        $linhas = $objetivos->map(function ($objetivo) use ($cumpridos) {
+            $feito = in_array($objetivo->id, $cumpridos, true);
+            return ($feito ? '✅ ' : '❌ ') . $objetivo->texto . ($feito ? '' : ': pendente');
+        });
 
-        $items[] = $ticket->endereco_destino
-            ? $ok("Endereço de destino: {$ticket->endereco_destino}")
-            : $nok("Endereço de destino");
-
-        // Lista de itens
-        $items[] = $ticket->lista_itens
-            ? $ok("Lista de itens: coletada")
-            : (preg_match('/\b(geladeira|sofá|cama|mesa|armário|guarda.roupa|fogão|máquina|tv|freezer|buffet)\b/i', $mensagensLead)
-                ? "⚠️ Lista de itens: parcialmente mencionada — auditar com fotos"
-                : $nok("Lista de itens"));
-
-        // Data
-        $temData = preg_match('/\b\d{1,2}[\/\-]\d{1,2}|\b(segunda|terça|quarta|quinta|sexta|sábado|domingo|amanhã|hoje|semana que vem)\b/i', $mensagensLead);
-        $items[] = $temData ? "⚠️ Data: mencionada — confirmar dia e horário exatos" : $nok("Data e horário");
-
-        // Escadas (detectar menção)
-        $temEscada = preg_match('/\b(escada|lance|andar|elevador|sem elevador|com elevador)\b/i', $mensagensLead);
-        $items[] = $temEscada ? "⚠️ Escadas: mencionado — confirmar lances reais" : $nok("Escadas (lances reais)");
-
-        // Serviços extras
-        $temExtra = preg_match('/\b(desmont|mont|embala|plástico|papelão|caixa)\b/i', $mensagensLead);
-        $items[] = $temExtra ? "⚠️ Serviços extras: mencionados — detalhar" : $nok("Desmontagem / Embalagem");
-
-        return "[STATUS_CHECKLIST]\n" . implode("\n", $items);
+        return "=== OBJETIVOS DESTA ETAPA (marque quando cumprir) ===\n"
+            . $linhas->implode("\n")
+            . "\n\nPra marcar um objetivo como cumprido, inclua no final da sua resposta um token "
+            . "[OBJETIVO_CUMPRIDO:<id>] — pode incluir mais de um na mesma resposta, um por linha. "
+            . "NUNCA mencione ou explique esses tokens ao lead."
+            . "\n===";
     }
 
     private function montarHistorico(SdrPersona $persona, TicketAtendimento $ticket, bool $origemLigacao = false, ?string $gatilho = null): array
@@ -304,7 +287,7 @@ class SdrResponderService
             . "\n===";
 
         $contextoHistorico = $this->contextoHistoricoCliente($ticket);
-        $checklistState    = $this->derivarChecklist($ticket);
+        $checklistState    = $this->montarBlocoObjetivos($ticket);
 
         // Gatilho de follow-up injetado no contexto
         $contextoGatilho = match ($gatilho) {
