@@ -178,4 +178,43 @@ class KanbanEnviarMidiaCanalOficialTest extends TestCase
         $this->assertDatabaseMissing('mensagens', ['ticket_id' => $ticket->id, 'remetente' => 'bot']);
         Http::assertNotSent(fn ($request) => str_contains($request->url(), 'groq'));
     }
+
+    public function test_audio_webm_falha_com_erro_especifico_no_canal_oficial(): void
+    {
+        $ticket = $this->criarTicketOficial();
+        $user   = User::factory()->create(['tenant_id' => $ticket->tenant_id, 'perfil' => 'dono', 'ativo' => true]);
+
+        // mimeType declarado como 'video/webm': é o que o guessExtension() do Symfony
+        // resolve pra extensão 'webm' (o mapeamento reverso de 'audio/webm' cai em 'weba',
+        // não em 'webm') — precisa bater com a extensão pra passar pela validação
+        // 'mimes:mp3,ogg,webm,m4a,wav' já existente antes de chegar na checagem nova do Covercut.
+        $arquivo = UploadedFile::fake()->create('audio.webm', 10, 'video/webm');
+
+        $response = $this->actingAs($user)->post("/api/painel/kanban/ticket/{$ticket->id}/midia", [
+            'tipo'    => 'audio',
+            'arquivo' => $arquivo,
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonFragment(['message' => 'O canal Oficial (WhatsApp Business) não aceita áudio nesse formato (.webm). Anexe um arquivo de áudio nos formatos .mp3, .ogg ou .m4a.']);
+        Http::assertNothingSent();
+        Storage::disk('public')->assertDirectoryEmpty('kanban-midia');
+    }
+
+    public function test_audio_wav_falha_com_erro_especifico_no_canal_oficial(): void
+    {
+        $ticket = $this->criarTicketOficial();
+        $user   = User::factory()->create(['tenant_id' => $ticket->tenant_id, 'perfil' => 'dono', 'ativo' => true]);
+
+        $arquivo = UploadedFile::fake()->create('audio.wav', 10, 'audio/wav');
+
+        $response = $this->actingAs($user)->post("/api/painel/kanban/ticket/{$ticket->id}/midia", [
+            'tipo'    => 'audio',
+            'arquivo' => $arquivo,
+        ]);
+
+        $response->assertStatus(422);
+        Http::assertNothingSent();
+        Storage::disk('public')->assertDirectoryEmpty('kanban-midia');
+    }
 }
