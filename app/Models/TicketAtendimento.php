@@ -37,6 +37,19 @@ class TicketAtendimento extends Model
                 ]);
             }
         });
+
+        // Achado 2 da revisão final: objetivos_cumpridos é por coluna — se o
+        // ticket muda de coluna sem que quem disparou o update tenha decidido
+        // explicitamente o que fazer com o checklist antigo, ele tem que zerar
+        // aqui, senão ids da coluna anterior vazam pro card na coluna nova.
+        // Centralizado no model pra cobrir TODOS os caminhos de movimento
+        // (drag-and-drop manual, botões do WhatsApp, followup automático,
+        // webhook, token da IA) de uma vez só, em vez de replicar em cada um.
+        static::updating(function (TicketAtendimento $ticket) {
+            if ($ticket->isDirty('coluna_kanban') && ! $ticket->isDirty('objetivos_cumpridos')) {
+                $ticket->objetivos_cumpridos = [];
+            }
+        });
     }
 
     protected $fillable = [

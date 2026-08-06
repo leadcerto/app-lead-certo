@@ -365,7 +365,7 @@
                 </template>
 
                 {{-- Progresso do checklist de objetivos da coluna --}}
-                <template x-if="(objetivosColuna || []).length">
+                <template x-if="objetivosAtivos().length">
                     <div class="border-b">
                         <button @click="objetivosAberto = !objetivosAberto"
                                 class="w-full flex items-center justify-between px-5 py-2 text-xs text-gray-500 hover:bg-gray-50 transition-colors">
@@ -373,7 +373,7 @@
                                 <svg class="w-3.5 h-3.5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                 </svg>
-                                <span x-text="'Objetivos (' + (ticketAtivo.objetivos_cumpridos || []).length + '/' + objetivosColuna.length + ')'"></span>
+                                <span x-text="'Objetivos (' + objetivosFeitos().length + '/' + objetivosAtivos().length + ')'"></span>
                             </span>
                             <svg class="w-3.5 h-3.5 transition-transform duration-200" :class="objetivosAberto ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -381,7 +381,7 @@
                         </button>
                         <template x-if="objetivosAberto">
                             <div class="px-5 pb-3 space-y-1">
-                                <template x-for="objetivo in objetivosColuna" :key="objetivo.id">
+                                <template x-for="objetivo in objetivosAtivos()" :key="objetivo.id">
                                     <p class="text-xs text-gray-600 flex items-center gap-1.5">
                                         <span x-text="(ticketAtivo.objetivos_cumpridos || []).includes(objetivo.id) ? '✅' : '❌'"></span>
                                         <span x-text="objetivo.texto"></span>
@@ -887,6 +887,20 @@ function kanban() {
         async carregarObjetivosColuna(colunaKey) {
             const res = await this.api(`/api/painel/kanban/coluna-objetivos/${colunaKey}`);
             this.objetivosColuna = res.ok ? await res.json() : [];
+        },
+
+        // Só objetivos ativos contam pro checklist — um objetivo desativado
+        // não deve aparecer nem ser contado no card (Achado 3 da revisão final).
+        objetivosAtivos() {
+            return (this.objetivosColuna || []).filter(o => o.ativo);
+        },
+
+        // Interseção com os ativos, não o array bruto salvo no ticket — um id
+        // de objetivo excluído/desativado não pode continuar contando aqui,
+        // senão o contador pode chegar a valores impossíveis tipo 3/2.
+        objetivosFeitos() {
+            const cumpridos = this.ticketAtivo?.objetivos_cumpridos || [];
+            return this.objetivosAtivos().filter(o => cumpridos.includes(o.id));
         },
 
         async carregarNotas(contatoId) {

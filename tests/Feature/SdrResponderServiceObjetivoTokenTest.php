@@ -99,6 +99,31 @@ class SdrResponderServiceObjetivoTokenTest extends TestCase
         $this->assertSame([], $ticketFresco->objetivos_cumpridos ?? []);
     }
 
+    public function test_token_de_objetivo_desativado_e_ignorado_sem_quebrar(): void
+    {
+        // Achado 4 da revisão final: o prompt (montarBlocoObjetivos) só mostra
+        // objetivos ativos, então a validação do token tem que concordar — um id
+        // de objetivo desativado não pode ser aceito mesmo que o modelo alucine
+        // ou reutilize um token de uma resposta anterior à desativação.
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $ticket = $this->criarTicketComCanal();
+
+        $objetivo = KanbanColunaObjetivo::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
+            'texto' => 'Objetivo desativado', 'ordem' => 1, 'ativo' => false,
+        ]);
+
+        $this->mock(OpenRouterService::class, function ($mock) use ($objetivo) {
+            $mock->shouldReceive('chat')->once()
+                ->andReturn("Perfeito!\n[OBJETIVO_CUMPRIDO:{$objetivo->id}]");
+        });
+
+        $resposta = app(SdrResponderService::class)->responder($ticket);
+
+        $this->assertSame('Perfeito!', $resposta);
+        $this->assertSame([], $ticket->fresh()->objetivos_cumpridos ?? []);
+    }
+
     public function test_token_com_id_inexistente_e_ignorado_sem_quebrar(): void
     {
         Http::fake(['*' => Http::response(['ok' => true], 200)]);

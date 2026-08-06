@@ -73,7 +73,9 @@ class SdrResponderService
                 $updates = $papel === \App\Enums\PapelColunaKanban::Encerramento
                     ? $ticket->dadosParaEncerrar(['etapa_ia' => $etapa], $chave)
                     : ['coluna_kanban' => $chave, 'etapa_ia' => $etapa];
-                $updates['objetivos_cumpridos'] = [];
+                // objetivos_cumpridos é zerado automaticamente pelo hook do model
+                // (TicketAtendimento::saving) sempre que coluna_kanban muda e este
+                // update não o define explicitamente — ver Achado 2 da revisão final.
 
                 $ticket->update($updates);
                 Log::info("SdrResponder: → {$chave} via token {$token}", ['ticket_id' => $ticket->id]);
@@ -99,6 +101,7 @@ class SdrResponderService
             $idsValidos = KanbanColunaObjetivo::withoutGlobalScopes()
                 ->where('tenant_id', $ticket->tenant_id)
                 ->where('coluna_kanban', $ticket->coluna_kanban)
+                ->where('ativo', true)
                 ->pluck('id')
                 ->all();
 
@@ -230,7 +233,7 @@ class SdrResponderService
 
         $linhas = $objetivos->map(function ($objetivo) use ($cumpridos) {
             $feito = in_array($objetivo->id, $cumpridos, true);
-            return ($feito ? '✅ ' : '❌ ') . $objetivo->texto . ($feito ? '' : ': pendente');
+            return ($feito ? '✅ ' : '❌ ') . "[id:{$objetivo->id}] " . $objetivo->texto . ($feito ? '' : ': pendente');
         });
 
         return "=== OBJETIVOS DESTA ETAPA (marque quando cumprir) ===\n"

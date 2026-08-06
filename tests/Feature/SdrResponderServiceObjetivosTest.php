@@ -42,7 +42,7 @@ class SdrResponderServiceObjetivosTest extends TestCase
             'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
             'texto' => 'Endereço de origem confirmado', 'ordem' => 1, 'ativo' => true,
         ]);
-        KanbanColunaObjetivo::create([
+        $obj2 = KanbanColunaObjetivo::create([
             'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
             'texto' => 'Lista de itens coletada', 'ordem' => 2, 'ativo' => true,
         ]);
@@ -63,9 +63,39 @@ class SdrResponderServiceObjetivosTest extends TestCase
         app(SdrResponderService::class)->responder($ticket);
 
         $prompt = $mensagensCapturadas[0]['content'];
-        $this->assertStringContainsString('✅ Endereço de origem confirmado', $prompt);
-        $this->assertStringContainsString('❌ Lista de itens coletada: pendente', $prompt);
+        $this->assertStringContainsString("✅ [id:{$obj1->id}] Endereço de origem confirmado", $prompt);
+        $this->assertStringContainsString("❌ [id:{$obj2->id}] Lista de itens coletada: pendente", $prompt);
         $this->assertStringContainsString('OBJETIVO_CUMPRIDO', $prompt);
+    }
+
+    public function test_bloco_de_objetivos_expoe_o_id_numerico_real_de_cada_objetivo(): void
+    {
+        // Achado 1 da revisão final: sem o id explícito no prompt, o modelo não tem
+        // como saber que número usar em [OBJETIVO_CUMPRIDO:<id>] — ele alucina ou
+        // simplesmente não emite o token, e objetivos_cumpridos nunca é preenchido.
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $ticket = $this->criarTicketComPersona();
+
+        $objetivo = KanbanColunaObjetivo::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
+            'texto' => 'Endereço de origem confirmado', 'ordem' => 1, 'ativo' => true,
+        ]);
+
+        $mensagensCapturadas = null;
+        $this->mock(OpenRouterService::class, function ($mock) use (&$mensagensCapturadas) {
+            $mock->shouldReceive('chat')
+                ->once()
+                ->withArgs(function ($messages) use (&$mensagensCapturadas) {
+                    $mensagensCapturadas = $messages;
+                    return true;
+                })
+                ->andReturn('Perfeito!');
+        });
+
+        app(SdrResponderService::class)->responder($ticket);
+
+        $prompt = $mensagensCapturadas[0]['content'];
+        $this->assertStringContainsString("[id:{$objetivo->id}]", $prompt);
     }
 
     public function test_bloco_de_objetivos_nao_aparece_quando_coluna_nao_tem_nenhum(): void
