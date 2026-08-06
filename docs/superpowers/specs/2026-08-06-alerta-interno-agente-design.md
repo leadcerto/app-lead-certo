@@ -73,7 +73,8 @@ despachar notificação push além de persistir, muda aqui uma vez só).
 ## 5. API
 
 - `GET /api/painel/alertas` — lista os alertas do tenant, mais recentes primeiro,
-  paginado (mesmo padrão de paginação já usado em outras listagens do painel).
+  retorna os 20 mais recentes (sem paginação real — é uma lista fixa pro dropdown,
+  não uma tela paginável).
   Retorna também a contagem de não lidos (`nao_lidos_count`) pro badge.
 - `POST /api/painel/alertas/{id}/marcar-lido` — seta `lido_em = now()`.
 - `POST /api/painel/alertas/marcar-todos-lidos` — marca todos os não lidos do
@@ -108,15 +109,15 @@ específico). Sem `ticket_id`, o item não é clicável, só informativo.
   chamados fora de request HTTP: `tenantId` é sempre passado explicitamente pelo
   chamador, nunca inferido de `auth()->user()`.
 - Volume alto de alertas (ex: Bloco 4 gerando muitos de monitoramento) → fora de
-  escopo deste bloco resolver throttling/agrupamento; a paginação da listagem já
-  evita problema de performance na tela. Se virar ruído de verdade na prática,
-  vira ajuste dos blocos que geram (não desta infra).
+  escopo deste bloco resolver throttling/agrupamento; o limite de 20 itens da
+  listagem já evita problema de performance na tela. Se virar ruído de verdade na
+  prática, vira ajuste dos blocos que geram (não desta infra).
 
 ## 8. Testes
 
 - `AlertaInterno` model: isolamento por tenant (`TenantScope`), cast de `lido_em`.
 - `AlertaInternoService::criar()`: cria com e sem `ticket_id`, tipo livre aceito.
-- Controller: listar (ordem, paginação, contagem de não lidos), marcar-lido
+- Controller: listar (ordem, limite de 20, contagem de não lidos), marcar-lido
   individual, marcar-todos-lidos, isolamento cross-tenant (tenant A não vê/marca
   alerta de tenant B — mesmo padrão de teste já usado em
   `KanbanColunaObjetivoControllerTest::test_isolamento_por_tenant`).
