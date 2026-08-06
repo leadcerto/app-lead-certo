@@ -97,6 +97,33 @@
         </div>
     </div>
 
+    {{-- Base de conhecimento geral do Kanban --}}
+    <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-6">
+        <div class="flex items-center gap-2 mb-2">
+            <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s4.332.477 5.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+            </svg>
+            <span class="text-sm font-semibold text-gray-700">Base de Conhecimento do Kanban</span>
+        </div>
+        <p class="text-xs text-gray-400 mb-3">O que a IA precisa saber sobre este Kanban como um todo — visão geral, estratégia, restrições que valem em qualquer coluna.</p>
+        <textarea
+            @input="conhecimentoGeral = $event.target.value; conhecimentoGeralAlterado = true"
+            :value="conhecimentoGeral"
+            placeholder="Ex: Este Kanban atende só clientes da Zona Sul do Rio de Janeiro."
+            rows="4"
+            class="w-full text-sm border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none bg-gray-50"
+        ></textarea>
+        <div class="flex items-center justify-end gap-2 mt-2">
+            <span x-show="conhecimentoGeralSalvando" class="text-xs text-gray-400">Salvando...</span>
+            <span x-show="conhecimentoGeralSalvo" class="text-xs text-green-600">✓ Salvo</span>
+            <button @click="salvarConhecimentoGeral()"
+                    :disabled="!conhecimentoGeralAlterado"
+                    class="text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
+                Salvar
+            </button>
+        </div>
+    </div>
+
     {{-- Tabs de colunas --}}
     <div class="flex gap-1 bg-gray-100 p-1 rounded-xl mb-6 overflow-x-auto">
         <template x-for="col in colunas" :key="col.key">
@@ -1273,6 +1300,12 @@ function kanbanConfig() {
         gerandoVariacoes: {},   // { [mensagemId]: bool } — spinner durante chamada IA
         novaVariacaoTexto: {},  // { [mensagemId]: string } — campo de criação manual de variação
 
+        // Base de conhecimento geral do Kanban (não por coluna)
+        conhecimentoGeral: '',
+        conhecimentoGeralAlterado: false,
+        conhecimentoGeralSalvando: false,
+        conhecimentoGeralSalvo: false,
+
         // Objetivo da coluna
         objetivo: {},
         objetivoAlterado: {},
@@ -1348,11 +1381,33 @@ function kanbanConfig() {
 
             await this.carregarColunas();
             await this.carregarCanais();
+            await this.carregarConhecimentoGeral();
 
             const res = await this.api('/api/painel/sequencias');
             if (res.ok) this.lista = await res.json();
             // Pré-carrega IA da aba inicial
             if (this.abaAtiva) await this.carregarIa(this.abaAtiva);
+        },
+
+        async carregarConhecimentoGeral() {
+            const res = await this.api('/api/painel/kanban/info');
+            if (res.ok) {
+                const json = await res.json();
+                this.conhecimentoGeral = json.conhecimento_geral ?? '';
+            }
+        },
+
+        async salvarConhecimentoGeral() {
+            this.conhecimentoGeralSalvando = true;
+            const res = await this.api('/api/painel/kanban/info', 'PUT', {
+                conhecimento_geral: this.conhecimentoGeral,
+            });
+            this.conhecimentoGeralSalvando = false;
+            if (res.ok) {
+                this.conhecimentoGeralAlterado = false;
+                this.conhecimentoGeralSalvo = true;
+                setTimeout(() => { this.conhecimentoGeralSalvo = false; }, 3000);
+            }
         },
 
         async carregarColunas() {
