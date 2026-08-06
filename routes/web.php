@@ -14,6 +14,7 @@ use App\Http\Controllers\Painel\RespostaProntaController;
 use App\Http\Controllers\Painel\NotaContatoController;
 use App\Http\Controllers\Painel\AgendaImediataController;
 use App\Http\Controllers\Painel\AgenteController;
+use App\Http\Controllers\Painel\AlertaInternoController;
 use App\Http\Controllers\Api\SecretariaEletronicaController;
 use App\Http\Controllers\Painel\FormulariosController;
 use App\Http\Controllers\Painel\SequenciaController;
@@ -309,6 +310,13 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
     // Agenda imediata (sino)
     Route::get('/agenda-imediata', [AgendaImediataController::class, 'index'])
         ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda');
+
+    // Alertas internos do agente
+    Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda')->group(function () {
+        Route::get('/alertas', [AlertaInternoController::class, 'index']);
+        Route::post('/alertas/{id}/marcar-lido', [AlertaInternoController::class, 'marcarLido']);
+        Route::post('/alertas/marcar-todos-lidos', [AlertaInternoController::class, 'marcarTodosLidos']);
+    });
 
     // Agentes — apenas dono e admin
     Route::middleware('role:admin,dono')->group(function () {
