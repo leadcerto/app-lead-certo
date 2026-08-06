@@ -26,6 +26,10 @@ class AlertaInternoModelTest extends TestCase
 
         $this->assertNull($alerta->fresh()->ticket_id);
         $this->assertNull($alerta->fresh()->lido_em);
+
+        $alerta->update(['lido_em' => now()]);
+
+        $this->assertInstanceOf(\Illuminate\Support\Carbon::class, $alerta->fresh()->lido_em);
     }
 
     public function test_cria_alerta_vinculado_a_ticket_e_marca_lido(): void

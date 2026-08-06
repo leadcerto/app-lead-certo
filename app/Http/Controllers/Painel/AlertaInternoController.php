@@ -15,14 +15,15 @@ class AlertaInternoController extends Controller
 
         $alertas = AlertaInterno::where('tenant_id', $tenantId)
             ->orderByDesc('created_at')
-            ->paginate(20);
+            ->limit(20)
+            ->get();
 
         $naoLidos = AlertaInterno::where('tenant_id', $tenantId)
             ->whereNull('lido_em')
             ->count();
 
         return response()->json([
-            'data'            => $alertas->items(),
+            'data'            => $alertas,
             'nao_lidos_count' => $naoLidos,
         ]);
     }

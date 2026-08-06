@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AlertaInterno;
+use Illuminate\Support\Str;
 
 class AlertaInternoService
 {
@@ -16,8 +17,8 @@ class AlertaInternoService
         return AlertaInterno::create([
             'tenant_id' => $tenantId,
             'ticket_id' => $ticketId,
-            'tipo'      => $tipo,
-            'titulo'    => $titulo,
+            'tipo'      => Str::limit($tipo, 50, ''),
+            'titulo'    => Str::limit($titulo, 150, ''),
             'conteudo'  => $conteudo,
         ]);
     }

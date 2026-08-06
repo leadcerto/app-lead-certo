@@ -43,4 +43,20 @@ class AlertaInternoServiceTest extends TestCase
 
         $this->assertSame($ticket->id, $alerta->fresh()->ticket_id);
     }
+
+    public function test_criar_trunca_titulo_e_tipo_acima_do_limite_da_coluna(): void
+    {
+        $tenant = Tenant::factory()->create();
+
+        $tituloLongo = str_repeat('a', 200);
+        $tipoLongo   = str_repeat('b', 80);
+
+        $alerta = app(AlertaInternoService::class)->criar(
+            $tenant->id, $tipoLongo, $tituloLongo, 'Conteúdo'
+        );
+
+        $alerta = $alerta->fresh();
+        $this->assertSame(150, strlen($alerta->titulo));
+        $this->assertSame(50, strlen($alerta->tipo));
+    }
 }

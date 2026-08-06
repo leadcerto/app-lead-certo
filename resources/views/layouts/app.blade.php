@@ -392,7 +392,7 @@
                  x-init="carregar(); setInterval(() => carregar(), 60000)"
                  @click.outside="aberto = false"
                  class="relative ml-2">
-                <button @click="aberto = !aberto; if (aberto) marcarVisualizados()"
+                <button @click="aberto = !aberto"
                         class="relative p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                     <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -408,19 +408,21 @@
                     <div class="absolute right-0 top-full mt-1 w-80 bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden z-50">
                         <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                             <span class="text-sm font-semibold text-gray-800">Alertas do agente</span>
-                            <button x-show="alertas.length > 0" @click="marcarTodosLidos()"
+                            <button x-show="alertas.some(a => !a.lido_em)" @click="marcarTodosLidos()"
                                     class="text-xs text-gray-400 hover:text-gray-600">Marcar tudo como lido</button>
                         </div>
 
                         <div class="max-h-96 overflow-y-auto">
                             <template x-for="item in alertas" :key="item.id">
-                                <div class="px-4 py-2.5 border-b border-gray-50 last:border-0"
-                                     :class="!item.lido_em ? 'bg-blue-50/50' : ''">
+                                <div class="px-4 py-2.5 border-b border-gray-50 last:border-0 cursor-pointer"
+                                     :class="!item.lido_em ? 'bg-blue-50/50' : ''"
+                                     @click="marcarItemLido(item)">
                                     <div class="flex items-start gap-2">
                                         <span x-show="!item.lido_em" class="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0"></span>
                                         <div class="min-w-0 flex-1">
-                                            <p class="text-xs font-medium text-gray-800" x-text="item.titulo"></p>
-                                            <p class="text-xs text-gray-400 mt-0.5" x-text="item.conteudo"></p>
+                                            <p class="text-xs font-medium text-gray-800 truncate" x-text="item.titulo"></p>
+                                            <p class="text-xs text-gray-400 mt-0.5" x-text="tempoRelativo(item.created_at)"></p>
+                                            <p class="text-xs text-gray-400 mt-0.5 line-clamp-2" x-text="item.conteudo"></p>
                                             <a x-show="item.ticket_id" :href="'/kanban'" @click="aberto = false"
                                                class="text-xs text-green-600 font-medium hover:underline">Abrir ticket</a>
                                         </div>
@@ -510,14 +512,21 @@ function alertasDropdown() {
             } catch (_) {}
         },
 
-        async marcarVisualizados() {
-            // Marca como lido ao abrir o dropdown, um a um, só os que ainda não foram —
-            // evita uma segunda rota "marcar todos" disparando sem o usuário ter escolhido.
-            const pendentes = this.alertas.filter(a => !a.lido_em);
-            for (const alerta of pendentes) {
-                alerta.lido_em = new Date().toISOString();
-            }
-            this.naoLidos = 0;
+        async marcarItemLido(item) {
+            if (item.lido_em) return;
+            try {
+                const res = await fetch(`/api/painel/alertas/${item.id}/marcar-lido`, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                });
+                if (res.ok) {
+                    item.lido_em = new Date().toISOString();
+                    this.naoLidos = this.alertas.filter(a => !a.lido_em).length;
+                }
+            } catch (_) {}
         },
 
         async marcarTodosLidos() {
@@ -531,6 +540,18 @@ function alertasDropdown() {
                 });
                 await this.carregar();
             } catch (_) {}
+        },
+
+        tempoRelativo(dataIso) {
+            if (!dataIso) return '';
+            const segundos = Math.max(0, Math.floor((Date.now() - new Date(dataIso).getTime()) / 1000));
+            if (segundos < 60) return 'agora';
+            const minutos = Math.floor(segundos / 60);
+            if (minutos < 60) return `há ${minutos} min`;
+            const horas = Math.floor(minutos / 60);
+            if (horas < 24) return `há ${horas}h`;
+            const dias = Math.floor(horas / 24);
+            return `há ${dias}d`;
         },
     };
 }
