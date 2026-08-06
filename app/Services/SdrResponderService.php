@@ -259,6 +259,15 @@ class SdrResponderService
             $iaContexto .= ($iaContexto ? "\n\n" : '') . "=== TABELA DE PREÇOS ===\n" . $ticket->tenant->tabela_precos_texto . "\n===";
         }
 
+        $kanban = \App\Models\Kanban::withoutGlobalScopes()
+            ->where('tenant_id', $ticket->tenant_id)
+            ->where('tipo', 'vendas')
+            ->first();
+
+        if ($kanban?->conhecimento_geral) {
+            $iaContexto .= ($iaContexto ? "\n\n" : '') . "=== CONHECIMENTO GERAL DESTE KANBAN ===\n" . $kanban->conhecimento_geral . "\n===";
+        }
+
         // Contexto específico da coluna atual (ex: em_atendimento)
         $colunaConfig = KanbanColunaConfig::withoutGlobalScopes()
             ->where('tenant_id', $ticket->tenant_id)
