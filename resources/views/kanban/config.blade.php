@@ -716,6 +716,36 @@
                             <p class="text-xs text-gray-400 mt-1 ml-5">Desligado: áudio e imagem ainda chegam e ficam salvos no card, só sem a transcrição/descrição automática por IA.</p>
                         </div>
 
+                        <div class="mt-3 pt-3 border-t border-gray-100" x-init="carregarObjetivos(col.key)">
+                            <label class="text-xs font-semibold text-gray-500 mb-1 block">Objetivos para avançar desta coluna</label>
+                            <p class="text-xs text-gray-400 mb-2">O que o lead precisa ter respondido/confirmado antes de sair desta etapa. O agente marca sozinho conforme a conversa evolui.</p>
+
+                            <div class="space-y-1.5 mb-2">
+                                <template x-for="objetivo in (objetivosPor[col.key] || [])" :key="objetivo.id">
+                                    <div class="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5">
+                                        <span class="text-xs text-gray-700 flex-1" x-text="objetivo.texto"></span>
+                                        <label class="flex items-center gap-1 flex-shrink-0" title="Objetivo ativo">
+                                            <input type="checkbox" :checked="objetivo.ativo"
+                                                   @change="toggleAtivoObjetivo(col.key, objetivo)"
+                                                   class="w-3 h-3 accent-purple-600">
+                                        </label>
+                                        <button @click="excluirObjetivo(col.key, objetivo)"
+                                                class="text-red-300 hover:text-red-500 flex-shrink-0 text-xs">✕</button>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <input type="text" :value="novoObjetivoTexto[col.key] || ''"
+                                       @input="novoObjetivoTexto[col.key] = $event.target.value"
+                                       @keydown.enter="adicionarObjetivo(col.key)"
+                                       placeholder="Ex: Endereço de origem confirmado"
+                                       class="flex-1 text-xs border border-gray-300 rounded-lg px-2 py-1.5">
+                                <button @click="adicionarObjetivo(col.key)"
+                                        class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1.5 rounded-lg">+</button>
+                            </div>
+                        </div>
+
                         <div class="mt-3 flex items-center justify-between">
                             <div class="flex items-center gap-4">
                                 <label class="flex items-center gap-1.5 cursor-pointer">
@@ -1294,6 +1324,10 @@ function kanbanConfig() {
         editMsgBotoes: [],
         editMsgObrigatorio: false,
 
+        objetivosPor: {},        // { [colunaKey]: [ {id, texto, ordem, ativo}, ... ] }
+        objetivosCarregado: {},  // { [colunaKey]: bool } — evita recarregar toda vez que abre a seção
+        novoObjetivoTexto: {},   // { [colunaKey]: string } — input de "adicionar objetivo"
+
         variacoesPor: {},       // { [mensagemId]: [ {id, conteudo, origem, protegida, ativa}, ... ] }
         abaVariacaoAberta: {},  // { [mensagemId]: bool } — controla se o painel de variações está expandido
         variacaoAbaAtiva: {},   // { [mensagemId]: variacaoId } — qual aba de variação está selecionada (null = primeira/original)
@@ -1635,6 +1669,41 @@ function kanbanConfig() {
             await this.api(`/api/painel/sequencias/${seqId}/mensagens/${id}`, 'DELETE');
             await this.carregarMsgs(seqId);
             await this.carregar();
+        },
+
+        async carregarObjetivos(colunaKey) {
+            if (this.objetivosCarregado[colunaKey]) return;
+            this.objetivosCarregado[colunaKey] = true;
+            const res = await this.api(`/api/painel/kanban/coluna-objetivos/${colunaKey}`);
+            this.objetivosPor[colunaKey] = res.ok ? await res.json() : [];
+        },
+
+        async adicionarObjetivo(colunaKey) {
+            const texto = (this.novoObjetivoTexto[colunaKey] || '').trim();
+            if (!texto) return;
+            const res = await this.api(`/api/painel/kanban/coluna-objetivos/${colunaKey}`, 'POST', { texto });
+            if (res.ok) {
+                this.novoObjetivoTexto[colunaKey] = '';
+                this.objetivosCarregado[colunaKey] = false;
+                await this.carregarObjetivos(colunaKey);
+            }
+        },
+
+        async toggleAtivoObjetivo(colunaKey, objetivo) {
+            const res = await this.api(`/api/painel/kanban/coluna-objetivos/${colunaKey}/${objetivo.id}`, 'PUT', { ativo: !objetivo.ativo });
+            if (res.ok) {
+                this.objetivosCarregado[colunaKey] = false;
+                await this.carregarObjetivos(colunaKey);
+            }
+        },
+
+        async excluirObjetivo(colunaKey, objetivo) {
+            if (!confirm('Excluir este objetivo?')) return;
+            const res = await this.api(`/api/painel/kanban/coluna-objetivos/${colunaKey}/${objetivo.id}`, 'DELETE');
+            if (res.ok) {
+                this.objetivosCarregado[colunaKey] = false;
+                await this.carregarObjetivos(colunaKey);
+            }
         },
 
         async carregarVariacoes(seqId, msg) {
