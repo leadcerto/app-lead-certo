@@ -93,6 +93,8 @@ class SdrResponderJob implements ShouldQueue
                     } else {
                         Log::warning("SdrResponderJob: falha ao enviar mensagem de espera, ticket #{$this->ticketId}");
                     }
+                } else {
+                    Log::warning("SdrResponderJob: sem canal ou telefone, mensagem de espera não enviada, ticket #{$this->ticketId}");
                 }
             }
 
