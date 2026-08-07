@@ -38,6 +38,7 @@ class KanbanColunaConfigController extends Controller
             'exclusao_definitiva_dias'    => $config?->exclusao_definitiva_dias    ?? 90,
             'timeout_reassuncao_ativo'    => $config?->timeout_reassuncao_ativo    ?? false,
             'timeout_reassuncao_segundos' => $config?->timeout_reassuncao_segundos ?? 3600,
+            'aguardando_orientacao_mensagem' => $config?->aguardando_orientacao_mensagem ?? '',
         ]);
     }
 
@@ -66,6 +67,7 @@ class KanbanColunaConfigController extends Controller
             'exclusao_definitiva_dias'    => 'sometimes|integer|min:1|max:3650',
             'timeout_reassuncao_ativo'    => 'sometimes|boolean',
             'timeout_reassuncao_segundos' => 'sometimes|integer|min:60|max:604800',
+            'aguardando_orientacao_mensagem' => 'nullable|string|max:1000',
         ]);
 
         $update = array_filter($validated, fn($v) => $v !== null);

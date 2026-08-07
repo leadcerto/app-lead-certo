@@ -952,6 +952,19 @@
                                 </div>
                             </div>
 
+                            <div class="mt-3 pt-3 border-t border-gray-100">
+                                <label class="text-xs font-semibold text-gray-500 mb-1 block">Mensagem de espera durante orientação (Regra 2)</label>
+                                <p class="text-xs text-gray-400 mb-2">
+                                    Se o agente pausar aguardando sua orientação e o lead escrever de novo nesse meio tempo,
+                                    essa mensagem é mandada uma única vez. Deixe em branco pra usar a mensagem padrão do sistema.
+                                </p>
+                                <textarea :value="aguardandoOrientacaoMensagem[col.key] || ''"
+                                          @input="aguardandoOrientacaoMensagem[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                          rows="2"
+                                          placeholder="Estou verificando mais detalhes sobre isso pra te dar a melhor resposta. Em breve retorno!"
+                                          class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"></textarea>
+                            </div>
+
                             {{-- Exclusão definitiva --}}
                             <div class="mt-3 pt-3 border-t border-gray-100">
                                 <label class="flex items-center gap-2 mb-2 cursor-pointer">
@@ -1424,6 +1437,9 @@ function kanbanConfig() {
         timeoutReassuncaoDelay: {},
         timeoutReassuncaoDelayUnidade: {},
 
+        // Mensagem de espera durante orientação
+        aguardandoOrientacaoMensagem: {},
+
         // Exclusão definitiva de tickets encerrados (por coluna)
         exclusaoDefinitivaAtivo: {},
         exclusaoDefinitivaDias: {},
@@ -1884,6 +1900,8 @@ function kanbanConfig() {
                 const tr = this.segundosParaDisplay(json.timeout_reassuncao_segundos ?? 3600);
                 this.timeoutReassuncaoDelay[key]        = tr.valor;
                 this.timeoutReassuncaoDelayUnidade[key] = tr.unidade;
+
+                this.aguardandoOrientacaoMensagem[key] = json.aguardando_orientacao_mensagem ?? '';
             }
         },
 
@@ -1940,6 +1958,7 @@ function kanbanConfig() {
                 exclusao_definitiva_dias:   this.exclusaoDefinitivaDias[key]  ?? 90,
                 timeout_reassuncao_ativo:    this.timeoutReassuncaoAtivo[key] ?? false,
                 timeout_reassuncao_segundos: this.delayParaSegundos(this.timeoutReassuncaoDelay[key] ?? 1, this.timeoutReassuncaoDelayUnidade[key] || 'hora'),
+                aguardando_orientacao_mensagem: this.aguardandoOrientacaoMensagem[key] ?? '',
             });
             this.iaSalvando[key] = false;
             if (res.ok) {

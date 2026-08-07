@@ -116,4 +116,30 @@ class KanbanColunaConfigAutoMoverTest extends TestCase
             'timeout_reassuncao_segundos' => 3600,
         ]);
     }
+
+    public function test_persiste_mensagem_de_espera_de_orientacao(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = $this->criarUsuarioDono($tenant);
+
+        $response = $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/em_atendimento', [
+            'aguardando_orientacao_mensagem' => 'Só um instante, já te retorno!',
+        ]);
+
+        $response->assertOk();
+
+        $config = KanbanColunaConfig::where('tenant_id', $tenant->id)->where('coluna_kanban', 'em_atendimento')->first();
+        $this->assertSame('Só um instante, já te retorno!', $config->aguardando_orientacao_mensagem);
+    }
+
+    public function test_show_retorna_default_vazio_de_mensagem_de_espera(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = $this->criarUsuarioDono($tenant);
+
+        $response = $this->actingAs($user)->getJson('/api/painel/kanban/coluna-config/em_atendimento');
+
+        $response->assertOk();
+        $response->assertJson(['aguardando_orientacao_mensagem' => '']);
+    }
 }
