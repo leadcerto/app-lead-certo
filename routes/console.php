@@ -36,6 +36,12 @@ Schedule::command('conversas:followup')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/followup-conversas.log'));
 
+// A cada 5 min — Reassume conversas onde o humano assumiu e sumiu além do timeout
+Schedule::command('conversas:reassumir-agente')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/reassumir-agente.log'));
+
 // 00:15 — Enriquece contatos com email, profissão e empresa extraídos das conversas via IA
 Schedule::command('contatos:enriquecer-conversas --limit=30')
     ->dailyAt('00:15')
