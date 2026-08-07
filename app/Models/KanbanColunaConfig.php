@@ -37,9 +37,9 @@ class KanbanColunaConfig extends Model
         'timeout_reassuncao_ativo',
         'timeout_reassuncao_segundos',
         'aguardando_orientacao_mensagem',
+        'tempo_maximo_permanencia_minutos',
         'exclusao_definitiva_ativo',
         'exclusao_definitiva_dias',
-        'tempo_maximo_permanencia_minutos',
     ];
 
     protected $casts = [
