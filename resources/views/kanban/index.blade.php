@@ -364,6 +364,34 @@
                     </div>
                 </template>
 
+                {{-- Painel de orientação — Regra 2, agente pausado com dúvida --}}
+                <template x-if="ticketAtivo.aguardando_orientacao_em">
+                    <div class="border-b bg-amber-50 px-5 py-3">
+                        <div class="flex items-center gap-1.5 mb-2">
+                            <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-amber-800">Agente aguardando orientação</span>
+                        </div>
+                        <p class="text-xs text-amber-700 mb-2">
+                            O agente pausou essa conversa porque não tinha certeza de como responder.
+                            Escreva a orientação abaixo — o agente usa isso pra montar a resposta e mandar pro lead sozinho.
+                        </p>
+                        <textarea x-model="orientacaoTexto"
+                                  rows="3"
+                                  placeholder="Ex: O preço desse serviço é R$ 250."
+                                  class="w-full text-xs border border-amber-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none bg-white"></textarea>
+                        <div class="flex justify-end mt-2">
+                            <button @click="enviarOrientacao()"
+                                    :disabled="!orientacaoTexto.trim() || orientacaoEnviando"
+                                    class="text-xs bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
+                                <span x-show="!orientacaoEnviando">Enviar orientação</span>
+                                <span x-show="orientacaoEnviando">Enviando...</span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+
                 {{-- Progresso do checklist de objetivos da coluna --}}
                 <template x-if="objetivosAtivos().length">
                     <div class="border-b">
@@ -662,6 +690,8 @@ function kanban() {
         itensAberto:       false,
         objetivosColuna:   [],
         objetivosAberto:   false,
+        orientacaoTexto:    '',
+        orientacaoEnviando: false,
         novaNota:          '',
         salvandoNota:      false,
         dragCard:          null,
@@ -867,6 +897,8 @@ function kanban() {
             this.moverColunaAlvo = ticket.coluna_kanban;
             this.limparMidia();
             this.objetivosColuna = [];
+            this.orientacaoTexto    = '';
+            this.orientacaoEnviando = false;
             this.objetivosAberto = false;
             this.mensagens = [];
             await this.sincronizarTicketAtivo();
@@ -887,6 +919,23 @@ function kanban() {
         async carregarObjetivosColuna(colunaKey) {
             const res = await this.api(`/api/painel/kanban/coluna-objetivos/${colunaKey}`);
             this.objetivosColuna = res.ok ? await res.json() : [];
+        },
+
+        async enviarOrientacao() {
+            const texto = (this.orientacaoTexto || '').trim();
+            if (!texto || this.orientacaoEnviando) return;
+
+            this.orientacaoEnviando = true;
+            const res = await this.api(`/api/painel/kanban/ticket/${this.ticketAtivo.id}/orientar`, 'POST', {
+                orientacao: texto,
+            });
+            this.orientacaoEnviando = false;
+
+            if (res.ok) {
+                this.orientacaoTexto = '';
+                this.ticketAtivo.aguardando_orientacao_em = null;
+                await this.carregar(); // recarrega o board pra refletir o estado atualizado
+            }
         },
 
         // Só objetivos ativos contam pro checklist — um objetivo desativado
