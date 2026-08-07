@@ -146,10 +146,12 @@ class FollowupConversas extends Command
 
                         if (! $dry) {
                             try {
-                                $sdr->responder($ticket, gatilho: "estagio_{$estagioAlvo}");
-                                $ticket->update(['followup_estagio_enviado' => $estagioAlvo]);
-                                $estagiosDisparados[(string) $estagioAlvo]++;
-                                $enviados++;
+                                $respostaEnviada = $sdr->responder($ticket, gatilho: "estagio_{$estagioAlvo}");
+                                if ($respostaEnviada !== null) {
+                                    $ticket->update(['followup_estagio_enviado' => $estagioAlvo]);
+                                    $estagiosDisparados[(string) $estagioAlvo]++;
+                                    $enviados++;
+                                }
                             } catch (\Exception $e) {
                                 Log::warning('FollowupConversas: erro no estágio', [
                                     'ticket_id' => $row->id, 'estagio' => $estagioAlvo, 'erro' => $e->getMessage(),

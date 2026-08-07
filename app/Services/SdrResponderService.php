@@ -22,9 +22,20 @@ class SdrResponderService
      * Seleciona persona, gera resposta via OpenRouter, envia com humanização, persiste.
      * Retorna o texto da resposta ou null se falhar.
      */
-    public function responder(TicketAtendimento $ticket, bool $origemLigacao = false, ?string $gatilho = null): ?string
+    public function responder(TicketAtendimento $ticket, bool $origemLigacao = false, ?string $gatilho = null, ?string $orientacaoHumana = null): ?string
     {
         $ticket->loadMissing(['contato', 'persona', 'mensagens', 'tenant', 'canal']);
+
+        // Regra 2/4: enquanto o ticket aguarda orientação humana sobre uma
+        // dúvida, o agente não gera nenhuma resposta — nem pra este chamador
+        // nem pros outros 3 (FollowupConversas x2, Internal\TicketController).
+        // Quem redispara com a orientação (Task 5, via SdrResponderJob) já
+        // limpa aguardando_orientacao_em ANTES de chamar responder() de novo,
+        // então esse guard nunca bloqueia o redisparo legítimo.
+        if ($ticket->aguardando_orientacao_em) {
+            Log::info('SdrResponder: ticket aguardando orientação humana, resposta suprimida', ['ticket_id' => $ticket->id]);
+            return null;
+        }
 
         // ── 1. Selecionar/confirmar persona ─────────────────────────────────
         $persona = $ticket->persona;
@@ -41,7 +52,7 @@ class SdrResponderService
         }
 
         // ── 2. Montar histórico para o OpenRouter ────────────────────────────
-        $messages = $this->montarHistorico($persona, $ticket, $origemLigacao, $gatilho);
+        $messages = $this->montarHistorico($persona, $ticket, $origemLigacao, $gatilho, $orientacaoHumana);
 
         // ── 3. Chamar o OpenRouter ───────────────────────────────────────────
         $tier    = $ticket->etapa_ia === 'etapa_2' ? 'complexo' : 'simples';
@@ -49,6 +60,37 @@ class SdrResponderService
 
         if (! $resposta) {
             Log::error('SdrResponder: OpenRouter sem resposta', ['ticket_id' => $ticket->id]);
+            return null;
+        }
+
+        // ── 3.5. Detectar dúvida (Regra 2) ───────────────────────────────────
+        // Se o agente decidiu pausar (instrução de autovalidação da Regra 7,
+        // ver montarHistorico()), a resposta inteira é só esse token — nenhum
+        // outro processamento (movimento de coluna, objetivos, envio) roda.
+        if (preg_match('/\[D[UÚ]VIDA\s*:\s*(.+?)\]/isu', $resposta, $matchDuvida)) {
+            $resumo = trim($matchDuvida[1]);
+
+            $ticket->update([
+                'aguardando_orientacao_em' => now(),
+                'mensagem_espera_enviada'  => false,
+            ]);
+
+            try {
+                app(\App\Services\AlertaInternoService::class)->criar(
+                    $ticket->tenant_id,
+                    'duvida_ia',
+                    'Agente pediu orientação',
+                    $resumo,
+                    $ticket->id,
+                );
+            } catch (\Exception $e) {
+                Log::warning('SdrResponder: falha ao criar alerta de dúvida', [
+                    'ticket_id' => $ticket->id, 'erro' => $e->getMessage(),
+                ]);
+            }
+
+            Log::info('SdrResponder: pausado aguardando orientação', ['ticket_id' => $ticket->id, 'resumo' => $resumo]);
+
             return null;
         }
 
@@ -244,7 +286,7 @@ class SdrResponderService
             . "\n===";
     }
 
-    private function montarHistorico(SdrPersona $persona, TicketAtendimento $ticket, bool $origemLigacao = false, ?string $gatilho = null): array
+    private function montarHistorico(SdrPersona $persona, TicketAtendimento $ticket, bool $origemLigacao = false, ?string $gatilho = null, ?string $orientacaoHumana = null): array
     {
         $etapaInstrucao = match ($ticket->etapa_ia) {
             'etapa_1' => '[ETAPA: qualificação inicial do lead]',
@@ -328,6 +370,36 @@ class SdrResponderService
             . "NUNCA inclua esse marcador nas suas próprias respostas."
             . "\n===";
 
+        // Regra 6 — proibição de eco.
+        $iaContexto .= "\n\n=== REGRA DE ESTILO ===\n"
+            . "Nunca repita literalmente o que o lead acabou de escrever como se fosse sua "
+            . "própria fala. Reformular com valor agregado (confirmar entendimento, avançar "
+            . "a conversa) é permitido — cópia pura da mensagem do lead é proibida."
+            . "\n===";
+
+        // Regra 5 — não perguntar de novo o que já foi respondido.
+        $iaContexto .= "\n\n=== NÃO REPITA PERGUNTAS ===\n"
+            . "Antes de pedir qualquer informação ao lead, releia todo o histórico da conversa "
+            . "(incluindo transcrições de áudio/imagem) — se já foi dito, use o que já foi "
+            . "informado em vez de perguntar de novo. Os itens marcados ✅ no bloco de "
+            . "objetivos abaixo (se houver) já foram confirmados — nunca pergunte de novo "
+            . "sobre eles."
+            . "\n===";
+
+        // Regra 7 — autovalidação antes de responder (1 chamada só, sem chamada
+        // dupla — decisão fechada). Regra 2 é o efeito prático desta validação:
+        // é este bloco que ensina o modelo a emitir [DUVIDA:...] quando não tem
+        // certeza — a detecção do token acontece em responder(), não aqui.
+        $iaContexto .= "\n\n=== VALIDAÇÃO ANTES DE RESPONDER ===\n"
+            . "Antes de finalizar sua resposta, confira: (1) ela é relevante pro que o lead "
+            . "perguntou agora? (2) está dentro do escopo deste atendimento? (3) não "
+            . "contradiz nada dito antes nesta conversa? Se qualquer resposta for não, ou se "
+            . "você não tiver certeza ou informação suficiente pra responder com segurança, "
+            . "NÃO responda normalmente — em vez disso, responda SOMENTE com o token "
+            . "[DUVIDA: <resuma em uma frase o que você não sabe responder>]. NUNCA invente "
+            . "informação que não está no seu contexto."
+            . "\n===";
+
         $contextoHistorico = $this->contextoHistoricoCliente($ticket);
         $checklistState    = $this->montarBlocoObjetivos($ticket);
 
@@ -339,6 +411,11 @@ class SdrResponderService
             'estagio_3' => "[GATILHO: ESTÁGIO 3 DE SILÊNCIO CONFIRMADO — O tempo real de silêncio do lead já cruzou o limite do Estágio 3 configurado para esta coluna. Siga as instruções do Estágio 3 (encerramento) descritas nas instruções desta etapa, se houver; senão, informe que está encerrando por falta de retorno, deixe as portas abertas para o futuro, e inclua [ENCERRADO] ao final. Se o histórico mostrar que o lead já retomou contato recentemente, NÃO encerre — responda normalmente ao que ele disse.]",
             default     => null,
         };
+
+        $contextoOrientacao = $orientacaoHumana
+            ? "[ORIENTAÇÃO DO ATENDENTE — use isso pra responder ao lead agora, "
+              . "NUNCA mencione que recebeu orientação interna]: {$orientacaoHumana}"
+            : null;
 
         $messages = [[
             'role'    => 'system',
@@ -352,6 +429,7 @@ class SdrResponderService
                 $primeiroContato,
                 $contextoLigacao,
                 $contextoGatilho,
+                $contextoOrientacao,
             ])),
         ]];
 

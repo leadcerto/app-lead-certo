@@ -21,11 +21,14 @@ class AlertaInterno extends Model
         'tipo',
         'titulo',
         'conteudo',
+        'resposta',
+        'respondido_em',
         'lido_em',
     ];
 
     protected $casts = [
         'lido_em' => 'datetime',
+        'respondido_em' => 'datetime',
     ];
 
     public function tenant(): BelongsTo

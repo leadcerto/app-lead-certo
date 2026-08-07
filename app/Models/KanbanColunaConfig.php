@@ -36,6 +36,7 @@ class KanbanColunaConfig extends Model
         'auto_mover_mensagem',
         'timeout_reassuncao_ativo',
         'timeout_reassuncao_segundos',
+        'aguardando_orientacao_mensagem',
         'exclusao_definitiva_ativo',
         'exclusao_definitiva_dias',
     ];

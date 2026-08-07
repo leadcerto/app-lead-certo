@@ -306,6 +306,50 @@ class KanbanController extends Controller
     }
 
     /**
+     * Regra 2 (Bloco 3): o humano orienta uma dúvida do agente por aqui — não
+     * pelo chat normal (que assumiria a conversa inteira). Limpa o estado de
+     * espera, registra a resposta no alerta correspondente, e redispara o
+     * agente com a orientação injetada só nessa chamada — o agente continua
+     * no controle da conversa.
+     */
+    public function orientar(Request $request, int $ticket): JsonResponse
+    {
+        $request->merge(['orientacao' => trim((string) $request->input('orientacao'))]);
+        $request->validate(['orientacao' => 'required|string|min:1|max:2000']);
+
+        $model = TicketAtendimento::findOrFail($ticket);
+
+        if (! $model->aguardando_orientacao_em) {
+            return response()->json(['message' => 'Este ticket não está aguardando orientação.'], 422);
+        }
+
+        if ($model->agente_responsavel !== 'bot') {
+            return response()->json(['message' => 'Este ticket está com um atendente humano — libere pra IA antes de orientar.'], 422);
+        }
+
+        $alerta = \App\Models\AlertaInterno::where('tenant_id', $model->tenant_id)
+            ->where('ticket_id', $ticket)
+            ->where('tipo', 'duvida_ia')
+            ->whereNull('resposta')
+            ->latest('id')
+            ->first();
+
+        $alerta?->update([
+            'resposta'      => $request->orientacao,
+            'respondido_em' => now(),
+        ]);
+
+        $model->update([
+            'aguardando_orientacao_em' => null,
+            'mensagem_espera_enviada'  => false,
+        ]);
+
+        dispatch(new \App\Jobs\SdrResponderJob($ticket, '', false, true, 0, $request->orientacao));
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
      * "Pendente" é uma etiqueta independente (não mexe em status nem coluna) —
      * sinaliza "tenho uma pergunta em aberto com o lead, aguardando resposta".
      * Clicar de novo desmarca (alterna).
