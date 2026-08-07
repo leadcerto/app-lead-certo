@@ -39,6 +39,7 @@ class KanbanColunaConfig extends Model
         'aguardando_orientacao_mensagem',
         'exclusao_definitiva_ativo',
         'exclusao_definitiva_dias',
+        'tempo_maximo_permanencia_minutos',
     ];
 
     protected $casts = [

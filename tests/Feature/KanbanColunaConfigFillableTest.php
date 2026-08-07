@@ -64,4 +64,27 @@ class KanbanColunaConfigFillableTest extends TestCase
         $this->assertTrue($config->fresh()->timeout_reassuncao_ativo);
         $this->assertSame(3600, $config->fresh()->timeout_reassuncao_segundos);
     }
+
+    public function test_tempo_maximo_permanencia_minutos_e_mass_assignable(): void
+    {
+        $tenant = \App\Models\Tenant::factory()->create();
+
+        $config = \App\Models\KanbanColunaConfig::create([
+            'tenant_id' => $tenant->id, 'coluna_kanban' => 'aguardando_orcamento',
+            'tempo_maximo_permanencia_minutos' => 120,
+        ]);
+
+        $this->assertSame(120, $config->fresh()->tempo_maximo_permanencia_minutos);
+    }
+
+    public function test_tempo_maximo_permanencia_minutos_e_nulo_por_padrao(): void
+    {
+        $tenant = \App\Models\Tenant::factory()->create();
+
+        $config = \App\Models\KanbanColunaConfig::create([
+            'tenant_id' => $tenant->id, 'coluna_kanban' => 'aguardando_orcamento',
+        ]);
+
+        $this->assertNull($config->fresh()->tempo_maximo_permanencia_minutos);
+    }
 }
