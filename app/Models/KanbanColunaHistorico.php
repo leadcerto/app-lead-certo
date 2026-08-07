@@ -22,12 +22,17 @@ class KanbanColunaHistorico extends Model
         'ticket_id',
         'coluna',
         'coluna_anterior',
+        'origem',
         'entrou_em',
+        'alertado_em',
     ];
 
     protected function casts(): array
     {
-        return ['entrou_em' => 'datetime'];
+        return [
+            'entrou_em'    => 'datetime',
+            'alertado_em'  => 'datetime',
+        ];
     }
 
     public function ticket(): BelongsTo

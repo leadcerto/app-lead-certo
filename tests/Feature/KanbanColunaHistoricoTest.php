@@ -70,4 +70,23 @@ class KanbanColunaHistoricoTest extends TestCase
 
         $this->assertSame(1, KanbanColunaHistorico::where('ticket_id', $ticket->id)->count());
     }
+
+    public function test_origem_e_alertado_em_sao_preenchiveis(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'lead_novo', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $registro = KanbanColunaHistorico::where('ticket_id', $ticket->id)->firstOrFail();
+        $registro->update(['origem' => 'humano', 'alertado_em' => now()]);
+
+        $registro->refresh();
+        $this->assertSame('humano', $registro->origem);
+        $this->assertNotNull($registro->alertado_em);
+        $this->assertInstanceOf(\Illuminate\Support\Carbon::class, $registro->alertado_em);
+    }
 }
