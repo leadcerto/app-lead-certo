@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AlertaInterno;
 use App\Models\Contato;
+use App\Models\KanbanColunaObjetivo;
 use App\Models\SdrPersona;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
@@ -113,5 +114,63 @@ class SdrResponderServiceDuvidaTest extends TestCase
         app(SdrResponderService::class)->responder($ticket);
 
         $this->assertNotNull($ticket->fresh()->aguardando_orientacao_em);
+    }
+
+    private function assertTokenDuvidaPausaOTicket(string $tokenBruto): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $ticket = $this->criarTicketComCanal();
+
+        $this->mock(OpenRouterService::class, function ($mock) use ($tokenBruto) {
+            $mock->shouldReceive('chat')->once()->andReturn($tokenBruto);
+        });
+
+        $resposta = app(SdrResponderService::class)->responder($ticket);
+
+        $this->assertNull($resposta);
+        Http::assertNothingSent();
+        $this->assertDatabaseMissing('mensagens', ['ticket_id' => $ticket->id, 'remetente' => 'bot']);
+        $this->assertNotNull($ticket->fresh()->aguardando_orientacao_em);
+    }
+
+    public function test_token_duvida_acentuado_maiusculo_e_detectado(): void
+    {
+        $this->assertTokenDuvidaPausaOTicket('[DÚVIDA: preço não está na tabela]');
+    }
+
+    public function test_token_duvida_misto_sem_acento_e_detectado(): void
+    {
+        $this->assertTokenDuvidaPausaOTicket('[Duvida: preço não está na tabela]');
+    }
+
+    public function test_token_duvida_minusculo_acentuado_e_detectado(): void
+    {
+        $this->assertTokenDuvidaPausaOTicket('[dúvida: preço não está na tabela]');
+    }
+
+    public function test_duvida_tem_prioridade_sobre_outros_tokens_na_mesma_resposta(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $ticket = $this->criarTicketComCanal();
+
+        $objetivo = KanbanColunaObjetivo::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
+            'texto' => 'Endereço confirmado', 'ordem' => 1, 'ativo' => true,
+        ]);
+
+        $this->mock(OpenRouterService::class, function ($mock) use ($objetivo) {
+            $mock->shouldReceive('chat')->once()
+                ->andReturn("[DUVIDA: preciso de ajuda] [PAGAMENTO] [OBJETIVO_CUMPRIDO:{$objetivo->id}]");
+        });
+
+        $resposta = app(SdrResponderService::class)->responder($ticket);
+
+        $this->assertNull($resposta);
+        Http::assertNothingSent();
+
+        $ticketFresco = $ticket->fresh();
+        $this->assertSame('em_atendimento', $ticketFresco->coluna_kanban);
+        $this->assertEmpty($ticketFresco->objetivos_cumpridos ?? []);
+        $this->assertNotNull($ticketFresco->aguardando_orientacao_em);
     }
 }

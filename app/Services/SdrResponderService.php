@@ -67,7 +67,7 @@ class SdrResponderService
         // Se o agente decidiu pausar (instrução de autovalidação da Regra 7,
         // ver montarHistorico()), a resposta inteira é só esse token — nenhum
         // outro processamento (movimento de coluna, objetivos, envio) roda.
-        if (preg_match('/\[DUVIDA:\s*(.+?)\]/s', $resposta, $matchDuvida)) {
+        if (preg_match('/\[D[UÚ]VIDA\s*:\s*(.+?)\]/isu', $resposta, $matchDuvida)) {
             $resumo = trim($matchDuvida[1]);
 
             $ticket->update([
