@@ -44,18 +44,33 @@ class ReassumirAgente extends Command
                 ->where('coluna_kanban', $row->coluna_kanban)
                 ->first();
 
-            if (! $config?->timeout_reassuncao_ativo || ! $config->timeout_reassuncao_segundos) {
+            if (! $config?->timeout_reassuncao_ativo) {
                 continue;
             }
 
+            // Achado 4 da revisão final: timeout_reassuncao_segundos é nullable,
+            // e a API já documenta pra UI um default de 3600s mesmo quando o
+            // campo nunca foi salvo — sem esse fallback, ativar o toggle via API
+            // sem mandar o segundo campo junto desativava a feature em silêncio.
+            $timeoutSegundos = $config->timeout_reassuncao_segundos ?? 3600;
+
             $silencioSegundos = now()->diffInSeconds(Carbon::parse($row->ultima_em), absolute: true);
 
-            if ($silencioSegundos < $config->timeout_reassuncao_segundos) {
+            if ($silencioSegundos < $timeoutSegundos) {
                 continue;
             }
 
             $ticket = TicketAtendimento::withoutGlobalScopes()->with('contato')->find($row->id);
             if (! $ticket) {
+                continue;
+            }
+
+            // Achado 3 da revisão final: entre a query dos candidatos e a
+            // atualização, o humano pode ter respondido (ou algo mais mudou o
+            // estado do ticket) — mesmo padrão defensivo do auto-mover em
+            // FollowupConversas, que reconfere a condição no ticket recém-
+            // carregado antes de agir, em vez de confiar só na query original.
+            if ($ticket->agente_responsavel !== 'humano') {
                 continue;
             }
 
@@ -66,7 +81,21 @@ class ReassumirAgente extends Command
             }
 
             try {
-                $ticket->update(['agente_responsavel' => 'bot']);
+                $ticket->update([
+                    'agente_responsavel' => 'bot',
+                    // Achado 1 da revisão final: libera o ticket pra outros agentes
+                    // assumirem (mesmo padrão de KanbanController::liberar()) — sem
+                    // isso o vendedor_id antigo continuava bloqueando via
+                    // assumirAutomaticamente() e o card mostrava "Com: <nome>" errado.
+                    'vendedor_id' => null,
+                    // Achado 2 da revisão final (decisão de produto confirmada):
+                    // marca como se os estágios de follow-up já tivessem se
+                    // esgotado, pra FollowupConversas não mandar mensagem proativa
+                    // nos 5min seguintes — reassunção silenciosa até o lead
+                    // escrever de novo (o que reseta followup_estagio_enviado pra 0
+                    // nos webhooks, fora do escopo desta tarefa).
+                    'followup_estagio_enviado' => 3,
+                ]);
 
                 $horas = round($silencioSegundos / 3600, 1);
                 $nomeContato = $ticket->contato?->nome ?? 'contato sem nome';
