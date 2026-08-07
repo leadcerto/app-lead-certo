@@ -149,6 +149,27 @@ class FollowupConversasEstagiosTest extends TestCase
         $this->assertSame(0, $ticket->fresh()->followup_estagio_enviado);
     }
 
+    /**
+     * Achado Importante 3 da revisão final: quando responder() retorna null
+     * (ticket pausado aguardando orientação humana, Regra 9), o comando não
+     * pode avançar o estágio nem contar o envio — senão o ticket pausado
+     * queima os estágios 1→2→3 sem nunca ter mandado mensagem nenhuma.
+     */
+    public function test_nao_avanca_estagio_quando_responder_retorna_null_por_ticket_pausado(): void
+    {
+        $ticket = $this->criarTicketComUltimaMensagemHaXMinutos(90);
+
+        $this->mock(SdrResponderService::class, function ($mock) {
+            $mock->shouldReceive('responder')->once()->withArgs(
+                fn ($t, $origem, $gatilho) => $gatilho === 'estagio_1'
+            )->andReturn(null);
+        });
+
+        $this->artisan('conversas:followup')->assertExitCode(0);
+
+        $this->assertSame(0, $ticket->fresh()->followup_estagio_enviado);
+    }
+
     public function test_dry_run_nao_persiste_nada(): void
     {
         $ticket = $this->criarTicketComUltimaMensagemHaXMinutos(90);

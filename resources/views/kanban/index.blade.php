@@ -108,6 +108,9 @@
                                     <template x-if="ticket.status === 'resolvido'">
                                         <span class="text-xs bg-teal-100 text-teal-600 px-2 py-0.5 rounded-full">Resolvido</span>
                                     </template>
+                                    <template x-if="ticket.aguardando_orientacao_em">
+                                        <span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Aguardando orientação</span>
+                                    </template>
                                 </div>
                             </div>
 

@@ -314,12 +314,17 @@ class KanbanController extends Controller
      */
     public function orientar(Request $request, int $ticket): JsonResponse
     {
+        $request->merge(['orientacao' => trim((string) $request->input('orientacao'))]);
         $request->validate(['orientacao' => 'required|string|min:1|max:2000']);
 
         $model = TicketAtendimento::findOrFail($ticket);
 
         if (! $model->aguardando_orientacao_em) {
             return response()->json(['message' => 'Este ticket não está aguardando orientação.'], 422);
+        }
+
+        if ($model->agente_responsavel !== 'bot') {
+            return response()->json(['message' => 'Este ticket está com um atendente humano — libere pra IA antes de orientar.'], 422);
         }
 
         $alerta = \App\Models\AlertaInterno::where('tenant_id', $model->tenant_id)

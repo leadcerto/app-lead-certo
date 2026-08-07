@@ -85,4 +85,51 @@ class KanbanOrientarTest extends TestCase
 
         $response->assertStatus(422);
     }
+
+    public function test_orientacao_so_com_espacos_e_rejeitada(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $ticket = $this->criarTicketAguardandoOrientacao($tenant);
+
+        $response = $this->actingAs($user)->postJson("/api/painel/kanban/ticket/{$ticket->id}/orientar", [
+            'orientacao' => '   ',
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_orientar_ticket_ja_assumido_por_humano_retorna_erro_e_nao_muda_nada(): void
+    {
+        Bus::fake();
+        $tenant  = Tenant::factory()->create();
+        $user    = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $contato = Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'humano',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'aguardando_orientacao_em' => now(), 'mensagem_espera_enviada' => true,
+        ]);
+        $alerta = AlertaInterno::create([
+            'tenant_id' => $tenant->id, 'ticket_id' => $ticket->id, 'tipo' => 'duvida_ia',
+            'titulo' => 'Agente pediu orientação', 'conteudo' => 'Dúvida sobre preço',
+        ]);
+
+        $response = $this->actingAs($user)->postJson("/api/painel/kanban/ticket/{$ticket->id}/orientar", [
+            'orientacao' => 'O preço desse serviço é R$ 250.',
+        ]);
+
+        $response->assertStatus(422);
+
+        $ticketFresco = $ticket->fresh();
+        $this->assertNotNull($ticketFresco->aguardando_orientacao_em);
+        $this->assertTrue($ticketFresco->mensagem_espera_enviada);
+
+        $alertaFresco = $alerta->fresh();
+        $this->assertNull($alertaFresco->resposta);
+        $this->assertNull($alertaFresco->respondido_em);
+
+        Bus::assertNotDispatched(\App\Jobs\SdrResponderJob::class);
+    }
 }

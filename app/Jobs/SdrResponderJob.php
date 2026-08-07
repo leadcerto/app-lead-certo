@@ -65,7 +65,7 @@ class SdrResponderJob implements ShouldQueue
         // aqui. Não se aplica quando $orientacaoHumana está preenchido: isso
         // só acontece no redisparo da Task 5, que já limpa
         // aguardando_orientacao_em ANTES de despachar este job.
-        if ($ticket->aguardando_orientacao_em && ! $this->orientacaoHumana) {
+        if ($ticket->aguardando_orientacao_em && $this->orientacaoHumana === null) {
             if (! $ticket->mensagem_espera_enviada) {
                 $config = KanbanColunaConfig::withoutGlobalScopes()
                     ->where('tenant_id', $ticket->tenant_id)
