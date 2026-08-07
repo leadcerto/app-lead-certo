@@ -22,9 +22,20 @@ class SdrResponderService
      * Seleciona persona, gera resposta via OpenRouter, envia com humanização, persiste.
      * Retorna o texto da resposta ou null se falhar.
      */
-    public function responder(TicketAtendimento $ticket, bool $origemLigacao = false, ?string $gatilho = null): ?string
+    public function responder(TicketAtendimento $ticket, bool $origemLigacao = false, ?string $gatilho = null, ?string $orientacaoHumana = null): ?string
     {
         $ticket->loadMissing(['contato', 'persona', 'mensagens', 'tenant', 'canal']);
+
+        // Regra 2/4: enquanto o ticket aguarda orientação humana sobre uma
+        // dúvida, o agente não gera nenhuma resposta — nem pra este chamador
+        // nem pros outros 3 (FollowupConversas x2, Internal\TicketController).
+        // Quem redispara com a orientação (Task 5, via SdrResponderJob) já
+        // limpa aguardando_orientacao_em ANTES de chamar responder() de novo,
+        // então esse guard nunca bloqueia o redisparo legítimo.
+        if ($ticket->aguardando_orientacao_em) {
+            Log::info('SdrResponder: ticket aguardando orientação humana, resposta suprimida', ['ticket_id' => $ticket->id]);
+            return null;
+        }
 
         // ── 1. Selecionar/confirmar persona ─────────────────────────────────
         $persona = $ticket->persona;
@@ -41,7 +52,7 @@ class SdrResponderService
         }
 
         // ── 2. Montar histórico para o OpenRouter ────────────────────────────
-        $messages = $this->montarHistorico($persona, $ticket, $origemLigacao, $gatilho);
+        $messages = $this->montarHistorico($persona, $ticket, $origemLigacao, $gatilho, $orientacaoHumana);
 
         // ── 3. Chamar o OpenRouter ───────────────────────────────────────────
         $tier    = $ticket->etapa_ia === 'etapa_2' ? 'complexo' : 'simples';
@@ -49,6 +60,37 @@ class SdrResponderService
 
         if (! $resposta) {
             Log::error('SdrResponder: OpenRouter sem resposta', ['ticket_id' => $ticket->id]);
+            return null;
+        }
+
+        // ── 3.5. Detectar dúvida (Regra 2) ───────────────────────────────────
+        // Se o agente decidiu pausar (instrução de autovalidação da Regra 7,
+        // ver montarHistorico()), a resposta inteira é só esse token — nenhum
+        // outro processamento (movimento de coluna, objetivos, envio) roda.
+        if (preg_match('/\[DUVIDA:\s*(.+?)\]/s', $resposta, $matchDuvida)) {
+            $resumo = trim($matchDuvida[1]);
+
+            $ticket->update([
+                'aguardando_orientacao_em' => now(),
+                'mensagem_espera_enviada'  => false,
+            ]);
+
+            try {
+                app(\App\Services\AlertaInternoService::class)->criar(
+                    $ticket->tenant_id,
+                    'duvida_ia',
+                    'Agente pediu orientação',
+                    $resumo,
+                    $ticket->id,
+                );
+            } catch (\Exception $e) {
+                Log::warning('SdrResponder: falha ao criar alerta de dúvida', [
+                    'ticket_id' => $ticket->id, 'erro' => $e->getMessage(),
+                ]);
+            }
+
+            Log::info('SdrResponder: pausado aguardando orientação', ['ticket_id' => $ticket->id, 'resumo' => $resumo]);
+
             return null;
         }
 
@@ -244,7 +286,7 @@ class SdrResponderService
             . "\n===";
     }
 
-    private function montarHistorico(SdrPersona $persona, TicketAtendimento $ticket, bool $origemLigacao = false, ?string $gatilho = null): array
+    private function montarHistorico(SdrPersona $persona, TicketAtendimento $ticket, bool $origemLigacao = false, ?string $gatilho = null, ?string $orientacaoHumana = null): array
     {
         $etapaInstrucao = match ($ticket->etapa_ia) {
             'etapa_1' => '[ETAPA: qualificação inicial do lead]',
@@ -370,6 +412,11 @@ class SdrResponderService
             default     => null,
         };
 
+        $contextoOrientacao = $orientacaoHumana
+            ? "[ORIENTAÇÃO DO ATENDENTE — use isso pra responder ao lead agora, "
+              . "NUNCA mencione que recebeu orientação interna]: {$orientacaoHumana}"
+            : null;
+
         $messages = [[
             'role'    => 'system',
             'content' => implode("\n\n", array_filter([
@@ -382,6 +429,7 @@ class SdrResponderService
                 $primeiroContato,
                 $contextoLigacao,
                 $contextoGatilho,
+                $contextoOrientacao,
             ])),
         ]];
 
