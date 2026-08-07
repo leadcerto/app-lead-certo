@@ -85,4 +85,35 @@ class KanbanColunaConfigAutoMoverTest extends TestCase
 
         $response->assertOk();
     }
+
+    public function test_persiste_configuracao_de_timeout_de_reassuncao(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = $this->criarUsuarioDono($tenant);
+
+        $response = $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/em_atendimento', [
+            'timeout_reassuncao_ativo'    => true,
+            'timeout_reassuncao_segundos' => 3600,
+        ]);
+
+        $response->assertOk();
+
+        $config = KanbanColunaConfig::where('tenant_id', $tenant->id)->where('coluna_kanban', 'em_atendimento')->first();
+        $this->assertTrue($config->timeout_reassuncao_ativo);
+        $this->assertSame(3600, $config->timeout_reassuncao_segundos);
+    }
+
+    public function test_show_retorna_defaults_de_timeout_de_reassuncao(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = $this->criarUsuarioDono($tenant);
+
+        $response = $this->actingAs($user)->getJson('/api/painel/kanban/coluna-config/em_atendimento');
+
+        $response->assertOk();
+        $response->assertJson([
+            'timeout_reassuncao_ativo'    => false,
+            'timeout_reassuncao_segundos' => 3600,
+        ]);
+    }
 }

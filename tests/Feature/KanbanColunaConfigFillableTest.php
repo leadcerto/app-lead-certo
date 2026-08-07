@@ -51,4 +51,17 @@ class KanbanColunaConfigFillableTest extends TestCase
 
         $this->assertSame('etapa_1', $config->fresh()->etapa_ia_ao_mover);
     }
+
+    public function test_timeout_reassuncao_e_mass_assignable(): void
+    {
+        $tenant = \App\Models\Tenant::factory()->create();
+
+        $config = \App\Models\KanbanColunaConfig::create([
+            'tenant_id' => $tenant->id, 'coluna_kanban' => 'em_atendimento',
+            'timeout_reassuncao_ativo' => true, 'timeout_reassuncao_segundos' => 3600,
+        ]);
+
+        $this->assertTrue($config->fresh()->timeout_reassuncao_ativo);
+        $this->assertSame(3600, $config->fresh()->timeout_reassuncao_segundos);
+    }
 }
