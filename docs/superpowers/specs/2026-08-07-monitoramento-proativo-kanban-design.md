@@ -48,8 +48,17 @@ ainda não foi coberta pelos Blocos 1-3).
 
 ## 3. Modelo de dados
 
+> **Correção feita durante a escrita do plano:** o campo de tempo máximo
+> vive em `kanban_coluna_configs`, não em `kanban_colunas` como descrito
+> abaixo na primeira versão desta seção. É onde toda configuração
+> comportamental por coluna já vive hoje (`timeout_reassuncao_segundos`,
+> `auto_mover_segundos`, `aguardando_orientacao_mensagem`, etc.) — mesmo
+> controller (`KanbanColunaConfigController`) já expõe get/set/validação
+> pra esse padrão. `kanban_colunas` é só schema estrutural (chave, label,
+> ordem, papel). Ver plano, Task 1.
+
 ```
-kanban_colunas
+kanban_coluna_configs
 └── tempo_maximo_permanencia_minutos (integer, nullable)   [NOVO]
     Null = coluna não monitorada pela Regra 3. Preenchido = limiar em
     minutos que o comando de 15min usa pra decidir se um ticket travou.
