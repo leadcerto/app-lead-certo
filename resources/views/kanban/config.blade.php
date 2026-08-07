@@ -918,6 +918,40 @@
                                 </p>
                             </div>
 
+                            <div class="mt-3 pt-3 border-t border-gray-100">
+                                <label class="flex items-center gap-2 mb-2 cursor-pointer">
+                                    <input type="checkbox"
+                                           :checked="timeoutReassuncaoAtivo[col.key]"
+                                           @change="timeoutReassuncaoAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true"
+                                           class="w-3.5 h-3.5 accent-purple-600">
+                                    <span class="text-xs font-semibold text-gray-500">Reassumir automaticamente após silêncio do atendente</span>
+                                </label>
+
+                                <template x-if="timeoutReassuncaoAtivo[col.key]">
+                                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                                        <span class="text-xs text-gray-500">Depois de</span>
+                                        <input type="number" min="1"
+                                               :value="timeoutReassuncaoDelay[col.key] ?? 1"
+                                               @input="timeoutReassuncaoDelay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true"
+                                               class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
+                                        <select :value="timeoutReassuncaoDelayUnidade[col.key] || 'hora'"
+                                                @change="timeoutReassuncaoDelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                                class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
+                                            <option value="seg">seg</option>
+                                            <option value="min">min</option>
+                                            <option value="hora">hora</option>
+                                        </select>
+                                        <span class="text-xs text-gray-500">de silêncio, o agente retoma sozinho</span>
+                                    </div>
+                                </template>
+                                <div class="mt-2 p-3 bg-purple-50 border border-purple-200 rounded-xl">
+                                    <p class="text-xs font-semibold text-purple-800 mb-1">Como configurar</p>
+                                    <p class="text-xs text-purple-700 leading-relaxed">
+                                        Quando um atendente assume a conversa (o agente para de falar automaticamente), esse tempo conta o silêncio desde a última mensagem da conversa — sua ou do lead. Se ninguém escrever nada até esse limite, o agente de IA retoma o atendimento sozinho, sem mandar nenhuma mensagem pro lead — só volta a responder normalmente na próxima vez que ele escrever. Você recebe um alerta interno (ícone ao lado do sino, na barra de topo) toda vez que isso acontece. Roda a cada 5 minutos, sem restrição de horário.
+                                    </p>
+                                </div>
+                            </div>
+
                             {{-- Exclusão definitiva --}}
                             <div class="mt-3 pt-3 border-t border-gray-100">
                                 <label class="flex items-center gap-2 mb-2 cursor-pointer">
@@ -1385,6 +1419,11 @@ function kanbanConfig() {
         // não salva, diferente dos campos acima (que são editáveis em tempo real).
         autoMoverSalvo: {},
 
+        // Reassunção automática do agente quando o humano assume e some
+        timeoutReassuncaoAtivo: {},
+        timeoutReassuncaoDelay: {},
+        timeoutReassuncaoDelayUnidade: {},
+
         // Exclusão definitiva de tickets encerrados (por coluna)
         exclusaoDefinitivaAtivo: {},
         exclusaoDefinitivaDias: {},
@@ -1840,6 +1879,11 @@ function kanbanConfig() {
                     ativo: this.exclusaoDefinitivaAtivo[key],
                     dias:  this.exclusaoDefinitivaDias[key],
                 };
+
+                this.timeoutReassuncaoAtivo[key] = json.timeout_reassuncao_ativo ?? false;
+                const tr = this.segundosParaDisplay(json.timeout_reassuncao_segundos ?? 3600);
+                this.timeoutReassuncaoDelay[key]        = tr.valor;
+                this.timeoutReassuncaoDelayUnidade[key] = tr.unidade;
             }
         },
 
@@ -1894,6 +1938,8 @@ function kanbanConfig() {
                 auto_mover_mensagem:        this.autoMoverMensagem[key] ?? '',
                 exclusao_definitiva_ativo:  this.exclusaoDefinitivaAtivo[key] ?? false,
                 exclusao_definitiva_dias:   this.exclusaoDefinitivaDias[key]  ?? 90,
+                timeout_reassuncao_ativo:    this.timeoutReassuncaoAtivo[key] ?? false,
+                timeout_reassuncao_segundos: this.delayParaSegundos(this.timeoutReassuncaoDelay[key] ?? 1, this.timeoutReassuncaoDelayUnidade[key] || 'hora'),
             });
             this.iaSalvando[key] = false;
             if (res.ok) {
