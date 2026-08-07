@@ -49,6 +49,14 @@ class TicketAtendimento extends Model
             if ($ticket->isDirty('coluna_kanban') && ! $ticket->isDirty('objetivos_cumpridos')) {
                 $ticket->objetivos_cumpridos = [];
             }
+            // Regra 2 (Bloco 3): uma dúvida pausada é específica do contexto da
+            // coluna atual — se o ticket muda de coluna enquanto aguarda
+            // orientação (manual ou automático), a pausa não faz mais sentido.
+            // Mesmo raciocínio do reset de objetivos_cumpridos acima.
+            if ($ticket->isDirty('coluna_kanban') && ! $ticket->isDirty('aguardando_orientacao_em')) {
+                $ticket->aguardando_orientacao_em = null;
+                $ticket->mensagem_espera_enviada  = false;
+            }
         });
     }
 
@@ -82,6 +90,8 @@ class TicketAtendimento extends Model
         'pendente_desde',
         'visualizado_em',
         'objetivos_cumpridos',
+        'aguardando_orientacao_em',
+        'mensagem_espera_enviada',
     ];
 
     protected function casts(): array
@@ -99,6 +109,8 @@ class TicketAtendimento extends Model
             'janela_expira_em'      => 'datetime',
             'janela_origem_anuncio' => 'boolean',
             'objetivos_cumpridos'   => 'array',
+            'aguardando_orientacao_em' => 'datetime',
+            'mensagem_espera_enviada'  => 'boolean',
         ];
     }
 
