@@ -181,6 +181,7 @@ class TicketAtendimento extends Model
         'objetivos_cumpridos',
         'aguardando_orientacao_em',
         'mensagem_espera_enviada',
+        'tentativas_envio_falhas',
     ];
 
     protected function casts(): array
@@ -200,6 +201,7 @@ class TicketAtendimento extends Model
             'objetivos_cumpridos'   => 'array',
             'aguardando_orientacao_em' => 'datetime',
             'mensagem_espera_enviada'  => 'boolean',
+            'tentativas_envio_falhas' => 'integer',
         ];
     }
 
