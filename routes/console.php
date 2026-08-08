@@ -42,6 +42,12 @@ Schedule::command('conversas:reassumir-agente')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/reassumir-agente.log'));
 
+// A cada 5 min — Expira pausas de dúvida (Regra 2) não respondidas a tempo
+Schedule::command('conversas:expirar-pausa-orientacao')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/expirar-pausa-orientacao.log'));
+
 // A cada 15 min — Alerta tickets travados além do tempo máximo por coluna (Regra 3/12)
 Schedule::command('kanban:monitorar')
     ->everyFifteenMinutes()

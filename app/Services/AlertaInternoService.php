@@ -22,4 +22,24 @@ class AlertaInternoService
             'conteudo'  => $conteudo,
         ]);
     }
+
+    /**
+     * Bloco 5 — fecha o alerta de dúvida pendente (tipo 'duvida_ia', sem
+     * resposta ainda) de um ticket, sem exigir uma resposta real do humano.
+     * Usado quando a pausa termina por outro motivo que não uma orientação
+     * de verdade: timeout (ExpirarPausaOrientacao) ou mudança de coluna
+     * (TicketAtendimento::updating()). Mesma query que KanbanController::orientar()
+     * já usa pra achar o alerta certo. Sem-efeito se não houver alerta
+     * pendente (idempotente — seguro chamar mesmo sem ter certeza que existe).
+     */
+    public function fecharDuvidaPendente(int $tenantId, int $ticketId, string $motivo): void
+    {
+        AlertaInterno::where('tenant_id', $tenantId)
+            ->where('ticket_id', $ticketId)
+            ->where('tipo', 'duvida_ia')
+            ->whereNull('resposta')
+            ->latest('id')
+            ->first()
+            ?->update(['resposta' => $motivo, 'respondido_em' => now()]);
+    }
 }
