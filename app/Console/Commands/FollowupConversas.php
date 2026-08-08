@@ -142,20 +142,46 @@ class FollowupConversas extends Command
                         ->find($row->id);
 
                     if ($ticket) {
-                        $this->line("  ↺ [estágio {$estagioAlvo}] #{$ticket->id} — {$ticket->contato?->nome}");
+                        // Bloco 5 — depois de 3 falhas seguidas de envio (canal
+                        // recusando, ex: janela expirada), para de chamar a IA
+                        // pra esse ticket nesse ciclo e alerta uma vez só.
+                        if ($ticket->tentativas_envio_falhas >= 3) {
+                            $this->line("  ⚠ [envio travado] #{$ticket->id} — {$ticket->contato?->nome}");
 
-                        if (! $dry) {
-                            try {
-                                $respostaEnviada = $sdr->responder($ticket, gatilho: "estagio_{$estagioAlvo}");
-                                if ($respostaEnviada !== null) {
-                                    $ticket->update(['followup_estagio_enviado' => $estagioAlvo]);
-                                    $estagiosDisparados[(string) $estagioAlvo]++;
-                                    $enviados++;
+                            if (! $dry && $ticket->tentativas_envio_falhas === 3) {
+                                try {
+                                    app(\App\Services\AlertaInternoService::class)->criar(
+                                        $ticket->tenant_id,
+                                        'envio_falhou',
+                                        'Não consegui entregar a mensagem',
+                                        'O canal recusou o envio 3 vezes seguidas (ex: janela de conversa expirada). Parei de tentar automaticamente — confira o ticket.',
+                                        $ticket->id,
+                                    );
+                                    // Sobe pra 4 só pra não repetir o alerta no próximo ciclo
+                                    // sem mexer no contador real de falhas do envio em si.
+                                    $ticket->increment('tentativas_envio_falhas');
+                                } catch (\Exception $e) {
+                                    Log::warning('FollowupConversas: erro ao alertar envio travado', [
+                                        'ticket_id' => $ticket->id, 'erro' => $e->getMessage(),
+                                    ]);
                                 }
-                            } catch (\Exception $e) {
-                                Log::warning('FollowupConversas: erro no estágio', [
-                                    'ticket_id' => $row->id, 'estagio' => $estagioAlvo, 'erro' => $e->getMessage(),
-                                ]);
+                            }
+                        } else {
+                            $this->line("  ↺ [estágio {$estagioAlvo}] #{$ticket->id} — {$ticket->contato?->nome}");
+
+                            if (! $dry) {
+                                try {
+                                    $respostaEnviada = $sdr->responder($ticket, gatilho: "estagio_{$estagioAlvo}");
+                                    if ($respostaEnviada !== null) {
+                                        $ticket->update(['followup_estagio_enviado' => $estagioAlvo]);
+                                        $estagiosDisparados[(string) $estagioAlvo]++;
+                                        $enviados++;
+                                    }
+                                } catch (\Exception $e) {
+                                    Log::warning('FollowupConversas: erro no estágio', [
+                                        'ticket_id' => $row->id, 'estagio' => $estagioAlvo, 'erro' => $e->getMessage(),
+                                    ]);
+                                }
                             }
                         }
                     }

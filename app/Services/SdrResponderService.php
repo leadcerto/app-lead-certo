@@ -183,7 +183,16 @@ class SdrResponderService
                     'ticket_id' => $ticket->id, 'canal_id' => $canal->id,
                 ]);
 
+                // Bloco 5 — conta falhas seguidas pra dar um teto de tentativas
+                // (ver FollowupConversas, que decide quando parar e alertar).
+                $ticket->increment('tentativas_envio_falhas');
+
                 return null;
+            }
+
+            // Bloco 5 — envio confirmado, zera o contador de falhas seguidas.
+            if ($ticket->tentativas_envio_falhas > 0) {
+                $ticket->update(['tentativas_envio_falhas' => 0]);
             }
         } else {
             Log::warning('SdrResponder: sem canal ou telefone, mensagem não enviada', [

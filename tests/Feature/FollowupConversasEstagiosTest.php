@@ -182,4 +182,56 @@ class FollowupConversasEstagiosTest extends TestCase
 
         $this->assertSame(0, $ticket->fresh()->followup_estagio_enviado);
     }
+
+    public function test_para_de_tentar_apos_3_falhas_seguidas_e_alerta_uma_vez(): void
+    {
+        $ticket = $this->criarTicketComUltimaMensagemHaXMinutos(90);
+        $ticket->update(['tentativas_envio_falhas' => 3]);
+
+        $this->mock(SdrResponderService::class, function ($mock) {
+            $mock->shouldReceive('responder')->never();
+        });
+
+        $this->artisan('conversas:followup')->assertExitCode(0);
+
+        $this->assertSame(0, $ticket->fresh()->followup_estagio_enviado);
+        $this->assertDatabaseHas('alertas_internos', ['ticket_id' => $ticket->id, 'tipo' => 'envio_falhou']);
+        $this->assertSame(
+            1,
+            \App\Models\AlertaInterno::where('ticket_id', $ticket->id)->where('tipo', 'envio_falhou')->count()
+        );
+    }
+
+    public function test_nao_repete_alerta_envio_falhou_na_proxima_execucao(): void
+    {
+        $ticket = $this->criarTicketComUltimaMensagemHaXMinutos(90);
+        $ticket->update(['tentativas_envio_falhas' => 3]);
+
+        $this->mock(SdrResponderService::class, function ($mock) {
+            $mock->shouldReceive('responder')->never();
+        });
+
+        $this->artisan('conversas:followup')->assertExitCode(0);
+        $this->artisan('conversas:followup')->assertExitCode(0);
+
+        $this->assertSame(
+            1,
+            \App\Models\AlertaInterno::where('ticket_id', $ticket->id)->where('tipo', 'envio_falhou')->count()
+        );
+    }
+
+    public function test_menos_de_3_tentativas_ainda_chama_a_ia_normalmente(): void
+    {
+        $ticket = $this->criarTicketComUltimaMensagemHaXMinutos(90);
+        $ticket->update(['tentativas_envio_falhas' => 2]);
+
+        $this->mock(SdrResponderService::class, function ($mock) {
+            $mock->shouldReceive('responder')->once()->andReturn('ok');
+        });
+
+        $this->artisan('conversas:followup')->assertExitCode(0);
+
+        $this->assertSame(1, $ticket->fresh()->followup_estagio_enviado);
+        $this->assertDatabaseMissing('alertas_internos', ['ticket_id' => $ticket->id, 'tipo' => 'envio_falhou']);
+    }
 }

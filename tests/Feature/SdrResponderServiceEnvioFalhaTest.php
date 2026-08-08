@@ -71,4 +71,72 @@ class SdrResponderServiceEnvioFalhaTest extends TestCase
             ->withArgs(fn ($message) => str_contains($message, 'resposta não persistida'))
             ->once();
     }
+
+    public function test_incrementa_tentativas_envio_falhas_quando_canal_recusa(): void
+    {
+        Http::fake([
+            'openrouter.ai/*' => Http::response([
+                'choices' => [['message' => ['content' => 'Aqui está sua resposta.']]],
+            ], 200),
+        ]);
+
+        $tenant  = Tenant::factory()->create();
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '123456'],
+        ]);
+        $persona = SdrPersona::create([
+            'tenant_id' => $tenant->id, 'nome_interno' => 'padrao', 'nome_display' => 'Joao',
+            'system_prompt' => 'Você é um atendente.', 'ativo' => true, 'is_default' => true, 'tier' => 'simples',
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511999999999']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot', 'etapa_ia' => 'etapa_1',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'sdr_persona_id' => $persona->id,
+            'janela_expira_em' => now()->subHour(),
+        ]);
+
+        app(SdrResponderService::class)->responder($ticket);
+
+        $this->assertSame(1, $ticket->fresh()->tentativas_envio_falhas);
+    }
+
+    public function test_zera_tentativas_envio_falhas_quando_envio_confirma(): void
+    {
+        Http::fake([
+            'openrouter.ai/*' => Http::response([
+                'choices' => [['message' => ['content' => 'Aqui está sua resposta.']]],
+            ], 200),
+            // CovercutChannelService::enviar() faz POST em "{base_url}/messages/send"
+            // (app/Services/Canais/CovercutChannelService.php:108) — qualquer 2xx aqui
+            // já satisfaz $response->successful().
+            '*/messages/send' => Http::response(['id' => 'wamid.123'], 200),
+        ]);
+
+        $tenant  = Tenant::factory()->create();
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '123456'],
+        ]);
+        $persona = SdrPersona::create([
+            'tenant_id' => $tenant->id, 'nome_interno' => 'padrao', 'nome_display' => 'Joao',
+            'system_prompt' => 'Você é um atendente.', 'ativo' => true, 'is_default' => true, 'tier' => 'simples',
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511999999999']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot', 'etapa_ia' => 'etapa_1',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'sdr_persona_id' => $persona->id,
+            'tentativas_envio_falhas' => 2,
+        ]);
+
+        app(SdrResponderService::class)->responder($ticket);
+
+        $this->assertSame(0, $ticket->fresh()->tentativas_envio_falhas);
+    }
 }
