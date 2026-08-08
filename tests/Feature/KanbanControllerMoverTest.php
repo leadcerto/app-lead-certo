@@ -139,4 +139,24 @@ class KanbanControllerMoverTest extends TestCase
         $response->assertStatus(422);
         $this->assertSame('lead_novo', $ticket->fresh()->coluna_kanban);
     }
+
+    public function test_mover_manualmente_grava_origem_humano_no_historico(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $user    = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $contato = Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'lead_novo', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $this->actingAs($user)->postJson("/api/painel/kanban/ticket/{$ticket->id}/mover", [
+            'coluna' => 'em_atendimento',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('kanban_coluna_historico', [
+            'ticket_id' => $ticket->id, 'coluna' => 'em_atendimento', 'origem' => 'humano',
+        ]);
+    }
 }

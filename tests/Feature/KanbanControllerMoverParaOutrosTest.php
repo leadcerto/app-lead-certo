@@ -89,4 +89,22 @@ class KanbanControllerMoverParaOutrosTest extends TestCase
         $this->assertSame('bot', $ticket->agente_responsavel);
         $this->assertNull($ticket->vendedor_id);
     }
+
+    public function test_mover_para_outros_grava_origem_humano_no_historico(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $user    = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $contato = Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'lead_novo', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $this->actingAs($user)->postJson("/api/painel/kanban/ticket/{$ticket->id}/outros")->assertOk();
+
+        $this->assertDatabaseHas('kanban_coluna_historico', [
+            'ticket_id' => $ticket->id, 'coluna' => 'outros', 'origem' => 'humano',
+        ]);
+    }
 }

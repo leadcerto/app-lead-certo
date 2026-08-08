@@ -414,6 +414,9 @@ class KanbanController extends Controller
             $updates['status'] = 'aberto';
         }
 
+        // Regra 13 (Bloco 4) — este é um dos dois únicos endpoints de
+        // movimentação manual do sistema (drag-and-drop do board).
+        $model->origemMudancaColuna = 'humano';
         $model->update($updates);
 
         // Ao entrar em aguardando_lead: dispara sequência de follow-up
@@ -547,6 +550,8 @@ class KanbanController extends Controller
 
         $model = TicketAtendimento::findOrFail($ticket);
 
+        // Regra 13 (Bloco 4) — segundo dos dois endpoints de movimentação manual.
+        $model->origemMudancaColuna = 'humano';
         $model->update([
             'coluna_kanban'      => $colunaOutros,
             'agente_responsavel' => 'humano',
