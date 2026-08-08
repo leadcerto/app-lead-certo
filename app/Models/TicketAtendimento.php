@@ -40,7 +40,12 @@ class TicketAtendimento extends Model
         static::updated(function (TicketAtendimento $ticket) {
             if ($ticket->wasChanged('coluna_kanban')) {
                 $colunaAnterior = $ticket->getOriginal('coluna_kanban');
-                $origem = $ticket->origemMudancaColuna ?? 'ia';
+                // Bloco 5 — default agora é 'sistema' (política automática:
+                // auto-mover, webhook, botões), não 'ia'. 'ia' só é gravado
+                // quando SdrResponderService marca explicitamente, no único
+                // ponto onde a própria IA decide mover a coluna em tempo
+                // real (ver SdrResponderService.php, token de movimento).
+                $origem = $ticket->origemMudancaColuna ?? 'sistema';
 
                 KanbanColunaHistorico::create([
                     'tenant_id'       => $ticket->tenant_id,
@@ -111,8 +116,9 @@ class TicketAtendimento extends Model
      * Covercut) volta do Encerramento pra uma coluna bem anterior. Contar
      * esses saltos geraria ruído puro em operação normal, contrariando a
      * decisão de produto de só alertar o que é de fato incomum. Essa
-     * exclusão vale só pro cálculo de $pulou — uma movimentação manual
-     * (origem 'humano') continua alertando independente do papel envolvido.
+     * exclusão vale só pra origem 'sistema' (Bloco 5) — origem 'ia'
+     * (decisão real da própria IA em tempo real, via token) e origem
+     * 'humano' continuam alertando independente do papel envolvido.
      */
     private static function alertarSeMigracaoAtipica(self $ticket, ?string $colunaAnterior, string $origem): void
     {
@@ -130,8 +136,13 @@ class TicketAtendimento extends Model
 
         $pulou = $ordemAntes !== null && $ordemDepois !== null
             && abs($ordemDepois - $ordemAntes) > 1
-            && ! $papelForaDaOrdem($papelAntes)
-            && ! $papelForaDaOrdem($papelDepois);
+            // Bloco 5 — a exclusão de colunas fora da ordem normal (Encerramento/
+            // TransferenciaHumana) vale só quando a origem é 'sistema' (política
+            // automática de alta frequência: auto-mover, webhook, botões).
+            // Origem 'ia' (decisão real da própria IA em tempo real, via token)
+            // volta a contar mesmo envolvendo essas colunas — é raro e vale o
+            // glance de auditoria, mesmo que a maioria das vezes seja legítimo.
+            && ! ($origem === 'sistema' && ($papelForaDaOrdem($papelAntes) || $papelForaDaOrdem($papelDepois)));
 
         if ($origem !== 'humano' && ! $pulou) {
             return;

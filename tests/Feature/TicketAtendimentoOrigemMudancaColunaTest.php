@@ -24,15 +24,18 @@ class TicketAtendimentoOrigemMudancaColunaTest extends TestCase
         ]);
     }
 
-    public function test_mudanca_de_coluna_sem_marcar_origem_grava_ia_por_padrao(): void
+    public function test_mudanca_de_coluna_sem_marcar_origem_grava_sistema_por_padrao(): void
     {
         $tenant = Tenant::factory()->create();
         $ticket = $this->criarTicket($tenant);
 
+        // Bloco 5 — default mudou de 'ia' pra 'sistema': update direto, sem
+        // passar por SdrResponderService, é política automática, não uma
+        // decisão real da IA em tempo real.
         $ticket->update(['coluna_kanban' => 'em_atendimento']);
 
         $this->assertDatabaseHas('kanban_coluna_historico', [
-            'ticket_id' => $ticket->id, 'coluna' => 'em_atendimento', 'origem' => 'ia',
+            'ticket_id' => $ticket->id, 'coluna' => 'em_atendimento', 'origem' => 'sistema',
         ]);
     }
 
@@ -80,11 +83,12 @@ class TicketAtendimentoOrigemMudancaColunaTest extends TestCase
         $this->assertNull(\App\Models\KanbanColuna::ordemDe($tenant->id, 'nao_existe'));
     }
 
-    public function test_movimento_adjacente_pela_ia_nao_gera_alerta(): void
+    public function test_movimento_adjacente_automatico_nao_gera_alerta(): void
     {
         $tenant = Tenant::factory()->create();
         $ticket = $this->criarTicket($tenant, 'lead_novo'); // ordem 1
 
+        // Bloco 5 — origem não marcada, cai no default 'sistema'.
         $ticket->update(['coluna_kanban' => 'em_atendimento']); // ordem 2, adjacente
 
         $this->assertDatabaseMissing('alertas_internos', ['ticket_id' => $ticket->id]);
@@ -103,11 +107,14 @@ class TicketAtendimentoOrigemMudancaColunaTest extends TestCase
         ]);
     }
 
-    public function test_salto_de_mais_de_uma_coluna_gera_alerta_mesmo_pela_ia(): void
+    public function test_salto_de_mais_de_uma_coluna_gera_alerta_mesmo_automatico(): void
     {
         $tenant = Tenant::factory()->create();
         $ticket = $this->criarTicket($tenant, 'lead_novo'); // ordem 1
 
+        // Bloco 5 — origem não marcada, cai no default 'sistema'; mesmo assim
+        // alerta, porque nenhuma das colunas envolvidas é Encerramento/
+        // TransferenciaHumana (a exclusão do guardrail não se aplica aqui).
         $ticket->update(['coluna_kanban' => 'pagamento']); // ordem 5, pula 3 colunas
 
         $this->assertDatabaseHas('alertas_internos', [
@@ -148,8 +155,8 @@ class TicketAtendimentoOrigemMudancaColunaTest extends TestCase
         $tenant = Tenant::factory()->create();
         $ticket = $this->criarTicket($tenant, 'aguardando_lead'); // ordem 4
 
-        // Simula FollowupConversas: encerramento automático (origem 'ia' por
-        // padrão), pulando direto pra "encerrado" (ordem 7, papel Encerramento).
+        // Simula FollowupConversas: encerramento automático (origem 'sistema'
+        // por padrão), pulando direto pra "encerrado" (ordem 7, papel Encerramento).
         $ticket->update(['coluna_kanban' => 'encerrado']);
 
         $this->assertDatabaseMissing('alertas_internos', ['ticket_id' => $ticket->id]);
@@ -161,7 +168,7 @@ class TicketAtendimentoOrigemMudancaColunaTest extends TestCase
         $ticket = $this->criarTicket($tenant, 'encerrado'); // ordem 7
 
         // Simula webhook (Uazapi/Covercut) reabrindo o ticket de volta pra uma
-        // coluna bem anterior, automaticamente (origem 'ia' por padrão).
+        // coluna bem anterior, automaticamente (origem 'sistema' por padrão).
         $ticket->update(['coluna_kanban' => 'em_atendimento']); // ordem 2
 
         $this->assertDatabaseMissing('alertas_internos', ['ticket_id' => $ticket->id]);
@@ -222,5 +229,84 @@ class TicketAtendimentoOrigemMudancaColunaTest extends TestCase
         $ticket->update(['coluna_kanban' => 'em_atendimento']);
 
         $this->assertSame(0, \App\Models\AlertaInterno::where('ticket_id', $ticket->id)->count());
+    }
+
+    public function test_movimento_automatico_sem_origem_marcada_grava_sistema(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $ticket = $this->criarTicket($tenant);
+
+        // Simula um caminho automático (ex: FollowupConversas, webhook) —
+        // nenhum código chama origemMudancaColuna, então cai no novo default.
+        $ticket->update(['coluna_kanban' => 'em_atendimento']);
+
+        $this->assertDatabaseHas('kanban_coluna_historico', [
+            'ticket_id' => $ticket->id, 'coluna' => 'em_atendimento', 'origem' => 'sistema',
+        ]);
+    }
+
+    public function test_token_de_coluna_no_sdr_responder_service_grava_origem_ia(): void
+    {
+        \Illuminate\Support\Facades\Http::fake([
+            'openrouter.ai/*' => \Illuminate\Support\Facades\Http::response([
+                'choices' => [['message' => ['content' => 'Combinado! [PAGAMENTO]']]],
+            ], 200),
+        ]);
+
+        $tenant  = Tenant::factory()->create();
+        $persona = \App\Models\SdrPersona::create([
+            'tenant_id' => $tenant->id, 'nome_interno' => 'padrao', 'nome_display' => 'Joao',
+            'system_prompt' => 'Você é um atendente.', 'ativo' => true, 'is_default' => true, 'tier' => 'simples',
+        ]);
+        $contato = \App\Models\Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'aguardando_orcamento', 'agente_responsavel' => 'bot', 'etapa_ia' => 'etapa_1',
+            'status' => 'aberto', 'aberto_em' => now(), 'sdr_persona_id' => $persona->id,
+        ]);
+
+        app(\App\Services\SdrResponderService::class)->responder($ticket);
+
+        $this->assertDatabaseHas('kanban_coluna_historico', [
+            'ticket_id' => $ticket->id, 'coluna' => 'pagamento', 'origem' => 'ia',
+        ]);
+    }
+
+    public function test_sistema_pulando_para_encerrado_continua_sem_alerta(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $ticket = $this->criarTicket($tenant, 'lead_novo'); // ordem 1
+
+        // origemMudancaColuna não setada — cai em 'sistema' (ex: auto-mover).
+        $ticket->update(['coluna_kanban' => 'encerrado']); // papel Encerramento, salto grande
+
+        $this->assertDatabaseMissing('alertas_internos', ['ticket_id' => $ticket->id, 'tipo' => 'migracao_atipica']);
+    }
+
+    public function test_ia_via_token_pulando_para_encerrado_agora_alerta(): void
+    {
+        \Illuminate\Support\Facades\Http::fake([
+            'openrouter.ai/*' => \Illuminate\Support\Facades\Http::response([
+                'choices' => [['message' => ['content' => 'Tudo bem, até mais! [ENCERRADO]']]],
+            ], 200),
+        ]);
+
+        $tenant  = Tenant::factory()->create();
+        $persona = \App\Models\SdrPersona::create([
+            'tenant_id' => $tenant->id, 'nome_interno' => 'padrao', 'nome_display' => 'Joao',
+            'system_prompt' => 'Você é um atendente.', 'ativo' => true, 'is_default' => true, 'tier' => 'simples',
+        ]);
+        $contato = \App\Models\Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'lead_novo', 'agente_responsavel' => 'bot', 'etapa_ia' => 'etapa_1',
+            'status' => 'aberto', 'aberto_em' => now(), 'sdr_persona_id' => $persona->id,
+        ]);
+
+        app(\App\Services\SdrResponderService::class)->responder($ticket);
+
+        $this->assertDatabaseHas('alertas_internos', [
+            'ticket_id' => $ticket->id, 'tipo' => 'migracao_atipica',
+        ]);
     }
 }

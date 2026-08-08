@@ -119,6 +119,11 @@ class SdrResponderService
                 // (TicketAtendimento::saving) sempre que coluna_kanban muda e este
                 // update não o define explicitamente — ver Achado 2 da revisão final.
 
+                // Bloco 5 — este é o único ponto do sistema onde a própria IA
+                // decide mover a coluna em tempo real (não política automática
+                // de outro comando/webhook) — marca 'ia' explicitamente pro
+                // guardrail de salto (Regra 13) saber diferenciar os dois casos.
+                $ticket->origemMudancaColuna = 'ia';
                 $ticket->update($updates);
                 Log::info("SdrResponder: → {$chave} via token {$token}", ['ticket_id' => $ticket->id]);
                 $moveu = true;
