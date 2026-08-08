@@ -89,7 +89,97 @@ class AlertaInternoControllerTest extends TestCase
         $tenant = Tenant::factory()->create();
         $user   = $this->criarUsuario($tenant);
         for ($i = 0; $i < 25; $i++) {
-            AlertaInterno::create(['tenant_id' => $tenant->id, 'tipo' => 'duvida_ia', 'titulo' => "Alerta {$i}", 'conteudo' => 'x']);
+            AlertaInterno::create(['tenant_id' => $tenant->id, 'tipo' => 'ticket_travado', 'titulo' => "Alerta {$i}", 'conteudo' => 'x']);
+        }
+
+        $response = $this->actingAs($user)->getJson('/api/painel/alertas');
+
+        $response->assertJsonCount(20, 'data');
+    }
+
+    public function test_duvidas_nao_respondidas_aparecem_primeiro(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = $this->criarUsuario($tenant);
+
+        // 3 alertas de outro tipo, mais recentes que a dúvida
+        for ($i = 0; $i < 3; $i++) {
+            AlertaInterno::create([
+                'tenant_id' => $tenant->id, 'tipo' => 'ticket_travado',
+                'titulo' => "Travado {$i}", 'conteudo' => 'x',
+            ]);
+        }
+        $duvida = AlertaInterno::create([
+            'tenant_id' => $tenant->id, 'tipo' => 'duvida_ia',
+            'titulo' => 'Dúvida antiga', 'conteudo' => 'x',
+            'created_at' => now()->subDay(),
+        ]);
+
+        $response = $this->actingAs($user)->getJson('/api/painel/alertas');
+
+        $response->assertJsonPath('data.0.id', $duvida->id);
+    }
+
+    public function test_duvida_pendente_nunca_sai_da_lista_por_volume_de_outros_tipos(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = $this->criarUsuario($tenant);
+
+        $duvida = AlertaInterno::create([
+            'tenant_id' => $tenant->id, 'tipo' => 'duvida_ia',
+            'titulo' => 'Dúvida', 'conteudo' => 'x', 'created_at' => now()->subDays(2),
+        ]);
+        for ($i = 0; $i < 25; $i++) {
+            AlertaInterno::create([
+                'tenant_id' => $tenant->id, 'tipo' => 'ticket_travado',
+                'titulo' => "Travado {$i}", 'conteudo' => 'x',
+            ]);
+        }
+
+        $response = $this->actingAs($user)->getJson('/api/painel/alertas');
+
+        $ids = collect($response->json('data'))->pluck('id');
+        $this->assertTrue($ids->contains($duvida->id));
+        $this->assertSame($duvida->id, $ids->first());
+    }
+
+    public function test_duvida_ja_respondida_nao_conta_como_pendente(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = $this->criarUsuario($tenant);
+
+        AlertaInterno::create([
+            'tenant_id' => $tenant->id, 'tipo' => 'duvida_ia',
+            'titulo' => 'Dúvida respondida', 'conteudo' => 'x',
+            'resposta' => 'já respondida', 'respondido_em' => now(),
+            'created_at' => now()->subDay(),
+        ]);
+        $recente = AlertaInterno::create([
+            'tenant_id' => $tenant->id, 'tipo' => 'reassuncao_automatica',
+            'titulo' => 'Recente', 'conteudo' => 'x',
+        ]);
+
+        $response = $this->actingAs($user)->getJson('/api/painel/alertas');
+
+        $response->assertJsonPath('data.0.id', $recente->id);
+    }
+
+    public function test_lista_completa_20_com_multiplas_duvidas_pendentes(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = $this->criarUsuario($tenant);
+
+        for ($i = 0; $i < 5; $i++) {
+            AlertaInterno::create([
+                'tenant_id' => $tenant->id, 'tipo' => 'duvida_ia',
+                'titulo' => "Dúvida {$i}", 'conteudo' => 'x',
+            ]);
+        }
+        for ($i = 0; $i < 20; $i++) {
+            AlertaInterno::create([
+                'tenant_id' => $tenant->id, 'tipo' => 'ticket_travado',
+                'titulo' => "Travado {$i}", 'conteudo' => 'x',
+            ]);
         }
 
         $response = $this->actingAs($user)->getJson('/api/painel/alertas');
