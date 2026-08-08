@@ -283,7 +283,7 @@ class TicketAtendimentoOrigemMudancaColunaTest extends TestCase
         $this->assertDatabaseMissing('alertas_internos', ['ticket_id' => $ticket->id, 'tipo' => 'migracao_atipica']);
     }
 
-    public function test_ia_via_token_pulando_para_encerrado_agora_alerta(): void
+    public function test_ia_fecha_com_objetivos_pendentes_gera_alerta(): void
     {
         \Illuminate\Support\Facades\Http::fake([
             'openrouter.ai/*' => \Illuminate\Support\Facades\Http::response([
@@ -296,6 +296,71 @@ class TicketAtendimentoOrigemMudancaColunaTest extends TestCase
             'tenant_id' => $tenant->id, 'nome_interno' => 'padrao', 'nome_display' => 'Joao',
             'system_prompt' => 'Você é um atendente.', 'ativo' => true, 'is_default' => true, 'tier' => 'simples',
         ]);
+        \App\Models\KanbanColunaObjetivo::create([
+            'tenant_id' => $tenant->id, 'coluna_kanban' => 'lead_novo',
+            'texto' => 'Coletar nome do lead', 'ativo' => true, 'ordem' => 1,
+        ]);
+        $contato = \App\Models\Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'lead_novo', 'agente_responsavel' => 'bot', 'etapa_ia' => 'etapa_1',
+            'status' => 'aberto', 'aberto_em' => now(), 'sdr_persona_id' => $persona->id,
+            'objetivos_cumpridos' => [], // objetivo configurado, mas não marcado
+        ]);
+
+        app(\App\Services\SdrResponderService::class)->responder($ticket);
+
+        $this->assertDatabaseHas('alertas_internos', [
+            'ticket_id' => $ticket->id, 'tipo' => 'migracao_atipica',
+        ]);
+    }
+
+    public function test_ia_fecha_com_objetivos_todos_cumpridos_nao_gera_alerta(): void
+    {
+        \Illuminate\Support\Facades\Http::fake([
+            'openrouter.ai/*' => \Illuminate\Support\Facades\Http::response([
+                'choices' => [['message' => ['content' => 'Tudo bem, até mais! [ENCERRADO]']]],
+            ], 200),
+        ]);
+
+        $tenant  = Tenant::factory()->create();
+        $persona = \App\Models\SdrPersona::create([
+            'tenant_id' => $tenant->id, 'nome_interno' => 'padrao', 'nome_display' => 'Joao',
+            'system_prompt' => 'Você é um atendente.', 'ativo' => true, 'is_default' => true, 'tier' => 'simples',
+        ]);
+        $objetivo = \App\Models\KanbanColunaObjetivo::create([
+            'tenant_id' => $tenant->id, 'coluna_kanban' => 'lead_novo',
+            'texto' => 'Coletar nome do lead', 'ativo' => true, 'ordem' => 1,
+        ]);
+        $contato = \App\Models\Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'lead_novo', 'agente_responsavel' => 'bot', 'etapa_ia' => 'etapa_1',
+            'status' => 'aberto', 'aberto_em' => now(), 'sdr_persona_id' => $persona->id,
+            'objetivos_cumpridos' => [$objetivo->id], // já cumprido
+        ]);
+
+        app(\App\Services\SdrResponderService::class)->responder($ticket);
+
+        $this->assertDatabaseMissing('alertas_internos', [
+            'ticket_id' => $ticket->id, 'tipo' => 'migracao_atipica',
+        ]);
+    }
+
+    public function test_ia_fecha_coluna_sem_checklist_configurado_nao_gera_alerta(): void
+    {
+        \Illuminate\Support\Facades\Http::fake([
+            'openrouter.ai/*' => \Illuminate\Support\Facades\Http::response([
+                'choices' => [['message' => ['content' => 'Tudo bem, até mais! [ENCERRADO]']]],
+            ], 200),
+        ]);
+
+        $tenant  = Tenant::factory()->create();
+        $persona = \App\Models\SdrPersona::create([
+            'tenant_id' => $tenant->id, 'nome_interno' => 'padrao', 'nome_display' => 'Joao',
+            'system_prompt' => 'Você é um atendente.', 'ativo' => true, 'is_default' => true, 'tier' => 'simples',
+        ]);
+        // Nenhum KanbanColunaObjetivo cadastrado pra 'lead_novo'.
         $contato = \App\Models\Contato::factory()->create();
         $ticket  = TicketAtendimento::create([
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
@@ -305,7 +370,7 @@ class TicketAtendimentoOrigemMudancaColunaTest extends TestCase
 
         app(\App\Services\SdrResponderService::class)->responder($ticket);
 
-        $this->assertDatabaseHas('alertas_internos', [
+        $this->assertDatabaseMissing('alertas_internos', [
             'ticket_id' => $ticket->id, 'tipo' => 'migracao_atipica',
         ]);
     }

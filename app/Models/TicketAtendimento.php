@@ -94,6 +94,40 @@ class TicketAtendimento extends Model
     }
 
     /**
+     * Bloco 5 — decide se a IA encerrou a coluna anterior com o checklist de
+     * objetivos completo. Usado só pra suprimir o alerta de migração atípica
+     * em fechamentos rotineiros da IA (ver alertarSeMigracaoAtipica()) — um
+     * fechamento com objetivos pendentes é o caso que a Regra 13 realmente
+     * quer sinalizar, não o mero fato de ter fechado via token.
+     *
+     * Por essa altura (dentro de updated(), disparado pelo mesmo ->update()
+     * que já rodou o hook updating() acima), $ticket->objetivos_cumpridos já
+     * foi zerado pelo reset automático de coluna — por isso lê getOriginal(),
+     * que ainda reflete o que estava marcado ANTES desta mudança de coluna.
+     *
+     * Coluna sem nenhum objetivo configurado (Frente 1 da base de
+     * conhecimento é opt-in) não tem o que julgar como incompleto — decisão
+     * de produto confirmada: trata como cumprido, não alerta.
+     */
+    private static function objetivosCumpridosAoEncerrar(self $ticket, string $colunaAnterior): bool
+    {
+        $idsExigidos = \App\Models\KanbanColunaObjetivo::withoutGlobalScopes()
+            ->where('tenant_id', $ticket->tenant_id)
+            ->where('coluna_kanban', $colunaAnterior)
+            ->where('ativo', true)
+            ->pluck('id')
+            ->all();
+
+        if (empty($idsExigidos)) {
+            return true;
+        }
+
+        $cumpridos = $ticket->getOriginal('objetivos_cumpridos') ?? [];
+
+        return empty(array_diff($idsExigidos, $cumpridos));
+    }
+
+    /**
      * Regra 13 (Bloco 4) — migração atípica: movida manualmente por um
      * humano e/ou pulando mais de uma posição na ordem das colunas. Só
      * alerta, nunca bloqueia a movimentação (decisão de produto fechada —
@@ -116,9 +150,13 @@ class TicketAtendimento extends Model
      * Covercut) volta do Encerramento pra uma coluna bem anterior. Contar
      * esses saltos geraria ruído puro em operação normal, contrariando a
      * decisão de produto de só alertar o que é de fato incomum. Essa
-     * exclusão vale só pra origem 'sistema' (Bloco 5) — origem 'ia'
-     * (decisão real da própria IA em tempo real, via token) e origem
-     * 'humano' continuam alertando independente do papel envolvido.
+     * exclusão vale só pra origem 'sistema' (Bloco 5). Origem 'ia' fechando
+     * pra Encerramento via token só é suprimida quando o checklist de
+     * objetivos da coluna anterior estava completo (ver
+     * objetivosCumpridosAoEncerrar()) — um fechamento com objetivos
+     * pendentes é o "engano" real que a Regra 13 quer sinalizar, não o mero
+     * fato de ter fechado. Origem 'humano' continua alertando independente
+     * do papel envolvido.
      */
     private static function alertarSeMigracaoAtipica(self $ticket, ?string $colunaAnterior, string $origem): void
     {
@@ -134,15 +172,22 @@ class TicketAtendimento extends Model
         $papelForaDaOrdem = fn (?\App\Enums\PapelColunaKanban $papel) => $papel === \App\Enums\PapelColunaKanban::Encerramento
             || $papel === \App\Enums\PapelColunaKanban::TransferenciaHumana;
 
+        // Bloco 5 — a supressão de salto vira uma decisão por origem:
+        // 'sistema' continua suprimido perto de Encerramento/TransferenciaHumana
+        // (rotina de auto-fechamento/reabertura, ruído puro). 'ia' fechando
+        // via token pra Encerramento só é suprimido se o checklist de
+        // objetivos da coluna anterior estava completo — fechamento incompleto
+        // é o "engano" real que vale alertar.
+        $saltoSuprimido = match ($origem) {
+            'sistema' => $papelForaDaOrdem($papelAntes) || $papelForaDaOrdem($papelDepois),
+            'ia'      => $papelDepois === \App\Enums\PapelColunaKanban::Encerramento
+                && static::objetivosCumpridosAoEncerrar($ticket, $colunaAnterior),
+            default   => false,
+        };
+
         $pulou = $ordemAntes !== null && $ordemDepois !== null
             && abs($ordemDepois - $ordemAntes) > 1
-            // Bloco 5 — a exclusão de colunas fora da ordem normal (Encerramento/
-            // TransferenciaHumana) vale só quando a origem é 'sistema' (política
-            // automática de alta frequência: auto-mover, webhook, botões).
-            // Origem 'ia' (decisão real da própria IA em tempo real, via token)
-            // volta a contar mesmo envolvendo essas colunas — é raro e vale o
-            // glance de auditoria, mesmo que a maioria das vezes seja legítimo.
-            && ! ($origem === 'sistema' && ($papelForaDaOrdem($papelAntes) || $papelForaDaOrdem($papelDepois)));
+            && ! $saltoSuprimido;
 
         if ($origem !== 'humano' && ! $pulou) {
             return;
