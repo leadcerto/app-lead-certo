@@ -42,6 +42,12 @@ Schedule::command('conversas:reassumir-agente')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/reassumir-agente.log'));
 
+// A cada 15 min — Alerta tickets travados além do tempo máximo por coluna (Regra 3/12)
+Schedule::command('kanban:monitorar')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/kanban-monitorar.log'));
+
 // 00:15 — Enriquece contatos com email, profissão e empresa extraídos das conversas via IA
 Schedule::command('contatos:enriquecer-conversas --limit=30')
     ->dailyAt('00:15')
