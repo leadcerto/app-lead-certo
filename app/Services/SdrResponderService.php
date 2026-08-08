@@ -190,7 +190,14 @@ class SdrResponderService
 
                 // Bloco 5 — conta falhas seguidas pra dar um teto de tentativas
                 // (ver FollowupConversas, que decide quando parar e alertar).
-                $ticket->increment('tentativas_envio_falhas');
+                // Capado em 3: sem isso, chamadas sem teto (ex: Follow-up curto
+                // 10min, que roda antes do ciclo de estágios avaliar o ticket)
+                // empurravam o contador além de 3 antes do FollowupConversas
+                // conseguir detectar a transição exata pra criar o alerta —
+                // o alerta nunca disparava na prática (achado da revisão final).
+                if ($ticket->tentativas_envio_falhas < 3) {
+                    $ticket->increment('tentativas_envio_falhas');
+                }
 
                 return null;
             }

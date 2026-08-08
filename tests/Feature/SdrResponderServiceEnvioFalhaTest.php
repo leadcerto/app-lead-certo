@@ -104,6 +104,51 @@ class SdrResponderServiceEnvioFalhaTest extends TestCase
         $this->assertSame(1, $ticket->fresh()->tentativas_envio_falhas);
     }
 
+    /**
+     * Achado Importante 1 da revisão final: sem teto, chamadas repetidas (ex:
+     * Follow-up curto 10min, que não tem checagem de limite nenhuma) empurravam
+     * o contador além de 3 antes do FollowupConversas conseguir detectar a
+     * transição exata pra criar o alerta 'envio_falhou' — o alerta nunca
+     * disparava na prática. O teto capa em 3 dentro do próprio
+     * SdrResponderService, então vale pra QUALQUER chamador.
+     */
+    public function test_tentativas_envio_falhas_fica_capado_em_tres(): void
+    {
+        Http::fake([
+            'openrouter.ai/*' => Http::response([
+                'choices' => [['message' => ['content' => 'Aqui está sua resposta.']]],
+            ], 200),
+        ]);
+
+        $tenant  = Tenant::factory()->create();
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '123456'],
+        ]);
+        $persona = SdrPersona::create([
+            'tenant_id' => $tenant->id, 'nome_interno' => 'padrao', 'nome_display' => 'Joao',
+            'system_prompt' => 'Você é um atendente.', 'ativo' => true, 'is_default' => true, 'tier' => 'simples',
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511999999999']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot', 'etapa_ia' => 'etapa_1',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'sdr_persona_id' => $persona->id,
+            'janela_expira_em' => now()->subHour(), // já expirou → bloqueio determinístico, todo envio falha
+        ]);
+
+        $sdr = app(SdrResponderService::class);
+
+        for ($i = 0; $i < 5; $i++) {
+            $sdr->responder($ticket);
+            $ticket->refresh();
+        }
+
+        $this->assertSame(3, $ticket->fresh()->tentativas_envio_falhas);
+    }
+
     public function test_zera_tentativas_envio_falhas_quando_envio_confirma(): void
     {
         Http::fake([
