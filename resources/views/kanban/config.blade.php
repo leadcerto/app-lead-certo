@@ -965,6 +965,22 @@
                                           class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"></textarea>
                             </div>
 
+                            <div class="mt-3 pt-3 border-t border-gray-100">
+                                <label class="text-xs font-semibold text-gray-500 mb-1 block">Tempo máximo de permanência (Regra 12)</label>
+                                <p class="text-xs text-gray-400 mb-2">
+                                    Se um ticket ficar nessa coluna além desse tempo, você recebe um alerta
+                                    interno (mesmo ícone dos outros alertas). Deixe em branco pra não monitorar.
+                                </p>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" min="1"
+                                           :value="tempoMaximoPermanenciaMinutos[col.key] ?? ''"
+                                           @input="tempoMaximoPermanenciaMinutos[col.key] = $event.target.value ? parseInt($event.target.value) : null; iaAlterado[col.key] = true"
+                                           class="w-20 text-xs border border-gray-300 rounded px-2 py-1"
+                                           placeholder="—">
+                                    <span class="text-xs text-gray-500">minutos</span>
+                                </div>
+                            </div>
+
                             {{-- Exclusão definitiva --}}
                             <div class="mt-3 pt-3 border-t border-gray-100">
                                 <label class="flex items-center gap-2 mb-2 cursor-pointer">
@@ -1440,6 +1456,10 @@ function kanbanConfig() {
         // Mensagem de espera durante orientação
         aguardandoOrientacaoMensagem: {},
 
+        // Tempo máximo de permanência (Regra 12) — minutos até o comando
+        // kanban:monitorar alertar que o ticket travou nessa coluna.
+        tempoMaximoPermanenciaMinutos: {},
+
         // Exclusão definitiva de tickets encerrados (por coluna)
         exclusaoDefinitivaAtivo: {},
         exclusaoDefinitivaDias: {},
@@ -1902,6 +1922,7 @@ function kanbanConfig() {
                 this.timeoutReassuncaoDelayUnidade[key] = tr.unidade;
 
                 this.aguardandoOrientacaoMensagem[key] = json.aguardando_orientacao_mensagem ?? '';
+                this.tempoMaximoPermanenciaMinutos[key] = json.tempo_maximo_permanencia_minutos ?? null;
             }
         },
 
@@ -1959,6 +1980,7 @@ function kanbanConfig() {
                 timeout_reassuncao_ativo:    this.timeoutReassuncaoAtivo[key] ?? false,
                 timeout_reassuncao_segundos: this.delayParaSegundos(this.timeoutReassuncaoDelay[key] ?? 1, this.timeoutReassuncaoDelayUnidade[key] || 'hora'),
                 aguardando_orientacao_mensagem: this.aguardandoOrientacaoMensagem[key] ?? '',
+                tempo_maximo_permanencia_minutos: this.tempoMaximoPermanenciaMinutos[key] || null,
             });
             this.iaSalvando[key] = false;
             if (res.ok) {
