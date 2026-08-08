@@ -67,6 +67,12 @@ class ExpirarPausaOrientacao extends Command
                 $atual->update([
                     'aguardando_orientacao_em' => null,
                     'mensagem_espera_enviada'  => false,
+                    // Mesmo padrão do ReassumirAgente (Bloco 2, achado 2 da revisão
+                    // final): sem isso, o FollowupConversas trata o silêncio que já
+                    // durou o timeout como candidato a estágio de silêncio e manda
+                    // uma mensagem proativa nos 5min seguintes — quebrando a
+                    // promessa de reassunção silenciosa.
+                    'followup_estagio_enviado' => 3,
                 ]);
 
                 $expirados++;

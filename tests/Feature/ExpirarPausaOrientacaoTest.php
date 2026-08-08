@@ -147,4 +147,53 @@ class ExpirarPausaOrientacaoTest extends TestCase
 
         $this->assertSame(0, \App\Models\Mensagem::where('ticket_id', $ticket->id)->count());
     }
+
+    /**
+     * Achado Importante 2 da revisão final: sem marcar followup_estagio_enviado
+     * = 3 no mesmo update, o conversas:followup rodado logo em seguida (dentro
+     * dos 5min) tratava o silêncio que já durou o timeout como candidato a
+     * estágio de silêncio e mandava uma mensagem proativa — quebrando a
+     * promessa de reassunção silenciosa (mesmo padrão do ReassumirAgente,
+     * Bloco 2).
+     */
+    public function test_reassuncao_silenciosa_nao_gera_followup_proativo_na_sequencia(): void
+    {
+        $ticket = $this->criarTicketPausado(now(), 'em_atendimento');
+
+        KanbanColunaConfig::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
+            'duvida_timeout_ativo' => true, 'duvida_timeout_segundos' => 1800,
+            'ia_ativo' => true,
+            'followup_estagio1_segundos' => 600,
+            'followup_estagio2_segundos' => 1200,
+            'followup_estagio3_segundos' => 1800,
+        ]);
+
+        // Remetente 'bot' pra não cair no gate do Follow-up curto (10min), que
+        // só olha tickets cuja última mensagem é do 'lead' — igual ao padrão
+        // usado em ReassumirAgenteTest (última mensagem não é do lead).
+        \App\Models\Mensagem::create([
+            'ticket_id' => $ticket->id, 'tenant_id' => $ticket->tenant_id,
+            'remetente' => 'bot', 'tipo' => 'texto', 'conteudo' => 'Já verifico e te respondo!',
+            'enviado_em' => now(),
+        ]);
+
+        Carbon::setTestNow(Carbon::parse('2026-08-08 10:35:00')); // 35min depois, expira a pausa
+
+        $this->artisan('conversas:expirar-pausa-orientacao')->assertExitCode(0);
+
+        $ticket->refresh();
+        $this->assertNull($ticket->aguardando_orientacao_em);
+        $this->assertSame(3, $ticket->followup_estagio_enviado);
+
+        $this->mock(\App\Services\SdrResponderService::class, function ($mock) {
+            $mock->shouldReceive('responder')->never();
+        });
+
+        $mensagensAntes = \App\Models\Mensagem::where('ticket_id', $ticket->id)->count();
+
+        $this->artisan('conversas:followup')->assertExitCode(0);
+
+        $this->assertSame($mensagensAntes, \App\Models\Mensagem::where('ticket_id', $ticket->id)->count());
+    }
 }
