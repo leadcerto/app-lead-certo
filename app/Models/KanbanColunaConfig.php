@@ -38,6 +38,8 @@ class KanbanColunaConfig extends Model
         'timeout_reassuncao_segundos',
         'aguardando_orientacao_mensagem',
         'tempo_maximo_permanencia_minutos',
+        'duvida_timeout_ativo',
+        'duvida_timeout_segundos',
         'exclusao_definitiva_ativo',
         'exclusao_definitiva_dias',
     ];
@@ -47,6 +49,7 @@ class KanbanColunaConfig extends Model
         'transcricao_ativa'         => 'boolean',
         'auto_mover_ativo'          => 'boolean',
         'timeout_reassuncao_ativo'  => 'boolean',
+        'duvida_timeout_ativo'      => 'boolean',
         'exclusao_definitiva_ativo' => 'boolean',
     ];
 }

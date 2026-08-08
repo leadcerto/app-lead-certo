@@ -87,4 +87,17 @@ class KanbanColunaConfigFillableTest extends TestCase
 
         $this->assertNull($config->fresh()->tempo_maximo_permanencia_minutos);
     }
+
+    public function test_duvida_timeout_e_mass_assignable(): void
+    {
+        $tenant = \App\Models\Tenant::factory()->create();
+
+        $config = \App\Models\KanbanColunaConfig::create([
+            'tenant_id' => $tenant->id, 'coluna_kanban' => 'em_atendimento',
+            'duvida_timeout_ativo' => true, 'duvida_timeout_segundos' => 1800,
+        ]);
+
+        $this->assertTrue($config->fresh()->duvida_timeout_ativo);
+        $this->assertSame(1800, $config->fresh()->duvida_timeout_segundos);
+    }
 }
