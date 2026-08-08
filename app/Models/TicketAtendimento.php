@@ -50,6 +50,8 @@ class TicketAtendimento extends Model
                     'entrou_em'       => now(),
                     'origem'          => $origem,
                 ]);
+
+                static::alertarSeMigracaoAtipica($ticket, $colunaAnterior, $origem);
             }
         });
 
@@ -73,6 +75,56 @@ class TicketAtendimento extends Model
                 $ticket->mensagem_espera_enviada  = false;
             }
         });
+    }
+
+    /**
+     * Regra 13 (Bloco 4) — migração atípica: movida manualmente por um
+     * humano e/ou pulando mais de uma posição na ordem das colunas. Só
+     * alerta, nunca bloqueia a movimentação (decisão de produto fechada —
+     * evita travar um caso legítimo, ex. pular direto pra Encerrado, por
+     * engano). Se os dois motivos se aplicarem ao mesmo evento, gera um
+     * alerta só, não dois.
+     *
+     * Ordem desconhecida pra qualquer um dos dois lados (coluna sem registro
+     * em kanban_colunas pro tenant — comum em testes e em tenants com
+     * chaves de coluna sem cadastro formal) significa que o salto não pode
+     * ser calculado: assume que não houve salto, não bloqueia nem falso-alarma.
+     */
+    private static function alertarSeMigracaoAtipica(self $ticket, ?string $colunaAnterior, string $origem): void
+    {
+        if ($colunaAnterior === null) {
+            return; // entrada inicial (criação do ticket), não é uma migração
+        }
+
+        $ordemAntes  = \App\Models\KanbanColuna::ordemDe($ticket->tenant_id, $colunaAnterior);
+        $ordemDepois = \App\Models\KanbanColuna::ordemDe($ticket->tenant_id, $ticket->coluna_kanban);
+        $pulou = $ordemAntes !== null && $ordemDepois !== null && abs($ordemDepois - $ordemAntes) > 1;
+
+        if ($origem !== 'humano' && ! $pulou) {
+            return;
+        }
+
+        $motivos = [];
+        if ($origem === 'humano') {
+            $motivos[] = 'movida manualmente por um atendente';
+        }
+        if ($pulou) {
+            $motivos[] = "pulou de \"{$colunaAnterior}\" direto pra \"{$ticket->coluna_kanban}\"";
+        }
+
+        try {
+            app(\App\Services\AlertaInternoService::class)->criar(
+                $ticket->tenant_id,
+                'migracao_atipica',
+                'Migração atípica de coluna',
+                'O ticket foi ' . implode(' e ', $motivos) . '.',
+                $ticket->id,
+            );
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('TicketAtendimento: erro ao criar alerta de migração atípica', [
+                'ticket_id' => $ticket->id, 'erro' => $e->getMessage(),
+            ]);
+        }
     }
 
     protected $fillable = [

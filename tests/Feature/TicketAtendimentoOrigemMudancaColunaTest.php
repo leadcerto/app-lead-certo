@@ -79,4 +79,82 @@ class TicketAtendimentoOrigemMudancaColunaTest extends TestCase
         $this->assertSame(5, \App\Models\KanbanColuna::ordemDe($tenant->id, 'pagamento'));
         $this->assertNull(\App\Models\KanbanColuna::ordemDe($tenant->id, 'nao_existe'));
     }
+
+    public function test_movimento_adjacente_pela_ia_nao_gera_alerta(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $ticket = $this->criarTicket($tenant, 'lead_novo'); // ordem 1
+
+        $ticket->update(['coluna_kanban' => 'em_atendimento']); // ordem 2, adjacente
+
+        $this->assertDatabaseMissing('alertas_internos', ['ticket_id' => $ticket->id]);
+    }
+
+    public function test_movimento_manual_adjacente_gera_alerta_migracao_atipica(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $ticket = $this->criarTicket($tenant, 'lead_novo');
+
+        $ticket->origemMudancaColuna = 'humano';
+        $ticket->update(['coluna_kanban' => 'em_atendimento']); // adjacente, mas manual
+
+        $this->assertDatabaseHas('alertas_internos', [
+            'ticket_id' => $ticket->id, 'tipo' => 'migracao_atipica',
+        ]);
+    }
+
+    public function test_salto_de_mais_de_uma_coluna_gera_alerta_mesmo_pela_ia(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $ticket = $this->criarTicket($tenant, 'lead_novo'); // ordem 1
+
+        $ticket->update(['coluna_kanban' => 'pagamento']); // ordem 5, pula 3 colunas
+
+        $this->assertDatabaseHas('alertas_internos', [
+            'ticket_id' => $ticket->id, 'tipo' => 'migracao_atipica',
+        ]);
+        // A movimentação em si não é bloqueada.
+        $this->assertSame('pagamento', $ticket->fresh()->coluna_kanban);
+    }
+
+    public function test_movimento_manual_com_salto_gera_apenas_um_alerta(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $ticket = $this->criarTicket($tenant, 'lead_novo');
+
+        $ticket->origemMudancaColuna = 'humano';
+        $ticket->update(['coluna_kanban' => 'pagamento']); // manual + salto
+
+        $this->assertSame(
+            1,
+            \App\Models\AlertaInterno::where('ticket_id', $ticket->id)->where('tipo', 'migracao_atipica')->count()
+        );
+    }
+
+    public function test_coluna_sem_registro_em_kanban_colunas_nao_calcula_salto_nem_falha(): void
+    {
+        $tenant = Tenant::factory()->create();
+        // Nenhuma KanbanColuna cadastrada com essas chaves — mesmo padrão de
+        // boa parte da suíte existente (coluna_kanban é só uma string solta).
+        $ticket = $this->criarTicket($tenant, 'coluna_solta_a');
+
+        $ticket->update(['coluna_kanban' => 'coluna_solta_b']);
+
+        $this->assertDatabaseMissing('alertas_internos', ['ticket_id' => $ticket->id]);
+    }
+
+    public function test_falha_ao_criar_alerta_nao_impede_a_migracao(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $ticket = $this->criarTicket($tenant, 'lead_novo');
+
+        $this->mock(\App\Services\AlertaInternoService::class, function ($mock) {
+            $mock->shouldReceive('criar')->once()->andThrow(new \Exception('falha simulada'));
+        });
+
+        $ticket->origemMudancaColuna = 'humano';
+        $ticket->update(['coluna_kanban' => 'em_atendimento']);
+
+        $this->assertSame('em_atendimento', $ticket->fresh()->coluna_kanban);
+    }
 }
