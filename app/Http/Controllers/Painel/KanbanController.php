@@ -267,6 +267,10 @@ class KanbanController extends Controller
 
         $model = TicketAtendimento::findOrFail($ticket);
 
+        // Regra 13 (Bloco 5) — terceiro e último endpoint de movimentação
+        // manual do sistema (os outros dois, mover()/moverParaOutros(), já
+        // marcam desde o Bloco 4).
+        $model->origemMudancaColuna = 'humano';
         $model->update($model->dadosParaEncerrar([
             'tag_desfecho'         => $request->tag_desfecho,
             'encerrado_em'         => now(),
