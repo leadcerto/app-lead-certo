@@ -143,6 +143,43 @@ class TicketAtendimentoOrigemMudancaColunaTest extends TestCase
         $this->assertDatabaseMissing('alertas_internos', ['ticket_id' => $ticket->id]);
     }
 
+    public function test_encerramento_automatico_por_silencio_nao_gera_alerta_de_salto(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $ticket = $this->criarTicket($tenant, 'aguardando_lead'); // ordem 4
+
+        // Simula FollowupConversas: encerramento automático (origem 'ia' por
+        // padrão), pulando direto pra "encerrado" (ordem 7, papel Encerramento).
+        $ticket->update(['coluna_kanban' => 'encerrado']);
+
+        $this->assertDatabaseMissing('alertas_internos', ['ticket_id' => $ticket->id]);
+    }
+
+    public function test_reabertura_automatica_de_encerrado_nao_gera_alerta_de_salto(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $ticket = $this->criarTicket($tenant, 'encerrado'); // ordem 7
+
+        // Simula webhook (Uazapi/Covercut) reabrindo o ticket de volta pra uma
+        // coluna bem anterior, automaticamente (origem 'ia' por padrão).
+        $ticket->update(['coluna_kanban' => 'em_atendimento']); // ordem 2
+
+        $this->assertDatabaseMissing('alertas_internos', ['ticket_id' => $ticket->id]);
+    }
+
+    public function test_movimento_manual_de_e_para_encerrado_ainda_gera_alerta(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $ticket = $this->criarTicket($tenant, 'aguardando_lead'); // ordem 4
+
+        $ticket->origemMudancaColuna = 'humano';
+        $ticket->update(['coluna_kanban' => 'encerrado']); // manual, ainda que papel Encerramento esteja envolvido
+
+        $this->assertDatabaseHas('alertas_internos', [
+            'ticket_id' => $ticket->id, 'tipo' => 'migracao_atipica',
+        ]);
+    }
+
     public function test_falha_ao_criar_alerta_nao_impede_a_migracao(): void
     {
         $tenant = Tenant::factory()->create();

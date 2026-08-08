@@ -89,6 +89,19 @@ class TicketAtendimento extends Model
      * em kanban_colunas pro tenant — comum em testes e em tenants com
      * chaves de coluna sem cadastro formal) significa que o salto não pode
      * ser calculado: assume que não houve salto, não bloqueia nem falso-alarma.
+     *
+     * Colunas de papel Encerramento ou TransferenciaHumana não fazem parte
+     * da ordem "normal" do funil — são desvios de fluxo, não etapas
+     * sequenciais. Fluxos automáticos de altíssima frequência passam por
+     * elas rotineiramente e produzem distância ordinal grande sem que isso
+     * seja uma migração atípica de verdade: encerramento automático por
+     * silêncio (FollowupConversas) pula de qualquer coluna intermediária
+     * direto pro Encerramento, e reabertura de ticket (webhooks Uazapi/
+     * Covercut) volta do Encerramento pra uma coluna bem anterior. Contar
+     * esses saltos geraria ruído puro em operação normal, contrariando a
+     * decisão de produto de só alertar o que é de fato incomum. Essa
+     * exclusão vale só pro cálculo de $pulou — uma movimentação manual
+     * (origem 'humano') continua alertando independente do papel envolvido.
      */
     private static function alertarSeMigracaoAtipica(self $ticket, ?string $colunaAnterior, string $origem): void
     {
@@ -98,7 +111,16 @@ class TicketAtendimento extends Model
 
         $ordemAntes  = \App\Models\KanbanColuna::ordemDe($ticket->tenant_id, $colunaAnterior);
         $ordemDepois = \App\Models\KanbanColuna::ordemDe($ticket->tenant_id, $ticket->coluna_kanban);
-        $pulou = $ordemAntes !== null && $ordemDepois !== null && abs($ordemDepois - $ordemAntes) > 1;
+
+        $papelAntes  = \App\Models\KanbanColuna::papelDe($ticket->tenant_id, $colunaAnterior);
+        $papelDepois = \App\Models\KanbanColuna::papelDe($ticket->tenant_id, $ticket->coluna_kanban);
+        $papelForaDaOrdem = fn (?\App\Enums\PapelColunaKanban $papel) => $papel === \App\Enums\PapelColunaKanban::Encerramento
+            || $papel === \App\Enums\PapelColunaKanban::TransferenciaHumana;
+
+        $pulou = $ordemAntes !== null && $ordemDepois !== null
+            && abs($ordemDepois - $ordemAntes) > 1
+            && ! $papelForaDaOrdem($papelAntes)
+            && ! $papelForaDaOrdem($papelDepois);
 
         if ($origem !== 'humano' && ! $pulou) {
             return;

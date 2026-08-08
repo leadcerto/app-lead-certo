@@ -85,6 +85,28 @@ class MonitorarKanbanTest extends TestCase
         $this->assertDatabaseMissing('alertas_internos', ['ticket_id' => $ticket->id]);
     }
 
+    public function test_coluna_com_config_existente_mas_tempo_maximo_null_nunca_alerta(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $ticket = $this->criarTicket($tenant);
+        // Caso real de produção: já existe uma linha de KanbanColunaConfig pra
+        // essa coluna (por causa de outros campos, ex. ia_ativo), mas
+        // tempo_maximo_permanencia_minutos nunca foi setado — continua null.
+        // Diferente de "sem config nenhuma" (já coberto acima), aqui o join
+        // com kanban_coluna_configs encontra a linha; é o whereNotNull que
+        // precisa excluir o candidato.
+        KanbanColunaConfig::create([
+            'tenant_id' => $tenant->id, 'coluna_kanban' => 'aguardando_orcamento',
+            'ia_ativo' => true,
+        ]);
+
+        Carbon::setTestNow(Carbon::parse('2026-08-10 10:00:00')); // 3 dias depois
+
+        $this->artisan('kanban:monitorar')->assertExitCode(0);
+
+        $this->assertDatabaseMissing('alertas_internos', ['ticket_id' => $ticket->id]);
+    }
+
     public function test_ticket_encerrado_nao_e_candidato(): void
     {
         $tenant = Tenant::factory()->create();

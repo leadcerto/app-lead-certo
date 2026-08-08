@@ -74,6 +74,13 @@ class KanbanColunaConfigController extends Controller
 
         $update = array_filter($validated, fn($v) => $v !== null);
 
+        // tempo_maximo_permanencia_minutos: null é um valor válido e intencional pra
+        // esse campo específico (= coluna não monitorada, Regra 12) — diferente dos
+        // outros campos nullable acima, não pode ser descartado pelo array_filter.
+        if (array_key_exists('tempo_maximo_permanencia_minutos', $validated)) {
+            $update['tempo_maximo_permanencia_minutos'] = $validated['tempo_maximo_permanencia_minutos'];
+        }
+
         KanbanColunaConfig::updateOrCreate(
             [
                 'tenant_id'     => $request->user()->tenant_id,
