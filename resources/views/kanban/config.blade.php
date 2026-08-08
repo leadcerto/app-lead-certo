@@ -953,6 +953,43 @@
                             </div>
 
                             <div class="mt-3 pt-3 border-t border-gray-100">
+                                <label class="flex items-center gap-2 mb-2 cursor-pointer">
+                                    <input type="checkbox"
+                                           :checked="duvidaTimeoutAtivo[col.key]"
+                                           @change="duvidaTimeoutAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true"
+                                           class="w-3.5 h-3.5 accent-amber-600">
+                                    <span class="text-xs font-semibold text-gray-500">Retomar automaticamente se ninguém orientar (Regra 2)</span>
+                                </label>
+
+                                <template x-if="duvidaTimeoutAtivo[col.key]">
+                                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                                        <span class="text-xs text-gray-500">Depois de</span>
+                                        <input type="number" min="1"
+                                               :value="duvidaTimeoutDelay[col.key] ?? 1"
+                                               @input="duvidaTimeoutDelay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true"
+                                               class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
+                                        <select :value="duvidaTimeoutDelayUnidade[col.key] || 'hora'"
+                                                @change="duvidaTimeoutDelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                                class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
+                                            <option value="seg">seg</option>
+                                            <option value="min">min</option>
+                                            <option value="hora">hora</option>
+                                        </select>
+                                        <span class="text-xs text-gray-500">sem resposta, o agente retoma sozinho</span>
+                                    </div>
+                                </template>
+                                <div class="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                                    <p class="text-xs font-semibold text-amber-800 mb-1">Como configurar</p>
+                                    <p class="text-xs text-amber-700 leading-relaxed">
+                                        Se o agente pausar aguardando sua orientação (Regra 2) e ninguém responder o
+                                        alerta dentro desse prazo, ele retoma o atendimento sozinho, sem mandar
+                                        nenhuma mensagem pro lead — o alerta é fechado automaticamente. Roda a
+                                        cada 5 minutos, sem restrição de horário.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="mt-3 pt-3 border-t border-gray-100">
                                 <label class="text-xs font-semibold text-gray-500 mb-1 block">Mensagem de espera durante orientação (Regra 2)</label>
                                 <p class="text-xs text-gray-400 mb-2">
                                     Se o agente pausar aguardando sua orientação e o lead escrever de novo nesse meio tempo,
@@ -1460,6 +1497,12 @@ function kanbanConfig() {
         // kanban:monitorar alertar que o ticket travou nessa coluna.
         tempoMaximoPermanenciaMinutos: {},
 
+        // Timeout da pausa de dúvida (Regra 2) — mesmo padrão de
+        // timeoutReassuncao* acima.
+        duvidaTimeoutAtivo: {},
+        duvidaTimeoutDelay: {},
+        duvidaTimeoutDelayUnidade: {},
+
         // Exclusão definitiva de tickets encerrados (por coluna)
         exclusaoDefinitivaAtivo: {},
         exclusaoDefinitivaDias: {},
@@ -1923,6 +1966,10 @@ function kanbanConfig() {
 
                 this.aguardandoOrientacaoMensagem[key] = json.aguardando_orientacao_mensagem ?? '';
                 this.tempoMaximoPermanenciaMinutos[key] = json.tempo_maximo_permanencia_minutos ?? null;
+                this.duvidaTimeoutAtivo[key] = json.duvida_timeout_ativo ?? false;
+                const dt = this.segundosParaDisplay(json.duvida_timeout_segundos ?? 3600);
+                this.duvidaTimeoutDelay[key]        = dt.valor;
+                this.duvidaTimeoutDelayUnidade[key] = dt.unidade;
             }
         },
 
@@ -1981,6 +2028,8 @@ function kanbanConfig() {
                 timeout_reassuncao_segundos: this.delayParaSegundos(this.timeoutReassuncaoDelay[key] ?? 1, this.timeoutReassuncaoDelayUnidade[key] || 'hora'),
                 aguardando_orientacao_mensagem: this.aguardandoOrientacaoMensagem[key] ?? '',
                 tempo_maximo_permanencia_minutos: this.tempoMaximoPermanenciaMinutos[key] || null,
+                duvida_timeout_ativo:    this.duvidaTimeoutAtivo[key] ?? false,
+                duvida_timeout_segundos: this.delayParaSegundos(this.duvidaTimeoutDelay[key] ?? 1, this.duvidaTimeoutDelayUnidade[key] || 'hora'),
             });
             this.iaSalvando[key] = false;
             if (res.ok) {

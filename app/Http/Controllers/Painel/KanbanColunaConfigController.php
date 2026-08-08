@@ -40,6 +40,8 @@ class KanbanColunaConfigController extends Controller
             'timeout_reassuncao_segundos' => $config?->timeout_reassuncao_segundos ?? 3600,
             'aguardando_orientacao_mensagem' => $config?->aguardando_orientacao_mensagem ?? '',
             'tempo_maximo_permanencia_minutos' => $config?->tempo_maximo_permanencia_minutos ?? null,
+            'duvida_timeout_ativo'    => $config?->duvida_timeout_ativo    ?? false,
+            'duvida_timeout_segundos' => $config?->duvida_timeout_segundos ?? 3600,
         ]);
     }
 
@@ -70,6 +72,8 @@ class KanbanColunaConfigController extends Controller
             'timeout_reassuncao_segundos' => 'sometimes|integer|min:60|max:604800',
             'aguardando_orientacao_mensagem' => 'nullable|string|max:1000',
             'tempo_maximo_permanencia_minutos' => 'sometimes|nullable|integer|min:1|max:43200',
+            'duvida_timeout_ativo'    => 'sometimes|boolean',
+            'duvida_timeout_segundos' => 'sometimes|integer|min:60|max:604800',
         ]);
 
         $update = array_filter($validated, fn($v) => $v !== null);
