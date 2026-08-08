@@ -12,6 +12,17 @@ class TicketAtendimento extends Model
 {
     protected $table = 'tickets_atendimento';
 
+    /**
+     * NÃO-PERSISTIDA — quem está causando a mudança de coluna neste update
+     * específico. Setada só pelos dois endpoints de movimentação manual
+     * (KanbanController::mover/moverParaOutros, Task 6) antes de chamar
+     * ->update(). Lida pelo hook updated() abaixo pra gravar 'origem' no
+     * histórico (Bloco 4, Regra 13) — sem isso o hook não teria como saber
+     * quem iniciou a mudança, já que dezenas de pontos diferentes do código
+     * chamam ->update(['coluna_kanban' => ...]).
+     */
+    public ?string $origemMudancaColuna = null;
+
     protected static function booted(): void
     {
         static::addGlobalScope(new TenantScope());
@@ -28,12 +39,16 @@ class TicketAtendimento extends Model
 
         static::updated(function (TicketAtendimento $ticket) {
             if ($ticket->wasChanged('coluna_kanban')) {
+                $colunaAnterior = $ticket->getOriginal('coluna_kanban');
+                $origem = $ticket->origemMudancaColuna ?? 'ia';
+
                 KanbanColunaHistorico::create([
                     'tenant_id'       => $ticket->tenant_id,
                     'ticket_id'       => $ticket->id,
                     'coluna'          => $ticket->coluna_kanban,
-                    'coluna_anterior' => $ticket->getOriginal('coluna_kanban'),
+                    'coluna_anterior' => $colunaAnterior,
                     'entrou_em'       => now(),
+                    'origem'          => $origem,
                 ]);
             }
         });

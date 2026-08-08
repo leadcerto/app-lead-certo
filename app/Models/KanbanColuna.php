@@ -78,6 +78,11 @@ class KanbanColuna extends Model
         return static::doTenant($tenantId)->firstWhere('chave', $chave)?->papel;
     }
 
+    public static function ordemDe(int $tenantId, string $chave): ?int
+    {
+        return static::doTenant($tenantId)->firstWhere('chave', $chave)?->ordem;
+    }
+
     public static function chaveDeEntrada(int $tenantId): string
     {
         $coluna = static::doTenant($tenantId)->first(fn (self $c) => $c->papel === PapelColunaKanban::Entrada);
