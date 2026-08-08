@@ -71,6 +71,17 @@ class TicketAtendimento extends Model
             // orientação (manual ou automático), a pausa não faz mais sentido.
             // Mesmo raciocínio do reset de objetivos_cumpridos acima.
             if ($ticket->isDirty('coluna_kanban') && ! $ticket->isDirty('aguardando_orientacao_em')) {
+                // Bloco 5 — fecha o alerta pendente ANTES de limpar o campo
+                // abaixo, senão a pausa "desapareceria" sem deixar rastro de
+                // por que o alerta nunca foi respondido de verdade.
+                if ($ticket->aguardando_orientacao_em) {
+                    app(\App\Services\AlertaInternoService::class)->fecharDuvidaPendente(
+                        $ticket->tenant_id,
+                        $ticket->id,
+                        'Mudou de coluna antes de receber orientação — pausa descartada.',
+                    );
+                }
+
                 $ticket->aguardando_orientacao_em = null;
                 $ticket->mensagem_espera_enviada  = false;
             }

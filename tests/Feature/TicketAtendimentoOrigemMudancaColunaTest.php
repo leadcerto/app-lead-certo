@@ -194,4 +194,33 @@ class TicketAtendimentoOrigemMudancaColunaTest extends TestCase
 
         $this->assertSame('em_atendimento', $ticket->fresh()->coluna_kanban);
     }
+
+    public function test_mudar_de_coluna_com_pausa_pendente_fecha_o_alerta(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $ticket = $this->criarTicket($tenant, 'lead_novo');
+        $ticket->update(['aguardando_orientacao_em' => now(), 'mensagem_espera_enviada' => true]);
+        $alerta = \App\Models\AlertaInterno::create([
+            'tenant_id' => $tenant->id, 'ticket_id' => $ticket->id,
+            'tipo' => 'duvida_ia', 'titulo' => 'Dúvida', 'conteudo' => 'x',
+        ]);
+
+        $ticket->update(['coluna_kanban' => 'em_atendimento']);
+
+        $alerta->refresh();
+        $this->assertNotNull($alerta->resposta);
+        $this->assertNotNull($alerta->respondido_em);
+        $this->assertNull($ticket->fresh()->aguardando_orientacao_em);
+    }
+
+    public function test_mudar_de_coluna_sem_pausa_pendente_nao_mexe_em_alerta_nenhum(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $ticket = $this->criarTicket($tenant, 'lead_novo');
+        // Ticket nunca foi pausado — sem aguardando_orientacao_em, sem alerta.
+
+        $ticket->update(['coluna_kanban' => 'em_atendimento']);
+
+        $this->assertSame(0, \App\Models\AlertaInterno::where('ticket_id', $ticket->id)->count());
+    }
 }
