@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\AuditoriaContato;
 use App\Models\Contato;
+use App\Services\ContatoMergeService;
 use App\Services\TelefoneService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
@@ -140,8 +141,9 @@ PROMPT;
         $invalidos   = 0;
         $excluidos   = 0;
         $emAuditoria = 0;
+        $mesclados   = 0;
 
-        $query->orderBy('id')->chunk(500, function ($contatos) use ($dryRun, &$corrigidos, &$invalidos, &$excluidos, &$emAuditoria) {
+        $query->orderBy('id')->chunk(500, function ($contatos) use ($dryRun, &$corrigidos, &$invalidos, &$excluidos, &$emAuditoria, &$mesclados) {
             foreach ($contatos as $contato) {
                 $original = $contato->telefone ?? '';
                 if (! $original) continue;
@@ -190,6 +192,34 @@ PROMPT;
                     continue;
                 }
 
+                // Achado real (visto em 29 e 30/07, quebrava o comando às 00:10):
+                // normalizar o telefone de um contato pode produzir um valor que
+                // já pertence a OUTRO contato (mesmo número em formatos
+                // diferentes) — o UPDATE direto estourava a constraint única e
+                // derrubava o comando inteiro no meio do chunk. Mesmo padrão já
+                // corrigido em NormalizarTelefonesCommand/Auditoria de Contatos:
+                // checar antes e mesclar em vez de sobrescrever.
+                $duplicata = Contato::withTrashed()->where('telefone', $semPlus)->where('id', '!=', $contato->id)->first();
+
+                if ($duplicata) {
+                    $mesclados++;
+                    if ($this->output->isVerbose()) {
+                        $this->warn("  [TEL→MESCLAR] #{$contato->id}: '{$original}' já pertence a #{$duplicata->id} ('{$semPlus}')");
+                    }
+
+                    if (! $dryRun) {
+                        if ($duplicata->trashed()) {
+                            $duplicata->restore();
+                        }
+                        app(ContatoMergeService::class)->mesclar($contato, $duplicata);
+                        AuditoriaContato::where('contato_id', $contato->id)
+                            ->where('campo', 'telefone')
+                            ->where('status', 'pendente')
+                            ->delete();
+                    }
+                    continue;
+                }
+
                 $corrigidos++;
                 if ($this->output->isVerbose()) {
                     $this->line("  [TEL] #{$contato->id}: '{$original}' → '{$semPlus}'");
@@ -205,7 +235,7 @@ PROMPT;
             }
         });
 
-        $this->line("  Telefones corrigidos: {$corrigidos} | Excluídos: {$excluidos} | Na auditoria: {$invalidos}");
+        $this->line("  Telefones corrigidos: {$corrigidos} | Mesclados: {$mesclados} | Excluídos: {$excluidos} | Na auditoria: {$invalidos}");
     }
 
     /**
