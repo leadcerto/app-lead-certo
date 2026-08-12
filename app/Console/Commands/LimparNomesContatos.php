@@ -325,19 +325,16 @@ PROMPT;
         $this->line('');
         $this->info('Limpando nomes com IA...');
 
-        // Filtra contatos que provavelmente têm nome problemático
+        // Achado real (2026-08-11/12): o filtro antigo só mandava pra IA nomes com
+        // formatação "suspeita" (traço, número embutido, CAIXA ALTA, etc.) — pensado
+        // pra pegar sujeira de sistema antigo (ex: "- 01 Vinicius 3516"). Isso deixava
+        // passar batido texto que parece nome normal mas não identifica ninguém (ex:
+        // "Pai Saudade 💕", "Block rastreadores") — nunca era nem avaliado. Agora todo
+        // contato passa pela IA pelo menos uma vez; `nome_revisado_ia_em` evita
+        // reprocessar pra sempre o que já foi confirmado como nome/empresa válido.
         $query = Contato::query()
             ->where('nome', '!=', 'Sem Nome')
-            ->where(function ($q) {
-                $q->where('nome', 'REGEXP', '^[-–]')                        // começa com traço
-                  ->orWhere('nome', 'REGEXP', '^(FRETE|MOT|PCR|BAU|MOV)')  // classificação legada
-                  ->orWhere('nome', 'REGEXP', '^[0-9]')                     // começa com número
-                  ->orWhere('nome', 'REGEXP', '[0-9]{3,}')                  // tem sequência de 3+ dígitos
-                  ->orWhere('nome', 'REGEXP', '[A-Z]{4,}')                  // tem CAIXA ALTA longa
-                  ->orWhere('nome', 'REGEXP', '[.#@]')                      // tem ponto, #, @
-                  ->orWhereRaw('LENGTH(nome) <= 3')                         // muito curto (1-3 chars)
-                  ->orWhereColumn('nome', 'telefone');                       // nome = telefone
-            });
+            ->whereNull('nome_revisado_ia_em');
 
         if ($tenantId) {
             $query->whereHas('vinculos', fn($q) => $q->where('tenant_id', $tenantId));
@@ -348,10 +345,10 @@ PROMPT;
         $semNome   = 0;
         $falhas    = 0;
 
-        $this->line("  {$total} contatos com nome suspeito para processar");
+        $this->line("  {$total} contatos ainda não revisados pela IA");
 
         if ($total === 0) {
-            $this->info('  Nenhum contato suspeito encontrado.');
+            $this->info('  Nenhum contato pendente de revisão.');
             return;
         }
 
@@ -382,22 +379,22 @@ PROMPT;
                 $nomeIA      = $resultado['nome'] ?? null;
                 $descritorIA = $resultado['descritor'] ?? null;
 
-                // LIXO: vai para auditoria — nunca apaga sem revisão humana
+                // LIXO: aplica "Sem Nome" direto. Decisão do Leonardo (2026-08-12):
+                // a fila de Auditoria pra esse caso nunca era esvaziada na prática
+                // (chegou a acumular 3.539 pendências) — manter a trava de revisão
+                // humana só deixava nome ruim visível pra sempre. Continua
+                // registrado via log, só não bloqueia mais em fila de ação humana.
                 if ($tipo === 'lixo' || ! $nomeIA) {
                     if ($this->output->isVerbose()) {
                         $this->newLine();
-                        $this->warn("  [AUDITORIA] #{$contato->id}: '{$contato->nome}' → sugerido: 'Sem Nome'");
+                        $this->warn("  [SEM NOME] #{$contato->id}: '{$contato->nome}' → 'Sem Nome'");
                     }
                     if (! $dryRun) {
-                        AuditoriaContato::firstOrCreate(
-                            ['contato_id' => $contato->id, 'campo' => 'nome', 'status' => 'pendente'],
-                            [
-                                'tipo'           => 'nome_invalido',
-                                'valor_original' => $contato->nome,
-                                'valor_sugerido' => 'Sem Nome',
-                                'observacao'     => 'IA classificou como lixo — sem nome identificável',
-                            ]
-                        );
+                        Log::info('LimparNomesContatos: aplicado Sem Nome automaticamente', [
+                            'contato_id'      => $contato->id,
+                            'nome_original'   => $contato->nome,
+                        ]);
+                        $contato->update(['nome' => 'Sem Nome', 'nome_revisado_ia_em' => now()]);
                     }
                     $semNome++;
                     $bar->advance();
@@ -410,6 +407,9 @@ PROMPT;
                 $mudouDescritor = $tipo === 'pessoa' && $descritorIA !== $contato->sobrenome;
 
                 if (! $mudouNome && ! $mudouDescritor) {
+                    if (! $dryRun) {
+                        $contato->update(['nome_revisado_ia_em' => now()]);
+                    }
                     $bar->advance();
                     continue;
                 }
@@ -423,7 +423,7 @@ PROMPT;
                 }
 
                 if (! $dryRun) {
-                    $updates = ['nome' => $nomeIA];
+                    $updates = ['nome' => $nomeIA, 'nome_revisado_ia_em' => now()];
                     if ($tipo === 'pessoa' && $descritorIA) {
                         $updates['sobrenome'] = $descritorIA;
                     }

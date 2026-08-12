@@ -874,6 +874,7 @@ class ContatosController extends Controller
     {
         $request->validate([
             'nome'           => 'sometimes|string|max:200',
+            'sobrenome'      => 'sometimes|nullable|string|max:200',
             'email'          => 'sometimes|nullable|email|max:200',
             'email_2'        => 'sometimes|nullable|email|max:200',
             'telefone_2'     => 'sometimes|nullable|string|max:20',
@@ -904,7 +905,7 @@ class ContatosController extends Controller
 
         $tenantId = $request->user()->tenant_id;
         $campos   = [
-            'nome','email','email_2','telefone_2','profissao','empresa','departamento',
+            'nome','sobrenome','email','email_2','telefone_2','profissao','empresa','departamento',
             'observacoes','endereco','cidade','estado','cep','pais','tipo','tipo_contato',
             'score','genero','estado_civil','aniversario','cpf','rg',
             'instagram','facebook','linkedin','twitter','website','opt_out',
@@ -955,7 +956,7 @@ class ContatosController extends Controller
      */
     private function sincronizarComGoogle(Contato $contato, int $tenantId, array $camposSalvos): void
     {
-        if (! array_intersect(['nome', 'email'], array_keys($camposSalvos))) {
+        if (! array_intersect(['nome', 'sobrenome', 'email'], array_keys($camposSalvos))) {
             return;
         }
 

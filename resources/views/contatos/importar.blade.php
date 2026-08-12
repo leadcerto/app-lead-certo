@@ -357,6 +357,11 @@
                     <div class="view-field" data-field="nome"></div>
                     <input class="edit-field" data-field="nome" type="text" maxlength="200" placeholder="Nome completo">
                 </div>
+                <div class="col-span-2">
+                    <label class="label-field">Complemento (sobrenome, apelido ou o que ajuda a lembrar quem é)</label>
+                    <div class="view-field" data-field="sobrenome"></div>
+                    <input class="edit-field" data-field="sobrenome" type="text" maxlength="200" placeholder="Ex: profissão, empresa, como você conhece essa pessoa...">
+                </div>
                 <div>
                     <label class="label-field">Telefone (WhatsApp)</label>
                     <div class="view-field font-mono" data-field="telefone"></div>

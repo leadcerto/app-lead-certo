@@ -95,6 +95,35 @@ class ContatoAtualizarSincronizaGoogleTest extends TestCase
         Http::assertNothingSent();
     }
 
+    /**
+     * Achado real (2026-08-12): o painel de edição do contato só expunha "Nome
+     * completo" — o campo `sobrenome` (complemento que ajuda a identificar o
+     * contato, ex: profissão) já existia no banco e já era usado no push pro
+     * Google (`familyName`), mas não dava pra ver nem editar na nossa UI.
+     */
+    public function test_editar_sobrenome_persiste_e_empurra_pro_google_quando_ja_vinculado(): void
+    {
+        Http::fake(['*updateContact*' => Http::response(['etag' => 'novo-etag-789'], 200)]);
+
+        $tenant  = $this->criarTenantComGoogle();
+        $contato = Contato::factory()->create(['nome' => 'Ricardo', 'sobrenome' => null]);
+        VinculoContatoTenant::create([
+            'contato_id'            => $contato->id,
+            'tenant_id'             => $tenant->id,
+            'google_resource_name'  => 'people/c123456789',
+            'google_etag'           => 'etag-velho-456',
+        ]);
+        $user = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+
+        $response = $this->actingAs($user)->patchJson("/api/painel/contato/{$contato->id}", [
+            'sobrenome' => 'Encanador — indicação do seu Zé',
+        ]);
+
+        $response->assertOk();
+        $this->assertSame('Encanador — indicação do seu Zé', $contato->fresh()->sobrenome);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'updateContact'));
+    }
+
     public function test_editar_apenas_profissao_nao_chama_google(): void
     {
         Http::fake();
