@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Webhook;
 
-use App\Enums\PapelColunaKanban;
 use App\Http\Controllers\Controller;
 use App\Jobs\PushContatoParaGoogleJob;
 use App\Jobs\SdrResponderJob;
@@ -15,7 +14,6 @@ use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
 use App\Services\EcoTranscricaoService;
 use App\Services\MediaProcessorService;
-use App\Services\OpenRouterService;
 use App\Services\SequenciaService;
 use App\Services\TelefoneService;
 use Illuminate\Http\JsonResponse;
@@ -225,35 +223,14 @@ class UazapiWebhookController extends Controller
             }
         } else {
             // Verifica se há ticket encerrado: reativa para o Guardião classificar a mensagem
-            $ticketEncerrado = TicketAtendimento::withoutGlobalScopes()
-                ->where('tenant_id', $tenant->id)
-                ->where('contato_id', $contato->id)
-                ->whereIn('coluna_kanban', KanbanColuna::chavesComPapel($tenant->id, PapelColunaKanban::Encerramento))
-                ->latest()
-                ->first();
+            $reaberturaService = app(\App\Services\TicketReaberturaService::class);
+            $ticketEncerrado   = $reaberturaService->buscarTicketEncerrado($tenant->id, $contato->id);
 
             if ($ticketEncerrado) {
                 // Nem toda mensagem pra um ticket encerrado deve reabrir o atendimento
                 // — uma despedida/agradecimento ("obrigado, já consegui") não precisa
                 // reabrir, mas informação útil de verdade precisa. A IA decide.
-                if ($this->deveReabrirTicketEncerrado($conteudo)) {
-                    // Volta pra coluna em que estava antes de encerrar — independente de
-                    // quem encerrou (humano, silêncio automático ou a própria IA).
-                    $colunaRestaurada = $ticketEncerrado->coluna_antes_encerrar ?: 'em_atendimento';
-
-                    $ticketEncerrado->update([
-                        'status'                => 'aberto',
-                        'agente_responsavel'    => 'bot',
-                        'coluna_kanban'         => $colunaRestaurada,
-                        'coluna_antes_encerrar' => null,
-                        // Reflete qual número reativou o atendimento — o ticket
-                        // continua único por lead, mas o canal aponta pro mais recente.
-                        'whatsapp_canal_id'     => $canal->id,
-                    ]);
-                    Log::info("Webhook: ticket #{$ticketEncerrado->id} reativado, voltou pra coluna '{$colunaRestaurada}'");
-                } else {
-                    Log::info("Webhook: ticket #{$ticketEncerrado->id} recebeu mensagem mas continua encerrado (parece despedida/agradecimento)");
-                }
+                $reaberturaService->reabrirSeNecessario($ticketEncerrado, $canal->id, $conteudo);
 
                 $ticket = $ticketEncerrado;
                 // ticketNovo permanece false → se reativou, cai no elseif abaixo →
@@ -561,36 +538,6 @@ class UazapiWebhookController extends Controller
         }
 
         return null;
-    }
-
-    /**
-     * Decide se uma mensagem nova pra um ticket encerrado deve reabrir o
-     * atendimento. Despedidas/agradecimentos ("obrigado", "já consegui",
-     * "tchau") não devem reabrir; qualquer informação útil de verdade deve.
-     * Em caso de dúvida ou falha da IA, opta por reabrir — perder uma venda
-     * por não reabrir é pior do que reabrir um agradecimento por engano.
-     */
-    private function deveReabrirTicketEncerrado(?string $mensagem): bool
-    {
-        if (! $mensagem || trim($mensagem) === '') {
-            return true;
-        }
-
-        $resposta = app(OpenRouterService::class)->chat([
-            ['role' => 'system', 'content' =>
-                'Você analisa mensagens de um cliente cujo atendimento de frete/mudança JÁ FOI ENCERRADO. '
-                . 'Decida se essa nova mensagem precisa REABRIR o atendimento (nova dúvida, informação útil '
-                . 'pro serviço, reclamação, pedido de continuidade) ou se é só uma despedida/agradecimento que '
-                . 'NÃO precisa reabrir (ex: "obrigado", "já consegui", "tchau", "ok", emoji de agradecimento). '
-                . 'Responda com exatamente uma palavra: REABRIR ou MANTER.'],
-            ['role' => 'user', 'content' => $mensagem],
-        ], 'simples', 10, 'reabertura_ticket_encerrado');
-
-        if (! $resposta) {
-            return true;
-        }
-
-        return ! str_contains(mb_strtoupper($resposta), 'MANTER');
     }
 
     /**
