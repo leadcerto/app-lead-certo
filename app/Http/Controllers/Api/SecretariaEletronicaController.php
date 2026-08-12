@@ -83,44 +83,60 @@ class SecretariaEletronicaController extends Controller
             'tenant_id'  => $tenant->id,
         ]);
 
-        // Verifica se já tem ticket bot aberto — não abre duplicado
-        $ticketExistente = TicketAtendimento::where('tenant_id', $tenant->id)
-            ->where('contato_id', $contato->id)
-            ->whereNotIn('coluna_kanban', array_merge(
-                \App\Models\KanbanColuna::chavesComPapel($tenant->id, \App\Enums\PapelColunaKanban::Encerramento),
-                \App\Models\KanbanColuna::chavesComPapel($tenant->id, \App\Enums\PapelColunaKanban::TransferenciaHumana),
-            ))
-            ->first();
+        // Achado real (2026-08-12): duas chamadas perdidas quase simultâneas (ex:
+        // retry do app do celular) podiam gerar dois webhooks concorrentes — cada
+        // um checava "já tem ticket aberto?" antes do outro terminar de gravar, e
+        // os dois criavam ticket + disparavam a sequência de boas-vindas pro mesmo
+        // contato, duplicando a mensagem no WhatsApp do lead (mesmo bug achado no
+        // CovercutWebhookController). A trava garante que só uma requisição por
+        // vez resolve/cria o ticket deste contato.
+        [$ticket, $ticketNovo] = \Illuminate\Support\Facades\Cache::lock("ticket-resolve:secretaria:{$tenant->id}:{$contato->id}", 10)
+            ->block(5, function () use ($tenant, $contato) {
+                // Verifica se já tem ticket bot aberto — não abre duplicado
+                $ticketExistente = TicketAtendimento::where('tenant_id', $tenant->id)
+                    ->where('contato_id', $contato->id)
+                    ->whereNotIn('coluna_kanban', array_merge(
+                        \App\Models\KanbanColuna::chavesComPapel($tenant->id, \App\Enums\PapelColunaKanban::Encerramento),
+                        \App\Models\KanbanColuna::chavesComPapel($tenant->id, \App\Enums\PapelColunaKanban::TransferenciaHumana),
+                    ))
+                    ->first();
 
-        if ($ticketExistente) {
+                if ($ticketExistente) {
+                    return [$ticketExistente, false];
+                }
+
+                // Cria ticket
+                $kanban = \App\Models\Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->first();
+                $canal  = $kanban ? app(\App\Services\SelecaoCanalWhatsappService::class)->naoOficialAleatorioParaKanban($kanban) : null;
+
+                $ticket = TicketAtendimento::create([
+                    'tenant_id'          => $tenant->id,
+                    'contato_id'         => $contato->id,
+                    'whatsapp_canal_id'  => $canal?->id,
+                    'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
+                    'agente_responsavel' => 'bot',
+                    'etapa_ia'           => 'etapa_1',
+                    'origem'             => 'ligacao',
+                ]);
+
+                return [$ticket, true];
+            });
+
+        if (! $ticketNovo) {
             $chamada->update([
                 'contato_id'       => $contato->id,
-                'ticket_id'        => $ticketExistente->id,
+                'ticket_id'        => $ticket->id,
                 'mensagem_enviada' => false,
             ]);
 
             Log::info('Secretária: chamada registrada, ticket já existente', [
                 'tenant'  => $tenant->id,
                 'contato' => $contato->id,
-                'ticket'  => $ticketExistente->id,
+                'ticket'  => $ticket->id,
             ]);
 
-            return response()->json(['ok' => true, 'acao' => 'ticket_existente', 'ticket_id' => $ticketExistente->id]);
+            return response()->json(['ok' => true, 'acao' => 'ticket_existente', 'ticket_id' => $ticket->id]);
         }
-
-        // Cria ticket
-        $kanban = \App\Models\Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->first();
-        $canal  = $kanban ? app(\App\Services\SelecaoCanalWhatsappService::class)->naoOficialAleatorioParaKanban($kanban) : null;
-
-        $ticket = TicketAtendimento::create([
-            'tenant_id'          => $tenant->id,
-            'contato_id'         => $contato->id,
-            'whatsapp_canal_id'  => $canal?->id,
-            'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
-            'agente_responsavel' => 'bot',
-            'etapa_ia'           => 'etapa_1',
-            'origem'             => 'ligacao',
-        ]);
 
         // Atualiza chamada com IDs vinculados
         $chamada->update([
