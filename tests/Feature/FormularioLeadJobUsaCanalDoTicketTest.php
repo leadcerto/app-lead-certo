@@ -52,7 +52,7 @@ class FormularioLeadJobUsaCanalDoTicketTest extends TestCase
             'processado'    => false,
         ]);
 
-        (new FormularioLeadJob($envio->id, $ticket->id))->handle(app(\App\Services\HumanizacaoService::class));
+        (new FormularioLeadJob($envio->id, $ticket->id))->handle();
 
         Http::assertSent(fn ($request) => str_contains($request->url(), '/send/text')
             && $request->hasHeader('token', 'token-do-canal-certo'));
