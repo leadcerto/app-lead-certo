@@ -76,25 +76,47 @@ class SequenciaMensagemJobCovercutTest extends TestCase
         Http::assertNothingSent();
         $this->assertDatabaseMissing('mensagens', ['ticket_id' => $ticket->id]);
         Log::shouldHaveReceived('info')
-            ->withArgs(fn ($message) => str_contains($message, 'mídia/botões não suportados no canal oficial'))
+            ->withArgs(fn ($message) => str_contains($message, 'botões não suportados no canal oficial'))
             ->once();
     }
 
-    public function test_mensagem_com_imagem_via_covercut_e_pulada_sem_chamada_http(): void
+    /**
+     * Achado real (2026-08-12): a imagem era pulada no canal oficial por uma trava
+     * desatualizada — CovercutChannelService::enviarImagem() já existia e estava em
+     * produção (chat manual do card) desde 2026-07-30/31, só a Sequência nunca tinha
+     * sido atualizada pra usá-lo. Pedido do Leonardo pra Secretária Eletrônica poder
+     * mandar imagem expôs a lacuna, que vale pra qualquer Sequência no canal Oficial.
+     */
+    public function test_mensagem_com_imagem_via_covercut_e_enviada_pelo_servico_do_canal(): void
     {
-        Http::fake();
-        Log::spy();
+        Http::fake(['*/messages/send' => Http::response(['id' => 'wamid.img'], 200)]);
 
         $ticket = $this->criarTicketCovercut();
 
         (new SequenciaMensagemJob($ticket->id, 'Olha essa foto', 'https://exemplo.com/foto.jpg'))
             ->handle(app(HumanizacaoService::class), app(UazapiService::class));
 
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/messages/send')
+            && $request['image']['link'] === 'https://exemplo.com/foto.jpg'
+            && $request['image']['caption'] === 'Olha essa foto');
+
+        $this->assertDatabaseHas('mensagens', [
+            'ticket_id' => $ticket->id, 'tipo' => 'imagem', 'conteudo' => 'Olha essa foto',
+        ]);
+    }
+
+    public function test_mensagem_com_imagem_e_botoes_via_covercut_pula_por_causa_dos_botoes(): void
+    {
+        Http::fake();
+
+        $ticket = $this->criarTicketCovercut();
+        $botoes = [['text' => 'Confirmar', 'action' => 'move_column', 'target' => 'servico_agendado']];
+
+        (new SequenciaMensagemJob($ticket->id, 'Confirma pra mim?', 'https://exemplo.com/foto.jpg', null, $botoes))
+            ->handle(app(HumanizacaoService::class), app(UazapiService::class));
+
         Http::assertNothingSent();
         $this->assertDatabaseMissing('mensagens', ['ticket_id' => $ticket->id]);
-        Log::shouldHaveReceived('info')
-            ->withArgs(fn ($message) => str_contains($message, 'mídia/botões não suportados no canal oficial'))
-            ->once();
     }
 
     public function test_mensagem_via_covercut_bloqueada_por_janela_expirada_nao_persiste_mensagem(): void

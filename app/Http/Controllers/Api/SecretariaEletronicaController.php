@@ -136,7 +136,7 @@ class SecretariaEletronicaController extends Controller
             $mensagemAbertura = $tenant->secretaria_mensagem_inicial
                 ?: "Oi! Vi que você ligou aqui pra gente e não consegui atender na hora. Tô disponível agora no WhatsApp, pode falar! 😊";
 
-            SequenciaMensagemJob::dispatch($ticket->id, $mensagemAbertura)
+            SequenciaMensagemJob::dispatch($ticket->id, $mensagemAbertura, $tenant->secretaria_mensagem_inicial_imagem_url)
                 ->onQueue('default')
                 ->delay(now()->addSeconds(5));
         }
@@ -210,6 +210,7 @@ class SecretariaEletronicaController extends Controller
         return response()->json([
             'secretaria_token'    => $tenant->secretaria_token,
             'mensagem_inicial'    => $tenant->secretaria_mensagem_inicial ?? '',
+            'mensagem_imagem_url' => $tenant->secretaria_mensagem_inicial_imagem_url,
             'envio_ativo'         => $tenant->secretaria_envio_ativo,
             'chamadas'            => $chamadas,
             'total_mes'           => $totalMes,
@@ -227,6 +228,43 @@ class SecretariaEletronicaController extends Controller
 
         $tenant = Tenant::find($request->user()->tenant_id);
         $tenant->update(['secretaria_mensagem_inicial' => $validated['mensagem'] ?? null]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    // ─── Imagem anexada à mensagem de abertura ────────────────────────────────
+
+    public function salvarImagem(Request $request): JsonResponse
+    {
+        $request->validate([
+            'imagem' => 'required|image|max:5120', // 5MB
+        ]);
+
+        $tenant = Tenant::find($request->user()->tenant_id);
+
+        if ($tenant->secretaria_mensagem_inicial_imagem_url) {
+            $pathAntigo = str_replace(url('storage/') . '/', '', $tenant->secretaria_mensagem_inicial_imagem_url);
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($pathAntigo);
+        }
+
+        $path = $request->file('imagem')->store('secretaria-imagens', 'public');
+        $url  = url('storage/' . $path);
+
+        $tenant->update(['secretaria_mensagem_inicial_imagem_url' => $url]);
+
+        return response()->json(['ok' => true, 'imagem_url' => $url]);
+    }
+
+    public function removerImagem(Request $request): JsonResponse
+    {
+        $tenant = Tenant::find($request->user()->tenant_id);
+
+        if ($tenant->secretaria_mensagem_inicial_imagem_url) {
+            $path = str_replace(url('storage/') . '/', '', $tenant->secretaria_mensagem_inicial_imagem_url);
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($path);
+        }
+
+        $tenant->update(['secretaria_mensagem_inicial_imagem_url' => null]);
 
         return response()->json(['ok' => true]);
     }

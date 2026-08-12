@@ -333,6 +333,8 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::get('/secretaria-eletronica/dados',       [SecretariaEletronicaController::class, 'dadosPainel']);
         Route::post('/secretaria-eletronica/token',      [SecretariaEletronicaController::class, 'rotacionarToken']);
         Route::post('/secretaria-eletronica/mensagem',   [SecretariaEletronicaController::class, 'salvarMensagem']);
+        Route::post('/secretaria-eletronica/imagem',     [SecretariaEletronicaController::class, 'salvarImagem']);
+        Route::delete('/secretaria-eletronica/imagem',   [SecretariaEletronicaController::class, 'removerImagem']);
         Route::post('/secretaria-eletronica/toggle',     [SecretariaEletronicaController::class, 'toggleEnvio']);
     });
 
