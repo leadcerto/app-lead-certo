@@ -68,6 +68,34 @@ class KanbanControllerPrioridadeTest extends TestCase
         $this->assertFalse($tickets[0]['precisa_resposta']);
     }
 
+    /**
+     * Achado real (2026-08-13): o card do board mostrava "Xd atrás" calculado a
+     * partir de `aberto_em` (quando o ticket foi criado), não de quando a última
+     * mensagem foi trocada — uma conversa ativa há dias, com mensagens todo dia,
+     * aparecia como "parada" pro Leonardo só porque o ticket é antigo. O front
+     * já tem `ultima_mensagem_em` disponível (usado no cálculo de prioridade);
+     * este teste garante que o campo continua vindo na resposta da API e reflete
+     * a mensagem mais recente, não a abertura do ticket.
+     */
+    public function test_ultima_mensagem_em_reflete_a_mensagem_mais_recente_nao_a_abertura_do_ticket(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = $this->criarUsuarioDono($tenant);
+
+        $ticket = $this->criarTicketComUltimaMensagem($tenant, 'bot', 'lead', ['aberto_em' => now()->subDays(8)]);
+        Mensagem::create([
+            'ticket_id' => $ticket->id, 'tenant_id' => $tenant->id,
+            'remetente' => 'lead', 'tipo' => 'texto', 'conteudo' => 'mensagem mais recente',
+            'enviado_em' => now()->subMinutes(5),
+        ]);
+
+        $response = $this->actingAs($user)->getJson('/api/painel/kanban/tickets');
+        $tickets  = $response->json('em_atendimento.tickets');
+
+        $ultimaMensagemEm = \Illuminate\Support\Carbon::parse($tickets[0]['ultima_mensagem_em']);
+        $this->assertTrue($ultimaMensagemEm->diffInMinutes(now()) < 10);
+    }
+
     public function test_ticket_pendente_ou_com_retorno_vem_antes_dos_demais(): void
     {
         $tenant = Tenant::factory()->create();
