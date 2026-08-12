@@ -205,55 +205,67 @@ class UazapiWebhookController extends Controller
         }
 
         // Busca ticket aberto para este contato+tenant
-        $ticket = TicketAtendimento::withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
-            ->where('contato_id', $contato->id)
-            ->whereIn('status', ['aberto', 'aguardando'])
-            ->latest()
-            ->first();
+        // Achado real (2026-08-12): duas mensagens do mesmo lead chegando quase
+        // juntas geravam dois webhooks concorrentes — cada um checava "já tem
+        // ticket aberto?" antes do outro terminar de gravar, e os dois criavam
+        // ticket (e disparavam a sequência de boas-vindas) pro mesmo contato,
+        // duplicando toda mensagem enviada ao lead (achado no canal Oficial,
+        // mesma estrutura de código aqui — corrigido nos dois por precaução).
+        // A trava garante que só uma requisição por vez resolve/cria o ticket.
+        [$ticket, $ticketNovo] = \Illuminate\Support\Facades\Cache::lock("ticket-resolve:uazapi:{$tenant->id}:{$contato->id}", 10)
+            ->block(5, function () use ($tenant, $contato, $canal, $conteudo, $origemDetectada) {
+                $ticket = TicketAtendimento::withoutGlobalScopes()
+                    ->where('tenant_id', $tenant->id)
+                    ->where('contato_id', $contato->id)
+                    ->whereIn('status', ['aberto', 'aguardando'])
+                    ->latest()
+                    ->first();
 
-        $ticketNovo = false;
-        if ($ticket) {
-            // Ticket já aberto recebeu mensagem por outro canal (número) — o ticket
-            // continua único por lead, mas o canal precisa refletir quem tocou por
-            // último, senão a resposta sai pelo número errado (mesmo padrão usado
-            // na reativação de ticket encerrado e em transferirParaHumano()).
-            if ($ticket->whatsapp_canal_id !== $canal->id) {
-                $ticket->update(['whatsapp_canal_id' => $canal->id]);
-            }
-        } else {
-            // Verifica se há ticket encerrado: reativa para o Guardião classificar a mensagem
-            $reaberturaService = app(\App\Services\TicketReaberturaService::class);
-            $ticketEncerrado   = $reaberturaService->buscarTicketEncerrado($tenant->id, $contato->id);
+                $ticketNovo = false;
+                if ($ticket) {
+                    // Ticket já aberto recebeu mensagem por outro canal (número) — o ticket
+                    // continua único por lead, mas o canal precisa refletir quem tocou por
+                    // último, senão a resposta sai pelo número errado (mesmo padrão usado
+                    // na reativação de ticket encerrado e em transferirParaHumano()).
+                    if ($ticket->whatsapp_canal_id !== $canal->id) {
+                        $ticket->update(['whatsapp_canal_id' => $canal->id]);
+                    }
+                } else {
+                    // Verifica se há ticket encerrado: reativa para o Guardião classificar a mensagem
+                    $reaberturaService = app(\App\Services\TicketReaberturaService::class);
+                    $ticketEncerrado   = $reaberturaService->buscarTicketEncerrado($tenant->id, $contato->id);
 
-            if ($ticketEncerrado) {
-                // Nem toda mensagem pra um ticket encerrado deve reabrir o atendimento
-                // — uma despedida/agradecimento ("obrigado, já consegui") não precisa
-                // reabrir, mas informação útil de verdade precisa. A IA decide.
-                $reaberturaService->reabrirSeNecessario($ticketEncerrado, $canal->id, $conteudo);
+                    if ($ticketEncerrado) {
+                        // Nem toda mensagem pra um ticket encerrado deve reabrir o atendimento
+                        // — uma despedida/agradecimento ("obrigado, já consegui") não precisa
+                        // reabrir, mas informação útil de verdade precisa. A IA decide.
+                        $reaberturaService->reabrirSeNecessario($ticketEncerrado, $canal->id, $conteudo);
 
-                $ticket = $ticketEncerrado;
-                // ticketNovo permanece false → se reativou, cai no elseif abaixo →
-                // SdrResponderJob; se não, agente_responsavel continua como estava
-                // (não 'bot'), então o elseif não dispara e nada é enviado ao lead.
-            } else {
-                // Abre novo ticket
-                $persona = $tenant->personas()->where('is_default', true)->where('ativo', true)->first();
+                        $ticket = $ticketEncerrado;
+                        // ticketNovo permanece false → se reativou, cai no elseif abaixo →
+                        // SdrResponderJob; se não, agente_responsavel continua como estava
+                        // (não 'bot'), então o elseif não dispara e nada é enviado ao lead.
+                    } else {
+                        // Abre novo ticket
+                        $persona = $tenant->personas()->where('is_default', true)->where('ativo', true)->first();
 
-                $ticket = TicketAtendimento::create([
-                    'tenant_id'          => $tenant->id,
-                    'contato_id'         => $contato->id,
-                    'whatsapp_canal_id'  => $canal->id,
-                    'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
-                    'agente_responsavel' => 'bot',
-                    'sdr_persona_id'     => $persona?->id,
-                    'status'             => 'aberto',
-                    'origem'             => $origemDetectada,
-                    'aberto_em'          => now(),
-                ]);
-                $ticketNovo = true;
-            }
-        }
+                        $ticket = TicketAtendimento::create([
+                            'tenant_id'          => $tenant->id,
+                            'contato_id'         => $contato->id,
+                            'whatsapp_canal_id'  => $canal->id,
+                            'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
+                            'agente_responsavel' => 'bot',
+                            'sdr_persona_id'     => $persona?->id,
+                            'status'             => 'aberto',
+                            'origem'             => $origemDetectada,
+                            'aberto_em'          => now(),
+                        ]);
+                        $ticketNovo = true;
+                    }
+                }
+
+                return [$ticket, $ticketNovo];
+            });
 
         // Processa mídia se houver (imagem → visão IA / áudio → transcrição / etc)
         $mediaType = $msg['mediaType'] ?? null;

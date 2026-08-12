@@ -120,63 +120,74 @@ class CovercutWebhookController extends Controller
 
         VinculoContatoTenant::firstOrCreate(['contato_id' => $contato->id, 'tenant_id' => $tenant->id]);
 
-        $ticket = TicketAtendimento::withoutGlobalScopes()
-            ->where('tenant_id', $tenant->id)
-            ->where('contato_id', $contato->id)
-            ->whereIn('status', ['aberto', 'aguardando'])
-            ->latest()
-            ->first();
+        // Achado real (2026-08-12): duas mensagens do mesmo lead chegando quase
+        // juntas geravam dois webhooks concorrentes — cada um checava "já tem
+        // ticket aberto?" antes do outro terminar de gravar, e os dois criavam
+        // ticket (e disparavam a sequência de boas-vindas) pro mesmo contato,
+        // duplicando toda mensagem enviada ao lead. A trava garante que só uma
+        // requisição por vez resolve/cria o ticket deste contato.
+        [$ticket, $ticketNovo] = \Illuminate\Support\Facades\Cache::lock("ticket-resolve:covercut:{$tenant->id}:{$contato->id}", 10)
+            ->block(5, function () use ($tenant, $contato, $canal, $janelaExpiraEm, $temReferralAnuncio, $payload) {
+                $ticket = TicketAtendimento::withoutGlobalScopes()
+                    ->where('tenant_id', $tenant->id)
+                    ->where('contato_id', $contato->id)
+                    ->whereIn('status', ['aberto', 'aguardando'])
+                    ->latest()
+                    ->first();
 
-        $ticketNovo = false;
+                $ticketNovo = false;
 
-        if ($ticket) {
-            $ticket->update([
-                'whatsapp_canal_id'     => $canal->id,
-                'janela_expira_em'      => $janelaExpiraEm,
-                'janela_origem_anuncio' => $temReferralAnuncio,
-            ]);
-        } else {
-            // Achado real (2026-08-12, caso do Eduardo Almada): faltava aqui o
-            // equivalente do UazapiWebhookController — sem essa checagem, um lead
-            // que voltava a falar pelo canal Oficial após o atendimento encerrado
-            // sempre ganhava ticket novo, nunca reabria o anterior. Mesma lógica
-            // de reabertura dos dois canais, extraída pra TicketReaberturaService.
-            $reaberturaService = app(\App\Services\TicketReaberturaService::class);
-            $ticketEncerrado   = $reaberturaService->buscarTicketEncerrado($tenant->id, $contato->id);
+                if ($ticket) {
+                    $ticket->update([
+                        'whatsapp_canal_id'     => $canal->id,
+                        'janela_expira_em'      => $janelaExpiraEm,
+                        'janela_origem_anuncio' => $temReferralAnuncio,
+                    ]);
+                } else {
+                    // Achado real (2026-08-12, caso do Eduardo Almada): faltava aqui o
+                    // equivalente do UazapiWebhookController — sem essa checagem, um lead
+                    // que voltava a falar pelo canal Oficial após o atendimento encerrado
+                    // sempre ganhava ticket novo, nunca reabria o anterior. Mesma lógica
+                    // de reabertura dos dois canais, extraída pra TicketReaberturaService.
+                    $reaberturaService = app(\App\Services\TicketReaberturaService::class);
+                    $ticketEncerrado   = $reaberturaService->buscarTicketEncerrado($tenant->id, $contato->id);
 
-            $textoBruto = $payload['message']['text'] ?? null;
-            $textoBruto = is_string($textoBruto) ? $textoBruto : ($textoBruto['body'] ?? null);
+                    $textoBruto = $payload['message']['text'] ?? null;
+                    $textoBruto = is_string($textoBruto) ? $textoBruto : ($textoBruto['body'] ?? null);
 
-            if ($ticketEncerrado && $reaberturaService->reabrirSeNecessario($ticketEncerrado, $canal->id, $textoBruto)) {
-                $ticketEncerrado->update([
-                    'janela_expira_em'      => $janelaExpiraEm,
-                    'janela_origem_anuncio' => $temReferralAnuncio,
-                ]);
-                $ticket = $ticketEncerrado;
-                // ticketNovo permanece false → se reativou, o elseif abaixo dispara
-                // o SdrResponderJob normalmente (agente_responsavel já virou 'bot');
-                // se manteve encerrado, nada é enviado ao lead — mesmo padrão do Uazapi.
-            } elseif ($ticketEncerrado) {
-                $ticket = $ticketEncerrado;
-            } else {
-                $persona = $tenant->personas()->where('is_default', true)->where('ativo', true)->first();
+                    if ($ticketEncerrado && $reaberturaService->reabrirSeNecessario($ticketEncerrado, $canal->id, $textoBruto)) {
+                        $ticketEncerrado->update([
+                            'janela_expira_em'      => $janelaExpiraEm,
+                            'janela_origem_anuncio' => $temReferralAnuncio,
+                        ]);
+                        $ticket = $ticketEncerrado;
+                        // ticketNovo permanece false → se reativou, o elseif abaixo dispara
+                        // o SdrResponderJob normalmente (agente_responsavel já virou 'bot');
+                        // se manteve encerrado, nada é enviado ao lead — mesmo padrão do Uazapi.
+                    } elseif ($ticketEncerrado) {
+                        $ticket = $ticketEncerrado;
+                    } else {
+                        $persona = $tenant->personas()->where('is_default', true)->where('ativo', true)->first();
 
-                $ticket = TicketAtendimento::create([
-                    'tenant_id'             => $tenant->id,
-                    'contato_id'            => $contato->id,
-                    'whatsapp_canal_id'     => $canal->id,
-                    'coluna_kanban'         => KanbanColuna::chaveDeEntrada($tenant->id),
-                    'agente_responsavel'    => 'bot',
-                    'sdr_persona_id'        => $persona?->id,
-                    'status'                => 'aberto',
-                    'origem'                => $temReferralAnuncio ? 'anuncio_meta' : 'whatsapp',
-                    'aberto_em'             => now(),
-                    'janela_expira_em'      => $janelaExpiraEm,
-                    'janela_origem_anuncio' => $temReferralAnuncio,
-                ]);
-                $ticketNovo = true;
-            }
-        }
+                        $ticket = TicketAtendimento::create([
+                            'tenant_id'             => $tenant->id,
+                            'contato_id'            => $contato->id,
+                            'whatsapp_canal_id'     => $canal->id,
+                            'coluna_kanban'         => KanbanColuna::chaveDeEntrada($tenant->id),
+                            'agente_responsavel'    => 'bot',
+                            'sdr_persona_id'        => $persona?->id,
+                            'status'                => 'aberto',
+                            'origem'                => $temReferralAnuncio ? 'anuncio_meta' : 'whatsapp',
+                            'aberto_em'             => now(),
+                            'janela_expira_em'      => $janelaExpiraEm,
+                            'janela_origem_anuncio' => $temReferralAnuncio,
+                        ]);
+                        $ticketNovo = true;
+                    }
+                }
+
+                return [$ticket, $ticketNovo];
+            });
 
         [$conteudo, $tipoMensagem, $midiaUrl] = $this->resolverConteudoEMidia($payload['message'] ?? [], $canal, $ticket, $messageId);
 
