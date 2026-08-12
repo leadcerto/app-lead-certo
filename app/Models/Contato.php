@@ -19,7 +19,7 @@ class Contato extends Model
         'telefone', 'telefone_2', 'tipo_telefone', 'tipo_telefone_2',
         'email', 'email_2',
         // Nome
-        'nome', 'nome_do_meio', 'sobrenome', 'prefixo', 'sufixo', 'apelido',
+        'nome', 'nome_do_meio', 'sobrenome', 'prefixo', 'sufixo', 'apelido', 'nome_revisado_ia_em',
         // Documentos
         'cpf', 'rg', 'passaporte',
         // Pessoal
@@ -49,10 +49,11 @@ class Contato extends Model
     protected function casts(): array
     {
         return [
-            'opt_out'     => 'boolean',
-            'bloqueado'   => 'boolean',
-            'aniversario' => 'date',
-            'tags'        => 'array',
+            'opt_out'             => 'boolean',
+            'bloqueado'           => 'boolean',
+            'aniversario'         => 'date',
+            'tags'                => 'array',
+            'nome_revisado_ia_em' => 'datetime',
         ];
     }
 
