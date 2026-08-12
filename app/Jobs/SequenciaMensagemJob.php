@@ -130,16 +130,41 @@ class SequenciaMensagemJob implements ShouldQueue
         $botoesSettings = $this->botoesSettings ?? null;
 
         if ($ehCovercut) {
-            // MVP text-only (ver cabeçalho de CovercutWebhookController): botões e
-            // imagem não têm implementação nenhuma no canal oficial — pular em vez
-            // de tentar enviar (silenciosamente) só o texto, que mudaria o conteúdo
-            // combinado na sequência sem avisar ninguém.
-            if (! empty($botoesSettings) || $this->imagemUrl) {
-                Log::info('Sequência: mídia/botões não suportados no canal oficial, mensagem pulada', [
+            // Botões ainda não têm implementação no canal oficial — pular em vez de
+            // enviar (silenciosamente) só o texto, que mudaria o conteúdo combinado
+            // na sequência sem avisar ninguém.
+            //
+            // Imagem: o comentário antigo aqui dizia "imagem não tem implementação
+            // nenhuma no canal oficial" — ficou desatualizado depois do trabalho de
+            // mídia no canal oficial (2026-07-30/31, já em produção pro chat manual
+            // do card). CovercutChannelService::enviarImagem() já existe; ninguém
+            // tinha atualizado esta trava pra usá-lo (achado 2026-08-12, pedido do
+            // Leonardo pra Secretária Eletrônica, mas vale pra qualquer Sequência).
+            if (! empty($botoesSettings)) {
+                Log::info('Sequência: botões não suportados no canal oficial, mensagem pulada', [
                     'ticket_id' => $this->ticketId,
-                    'tem_botoes' => ! empty($botoesSettings),
-                    'tem_imagem' => (bool) $this->imagemUrl,
                 ]);
+                return;
+            }
+
+            if ($this->imagemUrl) {
+                $enviado = $canal->servico()->enviarImagem($canal, $telefone, $this->imagemUrl, $texto);
+
+                if ($enviado) {
+                    Mensagem::create([
+                        'ticket_id'  => $ticket->id,
+                        'tenant_id'  => $ticket->tenant_id,
+                        'remetente'  => 'bot',
+                        'tipo'       => 'imagem',
+                        'conteudo'   => $texto ?: '[Imagem]',
+                        'enviado_em' => now(),
+                    ]);
+                } else {
+                    Log::warning('SequenciaMensagemJob: envio de imagem via canal oficial falhou ou foi bloqueado (janela expirada)', [
+                        'ticket_id' => $this->ticketId,
+                    ]);
+                }
+
                 return;
             }
 

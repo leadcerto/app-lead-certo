@@ -26,6 +26,7 @@ class Tenant extends Model
         'uazapi_webhook_token',
         'secretaria_token',
         'secretaria_mensagem_inicial',
+        'secretaria_mensagem_inicial_imagem_url',
         'secretaria_envio_ativo',
         'ia_contexto',
         'tabela_precos_pdf_path',

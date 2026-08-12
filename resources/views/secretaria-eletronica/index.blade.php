@@ -205,6 +205,30 @@
                 <template x-if="!salvando"><span x-text="salvoOk ? 'Salvo ✓' : 'Salvar mensagem'"></span></template>
             </button>
         </div>
+
+        {{-- Imagem anexada à mensagem de abertura --}}
+        <div class="mt-4 pt-4 border-t border-gray-100">
+            <label class="text-xs font-medium text-gray-500 block mb-2">Imagem anexada (opcional)</label>
+
+            <template x-if="!mensagemImagemUrl">
+                <label class="flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-lg py-4 text-sm text-gray-400 cursor-pointer hover:border-gray-300 hover:text-gray-500 transition-colors"
+                       :class="!envioAtivo && 'opacity-50 cursor-not-allowed'">
+                    <span x-text="enviandoImagem ? 'Enviando…' : 'Clique para anexar uma imagem'"></span>
+                    <input type="file" accept="image/*" class="hidden" :disabled="!envioAtivo || enviandoImagem"
+                           @change="enviarImagem($event)">
+                </label>
+            </template>
+
+            <template x-if="mensagemImagemUrl">
+                <div class="flex items-center gap-3">
+                    <img :src="mensagemImagemUrl" class="w-16 h-16 object-cover rounded-lg border border-gray-200">
+                    <button @click="removerImagem()"
+                            class="text-xs text-red-500 hover:text-red-700 transition-colors">Remover imagem</button>
+                </div>
+            </template>
+
+            <p class="text-xs text-gray-400 mt-2">Junto com o texto acima, o lead recebe a imagem na mesma mensagem de abertura.</p>
+        </div>
     </div>
 
     {{-- Métricas --}}
@@ -330,6 +354,8 @@ function secretaria() {
     return {
         token: '',
         mensagemInicial: '',
+        mensagemImagemUrl: null,
+        enviandoImagem: false,
         envioAtivo: true,
         chamadas: [],
         totalMes: 0,
@@ -348,6 +374,7 @@ function secretaria() {
             const d = await res.json();
             this.token              = d.secretaria_token ?? '';
             this.mensagemInicial    = d.mensagem_inicial ?? '';
+            this.mensagemImagemUrl  = d.mensagem_imagem_url ?? null;
             this.envioAtivo         = d.envio_ativo ?? true;
             this.chamadas           = d.chamadas ?? [];
             this.totalMes           = d.total_mes ?? 0;
@@ -381,6 +408,36 @@ function secretaria() {
             });
             this.salvando = false;
             this.salvoOk  = true;
+        },
+
+        async enviarImagem(event) {
+            const arquivo = event.target.files[0];
+            if (! arquivo) return;
+
+            this.enviandoImagem = true;
+            const formData = new FormData();
+            formData.append('imagem', arquivo);
+
+            const res = await fetch('/api/painel/secretaria-eletronica/imagem', {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                body: formData,
+            });
+            this.enviandoImagem = false;
+
+            if (res.ok) {
+                const d = await res.json();
+                this.mensagemImagemUrl = d.imagem_url;
+            }
+            event.target.value = '';
+        },
+
+        async removerImagem() {
+            await fetch('/api/painel/secretaria-eletronica/imagem', {
+                method: 'DELETE',
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+            });
+            this.mensagemImagemUrl = null;
         },
 
         async copiarToken() {
