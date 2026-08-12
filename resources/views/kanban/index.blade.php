@@ -116,7 +116,7 @@
 
                             <div class="flex items-center justify-between mt-3">
                                 <span class="text-xs text-gray-400"
-                                      x-text="dataRelativa(ticket.aberto_em)"></span>
+                                      x-text="dataRelativa(ticket.ultima_mensagem_em || ticket.aberto_em)"></span>
                                 <template x-if="ticket.count_midias > 0">
                                     <span class="text-xs text-purple-600">📎 <span x-text="ticket.count_midias"></span></span>
                                 </template>
