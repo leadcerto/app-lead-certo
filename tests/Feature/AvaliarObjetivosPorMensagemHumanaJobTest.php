@@ -49,6 +49,11 @@ class AvaliarObjetivosPorMensagemHumanaJobTest extends TestCase
             'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
             'texto' => 'Endereço de origem e destino', 'ordem' => 1, 'ativo' => true,
         ]);
+        // Adicionar segundo objetivo para manter checklist incompleta e evitar avanço automático
+        KanbanColunaObjetivo::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
+            'texto' => 'Lista de itens confirmada', 'ordem' => 2, 'ativo' => true,
+        ]);
 
         $this->mock(OpenRouterService::class, function ($mock) use ($obj) {
             $mock->shouldReceive('chat')->once()->andReturn((string) $obj->id);
