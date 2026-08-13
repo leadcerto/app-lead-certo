@@ -83,6 +83,21 @@ class SecretariaEletronicaController extends Controller
             'tenant_id'  => $tenant->id,
         ]);
 
+        // Achado real (2026-08-12): quando uma ligação anterior desse número já
+        // tinha um ticket aberto (mesmo sem nenhuma mensagem enviada — ex: a
+        // primeira tentativa falhou por janela do WhatsApp fechada), o sistema
+        // nunca mais tentava mandar mensagem pra esse número, pra sempre. Regra
+        // combinada com o Leonardo: só NÃO reenviar se a ligação anterior desse
+        // número foi no MESMO DIA (evita virar spam) — em dia diferente, tenta
+        // mandar de novo, mesmo reaproveitando um ticket que já existe.
+        $ultimaChamadaAnterior = ChamadaPerdida::where('tenant_id', $tenant->id)
+            ->where('numero_chamador', $numeroChamador)
+            ->where('id', '!=', $chamada->id)
+            ->orderByDesc('chamou_em')
+            ->first();
+
+        $jaLigouHoje = $ultimaChamadaAnterior && $ultimaChamadaAnterior->chamou_em->isSameDay($chamouEm);
+
         // Achado real (2026-08-12): duas chamadas perdidas quase simultâneas (ex:
         // retry do app do celular) podiam gerar dois webhooks concorrentes — cada
         // um checava "já tem ticket aberto?" antes do outro terminar de gravar, e
@@ -90,8 +105,8 @@ class SecretariaEletronicaController extends Controller
         // contato, duplicando a mensagem no WhatsApp do lead (mesmo bug achado no
         // CovercutWebhookController). A trava garante que só uma requisição por
         // vez resolve/cria o ticket deste contato.
-        [$ticket, $ticketNovo] = \Illuminate\Support\Facades\Cache::lock("ticket-resolve:secretaria:{$tenant->id}:{$contato->id}", 10)
-            ->block(5, function () use ($tenant, $contato) {
+        [$ticket, $ticketNovo, $deveEnviarMensagem] = \Illuminate\Support\Facades\Cache::lock("ticket-resolve:secretaria:{$tenant->id}:{$contato->id}", 10)
+            ->block(5, function () use ($tenant, $contato, $jaLigouHoje) {
                 // Verifica se já tem ticket bot aberto — não abre duplicado
                 $ticketExistente = TicketAtendimento::where('tenant_id', $tenant->id)
                     ->where('contato_id', $contato->id)
@@ -102,7 +117,7 @@ class SecretariaEletronicaController extends Controller
                     ->first();
 
                 if ($ticketExistente) {
-                    return [$ticketExistente, false];
+                    return [$ticketExistente, false, ! $jaLigouHoje];
                 }
 
                 // Cria ticket
@@ -119,23 +134,23 @@ class SecretariaEletronicaController extends Controller
                     'origem'             => 'ligacao',
                 ]);
 
-                return [$ticket, true];
+                return [$ticket, true, true];
             });
 
-        if (! $ticketNovo) {
+        if (! $deveEnviarMensagem) {
             $chamada->update([
                 'contato_id'       => $contato->id,
                 'ticket_id'        => $ticket->id,
                 'mensagem_enviada' => false,
             ]);
 
-            Log::info('Secretária: chamada registrada, ticket já existente', [
+            Log::info('Secretária: já ligou hoje, não reenvia mensagem', [
                 'tenant'  => $tenant->id,
                 'contato' => $contato->id,
                 'ticket'  => $ticket->id,
             ]);
 
-            return response()->json(['ok' => true, 'acao' => 'ticket_existente', 'ticket_id' => $ticket->id]);
+            return response()->json(['ok' => true, 'acao' => 'ja_ligou_hoje', 'ticket_id' => $ticket->id]);
         }
 
         // Atualiza chamada com IDs vinculados
@@ -157,8 +172,14 @@ class SecretariaEletronicaController extends Controller
                 ->delay(now()->addSeconds(5));
         }
 
-        // Inicia sequência de mensagens automáticas (Boas-vindas)
-        app(SequenciaService::class)->iniciarParaTicket($ticket);
+        // Inicia sequência de mensagens automáticas (Boas-vindas) — só pra ticket
+        // genuinamente novo. Um ticket já existente reaproveitado em dia diferente
+        // (ex: primeira tentativa falhou) recebe a mensagem de abertura de novo,
+        // mas não reinicia a sequência inteira por cima de uma conversa que talvez
+        // já tenha andado.
+        if ($ticketNovo) {
+            app(SequenciaService::class)->iniciarParaTicket($ticket);
+        }
 
         Log::info('Secretária Eletrônica: chamada processada', [
             'tenant'  => $tenant->id,
