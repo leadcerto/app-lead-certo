@@ -44,8 +44,16 @@ class AvancoAutomaticoKanbanService
 
             if ($mudou) {
                 $atual->update(['objetivos_cumpridos' => $cumpridos]);
-                $this->avancarSeCompletoInterno($atual, $idsAtivos);
             }
+
+            // Achado 2 da revisão final: roda incondicionalmente (não só quando
+            // $mudou), igual o plano original especificava — se um objetivo já
+            // marcado for desativado depois na config (reduzindo a lista de
+            // "ativos"), a checklist pode ficar completa "por redução" sem
+            // nenhuma marcação nova disparar o avanço. avancarSeCompletoInterno
+            // já checa se está tudo completo antes de fazer qualquer coisa, então
+            // chamar sempre não muda o comportamento quando não está completo.
+            $this->avancarSeCompletoInterno($atual, $idsAtivos);
         });
     }
 

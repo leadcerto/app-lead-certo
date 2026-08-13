@@ -9,7 +9,6 @@ use App\Models\KanbanColunaObjetivo;
 use App\Models\Mensagem;
 use App\Models\SdrPersona;
 use App\Models\TicketAtendimento;
-use App\Services\AvancoAutomaticoKanbanService;
 use Illuminate\Support\Facades\Log;
 
 class SdrResponderService
@@ -107,6 +106,16 @@ class SdrResponderService
             $token = '[' . mb_strtoupper($chave) . ']';
 
             if (str_contains($resposta, $token)) {
+                // Achado 1 da revisão final: token redundante da coluna onde o
+                // ticket já está (o próprio system prompt oferece qualquer token
+                // "em qualquer etapa", inclusive o da atual) não move nada de
+                // fato — pula sem marcar $moveu, mas CONTINUA o loop, porque um
+                // token de OUTRA coluna pode aparecer na mesma resposta e esse
+                // sim precisa mover de verdade.
+                if ($chave === $ticket->coluna_kanban) {
+                    continue;
+                }
+
                 $etapa = KanbanColunaConfig::withoutGlobalScopes()
                     ->where('tenant_id', $tenantId)
                     ->where('coluna_kanban', $chave)
@@ -117,7 +126,7 @@ class SdrResponderService
                     ? $ticket->dadosParaEncerrar(['etapa_ia' => $etapa], $chave)
                     : ['coluna_kanban' => $chave, 'etapa_ia' => $etapa];
                 // objetivos_cumpridos é zerado automaticamente pelo hook do model
-                // (TicketAtendimento::saving) sempre que coluna_kanban muda e este
+                // (TicketAtendimento::updating) sempre que coluna_kanban muda e este
                 // update não o define explicitamente — ver Achado 2 da revisão final.
 
                 // Bloco 5 — este é o único ponto do sistema onde a própria IA
@@ -152,6 +161,12 @@ class SdrResponderService
             Log::info('SdrResponder: objetivos marcados como cumpridos', [
                 'ticket_id' => $ticket->id, 'ids' => $matchesObjetivos[1],
             ]);
+
+            // Achado 3 da revisão final: marcarObjetivos() recarrega o ticket
+            // internamente e pode avançar a coluna numa instância separada —
+            // sem o refresh, o $ticket em memória aqui ficaria com a coluna
+            // antiga pro resto do método (seção 5 em diante).
+            $ticket->refresh();
         }
         $resposta = trim(preg_replace('/\[OBJETIVO_CUMPRIDO:\d+\]/', '', $resposta));
 

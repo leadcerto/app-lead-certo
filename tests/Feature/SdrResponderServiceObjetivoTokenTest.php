@@ -220,4 +220,46 @@ class SdrResponderServiceObjetivoTokenTest extends TestCase
         // da ordem natural (aguardando_orcamento).
         $this->assertSame('pagamento', $ticket->fresh()->coluna_kanban);
     }
+
+    /**
+     * Achado 1 da revisão final: o token de movimento oferecido "em qualquer
+     * etapa" pode ser o da PRÓPRIA coluna atual do ticket — redundante, não
+     * move nada de fato. Antes do fix, qualquer token batido (mesmo o da
+     * coluna atual) marcava $moveu = true e bloqueava a seção 4.5 inteira,
+     * descartando silenciosamente o [OBJETIVO_CUMPRIDO:id] da mesma resposta.
+     */
+    public function test_token_redundante_da_coluna_atual_nao_bloqueia_marcacao_de_objetivo(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $ticket = $this->criarTicketComCanal(); // já está em 'em_atendimento'
+
+        $objetivo = KanbanColunaObjetivo::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
+            'texto' => 'Endereço de origem confirmado', 'ordem' => 1, 'ativo' => true,
+        ]);
+        // Segundo objetivo não mencionado — mantém a checklist incompleta,
+        // senão o avanço automático mudaria de coluna e zeraria
+        // objetivos_cumpridos como efeito colateral, o que não é o foco aqui.
+        KanbanColunaObjetivo::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
+            'texto' => 'Lista de itens', 'ordem' => 2, 'ativo' => true,
+        ]);
+
+        // A IA reemite o token da coluna ONDE JÁ ESTÁ (redundante) junto com
+        // o token de objetivo cumprido na mesma resposta.
+        $this->mock(OpenRouterService::class, function ($mock) use ($objetivo) {
+            $mock->shouldReceive('chat')->once()
+                ->andReturn("Perfeito, endereço anotado!\n[EM_ATENDIMENTO]\n[OBJETIVO_CUMPRIDO:{$objetivo->id}]");
+        });
+
+        $resposta = app(SdrResponderService::class)->responder($ticket);
+
+        $fresco = $ticket->fresh();
+        // Token redundante não moveu nada.
+        $this->assertSame('em_atendimento', $fresco->coluna_kanban);
+        // Objetivo não foi descartado silenciosamente — foi marcado.
+        $this->assertSame([$objetivo->id], $fresco->objetivos_cumpridos);
+        // Ambos os tokens foram removidos do texto final enviado ao lead.
+        $this->assertSame('Perfeito, endereço anotado!', $resposta);
+    }
 }

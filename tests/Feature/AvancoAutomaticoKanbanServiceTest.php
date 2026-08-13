@@ -120,6 +120,12 @@ class AvancoAutomaticoKanbanServiceTest extends TestCase
     {
         $ticket = $this->criarTicket();
         $obj    = $this->criarObjetivo($ticket, 'Endereço');
+        // Segundo objetivo pendente — mantém a checklist incompleta, senão
+        // (Achado 2 da revisão final: avancarSeCompletoInterno agora roda
+        // incondicionalmente) o único objetivo já completo faria o ticket
+        // avançar de coluna e zerar objetivos_cumpridos como efeito colateral,
+        // o que não é o que este teste quer verificar (aqui o foco é dedup).
+        $this->criarObjetivo($ticket, 'Lista de itens');
         $ticket->update(['objetivos_cumpridos' => [$obj->id]]);
 
         app(AvancoAutomaticoKanbanService::class)->marcarObjetivos($ticket, [$obj->id]);
