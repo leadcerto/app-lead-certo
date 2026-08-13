@@ -94,6 +94,16 @@ class FollowupConversas extends Command
         $estagiosDisparados = ['1' => 0, '2' => 0, '3' => 0];
         $autoMovidos        = 0;
 
+        // Achado real (Leonardo, 2026-08-13): o auto-mover por silêncio está
+        // configurado e ativo (ex: 24h/48h/72h → encerrado) mas nunca disparava
+        // pra nenhum ticket assumido por um humano — o filtro `agente_responsavel
+        // = 'bot'' abaixo cortava TODOS eles fora da lista de candidatos antes de
+        // sequer chegar na checagem de tempo. Auto-mover é um "escape" pra ticket
+        // parado independente de quem devia responder (humano esqueceu, bot
+        // encerrou controle, etc.) — não faz sentido restringir só ao bot. Os
+        // Estágios de mensagem (nudge ao lead) continuam bot-only logo abaixo,
+        // porque não faz sentido o bot "cutucar" o lead enquanto um humano já
+        // assumiu a conversa.
         $candidatos = $emHorarioComercial
             ? DB::table('tickets_atendimento as t')
                 ->join(DB::raw('(
@@ -102,10 +112,9 @@ class FollowupConversas extends Command
                     INNER JOIN (SELECT ticket_id, MAX(id) as max_id FROM mensagens GROUP BY ticket_id) m2
                     ON m1.id = m2.max_id
                 ) as ultima'), 'ultima.ticket_id', '=', 't.id')
-                ->where('t.agente_responsavel', 'bot')
                 ->whereNotIn('t.etapa_ia', ['handoff'])
                 ->where('t.status', 'aberto')
-                ->select('t.id', 't.tenant_id', 't.coluna_kanban', 't.followup_estagio_enviado', 'ultima.ultima_em')
+                ->select('t.id', 't.tenant_id', 't.coluna_kanban', 't.followup_estagio_enviado', 't.agente_responsavel', 'ultima.ultima_em')
                 ->get()
             : collect();
 
@@ -123,8 +132,8 @@ class FollowupConversas extends Command
 
             $ticket = null; // carregado sob demanda, só se alguma ação for aplicável
 
-            // ── Estágios de mensagem (1/2/3) ──────────────────────────────────
-            if ($row->followup_estagio_enviado < 3) {
+            // ── Estágios de mensagem (1/2/3) — só pra ticket com o bot no controle ──
+            if ($row->agente_responsavel === 'bot' && $row->followup_estagio_enviado < 3) {
                 $limite1 = $config?->followup_estagio1_segundos ?? 3600;
                 $limite2 = $config?->followup_estagio2_segundos ?? 7200;
                 $limite3 = $config?->followup_estagio3_segundos ?? 21600;

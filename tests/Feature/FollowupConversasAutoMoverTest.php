@@ -326,6 +326,79 @@ class FollowupConversasAutoMoverTest extends TestCase
         ]);
     }
 
+    /**
+     * Achado real (Leonardo, 2026-08-13): o auto-mover configurado (ex: 24h/48h/
+     * 72h → encerrado) nunca disparava pra ticket assumido por um humano — a
+     * consulta de candidatos filtrava `agente_responsavel = 'bot'` antes mesmo de
+     * checar o tempo de silêncio, deixando qualquer ticket "Humano" parado pra
+     * sempre, mesmo com a config ativa. Corrigido: auto-mover agora vale pra
+     * qualquer dono do ticket (bot ou humano) — só os Estágios de mensagem
+     * (nudge ao lead) continuam exclusivos do bot, feito no teste seguinte.
+     */
+    public function test_move_automaticamente_ticket_assumido_por_humano(): void
+    {
+        $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'config' => ['instance_token' => 'tok'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511955556666']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'aguardando_orcamento', 'agente_responsavel' => 'humano', 'etapa_ia' => 'etapa_1',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+        Mensagem::create([
+            'ticket_id' => $ticket->id, 'tenant_id' => $tenant->id,
+            'remetente' => 'humano', 'tipo' => 'texto', 'conteudo' => 'Vou verificar e já te retorno',
+            'enviado_em' => now()->subDays(4),
+        ]);
+
+        KanbanColunaConfig::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'aguardando_orcamento',
+            'auto_mover_ativo' => true, 'auto_mover_coluna_destino' => 'encerrado',
+            'auto_mover_segundos' => 3 * 86400,
+        ]);
+
+        $this->artisan('conversas:followup')->assertExitCode(0);
+
+        $ticket->refresh();
+        $this->assertSame('encerrado', $ticket->coluna_kanban);
+        $this->assertSame('encerrado', $ticket->status);
+    }
+
+    public function test_estagios_de_mensagem_continuam_exclusivos_do_bot_mesmo_apos_o_fix_do_auto_mover(): void
+    {
+        $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'config' => ['instance_token' => 'tok'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511955557777']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'aguardando_orcamento', 'agente_responsavel' => 'humano', 'etapa_ia' => 'etapa_1',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'followup_estagio_enviado' => 0,
+        ]);
+        Mensagem::create([
+            'ticket_id' => $ticket->id, 'tenant_id' => $tenant->id,
+            'remetente' => 'lead', 'tipo' => 'texto', 'conteudo' => 'oi',
+            'enviado_em' => now()->subMinutes(90),
+        ]);
+
+        KanbanColunaConfig::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'aguardando_orcamento',
+            'ia_ativo' => true,
+        ]);
+
+        $this->artisan('conversas:followup')->assertExitCode(0);
+
+        // Nenhum estágio de mensagem deve ter sido marcado — o bot não "cutuca"
+        // o lead num ticket que um humano já assumiu.
+        $this->assertSame(0, $ticket->fresh()->followup_estagio_enviado);
+    }
+
     public function test_mover_para_coluna_de_papel_encerramento_renomeada_encerra_o_ticket(): void
     {
         $tenant = \App\Models\Tenant::factory()->create();
