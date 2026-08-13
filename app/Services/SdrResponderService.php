@@ -9,6 +9,7 @@ use App\Models\KanbanColunaObjetivo;
 use App\Models\Mensagem;
 use App\Models\SdrPersona;
 use App\Models\TicketAtendimento;
+use App\Services\AvancoAutomaticoKanbanService;
 use Illuminate\Support\Facades\Log;
 
 class SdrResponderService
@@ -136,36 +137,18 @@ class SdrResponderService
         // ── 4.5. Detectar tokens de objetivo cumprido e aplicar ─────────────
         // Mesmo padrão dos tokens de movimento acima — o agente reporta na
         // própria resposta quais objetivos do checklist da coluna considera
-        // cumpridos, e o sistema persiste isso no ticket antes de mandar a
-        // mensagem pro lead sem o marcador.
+        // cumpridos. Delegado pro AvancoAutomaticoKanbanService, que também
+        // avança a coluna sozinho quando a checklist fecha.
+        //
+        // Só roda se a seção "4" acima NÃO já moveu o ticket explicitamente
+        // ($moveu === false) — se a IA já mandou mover pra outra coluna nesta
+        // mesma resposta, os ids do token de objetivo se referem à coluna de
+        // ONDE ela veio (que já mudou), não faz sentido tentar marcar contra
+        // a nova coluna nem tentar avançar de novo por cima.
         preg_match_all('/\[OBJETIVO_CUMPRIDO:(\d+)\]/', $resposta, $matchesObjetivos);
-        if (! empty($matchesObjetivos[1])) {
-            // Só aceita ids que realmente existem pra esse tenant/coluna — um
-            // objetivo pode ter sido excluído entre a config ser lida (início
-            // da chamada) e a resposta chegar, ou o modelo pode alucinar um id.
-            // Sem essa validação, um id órfão infla pra sempre o "X/Y cumpridos"
-            // do card sem corresponder a nenhum objetivo visível.
-            $idsValidos = KanbanColunaObjetivo::withoutGlobalScopes()
-                ->where('tenant_id', $ticket->tenant_id)
-                ->where('coluna_kanban', $ticket->coluna_kanban)
-                ->where('ativo', true)
-                ->pluck('id')
-                ->all();
-
-            $cumpridos = $ticket->objetivos_cumpridos ?? [];
-            foreach ($matchesObjetivos[1] as $idTexto) {
-                $id = (int) $idTexto;
-                if (! in_array($id, $idsValidos, true)) {
-                    Log::debug('SdrResponder: token de objetivo com id inexistente, ignorado', [
-                        'ticket_id' => $ticket->id, 'id' => $id,
-                    ]);
-                    continue;
-                }
-                if (! in_array($id, $cumpridos, true)) {
-                    $cumpridos[] = $id;
-                }
-            }
-            $ticket->update(['objetivos_cumpridos' => $cumpridos]);
+        if (! empty($matchesObjetivos[1]) && ! $moveu) {
+            $ids = array_map('intval', $matchesObjetivos[1]);
+            app(AvancoAutomaticoKanbanService::class)->marcarObjetivos($ticket, $ids);
             Log::info('SdrResponder: objetivos marcados como cumpridos', [
                 'ticket_id' => $ticket->id, 'ids' => $matchesObjetivos[1],
             ]);

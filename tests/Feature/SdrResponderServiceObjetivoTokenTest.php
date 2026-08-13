@@ -45,6 +45,14 @@ class SdrResponderServiceObjetivoTokenTest extends TestCase
             'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
             'texto' => 'Endereço de origem confirmado', 'ordem' => 1, 'ativo' => true,
         ]);
+        // Segundo objetivo não mencionado no token — mantém a checklist da
+        // coluna incompleta, senão o avanço automático (AvancoAutomaticoKanbanService,
+        // já coberto por testes próprios) dispararia e zeraria objetivos_cumpridos
+        // como efeito colateral, o que não é o que este teste quer verificar.
+        KanbanColunaObjetivo::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
+            'texto' => 'Lista de itens', 'ordem' => 2, 'ativo' => true,
+        ]);
 
         $this->mock(OpenRouterService::class, function ($mock) use ($objetivo) {
             $mock->shouldReceive('chat')->once()
@@ -70,6 +78,15 @@ class SdrResponderServiceObjetivoTokenTest extends TestCase
         $obj2 = KanbanColunaObjetivo::create([
             'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
             'texto' => 'Lista de itens', 'ordem' => 2, 'ativo' => true,
+        ]);
+        // Terceiro objetivo não mencionado em nenhum token — mantém a checklist
+        // da coluna incompleta, senão marcar obj1+obj2 fecharia 100% dela e o
+        // avanço automático (já coberto por testes próprios) dispararia,
+        // zerando objetivos_cumpridos como efeito colateral — não é o que este
+        // teste quer verificar (aqui o foco é o parsing de múltiplos tokens).
+        KanbanColunaObjetivo::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
+            'texto' => 'Confirmação de pagamento', 'ordem' => 3, 'ativo' => true,
         ]);
 
         $this->mock(OpenRouterService::class, function ($mock) use ($obj1, $obj2) {
@@ -138,5 +155,69 @@ class SdrResponderServiceObjetivoTokenTest extends TestCase
 
         $this->assertSame('Perfeito!', $resposta);
         $this->assertSame([], $ticket->fresh()->objetivos_cumpridos ?? []);
+    }
+
+    public function test_marcar_ultimo_objetivo_via_token_avanca_a_coluna(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $ticket = $this->criarTicketComCanal();
+
+        $obj1 = KanbanColunaObjetivo::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
+            'texto' => 'Endereço de origem', 'ordem' => 1, 'ativo' => true,
+        ]);
+        $obj2 = KanbanColunaObjetivo::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
+            'texto' => 'Lista de itens', 'ordem' => 2, 'ativo' => true,
+        ]);
+        $ticket->update(['objetivos_cumpridos' => [$obj1->id]]);
+
+        $this->mock(OpenRouterService::class, function ($mock) use ($obj2) {
+            $mock->shouldReceive('chat')->once()
+                ->andReturn("Perfeito, anotado!\n[OBJETIVO_CUMPRIDO:{$obj2->id}]");
+        });
+
+        app(SdrResponderService::class)->responder($ticket);
+
+        $fresco = $ticket->fresh();
+        $this->assertSame('aguardando_orcamento', $fresco->coluna_kanban);
+        $this->assertSame([], $fresco->objetivos_cumpridos ?? []);
+    }
+
+    /**
+     * Se a mesma resposta já incluir um token explícito de movimento de
+     * coluna ([NOME_DA_COLUNA], seção "4" — roda antes da seção "4.5"), o
+     * avanço automático por checklist não deve ser aplicado por cima —
+     * o ticket já mudou de coluna por decisão explícita, e os ids do token
+     * de objetivo se referem à coluna de ONDE ele veio, não a de destino.
+     */
+    public function test_token_de_movimento_explicito_impede_avanco_automatico_por_checklist(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $ticket = $this->criarTicketComCanal();
+
+        $obj1 = KanbanColunaObjetivo::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
+            'texto' => 'Endereço de origem', 'ordem' => 1, 'ativo' => true,
+        ]);
+        $obj2 = KanbanColunaObjetivo::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'em_atendimento',
+            'texto' => 'Lista de itens', 'ordem' => 2, 'ativo' => true,
+        ]);
+        $ticket->update(['objetivos_cumpridos' => [$obj1->id]]);
+
+        // A IA decide mover explicitamente pra 'pagamento' (pulando
+        // aguardando_orcamento/aguardando_lead) E, na mesma resposta,
+        // reporta o último objetivo de em_atendimento como cumprido.
+        $this->mock(OpenRouterService::class, function ($mock) use ($obj2) {
+            $mock->shouldReceive('chat')->once()
+                ->andReturn("Combinado!\n[PAGAMENTO]\n[OBJETIVO_CUMPRIDO:{$obj2->id}]");
+        });
+
+        app(SdrResponderService::class)->responder($ticket);
+
+        // Foi pra onde a IA mandou explicitamente, não pra próxima coluna
+        // da ordem natural (aguardando_orcamento).
+        $this->assertSame('pagamento', $ticket->fresh()->coluna_kanban);
     }
 }
