@@ -51,8 +51,12 @@ class SecretariaEletronicaReenvioMesmoDiaTest extends TestCase
         $response->assertOk()->assertJsonFragment(['acao' => 'ja_ligou_hoje']);
         Queue::assertPushed(SequenciaMensagemJob::class, 1);
 
+        // Fila fake — o job (assíncrono) nunca roda de verdade, então nenhuma das
+        // duas chamadas foi marcada como enviada ainda. O desfecho real só chega
+        // quando o job roda e reporta de volta via `chamadaPerdidaId`
+        // (SequenciaMensagemJobChamadaPerdidaTest cobre esse caminho).
         $chamadas = ChamadaPerdida::where('numero_chamador', '5511999995555')->orderBy('chamou_em')->get();
-        $this->assertTrue($chamadas[0]->mensagem_enviada);
+        $this->assertFalse($chamadas[0]->mensagem_enviada);
         $this->assertFalse($chamadas[1]->mensagem_enviada);
     }
 
@@ -80,9 +84,13 @@ class SecretariaEletronicaReenvioMesmoDiaTest extends TestCase
         $response->assertOk()->assertJsonFragment(['acao' => 'mensagem_enviada']);
         Queue::assertPushed(SequenciaMensagemJob::class, 2);
 
+        // Fila fake — nenhum dos dois jobs rodou de verdade ainda, então
+        // `mensagem_enviada` permanece false pra ambos (ver comentário no teste
+        // acima). O que este teste garante é a parte de dedup: duas ligações em
+        // dias diferentes disparam dois jobs, sem duplicar o ticket.
         $chamadas = ChamadaPerdida::where('numero_chamador', '5511999996666')->orderBy('chamou_em')->get();
-        $this->assertTrue($chamadas[0]->mensagem_enviada);
-        $this->assertTrue($chamadas[1]->mensagem_enviada);
+        $this->assertFalse($chamadas[0]->mensagem_enviada);
+        $this->assertFalse($chamadas[1]->mensagem_enviada);
 
         // As duas chamadas apontam pro mesmo ticket — não duplicou.
         $this->assertSame($chamadas[0]->ticket_id, $chamadas[1]->ticket_id);

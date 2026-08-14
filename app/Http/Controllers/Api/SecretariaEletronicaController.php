@@ -153,12 +153,15 @@ class SecretariaEletronicaController extends Controller
             return response()->json(['ok' => true, 'acao' => 'ja_ligou_hoje', 'ticket_id' => $ticket->id]);
         }
 
-        // Atualiza chamada com IDs vinculados
+        // Vincula a chamada ao ticket/contato. `mensagem_enviada` fica como está
+        // (false, default da criação) até o job (assíncrono, com delay) reportar
+        // o desfecho REAL do envio — achado real 2026-08-13: marcar `true` aqui,
+        // de forma otimista, fazia a Secretária mostrar "mensagem enviada" mesmo
+        // quando o envio de verdade falhava depois (janela fechada, contato
+        // bloqueado, etc). Ver SequenciaMensagemJob::registrarResultadoChamadaPerdida().
         $chamada->update([
-            'contato_id'          => $contato->id,
-            'ticket_id'           => $ticket->id,
-            'mensagem_enviada'    => true,
-            'mensagem_enviada_em' => now(),
+            'contato_id' => $contato->id,
+            'ticket_id'  => $ticket->id,
         ]);
 
         // Envia mensagem de abertura configurada (ou padrão) antes da sequência
@@ -167,7 +170,7 @@ class SecretariaEletronicaController extends Controller
             $mensagemAbertura = $tenant->secretaria_mensagem_inicial
                 ?: "Oi! Vi que você ligou aqui pra gente e não consegui atender na hora. Tô disponível agora no WhatsApp, pode falar! 😊";
 
-            SequenciaMensagemJob::dispatch($ticket->id, $mensagemAbertura, $tenant->secretaria_mensagem_inicial_imagem_url)
+            SequenciaMensagemJob::dispatch($ticket->id, $mensagemAbertura, $tenant->secretaria_mensagem_inicial_imagem_url, chamadaPerdidaId: $chamada->id)
                 ->onQueue('default')
                 ->delay(now()->addSeconds(5));
         }
