@@ -217,4 +217,100 @@ class KanbanEnviarMidiaCanalOficialTest extends TestCase
         Http::assertNothingSent();
         Storage::disk('public')->assertDirectoryEmpty('kanban-midia');
     }
+
+    /**
+     * Achado real 2026-08-14: a validação de upload aceitava até 32MB pra
+     * qualquer tipo de mídia, em qualquer canal — bem acima dos limites reais
+     * da Meta Cloud API (imagem 5MB). O upload passava na validação daqui e só
+     * falhava na chamada real à API, virando o 502 genérico "Falha ao enviar
+     * pelo WhatsApp" sem explicar o motivo real pro atendente.
+     */
+    public function test_imagem_acima_de_5mb_falha_na_validacao_no_canal_oficial(): void
+    {
+        $ticket = $this->criarTicketOficial();
+        $user   = User::factory()->create(['tenant_id' => $ticket->tenant_id, 'perfil' => 'dono', 'ativo' => true]);
+
+        $arquivo = UploadedFile::fake()->create('foto-grande.jpg', 6000, 'image/jpeg'); // 6MB > limite de 5MB
+
+        $response = $this->actingAs($user)->post("/api/painel/kanban/ticket/{$ticket->id}/midia", [
+            'tipo'    => 'imagem',
+            'arquivo' => $arquivo,
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors('arquivo');
+        Http::assertNothingSent();
+        Storage::disk('public')->assertDirectoryEmpty('kanban-midia');
+    }
+
+    public function test_figurinha_acima_de_500kb_falha_na_validacao_no_canal_oficial(): void
+    {
+        $ticket = $this->criarTicketOficial();
+        $user   = User::factory()->create(['tenant_id' => $ticket->tenant_id, 'perfil' => 'dono', 'ativo' => true]);
+
+        $arquivo = UploadedFile::fake()->create('fig-grande.webp', 600, 'image/webp'); // 600KB > limite de 500KB pra sticker
+
+        $response = $this->actingAs($user)->post("/api/painel/kanban/ticket/{$ticket->id}/midia", [
+            'tipo'    => 'imagem',
+            'arquivo' => $arquivo,
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors('arquivo');
+        Http::assertNothingSent();
+    }
+
+    public function test_documento_acima_de_100mb_falha_na_validacao_no_canal_oficial(): void
+    {
+        $ticket = $this->criarTicketOficial();
+        $user   = User::factory()->create(['tenant_id' => $ticket->tenant_id, 'perfil' => 'dono', 'ativo' => true]);
+
+        $arquivo = UploadedFile::fake()->create('doc-grande.pdf', 103000, 'application/pdf'); // ~100.6MB > limite de 100MB
+
+        $response = $this->actingAs($user)->post("/api/painel/kanban/ticket/{$ticket->id}/midia", [
+            'tipo'    => 'documento',
+            'arquivo' => $arquivo,
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors('arquivo');
+        Http::assertNothingSent();
+    }
+
+    public function test_gif_nao_e_aceito_como_imagem_no_canal_oficial(): void
+    {
+        $ticket = $this->criarTicketOficial();
+        $user   = User::factory()->create(['tenant_id' => $ticket->tenant_id, 'perfil' => 'dono', 'ativo' => true]);
+
+        $arquivo = UploadedFile::fake()->create('anim.gif', 10, 'image/gif');
+
+        $response = $this->actingAs($user)->post("/api/painel/kanban/ticket/{$ticket->id}/midia", [
+            'tipo'    => 'imagem',
+            'arquivo' => $arquivo,
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors('arquivo');
+        Http::assertNothingSent();
+    }
+
+    /**
+     * Imagem dentro do limite (abaixo de 5MB) continua funcionando
+     * normalmente — não é só rejeição, o caminho feliz não pode regredir.
+     */
+    public function test_imagem_dentro_do_limite_continua_funcionando_no_canal_oficial(): void
+    {
+        $ticket = $this->criarTicketOficial();
+        $user   = User::factory()->create(['tenant_id' => $ticket->tenant_id, 'perfil' => 'dono', 'ativo' => true]);
+
+        $arquivo = UploadedFile::fake()->create('foto.jpg', 3000, 'image/jpeg'); // 3MB, dentro do limite de 5MB
+
+        $response = $this->actingAs($user)->post("/api/painel/kanban/ticket/{$ticket->id}/midia", [
+            'tipo'    => 'imagem',
+            'arquivo' => $arquivo,
+        ]);
+
+        $response->assertCreated();
+        Http::assertSent(fn ($request) => $request['type'] === 'image');
+    }
 }

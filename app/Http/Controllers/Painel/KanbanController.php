@@ -440,20 +440,48 @@ class KanbanController extends Controller
 
     public function enviarMidia(Request $request, int $ticket): JsonResponse
     {
-        $tipo = $request->input('tipo');
+        $tipo  = $request->input('tipo');
+        $model = TicketAtendimento::with(['contato', 'tenant', 'canal'])->findOrFail($ticket);
+        $canal = $model->canal;
+
+        $ehCovercut  = $canal?->provider === 'covercut';
+        $extensao    = strtolower((string) $request->file('arquivo')?->getClientOriginalExtension());
+        $ehFigurinha = $tipo === 'imagem' && $extensao === 'webp';
+
+        // Limites reais de tamanho da Meta Cloud API — imagem 5MB, sticker
+        // (webp) 500KB, áudio 16MB, documento 100MB. A doc da Covercut não
+        // detalha isso (consultado em 2026-08-14), mas ela é um pass-through
+        // da API oficial da Meta, então o limite da própria plataforma vale
+        // independente do provedor intermediário — não é suposição por
+        // analogia. Sem isso, o upload passava direto na validação e só
+        // falhava na chamada real à API, virando o 502 genérico "Falha ao
+        // enviar pelo WhatsApp" sem explicar o motivo real pro atendente.
+        // Uazapi (WhatsApp Web, canal não-oficial) mantém o limite antigo de
+        // 32MB — não tem essa restrição de plataforma, sem mudança aqui.
+        $maxKb = match (true) {
+            ! $ehCovercut         => 32768,
+            $ehFigurinha          => 500,
+            $tipo === 'imagem'    => 5120,
+            $tipo === 'audio'     => 16384,
+            $tipo === 'documento' => 102400,
+            default               => 32768,
+        };
+
+        // GIF nunca é aceito como imagem pela Meta Cloud API (só jpeg/png; um
+        // .webp aqui é roteado como figurinha, não imagem — ver $ehFigurinha
+        // acima). Uazapi (WhatsApp Web) continua aceitando gif normalmente.
+        $mimesImagem = $ehCovercut ? 'mimes:jpg,jpeg,png,webp' : 'mimes:jpg,jpeg,png,webp,gif';
 
         $request->validate([
             'tipo'    => 'required|in:imagem,audio,documento',
             'caption' => 'nullable|string|max:500',
             'arquivo' => [
-                'required', 'file', 'max:32768',
-                Rule::when($tipo === 'imagem',    'mimes:jpg,jpeg,png,webp,gif'),
+                'required', 'file', "max:{$maxKb}",
+                Rule::when($tipo === 'imagem',    $mimesImagem),
                 Rule::when($tipo === 'audio',     'mimes:mp3,ogg,webm,m4a,wav'),
                 Rule::when($tipo === 'documento', 'mimes:pdf,doc,docx,xls,xlsx,txt,zip'),
             ],
         ]);
-
-        $model = TicketAtendimento::with(['contato', 'tenant', 'canal'])->findOrFail($ticket);
 
         if ($conflito = $this->assumirAutomaticamente($model, $request->user())) {
             return $conflito;
@@ -462,17 +490,16 @@ class KanbanController extends Controller
         $arquivo  = $request->file('arquivo');
         $caption  = $request->input('caption', '');
         $telefone = $model->contato->telefone;
-        $canal    = $model->canal;
 
         if (! $canal) {
             return response()->json(['message' => 'Nenhum canal de WhatsApp vinculado a este atendimento.'], 502);
         }
 
-        if ($tipo === 'audio' && $canal->provider === 'covercut') {
-            $extensao = $arquivo->guessExtension() ?: strtolower($arquivo->getClientOriginalExtension());
-            if (! in_array($extensao, self::AUDIO_EXTENSOES_ACEITAS_COVERCUT, true)) {
+        if ($tipo === 'audio' && $ehCovercut) {
+            $extensaoAudio = $arquivo->guessExtension() ?: strtolower($arquivo->getClientOriginalExtension());
+            if (! in_array($extensaoAudio, self::AUDIO_EXTENSOES_ACEITAS_COVERCUT, true)) {
                 return response()->json([
-                    'message' => "O canal Oficial (WhatsApp Business) não aceita áudio nesse formato (.{$extensao}). Anexe um arquivo de áudio nos formatos .mp3, .ogg ou .m4a.",
+                    'message' => "O canal Oficial (WhatsApp Business) não aceita áudio nesse formato (.{$extensaoAudio}). Anexe um arquivo de áudio nos formatos .mp3, .ogg ou .m4a.",
                 ], 422);
             }
         }
@@ -481,8 +508,7 @@ class KanbanController extends Controller
         $url      = url('storage/' . $path);
         $filename = $arquivo->getClientOriginalName();
 
-        $ehFigurinha = $tipo === 'imagem' && strtolower($arquivo->getClientOriginalExtension()) === 'webp';
-        $servico     = $canal->servico();
+        $servico = $canal->servico();
 
         $enviado = match (true) {
             $ehFigurinha          => $servico->enviarSticker($canal, $telefone, $url),
