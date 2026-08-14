@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\ChamadaPerdida;
 use App\Models\Mensagem;
 use App\Models\SpintaxVariavel;
 use App\Models\TicketAtendimento;
@@ -24,6 +25,13 @@ class SequenciaMensagemJob implements ShouldQueue
         public ?string $colunaKanban = null,
         public ?array  $botoesSettings = null,
         public bool    $obrigatorio = false,
+        // Só preenchido quando esta mensagem é a abertura da Secretária
+        // Eletrônica (ver SecretariaEletronicaController::receber()) — permite
+        // o job reportar de volta o desfecho REAL do envio (sucesso ou falha),
+        // em vez do controller marcar `mensagem_enviada=true` de forma otimista
+        // antes mesmo do job (assíncrono, com delay) rodar. Nenhum outro
+        // chamador (SequenciaService) passa este parâmetro.
+        public ?int $chamadaPerdidaId = null,
     ) {}
 
     public function handle(HumanizacaoService $humanizacao, UazapiService $uazapi): void
@@ -31,6 +39,7 @@ class SequenciaMensagemJob implements ShouldQueue
         $ticket = TicketAtendimento::with(['contato', 'tenant', 'canal'])->find($this->ticketId);
 
         if (! $ticket || \App\Models\KanbanColuna::papelDe($ticket->tenant_id, $ticket->coluna_kanban) === \App\Enums\PapelColunaKanban::Encerramento) {
+            $this->registrarResultadoChamadaPerdida(false);
             return;
         }
 
@@ -43,6 +52,7 @@ class SequenciaMensagemJob implements ShouldQueue
             Log::info('SequenciaMensagemJob: contato bloqueado (opt-out) neste tenant, envio cancelado', [
                 'ticket_id' => $this->ticketId,
             ]);
+            $this->registrarResultadoChamadaPerdida(false);
             return;
         }
 
@@ -65,6 +75,7 @@ class SequenciaMensagemJob implements ShouldQueue
             Log::info('SequenciaMensagemJob: ticket já assumido por humano, envio cancelado', [
                 'ticket_id' => $this->ticketId,
             ]);
+            $this->registrarResultadoChamadaPerdida(false);
             return;
         }
 
@@ -72,6 +83,7 @@ class SequenciaMensagemJob implements ShouldQueue
         // a menos que a mensagem seja marcada como "envio obrigatório" (obrigatorio = true),
         // que ignora essa checagem e envia mesmo assim.
         if ($colunaKanban && $ticket->coluna_kanban !== $colunaKanban && ! $obrigatorio) {
+            $this->registrarResultadoChamadaPerdida(false);
             return;
         }
 
@@ -89,6 +101,7 @@ class SequenciaMensagemJob implements ShouldQueue
 
         if (! $telefone || (! $ehCovercut && ! $token)) {
             Log::warning('SequenciaMensagemJob: sem telefone ou token', ['ticket_id' => $this->ticketId]);
+            $this->registrarResultadoChamadaPerdida(false);
             return;
         }
 
@@ -144,6 +157,7 @@ class SequenciaMensagemJob implements ShouldQueue
                 Log::info('Sequência: botões não suportados no canal oficial, mensagem pulada', [
                     'ticket_id' => $this->ticketId,
                 ]);
+                $this->registrarResultadoChamadaPerdida(false);
                 return;
             }
 
@@ -165,6 +179,7 @@ class SequenciaMensagemJob implements ShouldQueue
                     ]);
                 }
 
+                $this->registrarResultadoChamadaPerdida($enviado);
                 return;
             }
 
@@ -185,6 +200,7 @@ class SequenciaMensagemJob implements ShouldQueue
                 ]);
             }
 
+            $this->registrarResultadoChamadaPerdida($enviado);
             return;
         }
 
@@ -201,6 +217,7 @@ class SequenciaMensagemJob implements ShouldQueue
                     'enviado_em' => now(),
                 ]);
 
+                $this->registrarResultadoChamadaPerdida(true);
                 return;
             }
 
@@ -222,10 +239,12 @@ class SequenciaMensagemJob implements ShouldQueue
                     'conteudo'   => $texto ?: '[Imagem]',
                     'enviado_em' => now(),
                 ]);
+
+                $this->registrarResultadoChamadaPerdida(true);
             } else {
                 // Fallback: API de mídia indisponível — envia só o texto (ou URL pública)
-                $fallback = $texto ?: $this->imagemUrl;
-                $humanizacao->processar($token, $telefone, $fallback);
+                $fallback   = $texto ?: $this->imagemUrl;
+                $fallbackOk = $humanizacao->processar($token, $telefone, $fallback);
 
                 Mensagem::create([
                     'ticket_id'  => $ticket->id,
@@ -240,10 +259,13 @@ class SequenciaMensagemJob implements ShouldQueue
                     'ticket_id' => $this->ticketId,
                     'imagem_url' => $this->imagemUrl,
                 ]);
+
+                $this->registrarResultadoChamadaPerdida($fallbackOk);
             }
         } else {
             // Só texto — com humanização completa
-            $humanizacao->processar($token, $telefone, $texto);
+            $enviado = $humanizacao->processar($token, $telefone, $texto);
+            $this->registrarResultadoChamadaPerdida($enviado);
 
             Mensagem::create([
                 'ticket_id'  => $ticket->id,
@@ -254,6 +276,25 @@ class SequenciaMensagemJob implements ShouldQueue
                 'enviado_em' => now(),
             ]);
         }
+    }
+
+    // Reporta o desfecho real deste envio de volta pra ChamadaPerdida, quando
+    // esta mensagem é a de abertura da Secretária Eletrônica (chamadaPerdidaId
+    // preenchido). Substitui o `mensagem_enviada=true` otimista que o
+    // controller marcava antes do job (assíncrono) sequer rodar — achado real
+    // 2026-08-13: a Secretária mostrava "mensagem enviada" mesmo quando o
+    // envio de verdade falhava (janela fechada, contato bloqueado, humano
+    // assumiu o ticket antes do delay de 5s, etc).
+    private function registrarResultadoChamadaPerdida(bool $sucesso): void
+    {
+        if (! $this->chamadaPerdidaId) {
+            return;
+        }
+
+        ChamadaPerdida::where('id', $this->chamadaPerdidaId)->update([
+            'mensagem_enviada'    => $sucesso,
+            'mensagem_enviada_em' => $sucesso ? now() : null,
+        ]);
     }
 
     private function getSaudacao(\Illuminate\Support\Carbon $now): string
