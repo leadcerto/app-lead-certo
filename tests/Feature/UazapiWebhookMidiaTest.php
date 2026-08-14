@@ -9,6 +9,7 @@ use App\Models\TicketAtendimento;
 use App\Models\WhatsappCanal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -482,6 +483,10 @@ class UazapiWebhookMidiaTest extends TestCase
      */
     public function test_transcricao_desativada_na_coluna_pula_ia_mas_ainda_salva_midia(): void
     {
+        // Contato novo nasce sem nome real (pushName ausente no payload) —
+        // dispara IdentificarNomeConversaJob (achado 2026-08-14), irrelevante
+        // pra este teste especificamente sobre toggle de transcrição.
+        Queue::fake();
         $this->fakeDownloadDeMidia('image/jpeg');
 
         $tenant = $this->criarTenantComCanal('wh-midia-transc-off', 'inst-transc-off');
