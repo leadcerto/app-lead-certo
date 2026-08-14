@@ -29,3 +29,10 @@ Thumbs.db
 
 # Worktrees isolados (superpowers)
 /.worktrees
+
+# Material de referência solto na raiz do repo, fora do controle de versão
+# de propósito — não é código do sistema, só arquivos que o Leonardo colou
+# aqui (2026-08-14). Ignorado pra não travar o deploy.sh (que aborta se
+# houver qualquer arquivo não commitado, ver deploy.sh linha 30).
+/app-gmn-avaliacoes
+/app-lead_cerrto-gestor_geral-gabriel
