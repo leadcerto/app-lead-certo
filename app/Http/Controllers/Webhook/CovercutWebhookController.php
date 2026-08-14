@@ -75,9 +75,29 @@ class CovercutWebhookController extends Controller
             $this->processarMensagem($payload, $canal);
         } elseif ($event === 'echo' && $direction === 'outbound' && ($payload['echo_source'] ?? null) === 'phone') {
             $this->processarMensagemHumana($payload, $canal);
+        } elseif ($event === 'echo' && ($payload['echo_source'] ?? null) === 'api') {
+            // Eco da nossa própria mensagem enviada via API — nada a fazer, já
+            // registramos a Mensagem no momento do envio. Não é um evento "não
+            // tratado" de verdade, só não precisa de ação nenhuma.
+        } else {
+            // Achado real 2026-08-14: uma ligação perdida com número sem WhatsApp
+            // teve a mensagem de abertura "aceita" pela API (HTTP sucesso), mas
+            // nunca chegou de verdade — a Meta só informaria isso depois, via um
+            // evento de status de entrega (`event: "status"`, provavelmente com
+            // `status.status: "failed"`) que nunca vimos chegar aqui. Não dá pra
+            // confirmar o formato real sem capturar uma ocorrência de verdade —
+            // loga em warning (nível já capturado em produção) pra pegar a
+            // próxima com o payload completo. Mesmo padrão já usado no
+            // UazapiWebhookController (commit 31e2667). Remover este log assim
+            // que o formato for confirmado e o tratamento real for implementado
+            // (ou confirmado que a Covercut não manda esse evento pra nós).
+            Log::warning('Covercut webhook: evento não tratado — payload completo abaixo', [
+                'canal_id'  => $canal->id,
+                'event'     => $event,
+                'direction' => $direction,
+                'payload'   => $payload,
+            ]);
         }
-        // Outros eventos (echo/api — já registrado no envio pela nossa própria API;
-        // status de entrega/leitura; etc.) — ignorados silenciosamente.
 
         return response()->json(['ok' => true]);
     }

@@ -392,6 +392,65 @@ class CovercutWebhookControllerTest extends TestCase
         $this->assertNull(Mensagem::withoutGlobalScopes()->where('provider_message_id', 'wamid.echoapi')->first());
     }
 
+    /**
+     * Achado real 2026-08-14: um evento de status de entrega (`event: "status"`)
+     * chegando aqui seria descartado silenciosamente, sem nenhum log — se a
+     * Covercut já manda esse evento (ou vier a mandar), nunca teríamos evidência.
+     * Loga em warning (nível capturado em produção) até confirmarmos o formato
+     * real e implementarmos o tratamento — mesmo padrão já usado no
+     * UazapiWebhookController pro `EventType` desconhecido (commit 31e2667).
+     */
+    public function test_evento_desconhecido_e_logado_em_warning_sem_quebrar(): void
+    {
+        Log::spy();
+
+        $tenant = Tenant::factory()->create();
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $payload = [
+            'event' => 'status', 'from_number_id' => '950147584848138',
+            'status' => ['id' => 'wamid.abc123', 'status' => 'failed', 'recipient' => '5521988887777'],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn ($message, $context) => str_contains($message, 'evento não tratado')
+                && $context['canal_id'] === $canal->id
+                && $context['event'] === 'status'
+                && $context['payload'] === $payload)
+            ->once();
+    }
+
+    /**
+     * `event: "echo"` com `echo_source: "api"` é rotina (acontece em toda
+     * mensagem que nós mesmos enviamos) — não deve gerar o log de "evento não
+     * tratado" acima, senão o log ficaria poluído de ruído conhecido.
+     */
+    public function test_echo_api_nao_gera_log_de_evento_nao_tratado(): void
+    {
+        Log::spy();
+
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $payload = [
+            'event' => 'echo', 'direction' => 'outbound', 'echo_source' => 'api', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777'],
+            'message' => ['id' => 'wamid.echoapi2', 'type' => 'text', 'text' => 'Mensagem enviada pela nossa API'],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        Log::shouldNotHaveReceived('warning', fn ($message) => str_contains($message, 'evento não tratado'));
+    }
+
     public function test_echo_phone_sem_ticket_aberto_nao_quebra(): void
     {
         $tenant = Tenant::factory()->create();
