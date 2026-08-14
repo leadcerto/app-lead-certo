@@ -220,6 +220,20 @@ class CovercutWebhookController extends Controller
             ]);
         }
 
+        // Extração progressiva de nome a partir do conteúdo (texto ou
+        // transcrição de áudio) — achado real (2026-08-14): essa lógica
+        // vivia só do lado Uazapi, um lead que ligou (Secretária Eletrônica)
+        // e se identificou por áudio no canal Oficial nunca tinha o nome
+        // capturado. Mesmo padrão do UazapiWebhookController, agora
+        // compartilhado via NomeExtracaoService — regra de paridade entre
+        // canais do CLAUDE.md.
+        if ($conteudo && $contato->semNomeReal()) {
+            $nomeExtraido = app(\App\Services\NomeExtracaoService::class)->extrairDaMensagem($conteudo);
+            if ($nomeExtraido) {
+                $contato->update(['nome' => $nomeExtraido]);
+            }
+        }
+
         if ($conteudo) {
             Mensagem::create([
                 'ticket_id'            => $ticket->id,
