@@ -118,8 +118,8 @@
                     :disabled="!conhecimentoGeralAlterado"
                     class="text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
                 <span x-show="conhecimentoGeralSalvando">Salvando...</span>
-                <span x-show="!conhecimentoGeralSalvando && conhecimentoGeralSalvo">✓ Salvo</span>
-                <span x-show="!conhecimentoGeralSalvando && !conhecimentoGeralSalvo">Salvar</span>
+                <span x-show="!conhecimentoGeralSalvando && !conhecimentoGeralAlterado">✓ Salvo</span>
+                <span x-show="!conhecimentoGeralSalvando && conhecimentoGeralAlterado">Salvar</span>
             </button>
         </div>
     </div>
@@ -166,8 +166,8 @@
                                 :disabled="!objetivoAlterado[col.key]"
                                 class="text-xs bg-gray-700 hover:bg-gray-900 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg transition-colors">
                             <span x-show="objetivoSalvando[col.key]">Salvando...</span>
-                            <span x-show="!objetivoSalvando[col.key] && objetivoSalvo[col.key]">✓ Salvo</span>
-                            <span x-show="!objetivoSalvando[col.key] && !objetivoSalvo[col.key]">Salvar objetivo</span>
+                            <span x-show="!objetivoSalvando[col.key] && !objetivoAlterado[col.key]">✓ Salvo</span>
+                            <span x-show="!objetivoSalvando[col.key] && objetivoAlterado[col.key]">Salvar objetivo</span>
                         </button>
                     </div>
                 </div>
@@ -778,8 +778,8 @@
                                         :disabled="!iaAlterado[col.key]"
                                         class="text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
                                     <span x-show="iaSalvando[col.key]">Salvando...</span>
-                                    <span x-show="!iaSalvando[col.key] && iaSalvo[col.key]">✓ Salvo</span>
-                                    <span x-show="!iaSalvando[col.key] && !iaSalvo[col.key]">Salvar</span>
+                                    <span x-show="!iaSalvando[col.key] && !iaAlterado[col.key]">✓ Salvo</span>
+                                    <span x-show="!iaSalvando[col.key] && iaAlterado[col.key]">Salvar</span>
                                 </button>
                             </div>
                         </div>
@@ -1070,8 +1070,8 @@
                                         :disabled="!iaAlterado[col.key]"
                                         class="text-xs bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
                                     <span x-show="iaSalvando[col.key]">Salvando...</span>
-                                    <span x-show="!iaSalvando[col.key] && iaSalvo[col.key]">✓ Salvo</span>
-                                    <span x-show="!iaSalvando[col.key] && !iaSalvo[col.key]">Salvar</span>
+                                    <span x-show="!iaSalvando[col.key] && !iaAlterado[col.key]">✓ Salvo</span>
+                                    <span x-show="!iaSalvando[col.key] && iaAlterado[col.key]">Salvar</span>
                                 </button>
                             </div>
                         </div>
