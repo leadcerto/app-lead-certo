@@ -107,19 +107,19 @@
         </div>
         <p class="text-xs text-gray-400 mb-3">O que a IA precisa saber sobre este Kanban como um todo — visão geral, estratégia, restrições que valem em qualquer coluna.</p>
         <textarea
-            @input="conhecimentoGeral = $event.target.value; conhecimentoGeralAlterado = true"
+            @input="conhecimentoGeral = $event.target.value; conhecimentoGeralAlterado = true; conhecimentoGeralSalvo = false"
             :value="conhecimentoGeral"
             placeholder="Ex: Este Kanban atende só clientes da Zona Sul do Rio de Janeiro."
             rows="4"
             class="w-full text-sm border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none bg-gray-50"
         ></textarea>
-        <div class="flex items-center justify-end gap-2 mt-2">
-            <span x-show="conhecimentoGeralSalvando" class="text-xs text-gray-400">Salvando...</span>
-            <span x-show="conhecimentoGeralSalvo" class="text-xs text-green-600">✓ Salvo</span>
+        <div class="flex items-center justify-end mt-2">
             <button @click="salvarConhecimentoGeral()"
                     :disabled="!conhecimentoGeralAlterado"
                     class="text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
-                Salvar
+                <span x-show="conhecimentoGeralSalvando">Salvando...</span>
+                <span x-show="!conhecimentoGeralSalvando && conhecimentoGeralSalvo">✓ Salvo</span>
+                <span x-show="!conhecimentoGeralSalvando && !conhecimentoGeralSalvo">Salvar</span>
             </button>
         </div>
     </div>
@@ -155,7 +155,7 @@
                 <div>
                     <label class="block text-xs font-semibold text-gray-500 mb-1.5">Objetivo desta etapa</label>
                     <textarea
-                        @input="objetivo[col.key] = $event.target.value; objetivoAlterado[col.key] = true"
+                        @input="objetivo[col.key] = $event.target.value; objetivoAlterado[col.key] = true; objetivoSalvo[col.key] = false"
                         :value="objetivo[col.key] ?? ''"
                         :placeholder="col.objetivoEx"
                         rows="2"
@@ -165,8 +165,9 @@
                         <button @click="salvarObjetivo(col.key)"
                                 :disabled="!objetivoAlterado[col.key]"
                                 class="text-xs bg-gray-700 hover:bg-gray-900 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg transition-colors">
-                            <span x-show="!objetivoSalvo[col.key]">Salvar objetivo</span>
-                            <span x-show="objetivoSalvo[col.key]">✓ Salvo</span>
+                            <span x-show="objetivoSalvando[col.key]">Salvando...</span>
+                            <span x-show="!objetivoSalvando[col.key] && objetivoSalvo[col.key]">✓ Salvo</span>
+                            <span x-show="!objetivoSalvando[col.key] && !objetivoSalvo[col.key]">Salvar objetivo</span>
                         </button>
                     </div>
                 </div>
@@ -685,8 +686,9 @@
                             <p class="text-xs text-gray-400 mt-2">Inclua um token no final da resposta da IA para mover o card. Use apenas um por mensagem.</p>
                         </div>
 
+                        <label class="text-xs font-semibold text-gray-500 mb-1 block">Base de Conhecimento da coluna — o que a IA precisa saber pra atuar bem nesta etapa</label>
                         <textarea
-                            @input="iaContexto[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                            @input="iaContexto[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                             :value="iaContexto[col.key] ?? ''"
                             :placeholder="col.iaPlaceholder"
                             rows="10"
@@ -696,7 +698,7 @@
                         <div class="mt-3">
                             <label class="text-xs font-semibold text-gray-500 mb-1 block">O que a IA deve procurar nas imagens desta coluna</label>
                             <textarea
-                                @input="focoAnaliseImagem[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                @input="focoAnaliseImagem[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                 :value="focoAnaliseImagem[col.key] ?? ''"
                                 placeholder="Ex: móveis, volumes, caixas, quantidade de itens de mudança (deixe em branco para usar a descrição genérica)"
                                 rows="2"
@@ -709,7 +711,7 @@
                             <label class="flex items-center gap-1.5 cursor-pointer">
                                 <input type="checkbox"
                                        :checked="transcricaoAtiva[col.key] ?? true"
-                                       @change="transcricaoAtiva[col.key] = $event.target.checked; iaAlterado[col.key] = true"
+                                       @change="transcricaoAtiva[col.key] = $event.target.checked; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                        class="w-3.5 h-3.5 accent-purple-600">
                                 <span class="text-xs text-gray-500">Transcrever áudio e analisar imagens/documentos nesta coluna</span>
                             </label>
@@ -751,7 +753,7 @@
                                 <label class="flex items-center gap-1.5 cursor-pointer">
                                     <input type="checkbox"
                                            :checked="iaAtivo[col.key]"
-                                           @change="iaAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true"
+                                           @change="iaAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                            class="w-3.5 h-3.5 accent-purple-600">
                                     <span class="text-xs text-gray-500">Agente ativo nesta coluna</span>
                                 </label>
@@ -759,10 +761,10 @@
                                     <span class="text-xs text-gray-500">Aguardar</span>
                                     <input type="number" min="0"
                                            :value="iaDelay[col.key] ?? 45"
-                                           @input="iaDelay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true"
+                                           @input="iaDelay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                            class="w-16 text-xs border border-gray-300 rounded px-2 py-1">
                                     <select :value="iaDelayUnidade[col.key] || 'seg'"
-                                            @change="iaDelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                            @change="iaDelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                             class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
                                         <option value="seg">seg</option>
                                         <option value="min">min</option>
@@ -771,13 +773,13 @@
                                     <span class="text-xs text-gray-500">antes de responder</span>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-2">
-                                <span x-show="iaSalvando[col.key]" class="text-xs text-gray-400">Salvando...</span>
-                                <span x-show="iaSalvo[col.key]" class="text-xs text-green-600">✓ Salvo</span>
+                            <div class="flex items-center">
                                 <button @click="salvarIa(col.key)"
                                         :disabled="!iaAlterado[col.key]"
                                         class="text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
-                                    Salvar
+                                    <span x-show="iaSalvando[col.key]">Salvando...</span>
+                                    <span x-show="!iaSalvando[col.key] && iaSalvo[col.key]">✓ Salvo</span>
+                                    <span x-show="!iaSalvando[col.key] && !iaSalvo[col.key]">Salvar</span>
                                 </button>
                             </div>
                         </div>
@@ -789,10 +791,10 @@
                                     <span class="text-xs text-gray-500">1 · toque suave</span>
                                     <input type="number" min="1"
                                            :value="estagio1Delay[col.key] ?? 1"
-                                           @input="estagio1Delay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true"
+                                           @input="estagio1Delay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                            class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
                                     <select :value="estagio1DelayUnidade[col.key] || 'hora'"
-                                            @change="estagio1DelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                            @change="estagio1DelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                             class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
                                         <option value="seg">seg</option>
                                         <option value="min">min</option>
@@ -803,10 +805,10 @@
                                     <span class="text-xs text-gray-500">2 · urgência sutil</span>
                                     <input type="number" min="1"
                                            :value="estagio2Delay[col.key] ?? 2"
-                                           @input="estagio2Delay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true"
+                                           @input="estagio2Delay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                            class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
                                     <select :value="estagio2DelayUnidade[col.key] || 'hora'"
-                                            @change="estagio2DelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                            @change="estagio2DelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                             class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
                                         <option value="seg">seg</option>
                                         <option value="min">min</option>
@@ -817,10 +819,10 @@
                                     <span class="text-xs text-gray-500">3 · encerramento</span>
                                     <input type="number" min="1"
                                            :value="estagio3Delay[col.key] ?? 6"
-                                           @input="estagio3Delay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true"
+                                           @input="estagio3Delay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                            class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
                                     <select :value="estagio3DelayUnidade[col.key] || 'hora'"
-                                            @change="estagio3DelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                            @change="estagio3DelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                             class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
                                         <option value="seg">seg</option>
                                         <option value="min">min</option>
@@ -851,7 +853,7 @@
                             <label class="flex items-center gap-2 mb-2 cursor-pointer">
                                 <input type="checkbox"
                                        :checked="autoMoverAtivo[col.key]"
-                                       @change="autoMoverAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true"
+                                       @change="autoMoverAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                        class="w-3.5 h-3.5 accent-red-600">
                                 <span class="text-xs font-semibold text-gray-500">Transferência automática por silêncio</span>
                             </label>
@@ -885,10 +887,10 @@
                                         <span class="text-xs text-gray-500">Depois de</span>
                                         <input type="number" min="1"
                                                :value="autoMoverDelay[col.key] ?? 3"
-                                               @input="autoMoverDelay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true"
+                                               @input="autoMoverDelay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                                class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
                                         <select :value="autoMoverDelayUnidade[col.key] || 'dia'"
-                                                @change="autoMoverDelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                                @change="autoMoverDelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                                 class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
                                             <option value="seg">seg</option>
                                             <option value="min">min</option>
@@ -897,7 +899,7 @@
                                         </select>
                                         <span class="text-xs text-gray-500">de silêncio, mover para</span>
                                         <select :value="autoMoverDestino[col.key] || 'encerrado'"
-                                                @change="autoMoverDestino[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                                @change="autoMoverDestino[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                                 class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
                                             <template x-for="c in colunas" :key="c.key">
                                                 <option :value="c.key" x-text="c.label"></option>
@@ -905,7 +907,7 @@
                                         </select>
                                     </div>
                                     <textarea :value="autoMoverMensagem[col.key] || ''"
-                                              @input="autoMoverMensagem[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                              @input="autoMoverMensagem[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                               rows="5"
                                               placeholder="Mensagem opcional pra avisar o lead antes de mover (ex: Por falta de comunicação, estamos encerrando seu atendimento e ficamos à disposição caso queira retomar o assunto). Deixe em branco pra mover sem avisar."
                                               class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-red-400 resize-y"></textarea>
@@ -922,7 +924,7 @@
                                 <label class="flex items-center gap-2 mb-2 cursor-pointer">
                                     <input type="checkbox"
                                            :checked="timeoutReassuncaoAtivo[col.key]"
-                                           @change="timeoutReassuncaoAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true"
+                                           @change="timeoutReassuncaoAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                            class="w-3.5 h-3.5 accent-purple-600">
                                     <span class="text-xs font-semibold text-gray-500">Reassumir automaticamente após silêncio do atendente</span>
                                 </label>
@@ -932,10 +934,10 @@
                                         <span class="text-xs text-gray-500">Depois de</span>
                                         <input type="number" min="1"
                                                :value="timeoutReassuncaoDelay[col.key] ?? 1"
-                                               @input="timeoutReassuncaoDelay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true"
+                                               @input="timeoutReassuncaoDelay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                                class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
                                         <select :value="timeoutReassuncaoDelayUnidade[col.key] || 'hora'"
-                                                @change="timeoutReassuncaoDelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                                @change="timeoutReassuncaoDelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                                 class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
                                             <option value="seg">seg</option>
                                             <option value="min">min</option>
@@ -956,7 +958,7 @@
                                 <label class="flex items-center gap-2 mb-2 cursor-pointer">
                                     <input type="checkbox"
                                            :checked="duvidaTimeoutAtivo[col.key]"
-                                           @change="duvidaTimeoutAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true"
+                                           @change="duvidaTimeoutAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                            class="w-3.5 h-3.5 accent-amber-600">
                                     <span class="text-xs font-semibold text-gray-500">Retomar automaticamente se ninguém orientar (Regra 2)</span>
                                 </label>
@@ -966,10 +968,10 @@
                                         <span class="text-xs text-gray-500">Depois de</span>
                                         <input type="number" min="1"
                                                :value="duvidaTimeoutDelay[col.key] ?? 1"
-                                               @input="duvidaTimeoutDelay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true"
+                                               @input="duvidaTimeoutDelay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                                class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
                                         <select :value="duvidaTimeoutDelayUnidade[col.key] || 'hora'"
-                                                @change="duvidaTimeoutDelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                                @change="duvidaTimeoutDelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                                 class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
                                             <option value="seg">seg</option>
                                             <option value="min">min</option>
@@ -996,7 +998,7 @@
                                     essa mensagem é mandada uma única vez. Deixe em branco pra usar a mensagem padrão do sistema.
                                 </p>
                                 <textarea :value="aguardandoOrientacaoMensagem[col.key] || ''"
-                                          @input="aguardandoOrientacaoMensagem[col.key] = $event.target.value; iaAlterado[col.key] = true"
+                                          @input="aguardandoOrientacaoMensagem[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                           rows="2"
                                           placeholder="Estou verificando mais detalhes sobre isso pra te dar a melhor resposta. Em breve retorno!"
                                           class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"></textarea>
@@ -1011,7 +1013,7 @@
                                 <div class="flex items-center gap-2">
                                     <input type="number" min="1"
                                            :value="tempoMaximoPermanenciaMinutos[col.key] ?? ''"
-                                           @input="tempoMaximoPermanenciaMinutos[col.key] = $event.target.value ? parseInt($event.target.value) : null; iaAlterado[col.key] = true"
+                                           @input="tempoMaximoPermanenciaMinutos[col.key] = $event.target.value ? parseInt($event.target.value) : null; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                            class="w-20 text-xs border border-gray-300 rounded px-2 py-1"
                                            placeholder="—">
                                     <span class="text-xs text-gray-500">minutos</span>
@@ -1023,7 +1025,7 @@
                                 <label class="flex items-center gap-2 mb-2 cursor-pointer">
                                     <input type="checkbox"
                                            :checked="exclusaoDefinitivaAtivo[col.key]"
-                                           @change="exclusaoDefinitivaAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true"
+                                           @change="exclusaoDefinitivaAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                            class="w-3.5 h-3.5 accent-red-600">
                                     <span class="text-xs font-semibold text-gray-500">Exclusão definitiva</span>
                                 </label>
@@ -1049,7 +1051,7 @@
                                         <span class="text-xs text-gray-500">Apagar tickets encerrados nesta coluna há mais de</span>
                                         <input type="number" min="1"
                                                :value="exclusaoDefinitivaDias[col.key] ?? 90"
-                                               @input="exclusaoDefinitivaDias[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true"
+                                               @input="exclusaoDefinitivaDias[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
                                                class="w-16 text-xs border border-gray-300 rounded px-2 py-1">
                                         <span class="text-xs text-gray-500">dias</span>
                                     </div>
@@ -1063,13 +1065,13 @@
                                 </div>
                             </div>
 
-                            <div class="flex items-center justify-end gap-2 mt-2">
-                                <span x-show="iaSalvando[col.key]" class="text-xs text-gray-400">Salvando...</span>
-                                <span x-show="iaSalvo[col.key]" class="text-xs text-green-600">✓ Salvo</span>
+                            <div class="flex items-center justify-end mt-2">
                                 <button @click="salvarIa(col.key)"
                                         :disabled="!iaAlterado[col.key]"
                                         class="text-xs bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
-                                    Salvar
+                                    <span x-show="iaSalvando[col.key]">Salvando...</span>
+                                    <span x-show="!iaSalvando[col.key] && iaSalvo[col.key]">✓ Salvo</span>
+                                    <span x-show="!iaSalvando[col.key] && !iaSalvo[col.key]">Salvar</span>
                                 </button>
                             </div>
                         </div>
@@ -1444,6 +1446,7 @@ function kanbanConfig() {
         objetivo: {},
         objetivoAlterado: {},
         objetivoSalvo: {},
+        objetivoSalvando: {},
 
         // Edição inline de descrição/objetivo da sequência
         editandoDescricao: {},
@@ -1558,7 +1561,6 @@ function kanbanConfig() {
             if (res.ok) {
                 this.conhecimentoGeralAlterado = false;
                 this.conhecimentoGeralSalvo = true;
-                setTimeout(() => { this.conhecimentoGeralSalvo = false; }, 3000);
             }
         },
 
@@ -1974,13 +1976,14 @@ function kanbanConfig() {
         },
 
         async salvarObjetivo(key) {
+            this.objetivoSalvando[key] = true;
             const res = await this.api(`/api/painel/kanban/coluna-config/${key}`, 'PUT', {
                 objetivo: this.objetivo[key] ?? '',
             });
+            this.objetivoSalvando[key] = false;
             if (res.ok) {
                 this.objetivoAlterado[key] = false;
                 this.objetivoSalvo[key]    = true;
-                setTimeout(() => { this.objetivoSalvo[key] = false; }, 3000);
             }
         },
 
@@ -2035,7 +2038,6 @@ function kanbanConfig() {
             if (res.ok) {
                 this.iaAlterado[key] = false;
                 this.iaSalvo[key]    = true;
-                setTimeout(() => { this.iaSalvo[key] = false; }, 3000);
                 // Recarrega do servidor (não confia só no que foi enviado) — garante
                 // que o resumo "Confirmado salvo" abaixo reflete exatamente o valor
                 // gravado no banco, mesmo se o backend arredondar/normalizar algo.
