@@ -38,12 +38,20 @@ class ListaItensImagemTest extends TestCase
         return $tenant;
     }
 
-    private function fakeOpenRouterListaItens(string $texto): void
+    /**
+     * A partir de 2026-08-15 a IA de visão devolve descrição e itens numa
+     * única resposta, separados pelo marcador "ITENS:" (ver
+     * MediaProcessorService::separarDescricaoEItens) — antes disso eram duas
+     * chamadas independentes, uma só de itens. $itensTexto aqui é só a parte
+     * depois do marcador; a descrição narrativa antes dele é irrelevante pros
+     * testes deste arquivo (focados em lista_itens).
+     */
+    private function fakeOpenRouterListaItens(string $itensTexto): void
     {
         Http::fake([
             'openrouter.ai/*' => Http::response([
                 'model'   => 'modelo-fake',
-                'choices' => [['message' => ['content' => $texto]]],
+                'choices' => [['message' => ['content' => "Descrição da imagem.\n\nITENS:\n{$itensTexto}"]]],
             ], 200),
             '*' => Http::response('not found', 404),
         ]);

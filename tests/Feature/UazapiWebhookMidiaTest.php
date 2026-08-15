@@ -140,6 +140,7 @@ class UazapiWebhookMidiaTest extends TestCase
                 'fromMe'    => false,
                 'isGroup'   => false,
                 'chatid'    => '5511922221111@s.whatsapp.net',
+                'senderName' => 'Cliente Teste',
                 'mediaType' => 'image',
                 'messageid' => 'msg-itens-1',
                 'content'   => '{}',
