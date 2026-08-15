@@ -37,14 +37,14 @@ class MediaProcessorService
             return null;
         }
 
-        if (! $transcricaoAtiva && in_array($mediaType, ['image', 'audio'], true)) {
-            return $mediaType === 'image'
-                ? '[Imagem recebida — transcrição desativada para esta coluna]'
-                : '[Áudio recebido — transcrição desativada para esta coluna]';
+        // Imagem não passa mais por aqui — o webhook chama processarImagemUnica()
+        // diretamente (ver comentário nela: download único + 1 chamada de IA que
+        // já devolve descrição e itens juntos, achado real 2026-08-15).
+        if (! $transcricaoAtiva && $mediaType === 'audio') {
+            return '[Áudio recebido — transcrição desativada para esta coluna]';
         }
 
         return match ($mediaType) {
-            'image'    => $this->processarImagem($msg, $instanceToken, $focoAnalise),
             'audio'    => $this->processarAudio($msg, $instanceToken),
             'video'    => $this->processarVideo($msg, $instanceToken),
             'document' => $this->processarDocumento($msg),
@@ -56,96 +56,6 @@ class MediaProcessorService
     // Imagem → visão IA
     // -------------------------------------------------------------------------
 
-    private function processarImagem(array $msg, string $instanceToken, ?string $focoAnalise = null): string
-    {
-        $caption  = is_string($msg['content'] ?? null) ? ($msg['content'] ?? '') : '';
-        $mediaUrl = $this->obterUrlImagem($msg, $instanceToken);
-
-        if (! $mediaUrl) {
-            Log::warning('MediaProcessor: não encontrou URL de imagem', ['msg' => array_keys($msg)]);
-            $caption = $caption ?: '[Imagem recebida]';
-            return $caption;
-        }
-
-        $descricao = $this->descreverImagemComVisao($mediaUrl, $caption, $focoAnalise);
-        $prefixo   = $caption ? "[Imagem: {$caption}] " : '[Imagem] ';
-
-        return $prefixo . $descricao;
-    }
-
-    /**
-     * Gera uma lista curta dos itens vistos na imagem, focada no que a coluna
-     * configurou (ou num foco genérico se não configurado) — usada pra alimentar
-     * o campo "Itens identificados" do card, separado da descrição narrativa que
-     * vai pro contexto do agente. Retorna null se não conseguir processar.
-     */
-    public function extrairItensImagem(array $msg, string $instanceToken, ?string $focoAnalise = null, bool $transcricaoAtiva = true): ?string
-    {
-        if (! $transcricaoAtiva || ! $this->openRouterKey) {
-            return null;
-        }
-
-        $mediaUrl = $this->obterUrlImagem($msg, $instanceToken);
-        if (! $mediaUrl) {
-            return null;
-        }
-
-        return $this->chamarVisaoParaItens($mediaUrl, $focoAnalise);
-    }
-
-    private function chamarVisaoParaItens(string $mediaUrl, ?string $focoAnalise = null): ?string
-    {
-        $foco = trim($focoAnalise ?: self::FOCO_PADRAO);
-
-        $modelosVision = FreeModelsService::vision();
-        if (count($modelosVision) < 3) {
-            $modelosVision[] = self::VISAO_PAGO_FALLBACK;
-        }
-
-        $prompt = "Liste em tópicos curtos (um item por linha, começando com '-') o que aparece na imagem "
-            . "relacionado a: {$foco}. Seja objetivo, sem frases longas — só o essencial de cada item "
-            . "(ex: '- Sofá 3 lugares'). Se nada relevante aparecer, responda apenas 'Nada identificado'.";
-
-        try {
-            $response = Http::withHeaders([
-                'Authorization' => "Bearer {$this->openRouterKey}",
-                'HTTP-Referer'  => config('app.url', 'https://app.leadcerto.app.br'),
-                'X-Title'       => 'Lead Certo',
-            ])->timeout(45)->post('https://openrouter.ai/api/v1/chat/completions', [
-                'models'   => $modelosVision,
-                'route'    => 'fallback',
-                'messages' => [[
-                    'role'    => 'user',
-                    'content' => [
-                        ['type' => 'image_url', 'image_url' => ['url' => $mediaUrl]],
-                        ['type' => 'text',      'text'      => $prompt],
-                    ],
-                ]],
-                'max_tokens' => 200,
-            ]);
-
-            if ($response->successful()) {
-                $texto = trim($response->json('choices.0.message.content') ?? '');
-                return ($texto && ! str_contains(mb_strtolower($texto), 'nada identificado')) ? $texto : null;
-            }
-
-            Log::warning('MediaProcessor: extração de itens falhou', ['status' => $response->status()]);
-        } catch (\Exception $e) {
-            Log::error('MediaProcessor: extração de itens exceção', ['erro' => $e->getMessage()]);
-        }
-
-        return null;
-    }
-
-    private function obterUrlImagem(array $msg, string $instanceToken): ?string
-    {
-        $descriptografado = $this->descriptografarMidiaWhatsApp($msg, 'image');
-
-        return $descriptografado
-            ? 'data:' . ($descriptografado['mime'] ?: 'image/jpeg') . ';base64,' . base64_encode($descriptografado['bytes'])
-            : ($this->extrairUrl($msg) ?? $this->baixarUrlViaUazapi($instanceToken, $msg));
-    }
-
     // Modelo pago de visão — último recurso se todos os gratuitos falharem
     private const VISAO_PAGO_FALLBACK = 'google/gemini-flash-1.5-8b';
 
@@ -155,10 +65,93 @@ class MediaProcessorService
     // hoje como referência de teste, não deve ficar hardcoded no padrão).
     private const FOCO_PADRAO = 'os itens, objetos ou elementos que aparecem em destaque na imagem';
 
-    private function descreverImagemComVisao(string $imageUrl, string $caption = '', ?string $focoAnalise = null): string
+    /**
+     * Processa uma imagem recebida via Uazapi numa ÚNICA passada: baixa a mídia
+     * uma vez só e faz UMA chamada de visão que já devolve descrição narrativa
+     * (pro contexto do agente) e itens identificados (pro campo do card) juntos.
+     *
+     * Achado real 2026-08-05 (ticket 3085, Frete Rio): o padrão anterior baixava
+     * a mesma imagem até 3x (descrição, persistência, itens) e fazia 2 chamadas
+     * de IA separadas. Sob volume — 2 imagens chegando juntas — o provedor
+     * free-tier de visão estourava os 45s de timeout na chamada de itens, e o
+     * card ficava sem a lista mesmo com a descrição salva certinho na conversa.
+     *
+     * @return array{conteudo: string, itens: ?string, midiaUrl: ?string}
+     */
+    public function processarImagemUnica(array $msg, string $instanceToken, ?string $focoAnalise = null, bool $transcricaoAtiva = true): array
+    {
+        $caption = is_string($msg['content'] ?? null) ? ($msg['content'] ?? '') : '';
+        $baixada = $this->baixarImagemUazapi($msg, $instanceToken);
+
+        if (empty($baixada['bytes']) && empty($baixada['url'])) {
+            Log::warning('MediaProcessor: não encontrou URL de imagem', ['msg' => array_keys($msg)]);
+            return ['conteudo' => $caption ?: '[Imagem recebida]', 'itens' => null, 'midiaUrl' => null];
+        }
+
+        $midiaUrl = ! empty($baixada['bytes'])
+            ? $this->salvarBytes($baixada['bytes'], $baixada['mime'] ?: '', 'image')
+            : $baixada['url'];
+
+        if (! $transcricaoAtiva) {
+            return [
+                'conteudo' => '[Imagem recebida — transcrição desativada para esta coluna]',
+                'itens'    => null,
+                'midiaUrl' => $midiaUrl,
+            ];
+        }
+
+        $imagemParaVisao = ! empty($baixada['bytes'])
+            ? 'data:' . ($baixada['mime'] ?: 'image/jpeg') . ';base64,' . base64_encode($baixada['bytes'])
+            : $baixada['url'];
+
+        $analise = $this->analisarImagemCompleta($imagemParaVisao, $caption, $focoAnalise);
+        $prefixo = $caption ? "[Imagem: {$caption}] " : '[Imagem] ';
+
+        return [
+            'conteudo' => $prefixo . $analise['descricao'],
+            'itens'    => $analise['itens'],
+            'midiaUrl' => $midiaUrl,
+        ];
+    }
+
+    /**
+     * Baixa a mídia de imagem uma única vez (mesma ordem de fallback de
+     * baixarEPersistirUrl(): descriptografia direta → download via Uazapi →
+     * URL crua do payload como último recurso) e devolve tanto os bytes
+     * (quando disponíveis, pra persistir em storage) quanto o suficiente pra
+     * montar a URL usada na chamada de visão — sem baixar de novo em nenhuma
+     * das duas etapas.
+     *
+     * @return array{bytes: ?string, mime: ?string, url: ?string}
+     */
+    private function baixarImagemUazapi(array $msg, string $instanceToken): array
+    {
+        $descriptografado = $this->descriptografarMidiaWhatsApp($msg, 'image');
+        if ($descriptografado) {
+            return ['bytes' => $descriptografado['bytes'], 'mime' => $descriptografado['mime'] ?: 'image/jpeg', 'url' => null];
+        }
+
+        $midia = $this->baixarMidiaDoUazapi($instanceToken, $msg);
+        if ($midia) {
+            return ['bytes' => base64_decode($midia['base64']), 'mime' => $midia['mime'] ?: 'image/jpeg', 'url' => null];
+        }
+
+        return ['bytes' => null, 'mime' => null, 'url' => $this->extrairUrl($msg)];
+    }
+
+    /**
+     * Chamada de visão única, compartilhada por Uazapi e Covercut: pede à IA
+     * pra devolver a descrição narrativa e a lista de itens numa só resposta
+     * (separadas pelo marcador "ITENS:"), substituindo as duas chamadas
+     * independentes que existiam antes (descreverImagemComVisao +
+     * chamarVisaoParaItens).
+     *
+     * @return array{descricao: string, itens: ?string}
+     */
+    private function analisarImagemCompleta(string $imageUrl, string $caption, ?string $focoAnalise): array
     {
         if (! $this->openRouterKey) {
-            return '[Imagem recebida — processamento de visão não configurado]';
+            return ['descricao' => '[Imagem recebida — processamento de visão não configurado]', 'itens' => null];
         }
 
         // Modelos gratuitos atualizados diariamente + 1 pago como último recurso (≤ 3 total)
@@ -169,13 +162,18 @@ class MediaProcessorService
 
         $foco = trim($focoAnalise ?: self::FOCO_PADRAO);
 
-        $promptContexto = 'Você é um assistente de uma empresa. '
+        $prompt = 'Você é um assistente de uma empresa. '
             . 'Descreva em português o que vê na imagem de forma objetiva e prática, '
             . "focando em: {$foco}. Se não for relevante, descreva brevemente o que vê.";
 
         if ($caption) {
-            $promptContexto .= " O remetente adicionou a legenda: \"{$caption}\".";
+            $prompt .= " O remetente adicionou a legenda: \"{$caption}\".";
         }
+
+        $prompt .= "\n\nDepois da descrição, pule uma linha e escreva exatamente \"ITENS:\" seguido de uma lista "
+            . "em tópicos curtos (um item por linha, começando com '-') do que aparece na imagem relacionado a: "
+            . "{$foco}. Seja objetivo, sem frases longas (ex: '- Sofá 3 lugares'). Se nada relevante aparecer, "
+            . 'escreva "ITENS: nada identificado".';
 
         try {
             // OpenRouter route=fallback tenta cada modelo em ordem até um responder
@@ -190,16 +188,17 @@ class MediaProcessorService
                     'role'    => 'user',
                     'content' => [
                         ['type' => 'image_url', 'image_url' => ['url' => $imageUrl]],
-                        ['type' => 'text',      'text'      => $promptContexto],
+                        ['type' => 'text',      'text'      => $prompt],
                     ],
                 ]],
-                'max_tokens' => 300,
+                'max_tokens' => 400,
             ]);
 
             if ($response->successful()) {
                 $modeloUsado = $response->json('model') ?? 'desconhecido';
                 Log::debug('MediaProcessor visão OK', ['modelo' => $modeloUsado]);
-                return trim($response->json('choices.0.message.content') ?? '[Imagem recebida]');
+                $texto = trim($response->json('choices.0.message.content') ?? '');
+                return $this->separarDescricaoEItens($texto);
             }
 
             Log::warning('MediaProcessor visão falhou', ['status' => $response->status(), 'body' => substr($response->body(), 0, 200)]);
@@ -207,7 +206,28 @@ class MediaProcessorService
             Log::error('MediaProcessor visão exception', ['erro' => $e->getMessage()]);
         }
 
-        return '[Imagem recebida — não foi possível analisar o conteúdo]';
+        return ['descricao' => '[Imagem recebida — não foi possível analisar o conteúdo]', 'itens' => null];
+    }
+
+    /**
+     * Separa a resposta única da IA de visão em descrição narrativa + lista de
+     * itens, usando o marcador "ITENS:" pedido no prompt. Modelos gratuitos nem
+     * sempre seguem o formato à risca — se o marcador não aparecer, trata a
+     * resposta inteira como descrição em vez de quebrar (só fica sem itens).
+     *
+     * @return array{descricao: string, itens: ?string}
+     */
+    private function separarDescricaoEItens(string $texto): array
+    {
+        if (preg_match('/^(.*?)\R+ITENS:?\s*(.*)$/isu', $texto, $m)) {
+            $descricao  = trim($m[1]);
+            $itensTexto = trim($m[2]);
+            $itens      = ($itensTexto && ! str_contains(mb_strtolower($itensTexto), 'nada identificado')) ? $itensTexto : null;
+
+            return ['descricao' => $descricao ?: $texto, 'itens' => $itens];
+        }
+
+        return ['descricao' => $texto ?: '[Imagem recebida]', 'itens' => null];
     }
 
     // -------------------------------------------------------------------------
@@ -626,15 +646,14 @@ class MediaProcessorService
     {
         $tipo = $message['type'] ?? null;
 
-        if (! $transcricaoAtiva && in_array($tipo, ['image', 'audio'], true)) {
-            return $tipo === 'image'
-                ? '[Imagem recebida — transcrição desativada para esta coluna]'
-                : '[Áudio recebido — transcrição desativada para esta coluna]';
+        // Imagem não passa mais por aqui — o webhook chama
+        // processarImagemUnicaOficial() diretamente (ver comentário nela).
+        if (! $transcricaoAtiva && $tipo === 'audio') {
+            return '[Áudio recebido — transcrição desativada para esta coluna]';
         }
 
         return match ($tipo) {
             'audio'    => $this->processarAudioOficial($message, $canal),
-            'image'    => $this->processarImagemOficial($message, $canal, $focoAnalise),
             'video'    => $this->processarVideoOficial($message),
             'document' => $this->processarDocumentoOficial($message),
             default    => null,
@@ -659,47 +678,53 @@ class MediaProcessorService
         return $caption ? "[Documento recebido: {$caption}]" : '[Documento recebido]';
     }
 
-    private function processarImagemOficial(array $message, WhatsappCanal $canal, ?string $focoAnalise = null): string
+    /**
+     * Processa uma imagem recebida via Covercut (canal Oficial) numa ÚNICA
+     * passada: baixa a mídia uma vez só e faz UMA chamada de visão que já
+     * devolve descrição narrativa e itens identificados juntos — mesma lógica
+     * de processarImagemUnica() (Uazapi), ver o comentário dela pro achado que
+     * motivou a mudança (2026-08-15).
+     *
+     * @return array{conteudo: string, itens: ?string, midiaUrl: ?string}
+     */
+    public function processarImagemUnicaOficial(array $message, WhatsappCanal $canal, ?string $focoAnalise = null, bool $transcricaoAtiva = true): array
     {
         $caption = $message['image']['caption'] ?? '';
         $mediaId = $message['image']['id'] ?? null;
 
         if (! $mediaId) {
             Log::warning('MediaProcessor: payload de imagem oficial sem image.id', ['message' => $message]);
-            return $caption ?: '[Imagem recebida]';
+            return ['conteudo' => $caption ?: '[Imagem recebida]', 'itens' => null, 'midiaUrl' => null];
         }
 
         $midia = $this->baixarMidiaCovercut($mediaId, $canal);
         if (! $midia) {
-            return $caption ? "[Imagem: {$caption}]" : '[Imagem recebida — não foi possível analisar o conteúdo]';
+            return [
+                'conteudo' => $caption ? "[Imagem: {$caption}]" : '[Imagem recebida — não foi possível analisar o conteúdo]',
+                'itens'    => null,
+                'midiaUrl' => null,
+            ];
         }
 
-        $dataUri   = 'data:' . ($midia['mime'] ?: 'image/jpeg') . ';base64,' . base64_encode($midia['bytes']);
-        $descricao = $this->descreverImagemComVisao($dataUri, $caption, $focoAnalise);
-        $prefixo   = $caption ? "[Imagem: {$caption}] " : '[Imagem] ';
+        $midiaUrl = $this->salvarBytes($midia['bytes'], $midia['mime'], 'image');
 
-        return $prefixo . $descricao;
-    }
-
-    public function extrairItensImagemOficial(array $message, WhatsappCanal $canal, ?string $focoAnalise = null, bool $transcricaoAtiva = true): ?string
-    {
-        if (! $transcricaoAtiva || ! $this->openRouterKey) {
-            return null;
-        }
-
-        $mediaId = $message['image']['id'] ?? null;
-        if (! $mediaId) {
-            return null;
-        }
-
-        $midia = $this->baixarMidiaCovercut($mediaId, $canal);
-        if (! $midia) {
-            return null;
+        if (! $transcricaoAtiva) {
+            return [
+                'conteudo' => '[Imagem recebida — transcrição desativada para esta coluna]',
+                'itens'    => null,
+                'midiaUrl' => $midiaUrl,
+            ];
         }
 
         $dataUri = 'data:' . ($midia['mime'] ?: 'image/jpeg') . ';base64,' . base64_encode($midia['bytes']);
+        $analise = $this->analisarImagemCompleta($dataUri, $caption, $focoAnalise);
+        $prefixo = $caption ? "[Imagem: {$caption}] " : '[Imagem] ';
 
-        return $this->chamarVisaoParaItens($dataUri, $focoAnalise);
+        return [
+            'conteudo' => $prefixo . $analise['descricao'],
+            'itens'    => $analise['itens'],
+            'midiaUrl' => $midiaUrl,
+        ];
     }
 
     private function processarAudioOficial(array $message, WhatsappCanal $canal): string

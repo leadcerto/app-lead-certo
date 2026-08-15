@@ -280,23 +280,33 @@ class UazapiWebhookController extends Controller
                 $focoAnalise      = $mediaType === 'image' ? $colunaConfig?->foco_analise_imagem : null;
                 $transcricaoAtiva = $colunaConfig?->transcricao_ativa ?? true;
 
-                $processado = app(MediaProcessorService::class)->processar($msg, $canal->tokenUazapi(), $focoAnalise, $transcricaoAtiva);
-                if ($processado !== null) {
-                    $conteudo     = $processado;
-                    $tipoMensagem = match ($mediaType) {
-                        'image' => 'imagem', 'video' => 'video', 'audio' => 'audio', default => 'texto',
-                    };
-                    if (in_array($mediaType, ['image', 'audio', 'video'])) {
-                        $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrl($msg, $canal->tokenUazapi(), $mediaType);
-                    }
+                if ($mediaType === 'image') {
+                    // Download único + 1 chamada de visão que já devolve descrição
+                    // e itens juntos — antes disso a mesma imagem era baixada até
+                    // 3x e passava por 2 chamadas de IA separadas, o que sob
+                    // volume (2+ imagens seguidas) estourava timeout e deixava o
+                    // card sem os itens mesmo com a descrição salva certinho
+                    // (achado real 2026-08-15, ticket 3085, mesmo bug do Covercut).
+                    $resultado    = app(MediaProcessorService::class)->processarImagemUnica($msg, $canal->tokenUazapi(), $focoAnalise, $transcricaoAtiva);
+                    $conteudo     = $resultado['conteudo'];
+                    $tipoMensagem = 'imagem';
+                    $midiaUrl     = $resultado['midiaUrl'];
 
                     // Acumula os itens identificados na imagem no card, pra quem
                     // vende ver de relance o que já foi enviado sem reabrir cada foto.
-                    if ($mediaType === 'image') {
-                        $itens = app(MediaProcessorService::class)->extrairItensImagem($msg, $canal->tokenUazapi(), $focoAnalise, $transcricaoAtiva);
-                        if ($itens) {
-                            $listaAtual = $ticket->lista_itens ? $ticket->lista_itens . "\n" : '';
-                            $ticket->update(['lista_itens' => $listaAtual . $itens]);
+                    if ($resultado['itens']) {
+                        $listaAtual = $ticket->lista_itens ? $ticket->lista_itens . "\n" : '';
+                        $ticket->update(['lista_itens' => $listaAtual . $resultado['itens']]);
+                    }
+                } else {
+                    $processado = app(MediaProcessorService::class)->processar($msg, $canal->tokenUazapi(), null, $transcricaoAtiva);
+                    if ($processado !== null) {
+                        $conteudo     = $processado;
+                        $tipoMensagem = match ($mediaType) {
+                            'video' => 'video', 'audio' => 'audio', default => 'texto',
+                        };
+                        if (in_array($mediaType, ['audio', 'video'])) {
+                            $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrl($msg, $canal->tokenUazapi(), $mediaType);
                         }
                     }
                 }

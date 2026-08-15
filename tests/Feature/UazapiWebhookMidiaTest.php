@@ -109,6 +109,56 @@ class UazapiWebhookMidiaTest extends TestCase
         $this->assertNotNull($mensagem->midia_url);
     }
 
+    /**
+     * Achado real 2026-08-15 (ticket 3085, Frete Rio, mesmo bug do Covercut —
+     * ver CovercutWebhookMidiaTest::test_imagem_recebida_e_descrita_e_salva_com_midia_url_e_itens):
+     * antes desta correção a mesma imagem era baixada até 3x e passava por 2
+     * chamadas de IA separadas (descrição + itens). Agora é 1 download + 1
+     * chamada de visão que devolve os dois juntos (marcador "ITENS:" no
+     * prompt) — o assertSentCount(2) abaixo prova que não duplica mais.
+     */
+    public function test_imagem_e_descrita_e_itens_extraidos_numa_unica_passada(): void
+    {
+        config(['services.openrouter.key' => 'fake-openrouter-key']);
+
+        Http::fake([
+            '*/message/download' => Http::response([
+                'base64'   => base64_encode('conteudo-binario-fake-imagem'),
+                'mimetype' => 'image/jpeg',
+            ], 200),
+            'openrouter.ai/*' => Http::response([
+                'model'   => 'modelo-fake',
+                'choices' => [['message' => ['content' => "Um sofá de três lugares na sala.\n\nITENS:\n- Sofá 3 lugares\n- Mesa de centro"]]],
+            ], 200),
+        ]);
+
+        $this->criarTenantComCanal('wh-midia-itens', 'inst-itens');
+
+        $this->postJson('/api/webhook/uazapi/wh-midia-itens', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'    => false,
+                'isGroup'   => false,
+                'chatid'    => '5511922221111@s.whatsapp.net',
+                'mediaType' => 'image',
+                'messageid' => 'msg-itens-1',
+                'content'   => '{}',
+            ],
+        ]);
+
+        $mensagem = Mensagem::where('remetente', 'lead')->latest()->first();
+        $this->assertNotNull($mensagem);
+        $this->assertSame('imagem', $mensagem->tipo);
+        $this->assertStringContainsString('Um sofá de três lugares', $mensagem->conteudo);
+
+        $ticket = TicketAtendimento::withoutGlobalScopes()->where('id', $mensagem->ticket_id)->first();
+        $this->assertNotNull($ticket->lista_itens, 'lista_itens do ticket deveria ter sido populada com os itens extraídos');
+        $this->assertStringContainsString('Sofá 3 lugares', $ticket->lista_itens);
+        $this->assertStringContainsString('Mesa de centro', $ticket->lista_itens);
+
+        Http::assertSentCount(2); // 1 download da mídia + 1 chamada de visão — não duplica mais
+    }
+
     public function test_imagem_usa_url_direta_do_content_quando_download_do_uazapi_falha(): void
     {
         // Simula o cenário real de produção: os endpoints de download do Uazapi

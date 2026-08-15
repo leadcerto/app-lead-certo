@@ -199,19 +199,29 @@ class CovercutWebhookMidiaTest extends TestCase
         $this->assertNull($mensagem->midia_url);
     }
 
+    /**
+     * Achado real 2026-08-15 (ticket 3085, Frete Rio): antes desta correção a
+     * mesma imagem era baixada da Covercut até 3x (descrição, persistência,
+     * itens) e passava por 2 chamadas de IA separadas — sob volume (2+ imagens
+     * seguidas), o provedor free-tier de visão estourava timeout na chamada de
+     * itens e o card ficava sem a lista mesmo com a descrição salva certinho.
+     * Agora é 1 download + 1 chamada de visão que devolve os dois juntos
+     * (separados pelo marcador "ITENS:" no prompt) — o assertSentCount(2) abaixo
+     * prova que não duplica mais.
+     */
     public function test_imagem_recebida_e_descrita_e_salva_com_midia_url_e_itens(): void
     {
         // openrouter.key não está configurado por padrão no ambiente de teste (é assim
         // que as outras chamadas de IA no resto da suíte fazem short-circuit sem bater na
-        // rede) — aqui precisamos de uma chave fake pra extrairItensImagemOficial() de
-        // fato tentar a chamada de visão, senão ela nem chega a bater no endpoint fakeado.
+        // rede) — aqui precisamos de uma chave fake pra analisarImagemCompleta() de fato
+        // tentar a chamada de visão, senão ela nem chega a bater no endpoint fakeado.
         config(['services.openrouter.key' => 'fake-openrouter-key']);
 
         Http::fake([
             '*/media/get*'    => Http::response('conteudo-binario-fake-imagem', 200, ['Content-Type' => 'image/jpeg']),
             'openrouter.ai/*' => Http::response([
                 'model'   => 'modelo-fake',
-                'choices' => [['message' => ['content' => "- Sofá 3 lugares\n- Mesa de jantar"]]],
+                'choices' => [['message' => ['content' => "Uma sala de estar com sofá e mesa de jantar.\n\nITENS:\n- Sofá 3 lugares\n- Mesa de jantar"]]],
             ], 200),
         ]);
 
@@ -234,6 +244,7 @@ class CovercutWebhookMidiaTest extends TestCase
         $this->assertSame('imagem', $mensagem->tipo);
         $this->assertNotNull($mensagem->midia_url);
         $this->assertStringContainsString('minha sala', $mensagem->conteudo);
+        $this->assertStringContainsString('Uma sala de estar com sofá', $mensagem->conteudo);
 
         $ticket = TicketAtendimento::withoutGlobalScopes()->find($mensagem->ticket_id);
         $this->assertNotNull($ticket);
@@ -243,6 +254,7 @@ class CovercutWebhookMidiaTest extends TestCase
 
         Http::assertSent(fn ($request) => str_contains($request->url(), '/media/get') && $request['id'] === 'media-img-1');
         Http::assertSent(fn ($request) => str_contains($request->url(), 'openrouter.ai'));
+        Http::assertSentCount(2); // 1 download da mídia + 1 chamada de visão — não duplica mais
     }
 
     public function test_imagem_sem_id_no_payload_e_tratada_sem_quebrar(): void

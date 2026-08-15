@@ -312,16 +312,20 @@ class CovercutWebhookController extends Controller
             try {
                 $focoAnalise = $colunaConfig?->foco_analise_imagem;
 
-                $conteudo = app(MediaProcessorService::class)->processarOficial($message, $canal, $focoAnalise, $transcricaoAtiva);
-                if ($conteudo !== null) {
-                    $tipoMensagem = 'imagem';
-                    $midiaUrl = app(MediaProcessorService::class)->baixarEPersistirUrlOficial($message, $canal, 'image');
+                // Download único + 1 chamada de visão que já devolve descrição e
+                // itens juntos — antes disso a mesma imagem era baixada até 3x e
+                // passava por 2 chamadas de IA separadas, o que sob volume (2+
+                // imagens seguidas) estourava timeout e deixava o card sem os
+                // itens mesmo com a descrição salva certinho (achado real
+                // 2026-08-15, ticket 3085).
+                $resultado    = app(MediaProcessorService::class)->processarImagemUnicaOficial($message, $canal, $focoAnalise, $transcricaoAtiva);
+                $conteudo     = $resultado['conteudo'];
+                $tipoMensagem = 'imagem';
+                $midiaUrl     = $resultado['midiaUrl'];
 
-                    $itens = app(MediaProcessorService::class)->extrairItensImagemOficial($message, $canal, $focoAnalise, $transcricaoAtiva);
-                    if ($itens) {
-                        $listaAtual = $ticket->lista_itens ? $ticket->lista_itens . "\n" : '';
-                        $ticket->update(['lista_itens' => $listaAtual . $itens]);
-                    }
+                if ($resultado['itens']) {
+                    $listaAtual = $ticket->lista_itens ? $ticket->lista_itens . "\n" : '';
+                    $ticket->update(['lista_itens' => $listaAtual . $resultado['itens']]);
                 }
             } catch (\Throwable $e) {
                 Log::warning('Covercut webhook: falha ao processar imagem', ['message_id' => $messageId, 'erro' => $e->getMessage()]);
