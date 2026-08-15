@@ -1561,6 +1561,9 @@ function kanbanConfig() {
             if (res.ok) {
                 this.conhecimentoGeralAlterado = false;
                 this.conhecimentoGeralSalvo = true;
+            } else {
+                const erro = await res.json().catch(() => null);
+                this.mostrarToast(erro?.message || 'Não foi possível salvar a base de conhecimento.', 'erro');
             }
         },
 
@@ -1984,6 +1987,9 @@ function kanbanConfig() {
             if (res.ok) {
                 this.objetivoAlterado[key] = false;
                 this.objetivoSalvo[key]    = true;
+            } else {
+                const erro = await res.json().catch(() => null);
+                this.mostrarToast(erro?.message || 'Não foi possível salvar o objetivo desta etapa.', 'erro');
             }
         },
 
@@ -2041,7 +2047,13 @@ function kanbanConfig() {
                 // Recarrega do servidor (não confia só no que foi enviado) — garante
                 // que o resumo "Confirmado salvo" abaixo reflete exatamente o valor
                 // gravado no banco, mesmo se o backend arredondar/normalizar algo.
+                // carregarIa() tem guarda de "já carregado" (iaCarregado[key]), então
+                // aqui força o recarregamento de verdade em vez do no-op padrão.
+                this.iaCarregado[key] = false;
                 await this.carregarIa(key);
+            } else {
+                const erro = await res.json().catch(() => null);
+                this.mostrarToast(erro?.message || 'Não foi possível salvar as configurações do Agente de IA.', 'erro');
             }
         },
 
