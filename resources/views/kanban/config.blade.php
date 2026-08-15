@@ -107,11 +107,12 @@
         </div>
         <p class="text-xs text-gray-400 mb-3">O que a IA precisa saber sobre este Kanban como um todo — visão geral, estratégia, restrições que valem em qualquer coluna.</p>
         <textarea
-            @input="conhecimentoGeral = $event.target.value; conhecimentoGeralAlterado = true; conhecimentoGeralSalvo = false"
+            x-init="autoResize($el)"
+            @input="conhecimentoGeral = $event.target.value; conhecimentoGeralAlterado = true; conhecimentoGeralSalvo = false; autoResize($event.target)"
             :value="conhecimentoGeral"
             placeholder="Ex: Este Kanban atende só clientes da Zona Sul do Rio de Janeiro."
             rows="4"
-            class="w-full text-sm border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none bg-gray-50"
+            class="w-full text-sm border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none bg-gray-50 overflow-hidden"
         ></textarea>
         <div class="flex items-center justify-end mt-2">
             <button @click="salvarConhecimentoGeral()"
@@ -155,11 +156,12 @@
                 <div>
                     <label class="block text-xs font-semibold text-gray-500 mb-1.5">Objetivo desta etapa</label>
                     <textarea
-                        @input="objetivo[col.key] = $event.target.value; objetivoAlterado[col.key] = true; objetivoSalvo[col.key] = false"
+                        x-effect="(objetivo[col.key], abaAtiva === col.key) && $nextTick(() => autoResize($el))"
+                        @input="objetivo[col.key] = $event.target.value; objetivoAlterado[col.key] = true; objetivoSalvo[col.key] = false; autoResize($event.target)"
                         :value="objetivo[col.key] ?? ''"
                         :placeholder="col.objetivoEx"
                         rows="2"
-                        class="w-full text-sm border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none bg-gray-50"
+                        class="w-full text-sm border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none bg-gray-50 overflow-hidden"
                     ></textarea>
                     <div class="flex justify-end mt-2">
                         <button @click="salvarObjetivo(col.key)"
@@ -325,7 +327,9 @@
                                                         </div>
                                                     </template>
                                                     <textarea x-model="editMsgConteudo" rows="3"
-                                                              class="w-full text-sm border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                                              x-init="autoResize($el)"
+                                                              @input="autoResize($event.target)"
+                                                              class="w-full text-sm border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none overflow-hidden"
                                                               placeholder="Texto da mensagem..."></textarea>
 
                                                     @include('kanban.partials._botoes-editor', ['arrayExpr' => 'editMsgBotoes'])
@@ -478,11 +482,12 @@
                                                 class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center">✕</button>
                                     </div>
                                 </template>
-                                <textarea @input="novoConteudo[seq.id] = $event.target.value"
+                                <textarea @input="novoConteudo[seq.id] = $event.target.value; autoResize($event.target)"
                                           :value="novoConteudo[seq.id] || ''"
+                                          x-effect="(novoConteudo[seq.id], abaAtiva === col.key, aberto === seq.id) && $nextTick(() => autoResize($el))"
                                           rows="2"
                                           placeholder="Texto... Variáveis: {nome} {empresa} {endereco_saida} {endereco_destino} {data_hoje} {dia_semana}"
-                                          class="w-full text-sm border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-green-500"></textarea>
+                                          class="w-full text-sm border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none overflow-hidden"></textarea>
 
                                 @include('kanban.partials._botoes-editor', ['arrayExpr' => 'novoBotoes[seq.id]'])
 
@@ -639,11 +644,16 @@
                     </div>
                 </div>
 
-                <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-                    {{-- Tópicos de orientação (colapsável) --}}
-                    <div x-data="{ dicasAbertas: false }" class="border-b border-gray-100">
+                {{-- Cada seção abaixo é um card independente, com salvamento próprio —
+                     achado ao vivo (2026-08-15): um Salvar único pra ~10 seções confundia
+                     o Leonardo (editava uma, salvava, e outra seção intocada parecia "não
+                     salva"). Pedido explícito dele: cada seção no seu próprio card. --}}
+
+                {{-- Card 1: Base de Conhecimento + foco de imagem + transcrição --}}
+                <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-4">
+                    <div x-data="{ dicasAbertas: false }" class="mb-3 -mx-5 -mt-5 border-b border-gray-100">
                         <button @click="dicasAbertas = !dicasAbertas"
-                                class="w-full px-5 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors">
+                                class="w-full px-5 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors rounded-t-2xl">
                             <span class="text-xs font-semibold text-purple-600 flex items-center gap-1.5">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -668,413 +678,475 @@
                         </div>
                     </div>
 
-                    <div class="px-5 py-4">
-
-                        {{-- Dica compacta: tokens (dinâmico — reflete as colunas reais deste tenant) --}}
-                        <div class="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-xl">
-                            <p class="text-xs font-semibold text-gray-500 mb-2">Tokens que movem o card automaticamente:</p>
-                            <div class="flex flex-wrap gap-1.5">
-                                <template x-for="c in colunas" :key="c.key">
-                                    <span class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded cursor-default"
-                                          :title="'Move o card para a coluna ' + c.label">
-                                        <span class="font-sans" x-text="c.label"></span>
-                                        <span class="font-sans text-blue-400">→</span>
-                                        <code class="font-mono" x-text="c.token"></code>
-                                    </span>
-                                </template>
-                            </div>
-                            <p class="text-xs text-gray-400 mt-2">Inclua um token no final da resposta da IA para mover o card. Use apenas um por mensagem.</p>
+                    <div class="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-xl">
+                        <p class="text-xs font-semibold text-gray-500 mb-2">Tokens que movem o card automaticamente:</p>
+                        <div class="flex flex-wrap gap-1.5">
+                            <template x-for="c in colunas" :key="c.key">
+                                <span class="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded cursor-default"
+                                      :title="'Move o card para a coluna ' + c.label">
+                                    <span class="font-sans" x-text="c.label"></span>
+                                    <span class="font-sans text-blue-400">→</span>
+                                    <code class="font-mono" x-text="c.token"></code>
+                                </span>
+                            </template>
                         </div>
+                        <p class="text-xs text-gray-400 mt-2">Inclua um token no final da resposta da IA para mover o card. Use apenas um por mensagem.</p>
+                    </div>
 
-                        <label class="text-xs font-semibold text-gray-500 mb-1 block">Base de Conhecimento da coluna — o que a IA precisa saber pra atuar bem nesta etapa</label>
+                    <label class="text-xs font-semibold text-gray-500 mb-1 block">Base de Conhecimento da coluna — o que a IA precisa saber pra atuar bem nesta etapa</label>
+                    <textarea
+                        x-effect="(iaContexto[col.key], abaAtiva === col.key) && $nextTick(() => autoResize($el))"
+                        @input="iaContexto[col.key] = $event.target.value; marcarSecaoAlterada('conhecimento', col.key); autoResize($event.target)"
+                        :value="iaContexto[col.key] ?? ''"
+                        :placeholder="col.iaPlaceholder"
+                        rows="10"
+                        class="w-full text-sm border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none bg-gray-50 overflow-hidden"
+                    ></textarea>
+
+                    <div class="mt-3">
+                        <label class="text-xs font-semibold text-gray-500 mb-1 block">O que a IA deve procurar nas imagens desta coluna</label>
                         <textarea
-                            @input="iaContexto[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                            :value="iaContexto[col.key] ?? ''"
-                            :placeholder="col.iaPlaceholder"
-                            rows="10"
-                            class="w-full text-sm border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none bg-gray-50"
+                            x-effect="(focoAnaliseImagem[col.key], abaAtiva === col.key) && $nextTick(() => autoResize($el))"
+                            @input="focoAnaliseImagem[col.key] = $event.target.value; marcarSecaoAlterada('conhecimento', col.key); autoResize($event.target)"
+                            :value="focoAnaliseImagem[col.key] ?? ''"
+                            placeholder="Ex: móveis, volumes, caixas, quantidade de itens de mudança (deixe em branco para usar a descrição genérica)"
+                            rows="2"
+                            class="w-full text-xs border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none bg-gray-50 overflow-hidden"
                         ></textarea>
+                        <p class="text-xs text-gray-400 mt-1">Usado tanto na descrição da imagem pro agente quanto na lista de itens identificados no card. Cada negócio pode focar em algo diferente — móveis, placas de carro, cores, o que fizer sentido.</p>
+                    </div>
 
-                        <div class="mt-3">
-                            <label class="text-xs font-semibold text-gray-500 mb-1 block">O que a IA deve procurar nas imagens desta coluna</label>
-                            <textarea
-                                @input="focoAnaliseImagem[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                :value="focoAnaliseImagem[col.key] ?? ''"
-                                placeholder="Ex: móveis, volumes, caixas, quantidade de itens de mudança (deixe em branco para usar a descrição genérica)"
-                                rows="2"
-                                class="w-full text-xs border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none bg-gray-50"
-                            ></textarea>
-                            <p class="text-xs text-gray-400 mt-1">Usado tanto na descrição da imagem pro agente quanto na lista de itens identificados no card. Cada negócio pode focar em algo diferente — móveis, placas de carro, cores, o que fizer sentido.</p>
-                        </div>
+                    <div class="mt-3">
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox"
+                                   :checked="transcricaoAtiva[col.key] ?? true"
+                                   @change="transcricaoAtiva[col.key] = $event.target.checked; marcarSecaoAlterada('conhecimento', col.key)"
+                                   class="w-3.5 h-3.5 accent-purple-600">
+                            <span class="text-xs text-gray-500">Transcrever áudio e analisar imagens/documentos nesta coluna</span>
+                        </label>
+                        <p class="text-xs text-gray-400 mt-1 ml-5">Desligado: áudio e imagem ainda chegam e ficam salvos no card, só sem a transcrição/descrição automática por IA.</p>
+                    </div>
 
-                        <div class="mt-3">
+                    <div class="flex items-center justify-end mt-3">
+                        <button @click="salvarSecaoConhecimento(col.key)"
+                                :disabled="!secaoAlterada['conhecimento:' + col.key]"
+                                class="text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
+                            <span x-show="secaoSalvando['conhecimento:' + col.key]">Salvando...</span>
+                            <span x-show="!secaoSalvando['conhecimento:' + col.key] && !secaoAlterada['conhecimento:' + col.key]">✓ Salvo</span>
+                            <span x-show="!secaoSalvando['conhecimento:' + col.key] && secaoAlterada['conhecimento:' + col.key]">Salvar</span>
+                        </button>
+                    </div>
+                </div>
+
+                {{-- Card: Objetivos para avançar (checklist — já salva item a item, sem draft) --}}
+                <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-4" x-init="carregarObjetivos(col.key)">
+                    <label class="text-xs font-semibold text-gray-500 mb-1 block">Objetivos para avançar desta coluna</label>
+                    <p class="text-xs text-gray-400 mb-2">O que o lead precisa ter respondido/confirmado antes de sair desta etapa. O agente marca sozinho conforme a conversa evolui.</p>
+
+                    <div class="space-y-1.5 mb-2">
+                        <template x-for="objetivo in (objetivosPor[col.key] || [])" :key="objetivo.id">
+                            <div class="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5">
+                                <span class="text-xs text-gray-700 flex-1" x-text="objetivo.texto"></span>
+                                <label class="flex items-center gap-1 flex-shrink-0" title="Objetivo ativo">
+                                    <input type="checkbox" :checked="objetivo.ativo"
+                                           @change="toggleAtivoObjetivo(col.key, objetivo)"
+                                           class="w-3 h-3 accent-purple-600">
+                                </label>
+                                <button @click="excluirObjetivo(col.key, objetivo)"
+                                        class="text-red-300 hover:text-red-500 flex-shrink-0 text-xs">✕</button>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <input type="text" :value="novoObjetivoTexto[col.key] || ''"
+                               @input="novoObjetivoTexto[col.key] = $event.target.value"
+                               @keydown.enter="adicionarObjetivo(col.key)"
+                               placeholder="Ex: Endereço de origem confirmado"
+                               class="flex-1 text-xs border border-gray-300 rounded-lg px-2 py-1.5">
+                        <button @click="adicionarObjetivo(col.key)"
+                                class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1.5 rounded-lg">+</button>
+                    </div>
+                </div>
+
+                {{-- Card 2: Ativação --}}
+                <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-4">
+                    <div class="flex items-center justify-between flex-wrap gap-3">
+                        <div class="flex items-center gap-4">
                             <label class="flex items-center gap-1.5 cursor-pointer">
                                 <input type="checkbox"
-                                       :checked="transcricaoAtiva[col.key] ?? true"
-                                       @change="transcricaoAtiva[col.key] = $event.target.checked; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
+                                       :checked="iaAtivo[col.key]"
+                                       @change="iaAtivo[col.key] = $event.target.checked; marcarSecaoAlterada('ativacao', col.key)"
                                        class="w-3.5 h-3.5 accent-purple-600">
-                                <span class="text-xs text-gray-500">Transcrever áudio e analisar imagens/documentos nesta coluna</span>
+                                <span class="text-xs text-gray-500">Agente ativo nesta coluna</span>
                             </label>
-                            <p class="text-xs text-gray-400 mt-1 ml-5">Desligado: áudio e imagem ainda chegam e ficam salvos no card, só sem a transcrição/descrição automática por IA.</p>
-                        </div>
-
-                        <div class="mt-3 pt-3 border-t border-gray-100" x-init="carregarObjetivos(col.key)">
-                            <label class="text-xs font-semibold text-gray-500 mb-1 block">Objetivos para avançar desta coluna</label>
-                            <p class="text-xs text-gray-400 mb-2">O que o lead precisa ter respondido/confirmado antes de sair desta etapa. O agente marca sozinho conforme a conversa evolui.</p>
-
-                            <div class="space-y-1.5 mb-2">
-                                <template x-for="objetivo in (objetivosPor[col.key] || [])" :key="objetivo.id">
-                                    <div class="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5">
-                                        <span class="text-xs text-gray-700 flex-1" x-text="objetivo.texto"></span>
-                                        <label class="flex items-center gap-1 flex-shrink-0" title="Objetivo ativo">
-                                            <input type="checkbox" :checked="objetivo.ativo"
-                                                   @change="toggleAtivoObjetivo(col.key, objetivo)"
-                                                   class="w-3 h-3 accent-purple-600">
-                                        </label>
-                                        <button @click="excluirObjetivo(col.key, objetivo)"
-                                                class="text-red-300 hover:text-red-500 flex-shrink-0 text-xs">✕</button>
-                                    </div>
-                                </template>
-                            </div>
-
-                            <div class="flex items-center gap-2">
-                                <input type="text" :value="novoObjetivoTexto[col.key] || ''"
-                                       @input="novoObjetivoTexto[col.key] = $event.target.value"
-                                       @keydown.enter="adicionarObjetivo(col.key)"
-                                       placeholder="Ex: Endereço de origem confirmado"
-                                       class="flex-1 text-xs border border-gray-300 rounded-lg px-2 py-1.5">
-                                <button @click="adicionarObjetivo(col.key)"
-                                        class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1.5 rounded-lg">+</button>
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-xs text-gray-500">Aguardar</span>
+                                <input type="number" min="0"
+                                       :value="iaDelay[col.key] ?? 45"
+                                       @input="iaDelay[col.key] = parseInt($event.target.value) || 0; marcarSecaoAlterada('ativacao', col.key)"
+                                       class="w-16 text-xs border border-gray-300 rounded px-2 py-1">
+                                <select :value="iaDelayUnidade[col.key] || 'seg'"
+                                        @change="iaDelayUnidade[col.key] = $event.target.value; marcarSecaoAlterada('ativacao', col.key)"
+                                        class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
+                                    <option value="seg">seg</option>
+                                    <option value="min">min</option>
+                                    <option value="hora">hora</option>
+                                </select>
+                                <span class="text-xs text-gray-500">antes de responder</span>
                             </div>
                         </div>
+                        <button @click="salvarSecaoAtivacao(col.key)"
+                                :disabled="!secaoAlterada['ativacao:' + col.key]"
+                                class="text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
+                            <span x-show="secaoSalvando['ativacao:' + col.key]">Salvando...</span>
+                            <span x-show="!secaoSalvando['ativacao:' + col.key] && !secaoAlterada['ativacao:' + col.key]">✓ Salvo</span>
+                            <span x-show="!secaoSalvando['ativacao:' + col.key] && secaoAlterada['ativacao:' + col.key]">Salvar</span>
+                        </button>
+                    </div>
+                </div>
 
-                        <div class="mt-3 flex items-center justify-between">
-                            <div class="flex items-center gap-4">
-                                <label class="flex items-center gap-1.5 cursor-pointer">
-                                    <input type="checkbox"
-                                           :checked="iaAtivo[col.key]"
-                                           @change="iaAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                           class="w-3.5 h-3.5 accent-purple-600">
-                                    <span class="text-xs text-gray-500">Agente ativo nesta coluna</span>
-                                </label>
-                                <div class="flex items-center gap-1.5">
-                                    <span class="text-xs text-gray-500">Aguardar</span>
-                                    <input type="number" min="0"
-                                           :value="iaDelay[col.key] ?? 45"
-                                           @input="iaDelay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                           class="w-16 text-xs border border-gray-300 rounded px-2 py-1">
-                                    <select :value="iaDelayUnidade[col.key] || 'seg'"
-                                            @change="iaDelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                            class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
-                                        <option value="seg">seg</option>
-                                        <option value="min">min</option>
-                                        <option value="hora">hora</option>
-                                    </select>
-                                    <span class="text-xs text-gray-500">antes de responder</span>
-                                </div>
-                            </div>
-                            <div class="flex items-center">
-                                <button @click="salvarIa(col.key)"
-                                        :disabled="!iaAlterado[col.key]"
-                                        class="text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
-                                    <span x-show="iaSalvando[col.key]">Salvando...</span>
-                                    <span x-show="!iaSalvando[col.key] && !iaAlterado[col.key]">✓ Salvo</span>
-                                    <span x-show="!iaSalvando[col.key] && iaAlterado[col.key]">Salvar</span>
-                                </button>
-                            </div>
+                {{-- Card 3: Estágios de silêncio --}}
+                <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-4">
+                    <p class="text-xs font-semibold text-gray-500 mb-2">Estágios de silêncio (reengajamento automático, roda a cada 5min entre 8h-20h)</p>
+                    <div class="flex flex-wrap items-center gap-4">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-xs text-gray-500">1 · toque suave</span>
+                            <input type="number" min="1"
+                                   :value="estagio1Delay[col.key] ?? 1"
+                                   @input="estagio1Delay[col.key] = parseInt($event.target.value) || 0; marcarSecaoAlterada('estagios', col.key)"
+                                   class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
+                            <select :value="estagio1DelayUnidade[col.key] || 'hora'"
+                                    @change="estagio1DelayUnidade[col.key] = $event.target.value; marcarSecaoAlterada('estagios', col.key)"
+                                    class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
+                                <option value="seg">seg</option>
+                                <option value="min">min</option>
+                                <option value="hora">hora</option>
+                            </select>
                         </div>
-
-                        <div class="mt-3 pt-3 border-t border-gray-100">
-                            <p class="text-xs font-semibold text-gray-500 mb-2">Estágios de silêncio (reengajamento automático, roda a cada 5min entre 8h-20h)</p>
-                            <div class="flex flex-wrap items-center gap-4">
-                                <div class="flex items-center gap-1.5">
-                                    <span class="text-xs text-gray-500">1 · toque suave</span>
-                                    <input type="number" min="1"
-                                           :value="estagio1Delay[col.key] ?? 1"
-                                           @input="estagio1Delay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                           class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
-                                    <select :value="estagio1DelayUnidade[col.key] || 'hora'"
-                                            @change="estagio1DelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                            class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
-                                        <option value="seg">seg</option>
-                                        <option value="min">min</option>
-                                        <option value="hora">hora</option>
-                                    </select>
-                                </div>
-                                <div class="flex items-center gap-1.5">
-                                    <span class="text-xs text-gray-500">2 · urgência sutil</span>
-                                    <input type="number" min="1"
-                                           :value="estagio2Delay[col.key] ?? 2"
-                                           @input="estagio2Delay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                           class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
-                                    <select :value="estagio2DelayUnidade[col.key] || 'hora'"
-                                            @change="estagio2DelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                            class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
-                                        <option value="seg">seg</option>
-                                        <option value="min">min</option>
-                                        <option value="hora">hora</option>
-                                    </select>
-                                </div>
-                                <div class="flex items-center gap-1.5">
-                                    <span class="text-xs text-gray-500">3 · encerramento</span>
-                                    <input type="number" min="1"
-                                           :value="estagio3Delay[col.key] ?? 6"
-                                           @input="estagio3Delay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                           class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
-                                    <select :value="estagio3DelayUnidade[col.key] || 'hora'"
-                                            @change="estagio3DelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                            class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
-                                        <option value="seg">seg</option>
-                                        <option value="min">min</option>
-                                        <option value="hora">hora</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                                <p class="text-xs font-semibold text-blue-800 mb-1">Como configurar</p>
-                                <p class="text-xs text-blue-700 leading-relaxed">
-                                    Quando o lead para de responder, o sistema tenta reengajar automaticamente em 3 níveis, cada vez mais direto. Os campos acima definem <strong>quanto tempo de silêncio</strong> (contado desde a última mensagem da conversa, sua ou do lead) é preciso pra cada nível disparar. <strong>O estágio 2 precisa ser maior que o 1, e o 3 maior que o 2</strong> — senão a ordem fica confusa.
-                                </p>
-                                <ul class="text-xs text-blue-700 mt-1.5 space-y-0.5 list-disc list-inside">
-                                    <li><strong>1 · toque suave</strong> — mensagem leve perguntando se o lead teve alguma dificuldade ou prefere responder por áudio.</li>
-                                    <li><strong>2 · urgência sutil</strong> — avisa que a agenda está ficando concorrida e pergunta se o interesse ainda é atual.</li>
-                                    <li><strong>3 · encerramento</strong> — se despede educadamente e pode encerrar o atendimento (mesmo token <code class="bg-white px-1 rounded">[ENCERRADO]</code> explicado acima).</li>
-                                </ul>
-                                <p class="text-xs text-blue-700 mt-1.5">
-                                    O texto exato de cada mensagem fica a critério da IA, com base nas instruções escritas na caixa de texto grande acima (o mesmo campo "AGENTE DE IA" desta coluna). Se quiser controlar o que ela diz em cada estágio, inclua no texto trechos como "No Estágio 1, diga...", "No Estágio 2, diga...", "No Estágio 3, diga..." — se não escrever nada específico, a IA usa um tom padrão adequado a cada nível.
-                                </p>
-                                <p class="text-xs text-blue-700 mt-1.5">
-                                    Isso roda sozinho a cada 5 minutos, só em horário comercial (8h às 20h), e reinicia do zero sempre que o lead responder de novo. Depois de ajustar os tempos, clique em <strong>Salvar</strong> (botão logo acima).
-                                </p>
-                            </div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-xs text-gray-500">2 · urgência sutil</span>
+                            <input type="number" min="1"
+                                   :value="estagio2Delay[col.key] ?? 2"
+                                   @input="estagio2Delay[col.key] = parseInt($event.target.value) || 0; marcarSecaoAlterada('estagios', col.key)"
+                                   class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
+                            <select :value="estagio2DelayUnidade[col.key] || 'hora'"
+                                    @change="estagio2DelayUnidade[col.key] = $event.target.value; marcarSecaoAlterada('estagios', col.key)"
+                                    class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
+                                <option value="seg">seg</option>
+                                <option value="min">min</option>
+                                <option value="hora">hora</option>
+                            </select>
                         </div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-xs text-gray-500">3 · encerramento</span>
+                            <input type="number" min="1"
+                                   :value="estagio3Delay[col.key] ?? 6"
+                                   @input="estagio3Delay[col.key] = parseInt($event.target.value) || 0; marcarSecaoAlterada('estagios', col.key)"
+                                   class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
+                            <select :value="estagio3DelayUnidade[col.key] || 'hora'"
+                                    @change="estagio3DelayUnidade[col.key] = $event.target.value; marcarSecaoAlterada('estagios', col.key)"
+                                    class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
+                                <option value="seg">seg</option>
+                                <option value="min">min</option>
+                                <option value="hora">hora</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                        <p class="text-xs font-semibold text-blue-800 mb-1">Como configurar</p>
+                        <p class="text-xs text-blue-700 leading-relaxed">
+                            Quando o lead para de responder, o sistema tenta reengajar automaticamente em 3 níveis, cada vez mais direto. Os campos acima definem <strong>quanto tempo de silêncio</strong> (contado desde a última mensagem da conversa, sua ou do lead) é preciso pra cada nível disparar. <strong>O estágio 2 precisa ser maior que o 1, e o 3 maior que o 2</strong> — senão a ordem fica confusa.
+                        </p>
+                        <ul class="text-xs text-blue-700 mt-1.5 space-y-0.5 list-disc list-inside">
+                            <li><strong>1 · toque suave</strong> — mensagem leve perguntando se o lead teve alguma dificuldade ou prefere responder por áudio.</li>
+                            <li><strong>2 · urgência sutil</strong> — avisa que a agenda está ficando concorrida e pergunta se o interesse ainda é atual.</li>
+                            <li><strong>3 · encerramento</strong> — se despede educadamente e pode encerrar o atendimento (mesmo token <code class="bg-white px-1 rounded">[ENCERRADO]</code> explicado acima).</li>
+                        </ul>
+                        <p class="text-xs text-blue-700 mt-1.5">
+                            O texto exato de cada mensagem fica a critério da IA, com base nas instruções escritas no campo <strong>"Base de Conhecimento da coluna"</strong> (no primeiro card desta tela). Se quiser controlar o que ela diz em cada estágio, inclua no texto trechos como "No Estágio 1, diga...", "No Estágio 2, diga...", "No Estágio 3, diga..." — se não escrever nada específico, a IA usa um tom padrão adequado a cada nível.
+                        </p>
+                        <p class="text-xs text-blue-700 mt-1.5">
+                            Isso roda sozinho a cada 5 minutos, só em horário comercial (8h às 20h), e reinicia do zero sempre que o lead responder de novo.
+                        </p>
+                    </div>
+                    <div class="flex items-center justify-end mt-3">
+                        <button @click="salvarSecaoEstagios(col.key)"
+                                :disabled="!secaoAlterada['estagios:' + col.key]"
+                                class="text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
+                            <span x-show="secaoSalvando['estagios:' + col.key]">Salvando...</span>
+                            <span x-show="!secaoSalvando['estagios:' + col.key] && !secaoAlterada['estagios:' + col.key]">✓ Salvo</span>
+                            <span x-show="!secaoSalvando['estagios:' + col.key] && secaoAlterada['estagios:' + col.key]">Salvar</span>
+                        </button>
+                    </div>
+                </div>
 
-                        <div class="mt-3 pt-3 border-t border-gray-100">
-                            <label class="flex items-center gap-2 mb-2 cursor-pointer">
-                                <input type="checkbox"
-                                       :checked="autoMoverAtivo[col.key]"
-                                       @change="autoMoverAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                       class="w-3.5 h-3.5 accent-red-600">
-                                <span class="text-xs font-semibold text-gray-500">Transferência automática por silêncio</span>
-                            </label>
+                {{-- Card 4: Transferência automática por silêncio (auto-mover) --}}
+                <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-4">
+                    <label class="flex items-center gap-2 mb-2 cursor-pointer">
+                        <input type="checkbox"
+                               :checked="autoMoverAtivo[col.key]"
+                               @change="autoMoverAtivo[col.key] = $event.target.checked; marcarSecaoAlterada('automover', col.key)"
+                               class="w-3.5 h-3.5 accent-red-600">
+                        <span class="text-xs font-semibold text-gray-500">Transferência automática por silêncio</span>
+                    </label>
 
-                            {{-- Resumo do que está REALMENTE salvo no banco agora — nunca reflete
-                                 edição em andamento, só o que carregarIa()/salvarIa() confirmaram
-                                 com o servidor. Pedido do Leonardo: os campos editáveis logo acima
-                                 não dão nenhuma certeza visual do que está gravado de verdade. --}}
-                            <template x-if="autoMoverSalvo[col.key]">
-                                <div class="mb-2 p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
-                                    <span class="font-semibold text-gray-700">✓ Confirmado salvo no sistema:</span>
-                                    <template x-if="autoMoverSalvo[col.key].ativo">
-                                        <span>
-                                            depois de
-                                            <strong x-text="autoMoverSalvo[col.key].delay + ' ' + autoMoverSalvo[col.key].delayUnidade"></strong>
-                                            de silêncio, mover para
-                                            <strong x-text="labelColuna(autoMoverSalvo[col.key].destino)"></strong>.
-                                            Mensagem:
-                                            <em x-text="autoMoverSalvo[col.key].mensagem ? '« ' + autoMoverSalvo[col.key].mensagem + ' »' : '(nenhuma — move sem avisar)'"></em>
-                                        </span>
-                                    </template>
-                                    <template x-if="! autoMoverSalvo[col.key].ativo">
-                                        <span>desativado.</span>
-                                    </template>
-                                </div>
+                    {{-- Resumo do que está REALMENTE salvo no banco agora — atualizado direto
+                         pelo salvarSecaoAutoMover() no sucesso, sem depender de recarregar do
+                         servidor (achado real 2026-08-15: a versão anterior tinha um bug de
+                         guarda que fazia esse resumo nunca atualizar depois do primeiro save). --}}
+                    <template x-if="autoMoverSalvo[col.key]">
+                        <div class="mb-2 p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+                            <span class="font-semibold text-gray-700">✓ Confirmado salvo no sistema:</span>
+                            <template x-if="autoMoverSalvo[col.key].ativo">
+                                <span>
+                                    depois de
+                                    <strong x-text="autoMoverSalvo[col.key].delay + ' ' + autoMoverSalvo[col.key].delayUnidade"></strong>
+                                    de silêncio, mover para
+                                    <strong x-text="labelColuna(autoMoverSalvo[col.key].destino)"></strong>.
+                                    Mensagem:
+                                    <em x-text="autoMoverSalvo[col.key].mensagem ? '« ' + autoMoverSalvo[col.key].mensagem + ' »' : '(nenhuma — move sem avisar)'"></em>
+                                </span>
                             </template>
-
-                            <template x-if="autoMoverAtivo[col.key]">
-                                <div>
-                                    <div class="flex flex-wrap items-center gap-2 mb-2">
-                                        <span class="text-xs text-gray-500">Depois de</span>
-                                        <input type="number" min="1"
-                                               :value="autoMoverDelay[col.key] ?? 3"
-                                               @input="autoMoverDelay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                               class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
-                                        <select :value="autoMoverDelayUnidade[col.key] || 'dia'"
-                                                @change="autoMoverDelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                                class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
-                                            <option value="seg">seg</option>
-                                            <option value="min">min</option>
-                                            <option value="hora">hora</option>
-                                            <option value="dia">dia</option>
-                                        </select>
-                                        <span class="text-xs text-gray-500">de silêncio, mover para</span>
-                                        <select :value="autoMoverDestino[col.key] || 'encerrado'"
-                                                @change="autoMoverDestino[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                                class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
-                                            <template x-for="c in colunas" :key="c.key">
-                                                <option :value="c.key" x-text="c.label"></option>
-                                            </template>
-                                        </select>
-                                    </div>
-                                    <textarea :value="autoMoverMensagem[col.key] || ''"
-                                              @input="autoMoverMensagem[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                              rows="5"
-                                              placeholder="Mensagem opcional pra avisar o lead antes de mover (ex: Por falta de comunicação, estamos encerrando seu atendimento e ficamos à disposição caso queira retomar o assunto). Deixe em branco pra mover sem avisar."
-                                              class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-red-400 resize-y"></textarea>
-                                </div>
+                            <template x-if="! autoMoverSalvo[col.key].ativo">
+                                <span>desativado.</span>
                             </template>
-                            <div class="mt-2 p-3 bg-red-50 border border-red-200 rounded-xl">
-                                <p class="text-xs font-semibold text-red-800 mb-1">Como configurar</p>
-                                <p class="text-xs text-red-700 leading-relaxed">
-                                    Se o lead ficar em silêncio pelo tempo configurado acima (contado desde a última mensagem da conversa), o sistema move o atendimento sozinho pra coluna escolhida — independente dos Estágios de silêncio acima. Se o destino for <strong>Encerrado</strong>, o sistema também marca como encerrado automaticamente e gera os relatórios de IA (mesmo efeito do botão Encerrar); se o lead responder depois, o atendimento reabre normalmente. Se preencher a mensagem, ela é enviada ao lead exatamente antes de mover — use <code class="bg-white px-1 rounded">{nome}</code> pra personalizar. Roda junto com os Estágios de silêncio (5 em 5 minutos, horário comercial).
-                                </p>
-                            </div>
-
-                            <div class="mt-3 pt-3 border-t border-gray-100">
-                                <label class="flex items-center gap-2 mb-2 cursor-pointer">
-                                    <input type="checkbox"
-                                           :checked="timeoutReassuncaoAtivo[col.key]"
-                                           @change="timeoutReassuncaoAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                           class="w-3.5 h-3.5 accent-purple-600">
-                                    <span class="text-xs font-semibold text-gray-500">Reassumir automaticamente após silêncio do atendente</span>
-                                </label>
-
-                                <template x-if="timeoutReassuncaoAtivo[col.key]">
-                                    <div class="flex flex-wrap items-center gap-2 mb-2">
-                                        <span class="text-xs text-gray-500">Depois de</span>
-                                        <input type="number" min="1"
-                                               :value="timeoutReassuncaoDelay[col.key] ?? 1"
-                                               @input="timeoutReassuncaoDelay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                               class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
-                                        <select :value="timeoutReassuncaoDelayUnidade[col.key] || 'hora'"
-                                                @change="timeoutReassuncaoDelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                                class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
-                                            <option value="seg">seg</option>
-                                            <option value="min">min</option>
-                                            <option value="hora">hora</option>
-                                        </select>
-                                        <span class="text-xs text-gray-500">de silêncio, o agente retoma sozinho</span>
-                                    </div>
-                                </template>
-                                <div class="mt-2 p-3 bg-purple-50 border border-purple-200 rounded-xl">
-                                    <p class="text-xs font-semibold text-purple-800 mb-1">Como configurar</p>
-                                    <p class="text-xs text-purple-700 leading-relaxed">
-                                        Quando um atendente assume a conversa (o agente para de falar automaticamente), esse tempo conta o silêncio desde a última mensagem da conversa — sua ou do lead. Se ninguém escrever nada até esse limite, o agente de IA retoma o atendimento sozinho, sem mandar nenhuma mensagem pro lead — só volta a responder normalmente na próxima vez que ele escrever. Você recebe um alerta interno (ícone ao lado do sino, na barra de topo) toda vez que isso acontece. Roda a cada 5 minutos, sem restrição de horário.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div class="mt-3 pt-3 border-t border-gray-100">
-                                <label class="flex items-center gap-2 mb-2 cursor-pointer">
-                                    <input type="checkbox"
-                                           :checked="duvidaTimeoutAtivo[col.key]"
-                                           @change="duvidaTimeoutAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                           class="w-3.5 h-3.5 accent-amber-600">
-                                    <span class="text-xs font-semibold text-gray-500">Retomar automaticamente se ninguém orientar (Regra 2)</span>
-                                </label>
-
-                                <template x-if="duvidaTimeoutAtivo[col.key]">
-                                    <div class="flex flex-wrap items-center gap-2 mb-2">
-                                        <span class="text-xs text-gray-500">Depois de</span>
-                                        <input type="number" min="1"
-                                               :value="duvidaTimeoutDelay[col.key] ?? 1"
-                                               @input="duvidaTimeoutDelay[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                               class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
-                                        <select :value="duvidaTimeoutDelayUnidade[col.key] || 'hora'"
-                                                @change="duvidaTimeoutDelayUnidade[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                                class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
-                                            <option value="seg">seg</option>
-                                            <option value="min">min</option>
-                                            <option value="hora">hora</option>
-                                        </select>
-                                        <span class="text-xs text-gray-500">sem resposta, o agente retoma sozinho</span>
-                                    </div>
-                                </template>
-                                <div class="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                                    <p class="text-xs font-semibold text-amber-800 mb-1">Como configurar</p>
-                                    <p class="text-xs text-amber-700 leading-relaxed">
-                                        Se o agente pausar aguardando sua orientação (Regra 2) e ninguém responder o
-                                        alerta dentro desse prazo, ele retoma o atendimento sozinho, sem mandar
-                                        nenhuma mensagem pro lead — o alerta é fechado automaticamente. Roda a
-                                        cada 5 minutos, sem restrição de horário.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div class="mt-3 pt-3 border-t border-gray-100">
-                                <label class="text-xs font-semibold text-gray-500 mb-1 block">Mensagem de espera durante orientação (Regra 2)</label>
-                                <p class="text-xs text-gray-400 mb-2">
-                                    Se o agente pausar aguardando sua orientação e o lead escrever de novo nesse meio tempo,
-                                    essa mensagem é mandada uma única vez. Deixe em branco pra usar a mensagem padrão do sistema.
-                                </p>
-                                <textarea :value="aguardandoOrientacaoMensagem[col.key] || ''"
-                                          @input="aguardandoOrientacaoMensagem[col.key] = $event.target.value; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                          rows="2"
-                                          placeholder="Estou verificando mais detalhes sobre isso pra te dar a melhor resposta. Em breve retorno!"
-                                          class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"></textarea>
-                            </div>
-
-                            <div class="mt-3 pt-3 border-t border-gray-100">
-                                <label class="text-xs font-semibold text-gray-500 mb-1 block">Tempo máximo de permanência (Regra 12)</label>
-                                <p class="text-xs text-gray-400 mb-2">
-                                    Se um ticket ficar nessa coluna além desse tempo, você recebe um alerta
-                                    interno (mesmo ícone dos outros alertas). Deixe em branco pra não monitorar.
-                                </p>
-                                <div class="flex items-center gap-2">
-                                    <input type="number" min="1"
-                                           :value="tempoMaximoPermanenciaMinutos[col.key] ?? ''"
-                                           @input="tempoMaximoPermanenciaMinutos[col.key] = $event.target.value ? parseInt($event.target.value) : null; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                           class="w-20 text-xs border border-gray-300 rounded px-2 py-1"
-                                           placeholder="—">
-                                    <span class="text-xs text-gray-500">minutos</span>
-                                </div>
-                            </div>
-
-                            {{-- Exclusão definitiva --}}
-                            <div class="mt-3 pt-3 border-t border-gray-100">
-                                <label class="flex items-center gap-2 mb-2 cursor-pointer">
-                                    <input type="checkbox"
-                                           :checked="exclusaoDefinitivaAtivo[col.key]"
-                                           @change="exclusaoDefinitivaAtivo[col.key] = $event.target.checked; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                           class="w-3.5 h-3.5 accent-red-600">
-                                    <span class="text-xs font-semibold text-gray-500">Exclusão definitiva</span>
-                                </label>
-
-                                <template x-if="exclusaoDefinitivaSalvo[col.key]">
-                                    <div class="mb-2 p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
-                                        <span class="font-semibold text-gray-700">✓ Confirmado salvo no sistema:</span>
-                                        <template x-if="exclusaoDefinitivaSalvo[col.key].ativo">
-                                            <span>
-                                                tickets encerrados nesta coluna há mais de
-                                                <strong x-text="exclusaoDefinitivaSalvo[col.key].dias + ' dias'"></strong>
-                                                são apagados definitivamente (conversa inteira, sem volta).
-                                            </span>
-                                        </template>
-                                        <template x-if="! exclusaoDefinitivaSalvo[col.key].ativo">
-                                            <span>desativado — nada é apagado automaticamente nesta coluna.</span>
-                                        </template>
-                                    </div>
-                                </template>
-
-                                <template x-if="exclusaoDefinitivaAtivo[col.key]">
-                                    <div class="flex flex-wrap items-center gap-2 mb-2">
-                                        <span class="text-xs text-gray-500">Apagar tickets encerrados nesta coluna há mais de</span>
-                                        <input type="number" min="1"
-                                               :value="exclusaoDefinitivaDias[col.key] ?? 90"
-                                               @input="exclusaoDefinitivaDias[col.key] = parseInt($event.target.value) || 0; iaAlterado[col.key] = true; iaSalvo[col.key] = false"
-                                               class="w-16 text-xs border border-gray-300 rounded px-2 py-1">
-                                        <span class="text-xs text-gray-500">dias</span>
-                                    </div>
-                                </template>
-
-                                <div class="mt-2 p-3 bg-red-50 border border-red-200 rounded-xl">
-                                    <p class="text-xs font-semibold text-red-800 mb-1">⚠ Ação irreversível</p>
-                                    <p class="text-xs text-red-700 leading-relaxed">
-                                        Roda toda madrugada. Conta a partir do momento em que o ticket foi <strong>encerrado</strong> nesta coluna (não de quando foi criado ou da última mensagem) — só tickets já encerrados entram na conta, nunca um atendimento em aberto. Apaga o ticket e todas as mensagens da conversa <strong>de vez, sem possibilidade de recuperação</strong>. Não envia nenhum aviso ao lead antes de apagar.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div class="flex items-center justify-end mt-2">
-                                <button @click="salvarIa(col.key)"
-                                        :disabled="!iaAlterado[col.key]"
-                                        class="text-xs bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
-                                    <span x-show="iaSalvando[col.key]">Salvando...</span>
-                                    <span x-show="!iaSalvando[col.key] && !iaAlterado[col.key]">✓ Salvo</span>
-                                    <span x-show="!iaSalvando[col.key] && iaAlterado[col.key]">Salvar</span>
-                                </button>
-                            </div>
                         </div>
+                    </template>
+
+                    <template x-if="autoMoverAtivo[col.key]">
+                        <div>
+                            <div class="flex flex-wrap items-center gap-2 mb-2">
+                                <span class="text-xs text-gray-500">Depois de</span>
+                                <input type="number" min="1"
+                                       :value="autoMoverDelay[col.key] ?? 3"
+                                       @input="autoMoverDelay[col.key] = parseInt($event.target.value) || 0; marcarSecaoAlterada('automover', col.key)"
+                                       class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
+                                <select :value="autoMoverDelayUnidade[col.key] || 'dia'"
+                                        @change="autoMoverDelayUnidade[col.key] = $event.target.value; marcarSecaoAlterada('automover', col.key)"
+                                        class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
+                                    <option value="seg">seg</option>
+                                    <option value="min">min</option>
+                                    <option value="hora">hora</option>
+                                    <option value="dia">dia</option>
+                                </select>
+                                <span class="text-xs text-gray-500">de silêncio, mover para</span>
+                                <select :value="autoMoverDestino[col.key] || 'encerrado'"
+                                        @change="autoMoverDestino[col.key] = $event.target.value; marcarSecaoAlterada('automover', col.key)"
+                                        class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
+                                    <template x-for="c in colunas" :key="c.key">
+                                        <option :value="c.key" x-text="c.label"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <textarea :value="autoMoverMensagem[col.key] || ''"
+                                      x-effect="(autoMoverMensagem[col.key], abaAtiva === col.key) && $nextTick(() => autoResize($el))"
+                                      @input="autoMoverMensagem[col.key] = $event.target.value; marcarSecaoAlterada('automover', col.key); autoResize($event.target)"
+                                      rows="5"
+                                      placeholder="Mensagem opcional pra avisar o lead antes de mover (ex: Por falta de comunicação, estamos encerrando seu atendimento e ficamos à disposição caso queira retomar o assunto). Deixe em branco pra mover sem avisar."
+                                      class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-red-400 resize-none overflow-hidden"></textarea>
+                        </div>
+                    </template>
+                    <div class="mt-2 p-3 bg-red-50 border border-red-200 rounded-xl">
+                        <p class="text-xs font-semibold text-red-800 mb-1">Como configurar</p>
+                        <p class="text-xs text-red-700 leading-relaxed">
+                            Se o lead ficar em silêncio pelo tempo configurado acima (contado desde a última mensagem da conversa), o sistema move o atendimento sozinho pra coluna escolhida — independente dos Estágios de silêncio. Se o destino for <strong>Encerrado</strong>, o sistema também marca como encerrado automaticamente e gera os relatórios de IA (mesmo efeito do botão Encerrar); se o lead responder depois, o atendimento reabre normalmente. Se preencher a mensagem, ela é enviada ao lead exatamente antes de mover — use <code class="bg-white px-1 rounded">{nome}</code> pra personalizar. Roda junto com os Estágios de silêncio (5 em 5 minutos, horário comercial).
+                        </p>
+                    </div>
+                    <div class="flex items-center justify-end mt-3">
+                        <button @click="salvarSecaoAutoMover(col.key)"
+                                :disabled="!secaoAlterada['automover:' + col.key]"
+                                class="text-sm bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
+                            <span x-show="secaoSalvando['automover:' + col.key]">Salvando...</span>
+                            <span x-show="!secaoSalvando['automover:' + col.key] && !secaoAlterada['automover:' + col.key]">✓ Salvo</span>
+                            <span x-show="!secaoSalvando['automover:' + col.key] && secaoAlterada['automover:' + col.key]">Salvar</span>
+                        </button>
+                    </div>
+                </div>
+
+                {{-- Card 5: Reassumir automaticamente após silêncio do atendente --}}
+                <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-4">
+                    <label class="flex items-center gap-2 mb-2 cursor-pointer">
+                        <input type="checkbox"
+                               :checked="timeoutReassuncaoAtivo[col.key]"
+                               @change="timeoutReassuncaoAtivo[col.key] = $event.target.checked; marcarSecaoAlterada('timeoutreassuncao', col.key)"
+                               class="w-3.5 h-3.5 accent-purple-600">
+                        <span class="text-xs font-semibold text-gray-500">Reassumir automaticamente após silêncio do atendente</span>
+                    </label>
+
+                    <template x-if="timeoutReassuncaoAtivo[col.key]">
+                        <div class="flex flex-wrap items-center gap-2 mb-2">
+                            <span class="text-xs text-gray-500">Depois de</span>
+                            <input type="number" min="1"
+                                   :value="timeoutReassuncaoDelay[col.key] ?? 1"
+                                   @input="timeoutReassuncaoDelay[col.key] = parseInt($event.target.value) || 0; marcarSecaoAlterada('timeoutreassuncao', col.key)"
+                                   class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
+                            <select :value="timeoutReassuncaoDelayUnidade[col.key] || 'hora'"
+                                    @change="timeoutReassuncaoDelayUnidade[col.key] = $event.target.value; marcarSecaoAlterada('timeoutreassuncao', col.key)"
+                                    class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
+                                <option value="seg">seg</option>
+                                <option value="min">min</option>
+                                <option value="hora">hora</option>
+                            </select>
+                            <span class="text-xs text-gray-500">de silêncio, o agente retoma sozinho</span>
+                        </div>
+                    </template>
+                    <div class="mt-2 p-3 bg-purple-50 border border-purple-200 rounded-xl">
+                        <p class="text-xs font-semibold text-purple-800 mb-1">Como configurar</p>
+                        <p class="text-xs text-purple-700 leading-relaxed">
+                            Quando um atendente assume a conversa (o agente para de falar automaticamente), esse tempo conta o silêncio desde a última mensagem da conversa — sua ou do lead. Se ninguém escrever nada até esse limite, o agente de IA retoma o atendimento sozinho, sem mandar nenhuma mensagem pro lead — só volta a responder normalmente na próxima vez que ele escrever. Você recebe um alerta interno (ícone ao lado do sino, na barra de topo) toda vez que isso acontece. Roda a cada 5 minutos, sem restrição de horário.
+                        </p>
+                    </div>
+                    <div class="flex items-center justify-end mt-3">
+                        <button @click="salvarSecaoTimeoutReassuncao(col.key)"
+                                :disabled="!secaoAlterada['timeoutreassuncao:' + col.key]"
+                                class="text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
+                            <span x-show="secaoSalvando['timeoutreassuncao:' + col.key]">Salvando...</span>
+                            <span x-show="!secaoSalvando['timeoutreassuncao:' + col.key] && !secaoAlterada['timeoutreassuncao:' + col.key]">✓ Salvo</span>
+                            <span x-show="!secaoSalvando['timeoutreassuncao:' + col.key] && secaoAlterada['timeoutreassuncao:' + col.key]">Salvar</span>
+                        </button>
+                    </div>
+                </div>
+
+                {{-- Card 6: Retomar automaticamente se ninguém orientar + mensagem de espera --}}
+                <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-4">
+                    <label class="flex items-center gap-2 mb-2 cursor-pointer">
+                        <input type="checkbox"
+                               :checked="duvidaTimeoutAtivo[col.key]"
+                               @change="duvidaTimeoutAtivo[col.key] = $event.target.checked; marcarSecaoAlterada('duvidatimeout', col.key)"
+                               class="w-3.5 h-3.5 accent-amber-600">
+                        <span class="text-xs font-semibold text-gray-500">Retomar automaticamente se ninguém orientar (Regra 2)</span>
+                    </label>
+
+                    <template x-if="duvidaTimeoutAtivo[col.key]">
+                        <div class="flex flex-wrap items-center gap-2 mb-2">
+                            <span class="text-xs text-gray-500">Depois de</span>
+                            <input type="number" min="1"
+                                   :value="duvidaTimeoutDelay[col.key] ?? 1"
+                                   @input="duvidaTimeoutDelay[col.key] = parseInt($event.target.value) || 0; marcarSecaoAlterada('duvidatimeout', col.key)"
+                                   class="w-14 text-xs border border-gray-300 rounded px-2 py-1">
+                            <select :value="duvidaTimeoutDelayUnidade[col.key] || 'hora'"
+                                    @change="duvidaTimeoutDelayUnidade[col.key] = $event.target.value; marcarSecaoAlterada('duvidatimeout', col.key)"
+                                    class="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white text-gray-700">
+                                <option value="seg">seg</option>
+                                <option value="min">min</option>
+                                <option value="hora">hora</option>
+                            </select>
+                            <span class="text-xs text-gray-500">sem resposta, o agente retoma sozinho</span>
+                        </div>
+                    </template>
+                    <div class="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                        <p class="text-xs font-semibold text-amber-800 mb-1">Como configurar</p>
+                        <p class="text-xs text-amber-700 leading-relaxed">
+                            Se o agente pausar aguardando sua orientação (Regra 2) e ninguém responder o
+                            alerta dentro desse prazo, ele retoma o atendimento sozinho, sem mandar
+                            nenhuma mensagem pro lead — o alerta é fechado automaticamente. Roda a
+                            cada 5 minutos, sem restrição de horário.
+                        </p>
+                    </div>
+
+                    <div class="mt-3 pt-3 border-t border-gray-100">
+                        <label class="text-xs font-semibold text-gray-500 mb-1 block">Mensagem de espera durante orientação (Regra 2)</label>
+                        <p class="text-xs text-gray-400 mb-2">
+                            Se o agente pausar aguardando sua orientação e o lead escrever de novo nesse meio tempo,
+                            essa mensagem é mandada uma única vez. Deixe em branco pra usar a mensagem padrão do sistema.
+                        </p>
+                        <textarea :value="aguardandoOrientacaoMensagem[col.key] || ''"
+                                  x-effect="(aguardandoOrientacaoMensagem[col.key], abaAtiva === col.key) && $nextTick(() => autoResize($el))"
+                                  @input="aguardandoOrientacaoMensagem[col.key] = $event.target.value; marcarSecaoAlterada('duvidatimeout', col.key); autoResize($event.target)"
+                                  rows="2"
+                                  placeholder="Estou verificando mais detalhes sobre isso pra te dar a melhor resposta. Em breve retorno!"
+                                  class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none overflow-hidden"></textarea>
+                    </div>
+                    <div class="flex items-center justify-end mt-3">
+                        <button @click="salvarSecaoDuvidaTimeout(col.key)"
+                                :disabled="!secaoAlterada['duvidatimeout:' + col.key]"
+                                class="text-sm bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
+                            <span x-show="secaoSalvando['duvidatimeout:' + col.key]">Salvando...</span>
+                            <span x-show="!secaoSalvando['duvidatimeout:' + col.key] && !secaoAlterada['duvidatimeout:' + col.key]">✓ Salvo</span>
+                            <span x-show="!secaoSalvando['duvidatimeout:' + col.key] && secaoAlterada['duvidatimeout:' + col.key]">Salvar</span>
+                        </button>
+                    </div>
+                </div>
+
+                {{-- Card 7: Tempo máximo de permanência --}}
+                <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-4">
+                    <label class="text-xs font-semibold text-gray-500 mb-1 block">Tempo máximo de permanência (Regra 12)</label>
+                    <p class="text-xs text-gray-400 mb-2">
+                        Se um ticket ficar nessa coluna além desse tempo, você recebe um alerta
+                        interno (mesmo ícone dos outros alertas). Deixe em branco pra não monitorar.
+                    </p>
+                    <div class="flex items-center justify-between flex-wrap gap-3">
+                        <div class="flex items-center gap-2">
+                            <input type="number" min="1"
+                                   :value="tempoMaximoPermanenciaMinutos[col.key] ?? ''"
+                                   @input="tempoMaximoPermanenciaMinutos[col.key] = $event.target.value ? parseInt($event.target.value) : null; marcarSecaoAlterada('tempomaximo', col.key)"
+                                   class="w-20 text-xs border border-gray-300 rounded px-2 py-1"
+                                   placeholder="—">
+                            <span class="text-xs text-gray-500">minutos</span>
+                        </div>
+                        <button @click="salvarSecaoTempoMaximo(col.key)"
+                                :disabled="!secaoAlterada['tempomaximo:' + col.key]"
+                                class="text-sm bg-gray-700 hover:bg-gray-900 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
+                            <span x-show="secaoSalvando['tempomaximo:' + col.key]">Salvando...</span>
+                            <span x-show="!secaoSalvando['tempomaximo:' + col.key] && !secaoAlterada['tempomaximo:' + col.key]">✓ Salvo</span>
+                            <span x-show="!secaoSalvando['tempomaximo:' + col.key] && secaoAlterada['tempomaximo:' + col.key]">Salvar</span>
+                        </button>
+                    </div>
+                </div>
+
+                {{-- Card 8: Exclusão definitiva --}}
+                <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-4">
+                    <label class="flex items-center gap-2 mb-2 cursor-pointer">
+                        <input type="checkbox"
+                               :checked="exclusaoDefinitivaAtivo[col.key]"
+                               @change="exclusaoDefinitivaAtivo[col.key] = $event.target.checked; marcarSecaoAlterada('exclusaodefinitiva', col.key)"
+                               class="w-3.5 h-3.5 accent-red-600">
+                        <span class="text-xs font-semibold text-gray-500">Exclusão definitiva</span>
+                    </label>
+
+                    <template x-if="exclusaoDefinitivaSalvo[col.key]">
+                        <div class="mb-2 p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+                            <span class="font-semibold text-gray-700">✓ Confirmado salvo no sistema:</span>
+                            <template x-if="exclusaoDefinitivaSalvo[col.key].ativo">
+                                <span>
+                                    tickets encerrados nesta coluna há mais de
+                                    <strong x-text="exclusaoDefinitivaSalvo[col.key].dias + ' dias'"></strong>
+                                    são apagados definitivamente (conversa inteira, sem volta).
+                                </span>
+                            </template>
+                            <template x-if="! exclusaoDefinitivaSalvo[col.key].ativo">
+                                <span>desativado — nada é apagado automaticamente nesta coluna.</span>
+                            </template>
+                        </div>
+                    </template>
+
+                    <template x-if="exclusaoDefinitivaAtivo[col.key]">
+                        <div class="flex flex-wrap items-center gap-2 mb-2">
+                            <span class="text-xs text-gray-500">Apagar tickets encerrados nesta coluna há mais de</span>
+                            <input type="number" min="1"
+                                   :value="exclusaoDefinitivaDias[col.key] ?? 90"
+                                   @input="exclusaoDefinitivaDias[col.key] = parseInt($event.target.value) || 0; marcarSecaoAlterada('exclusaodefinitiva', col.key)"
+                                   class="w-16 text-xs border border-gray-300 rounded px-2 py-1">
+                            <span class="text-xs text-gray-500">dias</span>
+                        </div>
+                    </template>
+
+                    <div class="mt-2 p-3 bg-red-50 border border-red-200 rounded-xl">
+                        <p class="text-xs font-semibold text-red-800 mb-1">⚠ Ação irreversível</p>
+                        <p class="text-xs text-red-700 leading-relaxed">
+                            Roda toda madrugada. Conta a partir do momento em que o ticket foi <strong>encerrado</strong> nesta coluna (não de quando foi criado ou da última mensagem) — só tickets já encerrados entram na conta, nunca um atendimento em aberto. Apaga o ticket e todas as mensagens da conversa <strong>de vez, sem possibilidade de recuperação</strong>. Não envia nenhum aviso ao lead antes de apagar.
+                        </p>
+                    </div>
+
+                    <div class="flex items-center justify-end mt-3">
+                        <button @click="salvarSecaoExclusaoDefinitiva(col.key)"
+                                :disabled="!secaoAlterada['exclusaodefinitiva:' + col.key]"
+                                class="text-sm bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
+                            <span x-show="secaoSalvando['exclusaodefinitiva:' + col.key]">Salvando...</span>
+                            <span x-show="!secaoSalvando['exclusaodefinitiva:' + col.key] && !secaoAlterada['exclusaodefinitiva:' + col.key]">✓ Salvo</span>
+                            <span x-show="!secaoSalvando['exclusaodefinitiva:' + col.key] && secaoAlterada['exclusaodefinitiva:' + col.key]">Salvar</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1468,6 +1540,14 @@ function kanbanConfig() {
         iaSalvando: {},
         iaSalvo: {},
         iaCarregado: {},
+
+        // Estado genérico de salvamento por seção independente do card "Agente
+        // de IA" (2026-08-15) — cada seção (conhecimento, ativação, estágios,
+        // auto-mover, etc) salva só os próprios campos, com botão e confirmação
+        // próprios, em vez de compartilhar um Salvar único pra tudo. Chave é
+        // `${secao}:${colunaKey}`. Ver salvarSecao()/marcarSecaoAlterada() abaixo.
+        secaoAlterada: {},
+        secaoSalvando: {},
 
         // Estágios de silêncio (reengajamento automático)
         estagio1Delay: {},
@@ -2015,45 +2095,104 @@ function kanbanConfig() {
             });
         },
 
-        async salvarIa(key) {
-            this.iaSalvando[key] = true;
-            this.iaSalvo[key]    = false;
-            const res = await this.api(`/api/painel/kanban/coluna-config/${key}`, 'PUT', {
+        // Achado ao vivo (2026-08-15): um card só com um Salvar pra ~10 seções
+        // diferentes confundia o Leonardo — editava uma seção, salvava, e outra
+        // seção (que ele nem tinha tocado) parecia "não ter salvo" porque o
+        // resumo dela só atualizava depois de um reload que tinha um bug de
+        // guarda (iaCarregado). Substituído por salvamento independente por
+        // seção: cada uma manda só os próprios campos (o backend já aceita
+        // atualização parcial) e atualiza sua própria confirmação local — sem
+        // depender de recarregar nada do servidor.
+        marcarSecaoAlterada(secao, key) {
+            this.secaoAlterada[`${secao}:${key}`] = true;
+        },
+
+        async salvarSecao(secao, key, payload) {
+            const chave = `${secao}:${key}`;
+            this.secaoSalvando[chave] = true;
+            const res = await this.api(`/api/painel/kanban/coluna-config/${key}`, 'PUT', payload);
+            this.secaoSalvando[chave] = false;
+            if (res.ok) {
+                this.secaoAlterada[chave] = false;
+                return true;
+            }
+            const erro = await res.json().catch(() => null);
+            this.mostrarToast(erro?.message || 'Não foi possível salvar.', 'erro');
+            return false;
+        },
+
+        salvarSecaoConhecimento(key) {
+            return this.salvarSecao('conhecimento', key, {
                 ia_contexto:         this.iaContexto[key] ?? '',
                 foco_analise_imagem: this.focoAnaliseImagem[key] ?? '',
                 transcricao_ativa:   this.transcricaoAtiva[key] ?? true,
-                ia_ativo:            this.iaAtivo[key]    ?? false,
-                sdr_delay_segundos:  this.delayParaSegundos(this.iaDelay[key] ?? 45, this.iaDelayUnidade[key] || 'seg'),
+            });
+        },
+
+        salvarSecaoAtivacao(key) {
+            return this.salvarSecao('ativacao', key, {
+                ia_ativo:           this.iaAtivo[key] ?? false,
+                sdr_delay_segundos: this.delayParaSegundos(this.iaDelay[key] ?? 45, this.iaDelayUnidade[key] || 'seg'),
+            });
+        },
+
+        salvarSecaoEstagios(key) {
+            return this.salvarSecao('estagios', key, {
                 followup_estagio1_segundos: this.delayParaSegundos(this.estagio1Delay[key] ?? 1, this.estagio1DelayUnidade[key] || 'hora'),
                 followup_estagio2_segundos: this.delayParaSegundos(this.estagio2Delay[key] ?? 2, this.estagio2DelayUnidade[key] || 'hora'),
                 followup_estagio3_segundos: this.delayParaSegundos(this.estagio3Delay[key] ?? 6, this.estagio3DelayUnidade[key] || 'hora'),
-                auto_mover_ativo:           this.autoMoverAtivo[key] ?? false,
-                auto_mover_coluna_destino:  this.autoMoverDestino[key] || 'encerrado',
-                auto_mover_segundos:        this.delayParaSegundos(this.autoMoverDelay[key] ?? 3, this.autoMoverDelayUnidade[key] || 'dia'),
-                auto_mover_mensagem:        this.autoMoverMensagem[key] ?? '',
-                exclusao_definitiva_ativo:  this.exclusaoDefinitivaAtivo[key] ?? false,
-                exclusao_definitiva_dias:   this.exclusaoDefinitivaDias[key]  ?? 90,
+            });
+        },
+
+        async salvarSecaoAutoMover(key) {
+            const ok = await this.salvarSecao('automover', key, {
+                auto_mover_ativo:          this.autoMoverAtivo[key] ?? false,
+                auto_mover_coluna_destino: this.autoMoverDestino[key] || 'encerrado',
+                auto_mover_segundos:       this.delayParaSegundos(this.autoMoverDelay[key] ?? 3, this.autoMoverDelayUnidade[key] || 'dia'),
+                auto_mover_mensagem:       this.autoMoverMensagem[key] ?? '',
+            });
+            if (ok) {
+                this.autoMoverSalvo[key] = {
+                    ativo:        this.autoMoverAtivo[key],
+                    destino:      this.autoMoverDestino[key],
+                    delay:        this.autoMoverDelay[key],
+                    delayUnidade: this.autoMoverDelayUnidade[key],
+                    mensagem:     this.autoMoverMensagem[key],
+                };
+            }
+        },
+
+        salvarSecaoTimeoutReassuncao(key) {
+            return this.salvarSecao('timeoutreassuncao', key, {
                 timeout_reassuncao_ativo:    this.timeoutReassuncaoAtivo[key] ?? false,
                 timeout_reassuncao_segundos: this.delayParaSegundos(this.timeoutReassuncaoDelay[key] ?? 1, this.timeoutReassuncaoDelayUnidade[key] || 'hora'),
-                aguardando_orientacao_mensagem: this.aguardandoOrientacaoMensagem[key] ?? '',
-                tempo_maximo_permanencia_minutos: this.tempoMaximoPermanenciaMinutos[key] || null,
+            });
+        },
+
+        salvarSecaoDuvidaTimeout(key) {
+            return this.salvarSecao('duvidatimeout', key, {
                 duvida_timeout_ativo:    this.duvidaTimeoutAtivo[key] ?? false,
                 duvida_timeout_segundos: this.delayParaSegundos(this.duvidaTimeoutDelay[key] ?? 1, this.duvidaTimeoutDelayUnidade[key] || 'hora'),
+                aguardando_orientacao_mensagem: this.aguardandoOrientacaoMensagem[key] ?? '',
             });
-            this.iaSalvando[key] = false;
-            if (res.ok) {
-                this.iaAlterado[key] = false;
-                this.iaSalvo[key]    = true;
-                // Recarrega do servidor (não confia só no que foi enviado) — garante
-                // que o resumo "Confirmado salvo" abaixo reflete exatamente o valor
-                // gravado no banco, mesmo se o backend arredondar/normalizar algo.
-                // carregarIa() tem guarda de "já carregado" (iaCarregado[key]), então
-                // aqui força o recarregamento de verdade em vez do no-op padrão.
-                this.iaCarregado[key] = false;
-                await this.carregarIa(key);
-            } else {
-                const erro = await res.json().catch(() => null);
-                this.mostrarToast(erro?.message || 'Não foi possível salvar as configurações do Agente de IA.', 'erro');
+        },
+
+        salvarSecaoTempoMaximo(key) {
+            return this.salvarSecao('tempomaximo', key, {
+                tempo_maximo_permanencia_minutos: this.tempoMaximoPermanenciaMinutos[key] || null,
+            });
+        },
+
+        async salvarSecaoExclusaoDefinitiva(key) {
+            const ok = await this.salvarSecao('exclusaodefinitiva', key, {
+                exclusao_definitiva_ativo: this.exclusaoDefinitivaAtivo[key] ?? false,
+                exclusao_definitiva_dias:  this.exclusaoDefinitivaDias[key]  ?? 90,
+            });
+            if (ok) {
+                this.exclusaoDefinitivaSalvo[key] = {
+                    ativo: this.exclusaoDefinitivaAtivo[key],
+                    dias:  this.exclusaoDefinitivaDias[key],
+                };
             }
         },
 
@@ -2142,6 +2281,17 @@ function kanbanConfig() {
                 await this.carregarColunas();
                 this.mostrarToast('Não foi possível salvar a nova ordem.', 'erro');
             }
+        },
+
+        // Faz a textarea crescer pra caber todo o texto digitado, sem barra de
+        // rolagem interna — pedido do Leonardo (2026-08-15), pra ver o conteúdo
+        // inteiro de campos longos (base de conhecimento, objetivo, etc) sem
+        // precisar rolar dentro da caixinha. Chamado no x-init (carga inicial)
+        // e em todo @input (enquanto digita).
+        autoResize(el) {
+            if (!el) return;
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
         },
 
         // ── ✨ Aplicar Variáveis com IA ───────────────────────────────────────
