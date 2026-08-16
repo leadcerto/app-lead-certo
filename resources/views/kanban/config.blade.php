@@ -864,7 +864,7 @@
                             <li><strong>3 · encerramento</strong> — se despede educadamente e pode encerrar o atendimento (mesmo token <code class="bg-white px-1 rounded">[ENCERRADO]</code> explicado acima).</li>
                         </ul>
                         <p class="text-xs text-blue-700 mt-1.5">
-                            O texto exato de cada mensagem fica a critério da IA, com base nas instruções escritas no campo <strong>"Base de Conhecimento da coluna"</strong> (no primeiro card desta tela). Se quiser controlar o que ela diz em cada estágio, inclua no texto trechos como "No Estágio 1, diga...", "No Estágio 2, diga...", "No Estágio 3, diga..." — se não escrever nada específico, a IA usa um tom padrão adequado a cada nível.
+                            O texto exato de cada mensagem fica a critério da IA, com base nas instruções escritas no campo <strong>"Base de Conhecimento da coluna"</strong> logo abaixo (mesmo campo do primeiro card — editar aqui ou lá salva o mesmo conteúdo). Se quiser controlar o que ela diz em cada estágio, inclua no texto trechos como "No Estágio 1, diga...", "No Estágio 2, diga...", "No Estágio 3, diga..." — se não escrever nada específico, a IA usa um tom padrão adequado a cada nível.
                         </p>
                         <p class="text-xs text-blue-700 mt-1.5">
                             Isso roda sozinho a cada 5 minutos, só em horário comercial (8h às 20h), e reinicia do zero sempre que o lead responder de novo.
@@ -878,6 +878,32 @@
                             <span x-show="!secaoSalvando['estagios:' + col.key] && !secaoAlterada['estagios:' + col.key]">✓ Salvo</span>
                             <span x-show="!secaoSalvando['estagios:' + col.key] && secaoAlterada['estagios:' + col.key]">Salvar</span>
                         </button>
+                    </div>
+
+                    {{-- Mesmo campo do Card 1 (iaContexto), duplicado aqui por pedido do
+                         Leonardo (2026-08-15): ao escrever as regras de reengajamento por
+                         silêncio ele quer editar a Base de Conhecimento sem sair deste card.
+                         Estado e botão de salvar são os mesmos do Card 1 — editar/salvar
+                         aqui ou lá reflete no mesmo lugar automaticamente. --}}
+                    <div class="mt-4 pt-4 border-t border-dashed border-gray-200">
+                        <label class="text-xs font-semibold text-gray-500 mb-1 block">Base de Conhecimento da coluna <span class="font-normal text-gray-400">(mesmo campo do primeiro card, pra editar sem sair daqui)</span></label>
+                        <textarea
+                            x-effect="(iaContexto[col.key], abaAtiva === col.key) && $nextTick(() => autoResize($el))"
+                            @input="iaContexto[col.key] = $event.target.value; marcarSecaoAlterada('conhecimento', col.key); autoResize($event.target)"
+                            :value="iaContexto[col.key] ?? ''"
+                            :placeholder="col.iaPlaceholder"
+                            rows="6"
+                            class="w-full text-sm border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none bg-gray-50 overflow-hidden"
+                        ></textarea>
+                        <div class="flex items-center justify-end mt-3">
+                            <button @click="salvarSecaoConhecimento(col.key)"
+                                    :disabled="!secaoAlterada['conhecimento:' + col.key]"
+                                    class="text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
+                                <span x-show="secaoSalvando['conhecimento:' + col.key]">Salvando...</span>
+                                <span x-show="!secaoSalvando['conhecimento:' + col.key] && !secaoAlterada['conhecimento:' + col.key]">✓ Salvo</span>
+                                <span x-show="!secaoSalvando['conhecimento:' + col.key] && secaoAlterada['conhecimento:' + col.key]">Salvar</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
