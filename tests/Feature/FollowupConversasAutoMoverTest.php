@@ -367,6 +367,74 @@ class FollowupConversasAutoMoverTest extends TestCase
         $this->assertSame('encerrado', $ticket->status);
     }
 
+    /**
+     * Achado real (Leonardo, 2026-08-16): tickets sem NENHUMA mensagem (ex:
+     * origem='ligacao' — chamada perdida que abre um ticket mas nunca gera
+     * texto) ficavam de fora da lista de candidatos pra sempre, porque o
+     * INNER JOIN com a subquery de "última mensagem" não encontrava nenhuma
+     * linha pra eles — 23 tickets reais da coluna "Novo" (alguns com mais de
+     * 3 semanas parados) nunca eram avaliados. Corrigido pra LEFT JOIN +
+     * COALESCE(última mensagem, aberto_em): sem mensagem nenhuma, o silêncio
+     * conta a partir da abertura do ticket.
+     */
+    public function test_move_automaticamente_ticket_sem_nenhuma_mensagem_usando_aberto_em(): void
+    {
+        $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'config' => ['instance_token' => 'tok'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511955558888']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'aguardando_orcamento', 'agente_responsavel' => 'bot', 'etapa_ia' => 'etapa_1',
+            'status' => 'aberto', 'origem' => 'ligacao',
+            'aberto_em' => now()->subDays(4), // ticket de chamada perdida, sem nenhuma mensagem
+            'followup_estagio_enviado' => 3,
+        ]);
+
+        KanbanColunaConfig::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'aguardando_orcamento',
+            'auto_mover_ativo' => true, 'auto_mover_coluna_destino' => 'encerrado',
+            'auto_mover_segundos' => 3 * 86400,
+        ]);
+
+        $this->assertDatabaseMissing('mensagens', ['ticket_id' => $ticket->id]);
+
+        $this->artisan('conversas:followup')->assertExitCode(0);
+
+        $ticket->refresh();
+        $this->assertSame('encerrado', $ticket->coluna_kanban);
+        $this->assertSame('encerrado', $ticket->status);
+    }
+
+    public function test_nao_move_ticket_sem_mensagem_antes_do_tempo_configurado_contando_do_aberto_em(): void
+    {
+        $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'config' => ['instance_token' => 'tok'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511955559999']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'aguardando_orcamento', 'agente_responsavel' => 'bot', 'etapa_ia' => 'etapa_1',
+            'status' => 'aberto', 'origem' => 'ligacao',
+            'aberto_em' => now()->subDay(), // só 1 dia, limite é 3
+            'followup_estagio_enviado' => 3,
+        ]);
+
+        KanbanColunaConfig::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'aguardando_orcamento',
+            'auto_mover_ativo' => true, 'auto_mover_coluna_destino' => 'encerrado',
+            'auto_mover_segundos' => 3 * 86400,
+        ]);
+
+        $this->artisan('conversas:followup')->assertExitCode(0);
+
+        $this->assertSame('aguardando_orcamento', $ticket->fresh()->coluna_kanban);
+    }
+
     public function test_estagios_de_mensagem_continuam_exclusivos_do_bot_mesmo_apos_o_fix_do_auto_mover(): void
     {
         $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);

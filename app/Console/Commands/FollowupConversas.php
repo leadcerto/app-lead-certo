@@ -104,9 +104,19 @@ class FollowupConversas extends Command
         // Estágios de mensagem (nudge ao lead) continuam bot-only logo abaixo,
         // porque não faz sentido o bot "cutucar" o lead enquanto um humano já
         // assumiu a conversa.
+        // Achado real (Leonardo, 2026-08-16): tickets sem NENHUMA mensagem (ex:
+        // origem='ligacao' — chamada perdida que abre um ticket mas nunca gera
+        // uma mensagem de texto) ficavam de fora desta lista pra sempre, porque
+        // o INNER JOIN com a subquery de "última mensagem" simplesmente não
+        // encontrava nenhuma linha pra eles. Resultado: 23 tickets da coluna
+        // "Novo" (alguns com mais de 3 semanas parados) nunca eram avaliados
+        // nem pro nudge de estágio nem pro auto-mover — ficavam abertos pra
+        // sempre. Trocado pra LEFT JOIN + COALESCE(última mensagem, aberto_em)
+        // — sem mensagem nenhuma, a "última atividade" passa a ser a abertura
+        // do ticket, que é o marco correto de silêncio nesse caso.
         $candidatos = $emHorarioComercial
             ? DB::table('tickets_atendimento as t')
-                ->join(DB::raw('(
+                ->leftJoin(DB::raw('(
                     SELECT m1.ticket_id, m1.enviado_em as ultima_em
                     FROM mensagens m1
                     INNER JOIN (SELECT ticket_id, MAX(id) as max_id FROM mensagens GROUP BY ticket_id) m2
@@ -114,7 +124,7 @@ class FollowupConversas extends Command
                 ) as ultima'), 'ultima.ticket_id', '=', 't.id')
                 ->whereNotIn('t.etapa_ia', ['handoff'])
                 ->where('t.status', 'aberto')
-                ->select('t.id', 't.tenant_id', 't.coluna_kanban', 't.followup_estagio_enviado', 't.agente_responsavel', 'ultima.ultima_em')
+                ->select('t.id', 't.tenant_id', 't.coluna_kanban', 't.followup_estagio_enviado', 't.agente_responsavel', DB::raw('COALESCE(ultima.ultima_em, t.aberto_em) as ultima_em'))
                 ->get()
             : collect();
 
