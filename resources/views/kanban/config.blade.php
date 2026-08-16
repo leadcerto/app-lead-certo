@@ -276,12 +276,38 @@
                         <div x-show="aberto === seq.id" style="display:none"
                              class="border-t border-gray-100 bg-gray-50 px-5 py-4 space-y-3">
 
+                            {{-- Abas numeradas (1 mensagem por aba, + a aba "+" pra adicionar), estilo
+                                 navegador — mesmo padrão das abas de Variações. Wrapper próprio, isolado
+                                 do "space-y-3" do bloco pai, senão o gap forçado entre irmãos quebra a
+                                 ilusão de aba grudada no painel abaixo (mesmo achado do 2026-08-16). --}}
+                            <div>
+                                <div class="flex items-end gap-1 overflow-x-auto">
+                                    <template x-for="(msg, idx) in (mensagensPor[seq.id] || [])" :key="'aba-' + msg.id">
+                                        <button @click="msgAbaAtiva[seq.id] = msg.id"
+                                                class="relative flex-shrink-0 min-w-[2rem] px-2.5 py-1.5 text-xs font-semibold rounded-t-lg border border-b-0 transition-colors"
+                                                :class="(msgAbaAtiva[seq.id] ?? ((mensagensPor[seq.id] || [])[0]?.id ?? 'novo')) === msg.id
+                                                    ? 'bg-white border-gray-200 text-green-700 z-10'
+                                                    : 'bg-gray-100 border-gray-100 text-gray-400 hover:text-gray-600 hover:bg-gray-200'"
+                                                :title="'Mensagem ' + (idx + 1) + (!msg.ativo ? ' (inativa)' : '')">
+                                            <span x-text="idx + 1"></span>
+                                        </button>
+                                    </template>
+                                    <button @click="msgAbaAtiva[seq.id] = 'novo'"
+                                            class="relative flex-shrink-0 px-3 py-1.5 text-xs font-semibold rounded-t-lg border border-b-0 border-dashed transition-colors"
+                                            :class="(msgAbaAtiva[seq.id] ?? ((mensagensPor[seq.id] || [])[0]?.id ?? 'novo')) === 'novo'
+                                                ? 'bg-white border-gray-300 text-green-700 z-10'
+                                                : 'bg-gray-100 border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-200'"
+                                            title="Adicionar mensagem">+</button>
+                                </div>
+
                             <template x-if="(mensagensPor[seq.id] || []).length === 0">
-                                <p class="text-sm text-gray-400 text-center py-4">Nenhuma mensagem ainda.</p>
+                                <p class="-mt-px text-sm text-gray-400 text-center py-4 bg-white border border-gray-200 rounded-b-lg rounded-tr-lg">Nenhuma mensagem ainda — use a aba "+" acima pra criar a primeira.</p>
                             </template>
 
                             <template x-for="(msg, idx) in (mensagensPor[seq.id] || [])" :key="msg.id">
-                                <div class="bg-white border border-gray-200 rounded-xl p-4">
+                                <div x-show="(msgAbaAtiva[seq.id] ?? ((mensagensPor[seq.id] || [])[0]?.id ?? 'novo')) === msg.id"
+                                     style="display:none"
+                                     class="-mt-px bg-white border border-gray-200 rounded-b-lg rounded-tr-lg p-4">
                                     <div class="flex items-start gap-3">
                                         <span class="w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center flex-shrink-0"
                                               style="background:#dcfce7;color:#16a34a"
@@ -472,8 +498,10 @@
                                 </div>
                             </template>
 
-                            {{-- Adicionar mensagem --}}
-                            <div class="bg-white border border-dashed border-gray-300 rounded-xl p-4">
+                            {{-- Adicionar mensagem — painel da aba "+" --}}
+                            <div x-show="(msgAbaAtiva[seq.id] ?? ((mensagensPor[seq.id] || [])[0]?.id ?? 'novo')) === 'novo'"
+                                 style="display:none"
+                                 class="-mt-px bg-white border border-gray-200 rounded-b-lg rounded-tr-lg p-4">
                                 <div class="flex items-center justify-between mb-3">
                                     <p class="text-xs font-semibold text-gray-500">Adicionar mensagem</p>
                                     <div class="flex flex-wrap gap-1">
@@ -549,6 +577,8 @@
                                     </button>
                                 </div>
                             </div>
+                            </div>
+                            {{-- fim do wrapper de abas de mensagens --}}
 
                             {{-- ✨ Card — Aplicar Variáveis com IA --}}
                             <div x-show="(mensagensPor[seq.id] || []).some(m => m.conteudo)"
@@ -1539,6 +1569,13 @@ function kanbanConfig() {
         objetivosCarregado: {},  // { [colunaKey]: bool } — evita recarregar toda vez que abre a seção
         novoObjetivoTexto: {},   // { [colunaKey]: string } — input de "adicionar objetivo"
 
+        msgAbaAtiva: {},        // { [sequenciaId]: mensagemId | 'novo' } — qual mensagem da sequência
+                                 // está selecionada nas abas estilo navegador (null = primeira mensagem,
+                                 // ou 'novo' se a sequência ainda não tem nenhuma). Pedido do Leonardo
+                                 // (2026-08-16): as mensagens de uma sequência viravam uma lista rolável
+                                 // empilhada — ele queria clicar numa aba numerada e ver só aquela mensagem,
+                                 // igual abas de navegador escondendo as outras.
+
         variacoesPor: {},       // { [mensagemId]: [ {id, conteudo, origem, protegida, ativa}, ... ] }
         abaVariacaoAberta: {},  // { [mensagemId]: bool } — controla se o painel de variações está expandido
         variacaoAbaAtiva: {},   // { [mensagemId]: variacaoId } — qual aba de variação está selecionada (null = primeira/original)
@@ -1830,6 +1867,10 @@ function kanbanConfig() {
                 this.novoBotoes[seqId] = [];
                 this.novoObrigatorio[seqId] = false;
                 await this.carregarMsgs(seqId);
+                // Pula pra aba da mensagem recém-criada (última da lista), igual um
+                // navegador focando a aba nova que acabou de abrir.
+                const lista = this.mensagensPor[seqId] || [];
+                if (lista.length) this.msgAbaAtiva[seqId] = lista[lista.length - 1].id;
                 await this.carregar();
             } else {
                 const erro = await res.json().catch(() => null);
