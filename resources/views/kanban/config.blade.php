@@ -402,17 +402,22 @@
                                         </button>
 
                                         <div x-show="abaVariacaoAberta[msg.id]" style="display:none" class="mt-2 space-y-2">
-                                            <!-- Abas de variação (original + cada versão gerada), estilo navegador -->
+                                            <!-- Abas numeradas (1 a 7: original + até 6 geradas pela IA), estilo navegador —
+                                                 aba ativa "gruda" no painel de conteúdo abaixo (mesmo fundo branco, sem
+                                                 borda inferior, cantos superiores arredondados como aba de browser). -->
                                             <div x-show="(variacoesPor[msg.id] || []).length"
-                                                 class="flex items-center gap-0.5 border-b border-gray-200 overflow-x-auto">
+                                                 class="flex items-end gap-1 overflow-x-auto">
                                                 <template x-for="(variacao, idx) in (variacoesPor[msg.id] || [])" :key="variacao.id">
                                                     <button @click="variacaoAbaAtiva[msg.id] = variacao.id"
-                                                            class="px-3 py-1.5 text-xs whitespace-nowrap border-b-2 -mb-px transition-colors"
-                                                            :class="(variacaoAbaAtiva[msg.id] ?? (variacoesPor[msg.id] || [])[0]?.id) === variacao.id
-                                                                ? 'border-purple-500 text-purple-700 font-medium bg-purple-50/50'
-                                                                : 'border-transparent text-gray-400 hover:text-gray-600'">
-                                                        <span x-text="variacao.protegida ? 'Original' : ('Variação ' + idx)"></span>
-                                                        <span x-show="!variacao.protegida && !variacao.ativa" class="text-gray-300"> (inativa)</span>
+                                                            class="relative flex-shrink-0 min-w-[2rem] px-2.5 py-1.5 text-xs font-semibold rounded-t-lg border border-b-0 transition-colors"
+                                                            :class="[
+                                                                (variacaoAbaAtiva[msg.id] ?? (variacoesPor[msg.id] || [])[0]?.id) === variacao.id
+                                                                    ? 'bg-white border-gray-200 text-purple-700 z-10'
+                                                                    : 'bg-gray-100 border-gray-100 text-gray-400 hover:text-gray-600 hover:bg-gray-200',
+                                                                (!variacao.protegida && !variacao.ativa) ? 'opacity-40' : ''
+                                                            ]"
+                                                            :title="(variacao.protegida ? 'Original' : ('Variação ' + idx)) + (!variacao.protegida && !variacao.ativa ? ' (inativa no sorteio)' : '')">
+                                                        <span x-text="idx + 1"></span>
                                                     </button>
                                                 </template>
                                             </div>
@@ -421,7 +426,7 @@
                                             <template x-for="variacao in (variacoesPor[msg.id] || [])" :key="'painel-' + variacao.id">
                                                 <div x-show="(variacaoAbaAtiva[msg.id] ?? (variacoesPor[msg.id] || [])[0]?.id) === variacao.id"
                                                      style="display:none"
-                                                     class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                                     class="-mt-px bg-white border border-gray-200 rounded-b-lg rounded-tr-lg p-3">
                                                     <div class="flex items-center gap-2 mb-2">
                                                         <span class="text-xs px-1.5 py-0.5 rounded-full flex-shrink-0"
                                                               :class="variacao.protegida ? 'bg-green-100 text-green-700' : 'bg-purple-50 text-purple-600'"
