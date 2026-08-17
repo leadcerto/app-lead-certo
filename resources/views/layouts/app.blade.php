@@ -136,6 +136,13 @@
                         </svg>
                         Gestor do Kanban (admin)
                     </a>
+                    <a href="{{ route('admin.empresas.index') }}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('admin.empresas*') ? 'bg-green-700 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' }}">
+                        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2M5 21h2m0 0h10M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 8v-4a1 1 0 011-1h2a1 1 0 011 1v4"/>
+                        </svg>
+                        Empresas (admin)
+                    </a>
                     @endif
                 </div>
             </div>

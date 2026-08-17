@@ -24,6 +24,7 @@ use App\Http\Controllers\Painel\KanbanColunaController;
 use App\Http\Controllers\Painel\SpintaxVariavelController;
 use App\Http\Controllers\Admin\EspecificacoesController;
 use App\Http\Controllers\Admin\GestorKanbanConfigController;
+use App\Http\Controllers\Admin\EmpresaController;
 use App\Http\Controllers\Painel\GestorKanbanRelatorioController;
 use App\Http\Controllers\Painel\MotivoDesfechoController;
 use App\Http\Controllers\Painel\IaUsageController;
@@ -163,6 +164,13 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/admin/gestor-kanban', [GestorKanbanConfigController::class, 'view'])
         ->name('admin.gestor-kanban')
         ->middleware('role:admin');
+
+    // Cadastro de empresa (franqueado) — só admin, não é autosserviço
+    Route::middleware('role:admin')->prefix('admin/empresas')->name('admin.empresas.')->group(function () {
+        Route::get('/', [EmpresaController::class, 'index'])->name('index');
+        Route::get('/nova', [EmpresaController::class, 'create'])->name('create');
+        Route::post('/', [EmpresaController::class, 'store'])->name('store');
+    });
 
 
     // Secretária Eletrônica — dono e admin
