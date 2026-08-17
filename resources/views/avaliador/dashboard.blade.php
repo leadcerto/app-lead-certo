@@ -80,7 +80,7 @@
                                     Texto sugerido pra oferecer ao cliente ({{ $tarefa->template->categoria?->nome }}):
                                 </p>
                                 <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-700 relative group">
-                                    <p id="texto-{{ $tarefa->id }}">{{ $tarefa->template->texto }}</p>
+                                    <p id="texto-{{ $tarefa->id }}">{{ $tarefa->template->textoResolvido($tarefa->perfil->tenant->nome) }}</p>
                                     <button type="button"
                                             onclick="navigator.clipboard.writeText(document.getElementById('texto-{{ $tarefa->id }}').innerText).then(() => alert('Texto copiado! ✅'))"
                                             class="absolute top-2 right-2 px-2 py-1 bg-white border border-gray-300 rounded text-xs text-gray-600 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition">

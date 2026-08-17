@@ -50,4 +50,17 @@ class TemplateAvaliacao extends Model
     {
         return $query->where('ativo', true);
     }
+
+    // ── Métodos ───────────────────────────────────────────────────────────────
+
+    /**
+     * Substitui o marcador `[nome da empresa]` pelo nome real do tenant.
+     * O marcador `[nome de quem te atendeu]` NUNCA é resolvido aqui — ele
+     * fica literal de propósito, pro cliente real preencher na ligação
+     * (não sabemos quem atendeu cada cliente específico).
+     */
+    public function textoResolvido(string $nomeEmpresa): string
+    {
+        return str_replace('[nome da empresa]', $nomeEmpresa, $this->texto);
+    }
 }

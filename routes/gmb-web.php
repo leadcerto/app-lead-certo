@@ -31,8 +31,14 @@ Route::middleware(['auth', 'tenant', 'role:admin,dono,diretor'])->prefix('admin/
         ->name('templates-avaliacao.categorias');
     Route::post('categorias', [TemplateAvaliacaoController::class, 'storeCategoria'])
         ->name('templates-avaliacao.categorias.store');
+    Route::put('categorias/{categoria}', [TemplateAvaliacaoController::class, 'updateCategoria'])
+        ->name('templates-avaliacao.categorias.update');
     Route::delete('categorias/{categoria}', [TemplateAvaliacaoController::class, 'destroyCategoria'])
         ->name('templates-avaliacao.categorias.destroy');
+
+    // ── Geração de rascunhos de template por IA ───────────────────────────
+    Route::post('templates-avaliacao/gerar-ia', [TemplateAvaliacaoController::class, 'gerarComIa'])
+        ->name('templates-avaliacao.gerar-ia');
 
     // ── Agendamentos de Avaliação ─────────────────────────────────────────
     Route::get('agendamentos', [AgendamentoAvaliacaoController::class, 'index'])

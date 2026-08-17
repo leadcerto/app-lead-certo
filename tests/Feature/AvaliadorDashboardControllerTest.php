@@ -95,6 +95,23 @@ class AvaliadorDashboardControllerTest extends TestCase
         $response->assertSessionHas('aviso');
     }
 
+    public function test_marcador_de_empresa_no_texto_e_resolvido_pro_nome_real_do_tenant(): void
+    {
+        $tenant    = Tenant::factory()->create(['nome' => 'Frete Rio']);
+        $avaliador = $this->usuarioAvaliador($tenant);
+        $this->criarAgendamento($tenant, $avaliador, []);
+
+        // Sobrescreve o texto padrão do helper pra conter o marcador.
+        $template = TemplateAvaliacao::where('tenant_id', $tenant->id)->first();
+        $template->update(['texto' => 'A [nome da empresa] foi impecável do início ao fim.']);
+
+        $response = $this->actingAs($avaliador)->get('/avaliador/dashboard');
+
+        $response->assertOk();
+        $response->assertSee('A Frete Rio foi impecável do início ao fim.');
+        $response->assertDontSee('[nome da empresa]');
+    }
+
     public function test_vendedor_nao_acessa_dashboard_de_avaliador(): void
     {
         $tenant   = Tenant::factory()->create();

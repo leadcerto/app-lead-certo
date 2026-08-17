@@ -17,8 +17,15 @@ class CategoriaTemplate extends Model
     }
 
     protected $fillable = [
-        'tenant_id', 'nome',
+        'tenant_id', 'nome', 'palavras_chave',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'palavras_chave' => 'array',
+        ];
+    }
 
     // ── Relacionamentos ───────────────────────────────────────────────────────
 

@@ -4,10 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\CategoriaTemplate;
 use App\Models\TemplateAvaliacao;
+use App\Services\TemplateAvaliacaoIaService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class TemplateAvaliacaoController extends Controller
 {
+    public function __construct(private TemplateAvaliacaoIaService $iaService) {}
+
     /**
      * Lista todos os templates do tenant.
      */
@@ -128,6 +132,39 @@ class TemplateAvaliacaoController extends Controller
             ->with('sucesso', 'Template desativado.');
     }
 
+    /**
+     * Gera novos rascunhos de template por IA para uma categoria, usando as
+     * palavras-chave configuradas nela. Ver TemplateAvaliacaoIaService para
+     * as regras que todo rascunho gerado precisa respeitar.
+     */
+    public function gerarComIa(Request $request)
+    {
+        $tenantId = $request->user()->tenant_id;
+
+        $validated = $request->validate([
+            'categoria_id'            => ['required', Rule::exists('categorias_template', 'id')->where('tenant_id', $tenantId)],
+            'quantidade'              => 'required|integer|min:1|max:10',
+            'contexto'                => 'nullable|string|max:1000',
+            'incluir_nome_atendente'  => 'boolean',
+        ]);
+
+        $categoria = CategoriaTemplate::where('tenant_id', $tenantId)->findOrFail($validated['categoria_id']);
+
+        $criados = $this->iaService->gerar(
+            $categoria,
+            $validated['quantidade'],
+            $validated['contexto'] ?? null,
+            $request->boolean('incluir_nome_atendente'),
+        );
+
+        if ($criados === 0) {
+            return back()->withErrors(['ia' => 'Não foi possível gerar rascunhos agora. Tente de novo em instantes.']);
+        }
+
+        return redirect()->route('admin.templates-avaliacao.index')
+            ->with('sucesso', "{$criados} rascunho(s) gerado(s) por IA pra \"{$categoria->nome}\". Revise antes de usar.");
+    }
+
     // ── Categorias (CRUD inline) ──────────────────────────────────────────────
 
     /**
@@ -149,15 +186,52 @@ class TemplateAvaliacaoController extends Controller
     public function storeCategoria(Request $request)
     {
         $validated = $request->validate([
-            'nome' => 'required|string|max:100',
+            'nome'           => 'required|string|max:100',
+            'palavras_chave' => 'nullable|string|max:500',
         ]);
 
-        $validated['tenant_id'] = $request->user()->tenant_id;
-
-        CategoriaTemplate::create($validated);
+        CategoriaTemplate::create([
+            'tenant_id'      => $request->user()->tenant_id,
+            'nome'           => $validated['nome'],
+            'palavras_chave' => $this->palavrasChaveParaArray($validated['palavras_chave'] ?? null),
+        ]);
 
         return redirect()->route('admin.templates-avaliacao.categorias')
             ->with('sucesso', 'Categoria criada!');
+    }
+
+    /**
+     * Atualiza as palavras-chave de uma categoria existente (o nome não
+     * muda depois de criada, pra não confundir templates já vinculados).
+     */
+    public function updateCategoria(Request $request, CategoriaTemplate $categoria)
+    {
+        abort_if($categoria->tenant_id !== $request->user()->tenant_id, 403);
+
+        $validated = $request->validate([
+            'palavras_chave' => 'nullable|string|max:500',
+        ]);
+
+        $categoria->update([
+            'palavras_chave' => $this->palavrasChaveParaArray($validated['palavras_chave'] ?? null),
+        ]);
+
+        return redirect()->route('admin.templates-avaliacao.categorias')
+            ->with('sucesso', 'Palavras-chave atualizadas.');
+    }
+
+    private function palavrasChaveParaArray(?string $texto): ?array
+    {
+        $texto = trim((string) $texto);
+        if ($texto === '') {
+            return null;
+        }
+
+        return collect(explode(',', $texto))
+            ->map(fn ($palavra) => trim($palavra))
+            ->filter()
+            ->values()
+            ->all();
     }
 
     /**

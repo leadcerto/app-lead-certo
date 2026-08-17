@@ -225,4 +225,87 @@ class TemplateAvaliacaoControllerTest extends TestCase
         $response->assertForbidden();
         $this->assertDatabaseHas('categorias_template', ['id' => $categoriaAlheia->id]);
     }
+
+    public function test_cria_categoria_com_palavras_chave(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $dono   = $this->usuarioDono($tenant);
+
+        $response = $this->actingAs($dono)->post('/admin/gmb/categorias', [
+            'nome'           => 'Pontualidade',
+            'palavras_chave' => 'chegou no horário, sem atraso, rapidez',
+        ]);
+
+        $response->assertRedirect(route('admin.templates-avaliacao.categorias'));
+        $categoria = CategoriaTemplate::where('tenant_id', $tenant->id)->where('nome', 'Pontualidade')->first();
+        $this->assertSame(['chegou no horário', 'sem atraso', 'rapidez'], $categoria->palavras_chave);
+    }
+
+    public function test_atualiza_palavras_chave_de_categoria_existente(): void
+    {
+        $tenant    = Tenant::factory()->create();
+        $dono      = $this->usuarioDono($tenant);
+        $categoria = $this->criarCategoria($tenant);
+
+        $response = $this->actingAs($dono)->put("/admin/gmb/categorias/{$categoria->id}", [
+            'palavras_chave' => 'novo termo, outro termo',
+        ]);
+
+        $response->assertRedirect(route('admin.templates-avaliacao.categorias'));
+        $this->assertSame(['novo termo', 'outro termo'], $categoria->fresh()->palavras_chave);
+    }
+
+    public function test_nao_atualiza_palavras_chave_de_categoria_de_outro_tenant(): void
+    {
+        $tenant          = Tenant::factory()->create();
+        $outroTenant     = Tenant::factory()->create();
+        $dono            = $this->usuarioDono($tenant);
+        $categoriaAlheia = $this->criarCategoria($outroTenant);
+
+        $response = $this->actingAs($dono)->put("/admin/gmb/categorias/{$categoriaAlheia->id}", [
+            'palavras_chave' => 'invasão',
+        ]);
+
+        $response->assertForbidden();
+        $this->assertNull($categoriaAlheia->fresh()->palavras_chave);
+    }
+
+    public function test_gera_rascunhos_por_ia_para_categoria_do_proprio_tenant(): void
+    {
+        $tenant    = Tenant::factory()->create();
+        $dono      = $this->usuarioDono($tenant);
+        $categoria = $this->criarCategoria($tenant, 'Custo-Benefício');
+
+        $this->mock(\App\Services\OpenRouterService::class, function ($mock) {
+            $mock->shouldReceive('chat')->once()->andReturn(json_encode([
+                'templates' => [
+                    ['texto' => 'Preço justo, a [nome da empresa] foi muito atenciosa.'],
+                ],
+            ]));
+        });
+
+        $response = $this->actingAs($dono)->post('/admin/gmb/templates-avaliacao/gerar-ia', [
+            'categoria_id' => $categoria->id,
+            'quantidade'   => 1,
+        ]);
+
+        $response->assertRedirect(route('admin.templates-avaliacao.index'));
+        $this->assertSame(1, TemplateAvaliacao::where('categoria_id', $categoria->id)->count());
+    }
+
+    public function test_nao_gera_rascunhos_para_categoria_de_outro_tenant(): void
+    {
+        $tenant          = Tenant::factory()->create();
+        $outroTenant     = Tenant::factory()->create();
+        $dono            = $this->usuarioDono($tenant);
+        $categoriaAlheia = $this->criarCategoria($outroTenant);
+
+        $response = $this->actingAs($dono)->post('/admin/gmb/templates-avaliacao/gerar-ia', [
+            'categoria_id' => $categoriaAlheia->id,
+            'quantidade'   => 1,
+        ]);
+
+        $response->assertSessionHasErrors('categoria_id');
+        $this->assertSame(0, TemplateAvaliacao::where('categoria_id', $categoriaAlheia->id)->count());
+    }
 }

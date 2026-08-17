@@ -27,7 +27,7 @@ class AvaliadorDashboardController extends Controller
 
         $agendamentos = AgendamentoAvaliacao::doAvaliador($request->user()->id)
             ->daSemana($semana)
-            ->with(['perfil', 'template.categoria'])
+            ->with(['perfil.tenant', 'template.categoria'])
             ->orderBy('data_agendada')
             ->get();
 
