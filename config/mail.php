@@ -115,4 +115,16 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Relatório de Avaliações GMB em Atraso
+    |--------------------------------------------------------------------------
+    |
+    | E-mail do admin geral que recebe o relatório diário de agendamentos
+    | de avaliação em atraso (comando avaliadores:checar-atraso).
+    |
+    */
+
+    'review_report_to' => env('MAIL_REVIEW_REPORT_TO'),
+
 ];

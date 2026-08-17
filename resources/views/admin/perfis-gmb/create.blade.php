@@ -1,0 +1,64 @@
+@extends('layouts.app')
+@section('title', 'Novo Perfil GMB — Lead Certo')
+
+@section('content')
+<div class="max-w-2xl mx-auto">
+    <h1 class="text-2xl font-bold text-gray-800 mb-6">📍 Novo Perfil GMB</h1>
+
+    @if($errors->any())
+        <div class="mb-4 p-3 bg-red-100 text-red-800 rounded-lg text-sm">
+            @foreach($errors->all() as $error)
+                <p>{{ $error }}</p>
+            @endforeach
+        </div>
+    @endif
+
+    <form action="{{ route('admin.perfis-gmb.store') }}" method="POST" class="bg-white rounded-xl shadow p-6 space-y-4">
+        @csrf
+
+        <div>
+            <label for="nome" class="block text-sm font-medium text-gray-700 mb-1">Nome da Empresa/Perfil</label>
+            <input type="text" name="nome" id="nome" value="{{ old('nome') }}" required
+                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                   placeholder="Ex: Frete Rio Copacabana">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label for="city" class="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
+                <input type="text" name="city" id="city" value="{{ old('city') }}" required
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                       placeholder="Rio de Janeiro">
+            </div>
+            <div>
+                <label for="state" class="block text-sm font-medium text-gray-700 mb-1">UF</label>
+                <input type="text" name="state" id="state" value="{{ old('state') }}" required maxlength="2"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 uppercase"
+                       placeholder="RJ">
+            </div>
+        </div>
+
+        <div>
+            <label for="link_gmb" class="block text-sm font-medium text-gray-700 mb-1">Link do Google Meu Negócio</label>
+            <input type="url" name="link_gmb" id="link_gmb" value="{{ old('link_gmb') }}" required
+                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                   placeholder="https://www.google.com/maps/place/...">
+        </div>
+
+        <div class="flex items-center gap-2">
+            <input type="checkbox" name="ativo" id="ativo" value="1" checked
+                   class="rounded border-gray-300 text-green-600 focus:ring-green-500">
+            <label for="ativo" class="text-sm text-gray-700">Perfil ativo</label>
+        </div>
+
+        <div class="flex gap-3 pt-4">
+            <button type="submit" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-semibold transition">
+                Salvar Perfil
+            </button>
+            <a href="{{ route('admin.perfis-gmb.index') }}" class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm transition">
+                Cancelar
+            </a>
+        </div>
+    </form>
+</div>
+@endsection

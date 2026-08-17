@@ -1,0 +1,82 @@
+<?php
+
+/**
+ * Rotas do módulo Google Meu Negócio (GMB) — Avaliações.
+ * Incluído a partir de routes/web.php via require base_path('routes/gmb-web.php').
+ */
+
+use App\Http\Controllers\AgendamentoAvaliacaoController;
+use App\Http\Controllers\AvaliadorDashboardController;
+use App\Http\Controllers\PerfilGmbController;
+use App\Http\Controllers\TemplateAvaliacaoController;
+use Illuminate\Support\Facades\Route;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ROTAS DO ADMIN — Google Meu Negócio
+// Acesso: perfis com permissão 'avaliacoes_gmb' (admin, dono, diretor)
+// ══════════════════════════════════════════════════════════════════════════════
+
+Route::middleware(['auth', 'tenant', 'role:admin,dono,diretor'])->prefix('admin/gmb')->name('admin.')->group(function () {
+
+    // ── Perfis GMB (CRUD) ─────────────────────────────────────────────────
+    Route::resource('perfis-gmb', PerfilGmbController::class)
+        ->except(['show']);
+
+    // ── Templates de Avaliação (CRUD) ─────────────────────────────────────
+    Route::resource('templates-avaliacao', TemplateAvaliacaoController::class)
+        ->except(['show']);
+
+    // ── Categorias de Template ────────────────────────────────────────────
+    Route::get('categorias', [TemplateAvaliacaoController::class, 'categorias'])
+        ->name('templates-avaliacao.categorias');
+    Route::post('categorias', [TemplateAvaliacaoController::class, 'storeCategoria'])
+        ->name('templates-avaliacao.categorias.store');
+    Route::delete('categorias/{categoria}', [TemplateAvaliacaoController::class, 'destroyCategoria'])
+        ->name('templates-avaliacao.categorias.destroy');
+
+    // ── Agendamentos de Avaliação ─────────────────────────────────────────
+    Route::get('agendamentos', [AgendamentoAvaliacaoController::class, 'index'])
+        ->name('agendamentos-avaliacao.index');
+    Route::get('agendamentos/create', [AgendamentoAvaliacaoController::class, 'create'])
+        ->name('agendamentos-avaliacao.create');
+    Route::post('agendamentos', [AgendamentoAvaliacaoController::class, 'store'])
+        ->name('agendamentos-avaliacao.store');
+
+    // ── Agendamento em Lote (Matriz) ──────────────────────────────────────
+    Route::get('agendamentos/lote', [AgendamentoAvaliacaoController::class, 'lote'])
+        ->name('agendamentos-avaliacao.lote');
+    Route::post('agendamentos/lote', [AgendamentoAvaliacaoController::class, 'storeLote'])
+        ->name('agendamentos-avaliacao.lote.store');
+
+    // ── Campanha (Enviar Agora) ───────────────────────────────────────────
+    Route::get('agendamentos/campanha', [AgendamentoAvaliacaoController::class, 'campanha'])
+        ->name('agendamentos-avaliacao.campanha');
+    Route::post('agendamentos/campanha', [AgendamentoAvaliacaoController::class, 'storeCampanha'])
+        ->name('agendamentos-avaliacao.campanha.store');
+
+    // ── Ações em agendamento individual ───────────────────────────────────
+    Route::patch('agendamentos/{agendamento}/status', [AgendamentoAvaliacaoController::class, 'alterarStatus'])
+        ->name('agendamentos-avaliacao.status');
+    Route::patch('agendamentos/{agendamento}/avaliador', [AgendamentoAvaliacaoController::class, 'trocarAvaliador'])
+        ->name('agendamentos-avaliacao.trocar-avaliador');
+    Route::patch('agendamentos/{agendamento}/template', [AgendamentoAvaliacaoController::class, 'refazerTemplate'])
+        ->name('agendamentos-avaliacao.refazer-template');
+
+    // ── Alertar Avaliadores (e-mail manual) ───────────────────────────────
+    Route::post('agendamentos/alertar', [AgendamentoAvaliacaoController::class, 'alertarAvaliadores'])
+        ->name('agendamentos-avaliacao.alertar');
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ROTAS DO AVALIADOR — Dashboard
+// Acesso: perfis com permissão 'avaliador_dash' (admin, avaliador)
+// ══════════════════════════════════════════════════════════════════════════════
+
+Route::middleware(['auth', 'tenant', 'role:admin,avaliador'])->prefix('avaliador')->name('avaliador.')->group(function () {
+
+    Route::get('dashboard', [AvaliadorDashboardController::class, 'index'])
+        ->name('dashboard');
+
+    Route::post('agendamentos/{agendamento}/concluir', [AvaliadorDashboardController::class, 'concluir'])
+        ->name('concluir');
+});

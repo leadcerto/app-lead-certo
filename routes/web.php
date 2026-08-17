@@ -443,3 +443,6 @@ Route::prefix('api/admin')->middleware(['auth', 'tenant', 'role:admin'])->group(
     Route::get('/gestor-kanban/prompt', [GestorKanbanConfigController::class, 'show']);
     Route::put('/gestor-kanban/prompt', [GestorKanbanConfigController::class, 'update']);
 });
+
+// ── Módulo Google Meu Negócio — Avaliações ────────────────────────────────
+require base_path('routes/gmb-web.php');

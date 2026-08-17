@@ -73,3 +73,9 @@ Schedule::command('kanban:gestor-semanal')
     ->withoutOverlapping()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/gestor-kanban-semanal.log'));
+
+// 08:00 — Verifica agendamentos de avaliação GMB em atraso e alerta avaliadores + admin
+Schedule::command('avaliadores:checar-atraso')
+    ->dailyAt('08:00')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/avaliadores-atraso.log'));

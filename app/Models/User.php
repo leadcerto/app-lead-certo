@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
@@ -14,6 +15,7 @@ class User extends Authenticatable
 
     protected $fillable = [
         'tenant_id', 'nome', 'email', 'password', 'perfil', 'ativo',
+        'city', 'state',
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -41,6 +43,8 @@ class User extends Authenticatable
         'usuarios'          => ['admin', 'dono'],
         'contatos.editar'   => ['admin', 'dono', 'diretor', 'gerente', 'gestor'],
         'kanban.encerrar'   => ['admin', 'dono', 'diretor', 'gerente', 'gestor', 'vendedor'],
+        'avaliacoes_gmb'    => ['admin', 'dono', 'diretor'],
+        'avaliador_dash'    => ['admin', 'avaliador'],
     ];
 
     // ── Helpers de permissão ──────────────────────────────────────────────────
@@ -65,6 +69,11 @@ class User extends Authenticatable
         return in_array($this->perfil, ['admin', 'dono', 'diretor', 'gerente', 'gestor'], true);
     }
 
+    public function isAvaliador(): bool
+    {
+        return $this->perfil === 'avaliador';
+    }
+
     public function perfilLabel(): string
     {
         return match ($this->perfil) {
@@ -78,6 +87,7 @@ class User extends Authenticatable
             'growth_manager' => 'Growth Manager',
             'revops'         => 'RevOps',
             'pos_venda'      => 'Pós-Venda',
+            'avaliador'      => 'Avaliador',
             default          => ucfirst($this->perfil),
         };
     }
@@ -87,5 +97,10 @@ class User extends Authenticatable
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function agendamentosAvaliacao(): HasMany
+    {
+        return $this->hasMany(AgendamentoAvaliacao::class, 'avaliador_id');
     }
 }
