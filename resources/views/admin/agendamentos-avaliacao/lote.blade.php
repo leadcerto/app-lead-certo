@@ -27,7 +27,6 @@
                 <thead class="bg-gray-50 text-gray-600">
                     <tr>
                         <th class="px-4 py-3 text-left">Perfil</th>
-                        <th class="px-3 py-3 text-center">Vagas</th>
                         <th class="px-3 py-3 text-center">Segunda</th>
                         <th class="px-3 py-3 text-center">Terça</th>
                         <th class="px-3 py-3 text-center">Quarta</th>
@@ -44,12 +43,6 @@
                             <div class="font-medium text-gray-800">{{ $perfil->nome }}</div>
                             <div class="text-xs text-gray-400">{{ $perfil->city }}/{{ $perfil->state }}</div>
                         </td>
-                        <td class="px-3 py-3 text-center">
-                            <span class="px-2 py-1 rounded-full text-xs font-semibold
-                                {{ $vagasPorPerfil[$perfil->id] > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">
-                                {{ $vagasPorPerfil[$perfil->id] }}
-                            </span>
-                        </td>
                         @foreach(['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'] as $dia)
                         <td class="px-1 py-3 text-center">
                             <input type="number" name="matriz[{{ $perfil->id }}][{{ $dia }}]"
@@ -61,11 +54,6 @@
                     @endforeach
                 </tbody>
             </table>
-        </div>
-
-        <div class="mt-4 p-3 bg-yellow-50 text-yellow-800 rounded-lg text-sm">
-            ⚠️ <strong>Limite semanal:</strong> Máximo 2 avaliações por perfil por semana.
-            Agendamentos que excedam esse limite serão ignorados automaticamente.
         </div>
 
         <div class="flex gap-3 mt-4">

@@ -146,27 +146,4 @@ class SorteioTemplateServiceTest extends TestCase
         $this->assertNull($sorteado);
     }
 
-    public function test_pode_agendar_bloqueia_apos_2_avaliacoes_na_semana(): void
-    {
-        $template = $this->criarTemplate();
-        $this->agendar($template, Carbon::today());
-        $this->agendar($this->criarTemplate(), Carbon::today());
-
-        $this->assertFalse($this->service->podeAgendar($this->perfil, Carbon::today()));
-    }
-
-    public function test_pode_agendar_permite_com_menos_de_2_na_semana(): void
-    {
-        $template = $this->criarTemplate();
-        $this->agendar($template, Carbon::today());
-
-        $this->assertTrue($this->service->podeAgendar($this->perfil, Carbon::today()));
-    }
-
-    public function test_vagas_na_semana_calcula_o_restante(): void
-    {
-        $this->agendar($this->criarTemplate(), Carbon::today());
-
-        $this->assertSame(1, $this->service->vagasNaSemana($this->perfil, Carbon::today()));
-    }
 }

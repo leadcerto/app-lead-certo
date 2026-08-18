@@ -101,13 +101,7 @@ class AgendamentoAvaliacaoController extends Controller
 
         $semana = Carbon::today();
 
-        // Calcular vagas restantes por perfil
-        $vagasPorPerfil = [];
-        foreach ($perfis as $perfil) {
-            $vagasPorPerfil[$perfil->id] = $this->sorteioService->vagasNaSemana($perfil, $semana);
-        }
-
-        return view('admin.agendamentos-avaliacao.lote', compact('perfis', 'semana', 'vagasPorPerfil'));
+        return view('admin.agendamentos-avaliacao.lote', compact('perfis', 'semana'));
     }
 
     /**

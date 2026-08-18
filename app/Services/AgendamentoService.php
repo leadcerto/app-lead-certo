@@ -32,13 +32,6 @@ class AgendamentoService
         ?int $templateId = null,
         ?int $avaliadorId = null,
     ): AgendamentoAvaliacao {
-        // Verificar limite semanal
-        if (!$this->sorteioService->podeAgendar($perfil, $data)) {
-            throw new \RuntimeException(
-                "O perfil \"{$perfil->nome}\" já atingiu o limite de 2 avaliações nesta semana."
-            );
-        }
-
         // Sortear template se não especificado
         if (!$templateId) {
             $template = $this->sorteioService->sortear($perfil, $data);
@@ -126,12 +119,6 @@ class AgendamentoService
                     }
 
                     for ($i = 0; $i < $quantidade; $i++) {
-                        // Verificar limite semanal
-                        if (!$this->sorteioService->podeAgendar($perfil, $dataAlvo)) {
-                            $avisos[] = "⚠️ Perfil \"{$perfil->nome}\" atingiu limite semanal (2). Agendamentos extras ignorados.";
-                            break;
-                        }
-
                         $template = $this->sorteioService->sortear($perfil, $dataAlvo, $templatesSorteados);
                         if (!$template) {
                             $avisos[] = "⚠️ Sem templates disponíveis para \"{$perfil->nome}\".";
@@ -188,11 +175,6 @@ class AgendamentoService
         try {
             foreach ($perfilIds as $perfilId) {
                 $perfil = PerfilGmb::where('tenant_id', $tenantId)->findOrFail($perfilId);
-
-                if (!$this->sorteioService->podeAgendar($perfil, $data)) {
-                    $avisos[] = "⚠️ Perfil \"{$perfil->nome}\" já atingiu limite semanal.";
-                    continue;
-                }
 
                 try {
                     $this->agendarIndividual($perfil, $data);
