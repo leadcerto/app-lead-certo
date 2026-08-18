@@ -17,19 +17,17 @@ use Illuminate\Support\Str;
  * assim que se escreve uma avaliação de verdade) e proíbe estrelas dentro do
  * corpo (a nota já existe como campo separado no Google).
  *
- * Dois marcadores de texto ficam salvos literalmente no rascunho (nunca
- * resolvidos aqui) — continuam editáveis pelo admin como qualquer texto:
- * - `[nome da empresa]` — sempre presente; resolvido automaticamente pro
- *   nome real do tenant só na hora de exibir pro avaliador
- *   (TemplateAvaliacao::textoResolvido()). Como o dado já é conhecido, não
- *   faz sentido pedir pra IA acertar — e se o tenant mudar de nome, todo
- *   template já gerado atualiza sozinho, sem precisar editar um por um.
- * - `[nome de quem te atendeu]` — OPCIONAL: nem todo negócio tem um
- *   atendente identificável, então aparece só em parte dos rascunhos (nunca
- *   em todos) quando $incluirNomeAtendente é true, e nunca quando é false.
- *   Fica sempre como marcador literal (nunca resolvido pelo sistema),
- *   porque não sabemos quem atendeu cada cliente — é o cliente real quem
- *   preenche, na ligação.
+ * Achado ao vivo (2026-08-18): a versão anterior sempre incluía o marcador
+ * `[nome da empresa]`, resolvido automaticamente pro nome real na exibição.
+ * Na prática lia estranho ("A Frete Rio se destacou..." — ninguém fala assim
+ * de verdade). Trocado por instrução genérica: o rascunho nunca cita o nome
+ * da empresa, refere-se a ela de forma natural ("o serviço", "a equipe",
+ * "a empresa de mudança"), soando como uma avaliação de verdade.
+ *
+ * O marcador `[nome de quem te atendeu]` continua OPCIONAL (nunca resolvido
+ * pelo sistema — é o cliente real quem preenche, na ligação): aparece só em
+ * parte dos rascunhos (nunca em todos) quando $incluirNomeAtendente é true,
+ * e nunca quando é false.
  */
 class TemplateAvaliacaoIaService
 {
@@ -51,6 +49,7 @@ class TemplateAvaliacaoIaService
         bool $incluirNomeAtendente = true,
     ): int {
         $quantidade = max(1, min($quantidade, self::MAX_QUANTIDADE));
+        $nomeEmpresa = $categoria->tenant?->nome;
 
         $resposta = $this->openRouter->chat(
             $this->montarMensagens($categoria, $quantidade, $contexto, $incluirNomeAtendente),
@@ -87,10 +86,10 @@ class TemplateAvaliacaoIaService
             }
 
             // Rede de segurança: se a IA ignorar as regras (estrela no corpo,
-            // marcador de empresa ausente, ou usar o marcador de atendente
-            // mesmo desativado), o template não entra na rotação — melhor
-            // gerar menos do que deixar passar algo fora do combinado.
-            if (! $this->respeitaRegras($texto, $incluirNomeAtendente)) {
+            // nome da empresa citado por engano, ou usar o marcador de
+            // atendente mesmo desativado), o template não entra na rotação —
+            // melhor gerar menos do que deixar passar algo fora do combinado.
+            if (! $this->respeitaRegras($texto, $incluirNomeAtendente, $nomeEmpresa)) {
                 Log::warning('TemplateAvaliacaoIaService: rascunho descartado por não seguir as regras', [
                     'categoria_id' => $categoria->id,
                     'texto'        => $texto,
@@ -136,17 +135,17 @@ CATEGORIA: {$categoria->nome}
 PALAVRAS-CHAVE (direção de conteúdo — pode usar como inspiração, não precisa usar todas nem literalmente): {$palavrasChave}
 CONTEXTO ADICIONAL DA EMPRESA: {$this->contextoOuPadrao($contexto)}
 
-TAREFA: gere exatamente {$quantidade} rascunhos de avaliação, em primeira pessoa, como se fossem escritos por um cliente satisfeito relatando a própria experiência.
+TAREFA: gere exatamente {$quantidade} rascunhos de avaliação, em primeira pessoa, como se fossem escritos por um cliente satisfeito relatando a própria experiência — tom descontraído e natural, como gente de verdade escreve.
 
 REGRAS OBRIGATÓRIAS:
-1. Primeira pessoa, tom natural de avaliação real — não use linguagem de propaganda ou slogan.
-2. Todo rascunho precisa conter, em algum ponto do texto, exatamente o marcador `[nome da empresa]` (nunca escreva o nome real da empresa, sempre esse marcador).
+1. Primeira pessoa, tom natural e descontraído de avaliação real — não use linguagem de propaganda ou slogan.
+2. NUNCA escreva o nome da empresa (nem invente um). Refira-se a ela de forma genérica e natural: "o serviço", "a equipe", "a empresa de mudança", "o pessoal do frete" — como uma pessoa de verdade falaria, sem repetir o nome próprio do negócio.
 3. {$regraAtendente}
 4. NÃO inclua estrelas (⭐★✩) nem nota numérica no texto — a nota é um campo separado no Google, não faz parte do texto.
-5. Não invente fatos específicos (datas, valores, promessas) que a empresa não confirmou no contexto.
-6. Varie estrutura, abertura e tamanho entre os rascunhos — nunca repita a mesma frase de abertura.
-7. Máximo 400 caracteres por rascunho.
-8. No máximo 1 emoji por rascunho (pode ser zero).
+5. Espalhe 2 ou 3 emojis ao LONGO do texto (não só no final) — um depois de cada ponto relevante, combinando com o que a frase acabou de dizer (ex.: 🔑 perto de "deixei a chave", 🚚 perto de "mudança/transporte", 🫶💛😊 perto de agradecimento).
+6. Não invente fatos específicos (datas, valores, promessas) que a empresa não confirmou no contexto.
+7. Varie estrutura, abertura e tamanho entre os rascunhos — nunca repita a mesma frase de abertura.
+8. Máximo 400 caracteres por rascunho.
 
 FORMATO DE SAÍDA — retorne SOMENTE este JSON, sem markdown, sem explicação adicional:
 {"templates": [{"texto": "..."}, {"texto": "..."}]}
@@ -163,16 +162,16 @@ PROMPT,
 
     /**
      * Confirma que o rascunho respeita as regras que importam de verdade
-     * pro modelo de negócio: sem estrela embutida, com o marcador de
-     * empresa presente, e o marcador de atendente só quando permitido.
+     * pro modelo de negócio: sem estrela embutida, sem citar o nome real
+     * da empresa, e o marcador de atendente só quando permitido.
      */
-    private function respeitaRegras(string $texto, bool $incluirNomeAtendente): bool
+    private function respeitaRegras(string $texto, bool $incluirNomeAtendente, ?string $nomeEmpresa): bool
     {
         if (str_contains($texto, '⭐') || str_contains($texto, '★') || str_contains($texto, '✩')) {
             return false;
         }
 
-        if (! str_contains($texto, '[nome da empresa]')) {
+        if ($nomeEmpresa && mb_stripos($texto, $nomeEmpresa) !== false) {
             return false;
         }
 

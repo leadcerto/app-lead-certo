@@ -16,12 +16,12 @@ class TemplateAvaliacaoIaServiceTest extends TestCase
 
     private function criarCategoria(array $atributos = []): CategoriaTemplate
     {
-        $tenant = $atributos['tenant_id'] ?? Tenant::factory()->create()->id;
+        $tenantId = $atributos['tenant_id'] ?? Tenant::factory()->create(['nome' => 'Frete Rio'])->id;
 
         return CategoriaTemplate::create(array_merge([
-            'tenant_id' => $tenant,
+            'tenant_id' => $tenantId,
             'nome'      => 'Custo-Benefício',
-        ], $atributos, ['tenant_id' => $tenant]));
+        ], $atributos, ['tenant_id' => $tenantId]));
     }
 
     public function test_cria_templates_a_partir_da_resposta_da_ia(): void
@@ -31,8 +31,8 @@ class TemplateAvaliacaoIaServiceTest extends TestCase
         $this->mock(OpenRouterService::class, function ($mock) {
             $mock->shouldReceive('chat')->once()->andReturn(json_encode([
                 'templates' => [
-                    ['texto' => 'Fui muito bem atendido pela [nome da empresa], recomendo!'],
-                    ['texto' => 'Chegaram no horário combinado. A [nome da empresa] foi muito atenciosa.'],
+                    ['texto' => 'Fui muito bem atendido, recomendo! 🚚'],
+                    ['texto' => 'Chegaram no horário combinado e foram muito atenciosos.'],
                 ],
             ]));
         });
@@ -54,7 +54,7 @@ class TemplateAvaliacaoIaServiceTest extends TestCase
 
         $this->mock(OpenRouterService::class, function ($mock) {
             $mock->shouldReceive('chat')->once()->andReturn(json_encode([
-                'templates' => [['texto' => 'Ótimo serviço da [nome da empresa]!']],
+                'templates' => [['texto' => 'Ótimo serviço, super recomendo!']],
             ]));
         });
 
@@ -71,8 +71,8 @@ class TemplateAvaliacaoIaServiceTest extends TestCase
         $this->mock(OpenRouterService::class, function ($mock) {
             $mock->shouldReceive('chat')->once()->andReturn(json_encode([
                 'templates' => [
-                    ['texto' => '⭐⭐⭐⭐⭐ Ótimo! [nome da empresa] foi excelente.'],
-                    ['texto' => 'Sem estrela nenhuma aqui, [nome da empresa] foi ótima.'],
+                    ['texto' => '⭐⭐⭐⭐⭐ Ótimo! Foi excelente.'],
+                    ['texto' => 'Sem estrela nenhuma aqui, foi ótimo.'],
                 ],
             ]));
         });
@@ -83,34 +83,37 @@ class TemplateAvaliacaoIaServiceTest extends TestCase
         $this->assertSame(0, TemplateAvaliacao::whereRaw("texto LIKE '%⭐%'")->count());
     }
 
-    public function test_descarta_rascunho_sem_marcador_de_empresa(): void
+    public function test_descarta_rascunho_que_cita_o_nome_real_da_empresa(): void
     {
-        $categoria = $this->criarCategoria();
+        // Achado ao vivo (2026-08-18): o texto não deve mais citar o nome
+        // da empresa (nem via marcador) — soa artificial. Se a IA
+        // desobedecer e escrever o nome de qualquer jeito, descarta.
+        $categoria = $this->criarCategoria(); // tenant "Frete Rio"
 
         $this->mock(OpenRouterService::class, function ($mock) {
             $mock->shouldReceive('chat')->once()->andReturn(json_encode([
                 'templates' => [
-                    ['texto' => 'O serviço foi excelente do início ao fim.'],
+                    ['texto' => 'A Frete Rio se destacou pela honestidade e transparência.'],
+                    ['texto' => 'O serviço se destacou pela honestidade e transparência. 🔑'],
                 ],
             ]));
         });
 
-        $criados = app(TemplateAvaliacaoIaService::class)->gerar($categoria, 1);
+        $criados = app(TemplateAvaliacaoIaService::class)->gerar($categoria, 2);
 
-        $this->assertSame(0, $criados);
-        $this->assertSame(0, TemplateAvaliacao::where('categoria_id', $categoria->id)->count());
+        $this->assertSame(1, $criados);
+        $this->assertSame(0, TemplateAvaliacao::whereRaw("texto LIKE '%Frete Rio%'")->count());
     }
 
     public function test_aceita_rascunho_sem_marcador_de_atendente_quando_permitido(): void
     {
-        // Marcador de atendente é opcional por padrão — rascunho sem ele
-        // continua válido, desde que tenha o marcador de empresa.
+        // Marcador de atendente é opcional — rascunho sem ele continua válido.
         $categoria = $this->criarCategoria();
 
         $this->mock(OpenRouterService::class, function ($mock) {
             $mock->shouldReceive('chat')->once()->andReturn(json_encode([
                 'templates' => [
-                    ['texto' => 'A [nome da empresa] cumpriu tudo que prometeu, recomendo!'],
+                    ['texto' => 'A equipe cumpriu tudo que prometeu, recomendo!'],
                 ],
             ]));
         });
@@ -127,8 +130,8 @@ class TemplateAvaliacaoIaServiceTest extends TestCase
         $this->mock(OpenRouterService::class, function ($mock) {
             $mock->shouldReceive('chat')->once()->andReturn(json_encode([
                 'templates' => [
-                    ['texto' => 'A [nome da empresa] foi ótima, [nome de quem te atendeu] merece parabéns.'],
-                    ['texto' => 'A [nome da empresa] foi impecável, superou minhas expectativas.'],
+                    ['texto' => 'Foi ótimo, [nome de quem te atendeu] merece parabéns.'],
+                    ['texto' => 'Foi impecável, superou minhas expectativas.'],
                 ],
             ]));
         });
@@ -169,7 +172,7 @@ class TemplateAvaliacaoIaServiceTest extends TestCase
     {
         $categoria = $this->criarCategoria();
 
-        $templates = array_fill(0, 10, ['texto' => 'Texto de exemplo da [nome da empresa].']);
+        $templates = array_fill(0, 10, ['texto' => 'Texto de exemplo genérico.']);
 
         $this->mock(OpenRouterService::class, function ($mock) use ($templates) {
             $mock->shouldReceive('chat')->once()->andReturn(json_encode(['templates' => $templates]));
