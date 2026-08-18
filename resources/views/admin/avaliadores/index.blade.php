@@ -7,6 +7,10 @@
         <div>
             <h1 class="text-2xl font-bold text-gray-800">⭐ Avaliadores</h1>
             <p class="text-sm text-gray-500 mt-1">Quem liga pros clientes e oferece o texto sugerido.</p>
+            <p class="text-xs text-gray-500 mt-1">
+                Link de acesso (mesmo pra todos, cada um entra com o próprio e-mail/senha):
+                <a href="{{ route('login') }}" target="_blank" class="text-blue-600 hover:underline font-mono">{{ route('login') }}</a>
+            </p>
         </div>
         <a href="{{ route('admin.avaliadores.create') }}"
            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-semibold transition">

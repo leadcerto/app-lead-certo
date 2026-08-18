@@ -71,7 +71,13 @@ class AuthController extends Controller
         $request->session()->regenerate();
         session(['tenant_id' => Auth::user()->tenant_id]);
 
-        return redirect()->intended(route('dashboard'));
+        // Avaliador não tem acesso ao Dashboard geral — manda direto pro
+        // painel dele em vez de cair numa tela que não faz sentido pro perfil.
+        $destino = Auth::user()->perfil === 'avaliador'
+            ? route('avaliador.dashboard')
+            : route('dashboard');
+
+        return redirect()->intended($destino);
     }
 
     public function logoutWeb(Request $request): RedirectResponse
