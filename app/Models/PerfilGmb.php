@@ -3,10 +3,10 @@
 namespace App\Models;
 
 use App\Scopes\TenantScope;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Carbon\Carbon;
 
 class PerfilGmb extends Model
 {
@@ -14,11 +14,11 @@ class PerfilGmb extends Model
 
     protected static function booted(): void
     {
-        static::addGlobalScope(new TenantScope());
+        static::addGlobalScope(new TenantScope);
     }
 
     protected $fillable = [
-        'tenant_id', 'nome', 'city', 'state', 'link_gmb', 'ativo',
+        'tenant_id', 'nome', 'city', 'state', 'link_gmb', 'google_location_id', 'ativo',
     ];
 
     protected function casts(): array
@@ -56,7 +56,7 @@ class PerfilGmb extends Model
     public function avaliadorMaisDisponivel(Carbon $semanaReferencia): ?User
     {
         $inicioSemana = $semanaReferencia->copy()->startOfWeek(Carbon::MONDAY);
-        $fimSemana    = $semanaReferencia->copy()->endOfWeek(Carbon::SUNDAY);
+        $fimSemana = $semanaReferencia->copy()->endOfWeek(Carbon::SUNDAY);
 
         return User::where('tenant_id', $this->tenant_id)
             ->where('perfil', 'avaliador')

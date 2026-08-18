@@ -39,6 +39,14 @@
                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500">
         </div>
 
+        <div>
+            <label for="google_location_id" class="block text-sm font-medium text-gray-700 mb-1">ID do Perfil da Empresa no Google (opcional)</label>
+            <input type="text" name="google_location_id" id="google_location_id" value="{{ old('google_location_id', $perfil->google_location_id) }}" maxlength="60"
+                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                   placeholder="Ex: 16774193855414692805">
+            <p class="text-xs text-gray-400 mt-1">Encontrado em business.google.com → Configurações avançadas → "ID do Perfil da Empresa". Necessário pra publicação automática de posts/ofertas.</p>
+        </div>
+
         <div class="flex items-center gap-2">
             <input type="checkbox" name="ativo" id="ativo" value="1" {{ $perfil->ativo ? 'checked' : '' }}
                    class="rounded border-gray-300 text-green-600 focus:ring-green-500">

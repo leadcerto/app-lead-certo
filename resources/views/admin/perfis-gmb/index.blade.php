@@ -37,7 +37,12 @@
             <tbody class="divide-y divide-gray-100">
                 @forelse($perfis as $perfil)
                 <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-3 font-medium text-gray-800">{{ $perfil->nome }}</td>
+                    <td class="px-4 py-3 font-medium text-gray-800">
+                        {{ $perfil->nome }}
+                        @if(! $perfil->google_location_id)
+                            <span class="ml-1 text-amber-500 text-xs" title="ID do Perfil no Google não cadastrado — necessário pra Campanhas de Ofertas">⚠️</span>
+                        @endif
+                    </td>
                     <td class="px-4 py-3 text-gray-600">{{ $perfil->city }}</td>
                     <td class="px-4 py-3 text-gray-600">{{ $perfil->state }}</td>
                     <td class="px-4 py-3">

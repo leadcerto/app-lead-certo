@@ -34,11 +34,12 @@ class PerfilGmbController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'nome'     => 'required|string|max:200',
-            'city'     => 'required|string|max:100',
-            'state'    => 'required|string|size:2',
+            'nome' => 'required|string|max:200',
+            'city' => 'required|string|max:100',
+            'state' => 'required|string|size:2',
             'link_gmb' => 'required|url|max:500',
-            'ativo'    => 'boolean',
+            'google_location_id' => 'nullable|string|max:60',
+            'ativo' => 'boolean',
         ]);
 
         $validated['tenant_id'] = $request->user()->tenant_id;
@@ -73,11 +74,12 @@ class PerfilGmbController extends Controller
         abort_if($perfisGmb->tenant_id !== $request->user()->tenant_id, 403);
 
         $validated = $request->validate([
-            'nome'     => 'required|string|max:200',
-            'city'     => 'required|string|max:100',
-            'state'    => 'required|string|size:2',
+            'nome' => 'required|string|max:200',
+            'city' => 'required|string|max:100',
+            'state' => 'required|string|size:2',
             'link_gmb' => 'required|url|max:500',
-            'ativo'    => 'boolean',
+            'google_location_id' => 'nullable|string|max:60',
+            'ativo' => 'boolean',
         ]);
 
         $validated['ativo'] = $request->has('ativo');
