@@ -13,14 +13,19 @@ class TemplateAvaliacaoController extends Controller
     public function __construct(private TemplateAvaliacaoIaService $iaService) {}
 
     /**
-     * Lista todos os templates do tenant.
+     * Lista todos os templates do tenant, agrupados por categoria
+     * (ordenado por categoria + código pra o agrupamento na view funcionar),
+     * com texto completo e paginação de 5 por página.
      */
     public function index(Request $request)
     {
-        $templates = TemplateAvaliacao::where('tenant_id', $request->user()->tenant_id)
+        $templates = TemplateAvaliacao::where('templates_avaliacao.tenant_id', $request->user()->tenant_id)
+            ->join('categorias_template', 'categorias_template.id', '=', 'templates_avaliacao.categoria_id')
+            ->orderBy('categorias_template.nome')
+            ->orderBy('templates_avaliacao.codigo')
+            ->select('templates_avaliacao.*')
             ->with('categoria')
-            ->orderBy('codigo')
-            ->paginate(20);
+            ->paginate(5);
 
         return view('admin.templates-avaliacao.index', compact('templates'));
     }

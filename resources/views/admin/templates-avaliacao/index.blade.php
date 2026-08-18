@@ -25,46 +25,40 @@
         <div class="mb-4 p-3 bg-green-100 text-green-800 rounded-lg text-sm">✅ {{ session('sucesso') }}</div>
     @endif
 
-    <div class="bg-white rounded-xl shadow overflow-hidden">
-        <table class="w-full text-sm">
-            <thead class="bg-gray-50 text-gray-600">
-                <tr>
-                    <th class="px-4 py-3 text-left">Código</th>
-                    <th class="px-4 py-3 text-left">Categoria</th>
-                    <th class="px-4 py-3 text-left">Texto (prévia)</th>
-                    <th class="px-4 py-3 text-center">Status</th>
-                    <th class="px-4 py-3 text-center">Ações</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-                @forelse($templates as $template)
-                <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-3 font-mono text-gray-800 font-medium">{{ $template->codigo }}</td>
-                    <td class="px-4 py-3 text-gray-600">{{ $template->categoria?->nome ?? '—' }}</td>
-                    <td class="px-4 py-3 text-gray-600 max-w-md truncate">{{ Str::limit($template->texto, 100) }}</td>
-                    <td class="px-4 py-3 text-center">
+    <div class="space-y-4">
+        @php $categoriaAtual = null; @endphp
+        @forelse($templates as $template)
+            @if($template->categoria_id !== $categoriaAtual)
+                @php $categoriaAtual = $template->categoria_id; @endphp
+                <h2 class="text-sm font-semibold text-gray-600 uppercase tracking-wide {{ !$loop->first ? 'pt-2' : '' }}">
+                    {{ $template->categoria?->nome ?? 'Sem categoria' }}
+                </h2>
+            @endif
+
+            <div class="bg-white rounded-xl shadow p-4">
+                <div class="flex items-start justify-between gap-4">
+                    <div class="flex items-center gap-2">
+                        <span class="font-mono text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{{ $template->codigo }}</span>
                         @if($template->ativo)
-                            <span class="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">Ativo</span>
+                            <span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">Ativo</span>
                         @else
-                            <span class="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">Inativo</span>
+                            <span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-semibold">Inativo</span>
                         @endif
-                    </td>
-                    <td class="px-4 py-3 text-center space-x-2">
+                    </div>
+                    <div class="flex gap-3 flex-shrink-0">
                         <a href="{{ route('admin.templates-avaliacao.edit', $template) }}" class="text-blue-600 hover:underline text-xs">Editar</a>
                         <form action="{{ route('admin.templates-avaliacao.destroy', $template) }}" method="POST" class="inline">
                             @csrf @method('DELETE')
                             <button type="submit" class="text-red-500 hover:underline text-xs"
                                     onclick="return confirm('Desativar este template?')">Desativar</button>
                         </form>
-                    </td>
-                </tr>
-                @empty
-                <tr>
-                    <td colspan="5" class="px-4 py-8 text-center text-gray-400">Nenhum template cadastrado.</td>
-                </tr>
-                @endforelse
-            </tbody>
-        </table>
+                    </div>
+                </div>
+                <p class="text-sm text-gray-700 mt-2 whitespace-pre-line">{{ $template->texto }}</p>
+            </div>
+        @empty
+            <div class="bg-white rounded-xl shadow p-8 text-center text-gray-400">Nenhum template cadastrado.</div>
+        @endforelse
     </div>
 
     <div class="mt-4">{{ $templates->links() }}</div>
