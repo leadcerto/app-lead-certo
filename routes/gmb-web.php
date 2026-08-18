@@ -6,6 +6,7 @@
  */
 
 use App\Http\Controllers\AgendamentoAvaliacaoController;
+use App\Http\Controllers\AvaliadorController;
 use App\Http\Controllers\AvaliadorDashboardController;
 use App\Http\Controllers\ContatoAvaliacaoController;
 use App\Http\Controllers\PerfilGmbController;
@@ -80,6 +81,14 @@ Route::middleware(['auth', 'tenant', 'role:admin,dono,diretor'])->prefix('admin/
     // ── Alertar Avaliadores (e-mail manual) ───────────────────────────────
     Route::post('agendamentos/alertar', [AgendamentoAvaliacaoController::class, 'alertarAvaliadores'])
         ->name('agendamentos-avaliacao.alertar');
+
+    // ── Cadastro de Avaliadores ─────────────────────────────────────────────
+    Route::get('avaliadores', [AvaliadorController::class, 'index'])->name('avaliadores.index');
+    Route::get('avaliadores/novo', [AvaliadorController::class, 'create'])->name('avaliadores.create');
+    Route::post('avaliadores', [AvaliadorController::class, 'store'])->name('avaliadores.store');
+    Route::get('avaliadores/{avaliador}/editar', [AvaliadorController::class, 'edit'])->name('avaliadores.edit');
+    Route::put('avaliadores/{avaliador}', [AvaliadorController::class, 'update'])->name('avaliadores.update');
+    Route::delete('avaliadores/{avaliador}', [AvaliadorController::class, 'destroy'])->name('avaliadores.destroy');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
