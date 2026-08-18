@@ -56,8 +56,14 @@ class MediaProcessorService
     // Imagem → visão IA
     // -------------------------------------------------------------------------
 
-    // Modelo pago de visão — último recurso se todos os gratuitos falharem
-    private const VISAO_PAGO_FALLBACK = 'google/gemini-flash-1.5-8b';
+    // Modelo pago de visão — último recurso se todos os gratuitos falharem.
+    // Achado real em 2026-08-18 (ticket #3154, imagens do Thiago sem análise):
+    // 'google/gemini-flash-1.5-8b' foi descontinuado pela OpenRouter (404 "No
+    // endpoints found") — a rede de segurança nunca funcionava quando os
+    // modelos gratuitos falhavam/travavam. Trocado pro alias auto-atualizável
+    // '~google/gemini-flash-latest' (sempre aponta pro Flash vigente da Google,
+    // evita o mesmo apodrecimento se a OpenRouter aposentar o modelo de novo).
+    private const VISAO_PAGO_FALLBACK = '~google/gemini-flash-latest';
 
     // Foco padrão quando a coluna não configura foco_analise_imagem — precisa
     // ser genérico (2026-08-05, achado pelo Leonardo): o sistema é multi-tenant,
