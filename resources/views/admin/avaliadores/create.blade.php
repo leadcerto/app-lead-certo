@@ -26,10 +26,18 @@
                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500">
         </div>
 
-        <div>
-            <label for="email" class="block text-sm font-medium text-gray-700 mb-1">E-mail de Login</label>
-            <input type="email" name="email" id="email" required maxlength="200" value="{{ old('email') }}"
-                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500">
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label for="email" class="block text-sm font-medium text-gray-700 mb-1">E-mail de Login</label>
+                <input type="email" name="email" id="email" required maxlength="200" value="{{ old('email') }}"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500">
+            </div>
+            <div>
+                <label for="whatsapp" class="block text-sm font-medium text-gray-700 mb-1">WhatsApp (opcional)</label>
+                <input type="text" name="whatsapp" id="whatsapp" maxlength="30" value="{{ old('whatsapp') }}"
+                       placeholder="21999990000"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500">
+            </div>
         </div>
 
         <div class="grid grid-cols-2 gap-4">

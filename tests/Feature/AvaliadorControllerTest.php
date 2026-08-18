@@ -20,11 +20,12 @@ class AvaliadorControllerTest extends TestCase
     private function dadosValidos(array $sobrescreve = []): array
     {
         return array_merge([
-            'nome'  => 'Regis Rodrigues',
-            'email' => 'regis@frete.rio.br',
-            'senha' => 'senhaInicial123',
-            'city'  => 'Rio de Janeiro',
-            'state' => 'RJ',
+            'nome'     => 'Regis Rodrigues',
+            'email'    => 'regis@frete.rio.br',
+            'whatsapp' => '21975930674',
+            'senha'    => 'senhaInicial123',
+            'city'     => 'Rio de Janeiro',
+            'state'    => 'RJ',
         ], $sobrescreve);
     }
 
@@ -57,6 +58,7 @@ class AvaliadorControllerTest extends TestCase
         $this->assertNotNull($avaliador);
         $this->assertSame('avaliador', $avaliador->perfil);
         $this->assertSame($tenant->id, $avaliador->tenant_id);
+        $this->assertSame('21975930674', $avaliador->whatsapp);
         $this->assertTrue(Hash::check('senhaInicial123', $avaliador->password));
     }
 

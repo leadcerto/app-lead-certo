@@ -23,7 +23,7 @@
             <thead class="bg-gray-50 text-gray-600">
                 <tr>
                     <th class="px-4 py-3 text-left">Nome</th>
-                    <th class="px-4 py-3 text-left">E-mail</th>
+                    <th class="px-4 py-3 text-left">E-mail / WhatsApp</th>
                     <th class="px-4 py-3 text-left">Cidade/UF</th>
                     <th class="px-4 py-3 text-center">Agendamentos</th>
                     <th class="px-4 py-3 text-center">Status</th>
@@ -34,7 +34,12 @@
                 @forelse($avaliadores as $avaliador)
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3 font-medium text-gray-800">{{ $avaliador->nome }}</td>
-                    <td class="px-4 py-3 text-gray-600">{{ $avaliador->email }}</td>
+                    <td class="px-4 py-3 text-gray-600">
+                        {{ $avaliador->email }}
+                        @if($avaliador->whatsapp)
+                            <br><span class="text-xs text-green-600">{{ $avaliador->whatsapp }}</span>
+                        @endif
+                    </td>
                     <td class="px-4 py-3 text-gray-600">{{ $avaliador->city }}/{{ $avaliador->state }}</td>
                     <td class="px-4 py-3 text-center text-gray-600">{{ $avaliador->agendamentos_avaliacao_count }}</td>
                     <td class="px-4 py-3 text-center">

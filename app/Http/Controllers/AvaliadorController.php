@@ -37,17 +37,19 @@ class AvaliadorController extends Controller
         $tenantId = $request->user()->tenant_id;
 
         $validated = $request->validate([
-            'nome'  => 'required|string|max:200',
-            'email' => ['required', 'email', 'max:200', Rule::unique('users', 'email')],
-            'senha' => 'required|string|min:8|max:100',
-            'city'  => 'required|string|max:100',
-            'state' => 'required|string|size:2',
+            'nome'     => 'required|string|max:200',
+            'email'    => ['required', 'email', 'max:200', Rule::unique('users', 'email')],
+            'whatsapp' => 'nullable|string|max:30',
+            'senha'    => 'required|string|min:8|max:100',
+            'city'     => 'required|string|max:100',
+            'state'    => 'required|string|size:2',
         ]);
 
         User::create([
             'tenant_id' => $tenantId,
             'nome'      => $validated['nome'],
             'email'     => $validated['email'],
+            'whatsapp'  => $validated['whatsapp'] ?? null,
             'password'  => Hash::make($validated['senha']),
             'perfil'    => 'avaliador',
             'city'      => $validated['city'],
@@ -75,19 +77,21 @@ class AvaliadorController extends Controller
         abort_if($avaliador->tenant_id !== $request->user()->tenant_id || $avaliador->perfil !== 'avaliador', 403);
 
         $validated = $request->validate([
-            'nome'  => 'required|string|max:200',
-            'email' => ['required', 'email', 'max:200', Rule::unique('users', 'email')->ignore($avaliador->id)],
-            'senha' => 'nullable|string|min:8|max:100',
-            'city'  => 'required|string|max:100',
-            'state' => 'required|string|size:2',
-            'ativo' => 'boolean',
+            'nome'     => 'required|string|max:200',
+            'email'    => ['required', 'email', 'max:200', Rule::unique('users', 'email')->ignore($avaliador->id)],
+            'whatsapp' => 'nullable|string|max:30',
+            'senha'    => 'nullable|string|min:8|max:100',
+            'city'     => 'required|string|max:100',
+            'state'    => 'required|string|size:2',
+            'ativo'    => 'boolean',
         ]);
 
-        $avaliador->nome  = $validated['nome'];
-        $avaliador->email = $validated['email'];
-        $avaliador->city  = $validated['city'];
-        $avaliador->state = strtoupper($validated['state']);
-        $avaliador->ativo = $request->has('ativo');
+        $avaliador->nome     = $validated['nome'];
+        $avaliador->email    = $validated['email'];
+        $avaliador->whatsapp = $validated['whatsapp'] ?? null;
+        $avaliador->city     = $validated['city'];
+        $avaliador->state    = strtoupper($validated['state']);
+        $avaliador->ativo    = $request->has('ativo');
 
         if (!empty($validated['senha'])) {
             $avaliador->password = Hash::make($validated['senha']);
