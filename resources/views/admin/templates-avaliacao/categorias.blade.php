@@ -94,7 +94,7 @@
                            placeholder="ex.: somos especializados em mudanças de apartamento">
                 </div>
                 <label class="flex items-center gap-1.5 text-xs text-gray-600 pb-1.5 whitespace-nowrap">
-                    <input type="checkbox" name="incluir_nome_atendente" value="1" checked
+                    <input type="checkbox" name="incluir_nome_atendente" value="1"
                            class="rounded border-gray-300 text-purple-600 focus:ring-purple-500">
                     Incluir espaço pro nome de quem atendeu
                 </label>

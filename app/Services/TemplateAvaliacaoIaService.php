@@ -46,7 +46,7 @@ class TemplateAvaliacaoIaService
         CategoriaTemplate $categoria,
         int $quantidade = 5,
         ?string $contexto = null,
-        bool $incluirNomeAtendente = true,
+        bool $incluirNomeAtendente = false,
     ): int {
         $quantidade = max(1, min($quantidade, self::MAX_QUANTIDADE));
         $nomeEmpresa = $categoria->tenant?->nome;

@@ -36,13 +36,18 @@ class AgendamentoAvaliacaoController extends Controller
             ->orderBy('perfil_id')
             ->get();
 
+        // Agrupado por dia — mesmo modelo visual do painel do avaliador.
+        $agendamentosPorDia = $agendamentos->groupBy(function ($ag) {
+            return $ag->data_agendada->translatedFormat('l, d/m');
+        });
+
         $perfis = PerfilGmb::where('tenant_id', $request->user()->tenant_id)
             ->ativos()
             ->orderBy('nome')
             ->get();
 
         return view('admin.agendamentos-avaliacao.index', compact(
-            'agendamentos', 'perfis', 'semana'
+            'agendamentos', 'agendamentosPorDia', 'perfis', 'semana'
         ));
     }
 

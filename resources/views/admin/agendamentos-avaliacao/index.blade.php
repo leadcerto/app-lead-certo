@@ -2,7 +2,7 @@
 @section('title', 'Agendamentos — Lead Certo')
 
 @section('content')
-<div class="max-w-7xl mx-auto">
+<div class="max-w-4xl mx-auto">
 
     {{-- Header --}}
     <div class="flex items-center justify-between mb-6">
@@ -13,7 +13,7 @@
                 a {{ $semana->copy()->endOfWeek(\Carbon\Carbon::SUNDAY)->format('d/m/Y') }}
             </p>
         </div>
-        <div class="flex gap-2">
+        <div class="flex gap-2 flex-wrap justify-end">
             <a href="{{ route('admin.agendamentos-avaliacao.create') }}"
                class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-semibold transition">
                 + Individual
@@ -76,70 +76,63 @@
         </div>
     </div>
 
-    {{-- Tabela de agendamentos --}}
-    <div class="bg-white rounded-xl shadow overflow-hidden">
-        <table class="w-full text-sm">
-            <thead class="bg-gray-50 text-gray-600">
-                <tr>
-                    <th class="px-3 py-3 text-left">Data</th>
-                    <th class="px-3 py-3 text-left">Perfil</th>
-                    <th class="px-3 py-3 text-left">Template</th>
-                    <th class="px-3 py-3 text-left">Avaliador</th>
-                    <th class="px-3 py-3 text-center">Status</th>
-                    <th class="px-3 py-3 text-center">Ações</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-                @forelse($agendamentos as $ag)
-                <tr class="hover:bg-gray-50 {{ $ag->estaAtrasado() ? 'bg-red-50' : '' }}">
-                    <td class="px-3 py-3 text-gray-700">
-                        {{ $ag->data_agendada->format('d/m (D)') }}
-                        @if($ag->estaAtrasado())
-                            <span class="text-red-500 text-xs">⚠️ Atraso</span>
-                        @endif
-                    </td>
-                    <td class="px-3 py-3 font-medium text-gray-800">{{ $ag->perfil->nome }}</td>
-                    <td class="px-3 py-3 text-gray-600">
-                        <span class="text-xs font-mono">{{ $ag->template->codigo }}</span>
-                        <span class="text-xs text-gray-400 ml-1">({{ $ag->template->categoria?->nome }})</span>
-                    </td>
-                    <td class="px-3 py-3 text-gray-600">{{ $ag->avaliador->nome ?? '—' }}</td>
-                    <td class="px-3 py-3 text-center">
-                        @if($ag->status === 'concluido')
-                            <span class="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">Concluído</span>
-                        @elseif($ag->status === 'enviado')
-                            <span class="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">Enviado</span>
-                        @else
-                            <span class="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-semibold">Pendente</span>
-                        @endif
-                    </td>
-                    <td class="px-3 py-3 text-center">
-                        <div class="flex gap-1 justify-center">
-                            {{-- Alterar Status --}}
-                            <form action="{{ route('admin.agendamentos-avaliacao.status', $ag) }}" method="POST" class="inline">
-                                @csrf @method('PATCH')
-                                <select name="status" onchange="this.form.submit()" class="text-xs border rounded px-1 py-0.5">
-                                    <option value="pendente" {{ $ag->status === 'pendente' ? 'selected' : '' }}>Pendente</option>
-                                    <option value="enviado" {{ $ag->status === 'enviado' ? 'selected' : '' }}>Enviado</option>
-                                    <option value="concluido" {{ $ag->status === 'concluido' ? 'selected' : '' }}>Concluído</option>
-                                </select>
-                            </form>
+    {{-- Agendamentos agrupados por dia — mesmo modelo visual do painel do avaliador --}}
+    @forelse($agendamentosPorDia as $dia => $tarefas)
+        <div class="mb-6">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{{ $dia }}</h2>
 
-                            {{-- Refazer Template --}}
-                            <form action="{{ route('admin.agendamentos-avaliacao.refazer-template', $ag) }}" method="POST" class="inline">
-                                @csrf @method('PATCH')
-                                <button type="submit" class="text-xs text-purple-600 hover:underline" title="Sortear novo template">🔄</button>
-                            </form>
+            <div class="space-y-3">
+                @foreach($tarefas as $ag)
+                <div class="bg-white rounded-xl shadow p-4 border-l-4
+                    {{ $ag->status === 'concluido' ? 'border-green-500 opacity-70' :
+                       ($ag->estaAtrasado() ? 'border-red-500' : 'border-yellow-400') }}">
+
+                    <div class="flex items-start justify-between gap-4 flex-wrap">
+                        <div class="flex-1 min-w-[220px]">
+                            <h3 class="font-semibold text-gray-800">{{ $ag->perfil->nome }}</h3>
+                            <p class="text-xs text-gray-400">{{ $ag->perfil->city }}/{{ $ag->perfil->state }} · Avaliador: {{ $ag->avaliador->nome ?? '—' }}</p>
+                            <p class="text-xs text-gray-400 mt-0.5">
+                                <span class="font-mono">{{ $ag->template->codigo }}</span>
+                                ({{ $ag->template->categoria?->nome }})
+                            </p>
+                            @if($ag->estaAtrasado())
+                                <span class="inline-block mt-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-semibold">⚠️ Em Atraso</span>
+                            @endif
                         </div>
-                    </td>
-                </tr>
-                @empty
-                <tr>
-                    <td colspan="6" class="px-4 py-8 text-center text-gray-400">Nenhum agendamento para esta semana.</td>
-                </tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
+
+                        <div class="flex flex-col items-end gap-2">
+                            @if($ag->status === 'concluido')
+                                <span class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">✅ Concluído</span>
+                            @elseif($ag->status === 'enviado')
+                                <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">Enviado</span>
+                            @else
+                                <span class="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-semibold">Pendente</span>
+                            @endif
+
+                            <div class="flex gap-2 items-center">
+                                <form action="{{ route('admin.agendamentos-avaliacao.status', $ag) }}" method="POST" class="inline">
+                                    @csrf @method('PATCH')
+                                    <select name="status" onchange="this.form.submit()" class="text-xs border border-gray-300 rounded px-1.5 py-1">
+                                        <option value="pendente" {{ $ag->status === 'pendente' ? 'selected' : '' }}>Pendente</option>
+                                        <option value="enviado" {{ $ag->status === 'enviado' ? 'selected' : '' }}>Enviado</option>
+                                        <option value="concluido" {{ $ag->status === 'concluido' ? 'selected' : '' }}>Concluído</option>
+                                    </select>
+                                </form>
+                                <form action="{{ route('admin.agendamentos-avaliacao.refazer-template', $ag) }}" method="POST" class="inline">
+                                    @csrf @method('PATCH')
+                                    <button type="submit" class="px-2 py-1 bg-gray-100 text-purple-600 rounded hover:bg-gray-200 text-xs" title="Sortear novo template">🔄</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                @endforeach
+            </div>
+        </div>
+    @empty
+        <div class="bg-white rounded-xl shadow p-8 text-center text-gray-400">
+            <p class="text-lg">🎉 Nenhum agendamento para esta semana!</p>
+        </div>
+    @endforelse
 </div>
 @endsection
