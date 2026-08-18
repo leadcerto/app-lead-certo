@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Mail\AlertaAvaliadorMail;
 use App\Models\AgendamentoAvaliacao;
 use App\Models\PerfilGmb;
-use App\Models\User;
 use App\Services\AgendamentoService;
 use App\Services\SorteioTemplateService;
 use Carbon\Carbon;
@@ -70,9 +69,9 @@ class AgendamentoAvaliacaoController extends Controller
         $tenantId = $request->user()->tenant_id;
 
         $validated = $request->validate([
-            'perfil_id'    => ['required', Rule::exists('perfis_gmb', 'id')->where('tenant_id', $tenantId)],
-            'data_agendada'=> 'required|date',
-            'template_id'  => ['nullable', Rule::exists('templates_avaliacao', 'id')->where('tenant_id', $tenantId)],
+            'perfil_id' => ['required', Rule::exists('perfis_gmb', 'id')->where('tenant_id', $tenantId)],
+            'data_agendada' => 'required|date',
+            'template_id' => ['nullable', Rule::exists('templates_avaliacao', 'id')->where('tenant_id', $tenantId)],
             'avaliador_id' => [
                 'nullable',
                 Rule::exists('users', 'id')->where('tenant_id', $tenantId)->where('perfil', 'avaliador'),
@@ -115,8 +114,8 @@ class AgendamentoAvaliacaoController extends Controller
     public function storeLote(Request $request)
     {
         $validated = $request->validate([
-            'matriz'           => 'required|array',
-            'semana_referencia'=> 'required|date',
+            'matriz' => 'required|array',
+            'semana_referencia' => 'required|date',
         ]);
 
         try {
@@ -127,57 +126,14 @@ class AgendamentoAvaliacaoController extends Controller
             );
 
             $msg = "{$resultado['criados']} agendamento(s) criado(s).";
-            if (!empty($resultado['avisos'])) {
-                $msg .= ' Avisos: ' . implode(' | ', $resultado['avisos']);
+            if (! empty($resultado['avisos'])) {
+                $msg .= ' Avisos: '.implode(' | ', $resultado['avisos']);
             }
 
             return redirect()->route('admin.agendamentos-avaliacao.index')
                 ->with('sucesso', $msg);
         } catch (\Throwable $e) {
             return back()->withErrors(['lote' => $e->getMessage()])->withInput();
-        }
-    }
-
-    /**
-     * Tela de Enviar Agora (Campanha).
-     */
-    public function campanha(Request $request)
-    {
-        $perfis = PerfilGmb::where('tenant_id', $request->user()->tenant_id)
-            ->ativos()->orderBy('nome')->get();
-
-        return view('admin.agendamentos-avaliacao.campanha', compact('perfis'));
-    }
-
-    /**
-     * Processa campanha massiva.
-     */
-    public function storeCampanha(Request $request)
-    {
-        $tenantId = $request->user()->tenant_id;
-
-        $validated = $request->validate([
-            'perfil_ids'    => 'required|array|min:1',
-            'perfil_ids.*'  => Rule::exists('perfis_gmb', 'id')->where('tenant_id', $tenantId),
-            'data_agendada' => 'required|date',
-        ]);
-
-        try {
-            $resultado = $this->agendamentoService->enviarAgora(
-                $validated['perfil_ids'],
-                Carbon::parse($validated['data_agendada']),
-                $request->user()->tenant_id,
-            );
-
-            $msg = "{$resultado['criados']} avaliação(ões) disparada(s).";
-            if (!empty($resultado['avisos'])) {
-                $msg .= ' Avisos: ' . implode(' | ', $resultado['avisos']);
-            }
-
-            return redirect()->route('admin.agendamentos-avaliacao.index')
-                ->with('sucesso', $msg);
-        } catch (\Throwable $e) {
-            return back()->withErrors(['campanha' => $e->getMessage()])->withInput();
         }
     }
 
@@ -193,7 +149,7 @@ class AgendamentoAvaliacaoController extends Controller
         ]);
 
         $agendamento->update([
-            'status'       => $validated['status'],
+            'status' => $validated['status'],
             'concluido_em' => $validated['status'] === 'concluido' ? Carbon::now() : null,
         ]);
 
@@ -235,13 +191,13 @@ class AgendamentoAvaliacaoController extends Controller
             $agendamento->data_agendada,
         );
 
-        if (!$template) {
+        if (! $template) {
             return back()->withErrors(['template' => 'Nenhum template disponível.']);
         }
 
         $agendamento->update(['template_id' => $template->id]);
 
-        return back()->with('sucesso', 'Template atualizado para: ' . $template->codigo);
+        return back()->with('sucesso', 'Template atualizado para: '.$template->codigo);
     }
 
     /**

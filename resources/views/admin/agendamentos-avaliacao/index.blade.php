@@ -22,10 +22,6 @@
                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold transition">
                 📊 Lote (Matriz)
             </a>
-            <a href="{{ route('admin.agendamentos-avaliacao.campanha') }}"
-               class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold transition">
-                🚀 Campanha
-            </a>
             <form action="{{ route('admin.agendamentos-avaliacao.alertar') }}" method="POST" class="inline">
                 @csrf
                 <button type="submit" class="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm font-semibold transition"

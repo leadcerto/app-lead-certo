@@ -64,12 +64,6 @@ Route::middleware(['auth', 'tenant', 'role:admin,dono,diretor'])->prefix('admin/
     Route::post('agendamentos/lote', [AgendamentoAvaliacaoController::class, 'storeLote'])
         ->name('agendamentos-avaliacao.lote.store');
 
-    // ── Campanha (Enviar Agora) ───────────────────────────────────────────
-    Route::get('agendamentos/campanha', [AgendamentoAvaliacaoController::class, 'campanha'])
-        ->name('agendamentos-avaliacao.campanha');
-    Route::post('agendamentos/campanha', [AgendamentoAvaliacaoController::class, 'storeCampanha'])
-        ->name('agendamentos-avaliacao.campanha.store');
-
     // ── Ações em agendamento individual ───────────────────────────────────
     Route::patch('agendamentos/{agendamento}/status', [AgendamentoAvaliacaoController::class, 'alterarStatus'])
         ->name('agendamentos-avaliacao.status');
