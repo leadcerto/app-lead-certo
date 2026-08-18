@@ -7,6 +7,7 @@
 
 use App\Http\Controllers\AgendamentoAvaliacaoController;
 use App\Http\Controllers\AvaliadorDashboardController;
+use App\Http\Controllers\ContatoAvaliacaoController;
 use App\Http\Controllers\PerfilGmbController;
 use App\Http\Controllers\TemplateAvaliacaoController;
 use Illuminate\Support\Facades\Route;
@@ -21,6 +22,14 @@ Route::middleware(['auth', 'tenant', 'role:admin,dono,diretor'])->prefix('admin/
     // ── Perfis GMB (CRUD) ─────────────────────────────────────────────────
     Route::resource('perfis-gmb', PerfilGmbController::class)
         ->except(['show']);
+
+    // ── Lista de telefones (clientes reais pra ligar) por Perfil GMB ──────
+    Route::get('perfis-gmb/{perfil}/contatos', [ContatoAvaliacaoController::class, 'index'])
+        ->name('perfis-gmb.contatos.index');
+    Route::post('perfis-gmb/{perfil}/contatos', [ContatoAvaliacaoController::class, 'store'])
+        ->name('perfis-gmb.contatos.store');
+    Route::delete('perfis-gmb/contatos/{contato}', [ContatoAvaliacaoController::class, 'destroy'])
+        ->name('perfis-gmb.contatos.destroy');
 
     // ── Templates de Avaliação (CRUD) ─────────────────────────────────────
     Route::resource('templates-avaliacao', TemplateAvaliacaoController::class)
@@ -85,4 +94,7 @@ Route::middleware(['auth', 'tenant', 'role:admin,avaliador'])->prefix('avaliador
 
     Route::post('agendamentos/{agendamento}/concluir', [AvaliadorDashboardController::class, 'concluir'])
         ->name('concluir');
+
+    Route::post('contatos/{contato}/concluir', [AvaliadorDashboardController::class, 'concluirContato'])
+        ->name('contatos.concluir');
 });

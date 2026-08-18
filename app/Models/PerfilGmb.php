@@ -40,6 +40,11 @@ class PerfilGmb extends Model
         return $this->hasMany(AgendamentoAvaliacao::class, 'perfil_id');
     }
 
+    public function contatos(): HasMany
+    {
+        return $this->hasMany(ContatoAvaliacao::class, 'perfil_id');
+    }
+
     // ── Métodos Auxiliares ─────────────────────────────────────────────────────
 
     /**

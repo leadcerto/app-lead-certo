@@ -53,6 +53,13 @@
                         @endif
                     </td>
                     <td class="px-4 py-3 text-center space-x-2">
+                        <a href="{{ route('admin.perfis-gmb.contatos.index', $perfil) }}"
+                           class="text-purple-600 hover:underline text-xs">
+                            📞 Contatos
+                            @if($perfil->contatos_pendentes_count > 0)
+                                <span class="ml-0.5 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[10px] font-semibold">{{ $perfil->contatos_pendentes_count }}</span>
+                            @endif
+                        </a>
                         <a href="{{ route('admin.perfis-gmb.edit', $perfil) }}"
                            class="text-blue-600 hover:underline text-xs">Editar</a>
                         <form action="{{ route('admin.perfis-gmb.destroy', $perfil) }}" method="POST" class="inline">

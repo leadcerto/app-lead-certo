@@ -68,11 +68,18 @@
                             <h3 class="font-semibold text-gray-800 text-lg">{{ $tarefa->perfil->nome }}</h3>
                             <p class="text-xs text-gray-400 mb-3">{{ $tarefa->perfil->city }}/{{ $tarefa->perfil->state }}</p>
 
-                            {{-- Link GMB (referência do perfil a ligar) --}}
-                            <a href="{{ $tarefa->perfil->link_gmb }}" target="_blank"
-                               class="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200 transition mb-3">
-                                🌐 Ver perfil no Google Meu Negócio ↗
-                            </a>
+                            {{-- Link GMB: abrir (nova aba) ou copiar pra mandar pro cliente --}}
+                            <div class="flex items-center gap-2 mb-3 flex-wrap">
+                                <a href="{{ $tarefa->perfil->link_gmb }}" target="_blank" rel="noopener"
+                                   class="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+                                    🌐 Abrir perfil no Google ↗
+                                </a>
+                                <button type="button" id="link-{{ $tarefa->id }}" data-link="{{ $tarefa->perfil->link_gmb }}"
+                                        onclick="navigator.clipboard.writeText(this.dataset.link).then(() => alert('Link copiado! Cole pro cliente no WhatsApp. ✅'))"
+                                        class="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition">
+                                    📋 Copiar link
+                                </button>
+                            </div>
 
                             {{-- Texto sugerido para enviar ao cliente --}}
                             <div class="mt-3">
@@ -88,6 +95,30 @@
                                     </button>
                                 </div>
                             </div>
+
+                            {{-- Telefones pra ligar (lista solta do perfil, não é fixa pra este agendamento) --}}
+                            @php $contatosPendentes = $contatosPorPerfil[$tarefa->perfil_id] ?? collect(); @endphp
+                            @if($contatosPendentes->isNotEmpty())
+                            <div class="mt-3">
+                                <p class="text-xs font-medium text-gray-500 mb-1">
+                                    Telefones pra ligar ({{ $contatosPendentes->count() }} pendente(s)):
+                                </p>
+                                <div class="space-y-1.5">
+                                    @foreach($contatosPendentes as $contato)
+                                    <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+                                        <span class="text-gray-700">
+                                            {{ $contato->nome ?? 'Sem nome' }} —
+                                            <a href="tel:{{ $contato->telefone }}" class="font-mono text-blue-700 hover:underline">{{ $contato->telefone }}</a>
+                                        </span>
+                                        <form action="{{ route('avaliador.contatos.concluir', $contato) }}" method="POST">
+                                            @csrf
+                                            <button type="submit" class="text-green-600 hover:underline text-xs font-semibold">✓ Já liguei</button>
+                                        </form>
+                                    </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                            @endif
                         </div>
 
                         {{-- Status e ação --}}

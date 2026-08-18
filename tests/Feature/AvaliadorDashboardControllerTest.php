@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AgendamentoAvaliacao;
 use App\Models\CategoriaTemplate;
+use App\Models\ContatoAvaliacao;
 use App\Models\PerfilGmb;
 use App\Models\Tenant;
 use App\Models\TemplateAvaliacao;
@@ -110,6 +111,73 @@ class AvaliadorDashboardControllerTest extends TestCase
         $response->assertOk();
         $response->assertSee('A Frete Rio foi impecável do início ao fim.');
         $response->assertDontSee('[nome da empresa]');
+    }
+
+    public function test_mostra_contatos_pendentes_do_perfil_no_dashboard(): void
+    {
+        $tenant      = Tenant::factory()->create();
+        $avaliador   = $this->usuarioAvaliador($tenant);
+        $agendamento = $this->criarAgendamento($tenant, $avaliador);
+        ContatoAvaliacao::create([
+            'tenant_id' => $tenant->id, 'perfil_id' => $agendamento->perfil_id,
+            'nome' => 'Maria Silva', 'telefone' => '21988887777',
+        ]);
+
+        $response = $this->actingAs($avaliador)->get('/avaliador/dashboard');
+
+        $response->assertOk();
+        $response->assertSee('Maria Silva');
+        $response->assertSee('21988887777');
+    }
+
+    public function test_nao_mostra_contato_ja_ligado(): void
+    {
+        $tenant      = Tenant::factory()->create();
+        $avaliador   = $this->usuarioAvaliador($tenant);
+        $agendamento = $this->criarAgendamento($tenant, $avaliador);
+        ContatoAvaliacao::create([
+            'tenant_id' => $tenant->id, 'perfil_id' => $agendamento->perfil_id,
+            'nome' => 'Já Ligado', 'telefone' => '21977776666', 'contatado_em' => now(),
+        ]);
+
+        $response = $this->actingAs($avaliador)->get('/avaliador/dashboard');
+
+        $response->assertOk();
+        $response->assertDontSee('Já Ligado');
+    }
+
+    public function test_avaliador_marca_contato_como_ligado(): void
+    {
+        $tenant      = Tenant::factory()->create();
+        $avaliador   = $this->usuarioAvaliador($tenant);
+        $agendamento = $this->criarAgendamento($tenant, $avaliador);
+        $contato     = ContatoAvaliacao::create([
+            'tenant_id' => $tenant->id, 'perfil_id' => $agendamento->perfil_id, 'telefone' => '21988887777',
+        ]);
+
+        $response = $this->actingAs($avaliador)->post("/avaliador/contatos/{$contato->id}/concluir");
+
+        $response->assertRedirect();
+        $this->assertNotNull($contato->fresh()->contatado_em);
+    }
+
+    public function test_nao_marca_contato_de_outro_tenant(): void
+    {
+        $tenant         = Tenant::factory()->create();
+        $outroTenant    = Tenant::factory()->create();
+        $avaliador      = $this->usuarioAvaliador($tenant);
+        $perfilAlheio   = PerfilGmb::create([
+            'tenant_id' => $outroTenant->id, 'nome' => 'Alheio', 'city' => 'Rio de Janeiro',
+            'state' => 'RJ', 'link_gmb' => 'https://maps.google.com/?cid=2', 'ativo' => true,
+        ]);
+        $contatoAlheio  = ContatoAvaliacao::create([
+            'tenant_id' => $outroTenant->id, 'perfil_id' => $perfilAlheio->id, 'telefone' => '21988887777',
+        ]);
+
+        $response = $this->actingAs($avaliador)->post("/avaliador/contatos/{$contatoAlheio->id}/concluir");
+
+        $response->assertForbidden();
+        $this->assertNull($contatoAlheio->fresh()->contatado_em);
     }
 
     public function test_vendedor_nao_acessa_dashboard_de_avaliador(): void

@@ -13,6 +13,7 @@ class PerfilGmbController extends Controller
     public function index(Request $request)
     {
         $perfis = PerfilGmb::where('tenant_id', $request->user()->tenant_id)
+            ->withCount(['contatos as contatos_pendentes_count' => fn ($q) => $q->naoContatados()])
             ->orderBy('nome')
             ->paginate(20);
 
