@@ -48,6 +48,10 @@
         <div class="px-6 py-5 border-b border-gray-700">
             <span class="text-lg font-bold tracking-wide">Lead Certo</span>
             <p class="text-xs text-gray-400 mt-0.5">{{ $user?->tenant?->nome ?? 'Admin' }}</p>
+            {{-- Nome de quem está logado — achado 2026-08-19: só aparecia lá embaixo perto
+                 do "Sair", ficava invisível quando o nome do tenant coincide com o nome da
+                 empresa ("Lead Certo" aparecia duas vezes seguidas pro tenant Lead Certo). --}}
+            <p class="text-xs text-gray-300 mt-1 font-medium truncate">{{ $user?->nome }}</p>
             <p class="text-xs text-gray-500 mt-0.5">{{ $user?->perfilLabel() }}</p>
         </div>
 
