@@ -3,7 +3,7 @@
 @section('title', 'Configurações — Lead Certo')
 
 @section('content')
-<div class="max-w-lg">
+<div class="max-w-2xl">
 
     <div class="flex items-center gap-1 mb-6 border-b border-gray-200">
         <a href="{{ route('configuracoes') }}"
