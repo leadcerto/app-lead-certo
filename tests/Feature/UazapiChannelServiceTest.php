@@ -120,4 +120,58 @@ class UazapiChannelServiceTest extends TestCase
 
         $this->assertFalse($enviado);
     }
+
+    // ─── Aquecimento — achado 2026-08-19: todo envio não-oficial passa por aqui ──
+
+    public function test_bloqueia_envio_de_texto_quando_canal_em_dia_zero_de_aquecimento(): void
+    {
+        Http::fake(['*/send/text' => Http::response(['id' => 'abc'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'nao_oficial', 'provider' => 'uazapi',
+            'config' => ['instance_token' => 'token-canal-uazapi'],
+            'aquecimento_iniciado_em' => now(), // dia zero — limite frio é 0
+        ]);
+
+        $enviado = app(UazapiChannelService::class)->enviarTexto($canal, '5511999999999', 'Oi!');
+
+        $this->assertFalse($enviado);
+        Http::assertNotSent(fn ($request) => true);
+    }
+
+    public function test_enviar_texto_direto_tambem_respeita_o_limite_de_aquecimento(): void
+    {
+        // enviarTextoDireto() é o caminho da resposta manual no Kanban, pula o
+        // HumanizacaoService — mas o WhatsApp não distingue a origem do envio,
+        // então o teto de aquecimento tem que valer aqui também.
+        Http::fake(['*/send/text' => Http::response(['id' => 'abc'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'nao_oficial', 'provider' => 'uazapi',
+            'config' => ['instance_token' => 'token-canal-uazapi'],
+            'aquecimento_iniciado_em' => now(),
+        ]);
+
+        $enviado = app(UazapiChannelService::class)->enviarTextoDireto($canal, '5511999999999', 'Oi!');
+
+        $this->assertFalse($enviado);
+    }
+
+    public function test_envio_bem_sucedido_registra_no_contador_de_aquecimento(): void
+    {
+        Http::fake(['*/send/text' => Http::response(['id' => 'abc'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        // Canal padrão da factory já está "aquecido" (30 dias) — envio deve passar.
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'nao_oficial', 'provider' => 'uazapi',
+            'config' => ['instance_token' => 'token-canal-uazapi'],
+        ]);
+
+        app(UazapiChannelService::class)->enviarTexto($canal, '5511999999999', 'Oi!');
+
+        $this->assertDatabaseHas('whatsapp_envios_diarios', ['whatsapp_canal_id' => $canal->id, 'contador_frio' => 1]);
+    }
 }

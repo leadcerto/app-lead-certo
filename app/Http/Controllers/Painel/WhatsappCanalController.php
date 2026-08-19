@@ -56,6 +56,11 @@ class WhatsappCanalController extends Controller
             'tipo'          => 'nao_oficial',
             'provider'      => 'uazapi',
             'app'           => $app,
+            // Número recém-conectado é sempre dia zero de aquecimento — mesmo se
+            // o chip físico já for antigo, o WhatsApp julga pela atividade dentro
+            // do app, não pela idade do SIM. Perfil default 'protegido' (mais
+            // conservador); quem for número de prospecção troca depois.
+            'aquecimento_iniciado_em' => now(),
             'status'        => 'connecting',
             'webhook_token' => $webhookToken,
             'config'        => [

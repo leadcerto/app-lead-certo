@@ -24,6 +24,8 @@ class WhatsappCanal extends Model
         'tipo',
         'provider',
         'app',
+        'perfil_aquecimento',
+        'aquecimento_iniciado_em',
         'status',
         'phone',
         'connected_since',
@@ -32,8 +34,9 @@ class WhatsappCanal extends Model
     ];
 
     protected $casts = [
-        'connected_since' => 'datetime',
-        'config'          => 'array',
+        'connected_since'         => 'datetime',
+        'config'                  => 'array',
+        'aquecimento_iniciado_em' => 'datetime',
     ];
 
     public function tenant(): BelongsTo

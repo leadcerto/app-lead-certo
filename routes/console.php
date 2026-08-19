@@ -67,6 +67,14 @@ Schedule::command('conversas:limpar-antigas')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/limpar-conversas.log'));
 
+// A cada 2h — Posta reação casual em grupo de aquecimento (pedido do Leonardo, 2026-08-19)
+// pra número não-oficial não ser expulso de grupo por inatividade. O próprio comando
+// respeita o bloqueio de madrugada (23h-7h) e o teto de 1 post por grupo por dia.
+Schedule::command('whatsapp:aquecimento-grupos')
+    ->everyTwoHours()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/aquecimento-grupos.log'));
+
 // Sábado 00:00 — Relatório semanal do Gestor do Kanban (números + análise + sugestão de prompt por coluna)
 Schedule::command('kanban:gestor-semanal')
     ->weeklyOn(6, '00:00')

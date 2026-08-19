@@ -19,6 +19,11 @@ class WhatsappCanalFactory extends Factory
             'tenant_id' => Tenant::factory(),
             'tipo'      => 'nao_oficial',
             'provider'  => 'uazapi',
+            // Testes que não são sobre aquecimento não deveriam precisar pensar
+            // nisso — factory representa um canal já estabelecido (teto de regime),
+            // não um dia zero. Testes específicos de aquecimento sobrescrevem.
+            'perfil_aquecimento'      => 'protegido',
+            'aquecimento_iniciado_em' => now()->subDays(30),
             'status'    => 'connected',
             'phone'     => '55' . $this->faker->numerify('###########'),
             'connected_since' => now(),
