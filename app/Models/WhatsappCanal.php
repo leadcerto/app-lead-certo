@@ -23,6 +23,7 @@ class WhatsappCanal extends Model
         'tenant_id',
         'tipo',
         'provider',
+        'app',
         'status',
         'phone',
         'connected_since',

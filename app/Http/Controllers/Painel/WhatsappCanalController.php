@@ -17,10 +17,19 @@ class WhatsappCanalController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $canais = WhatsappCanal::where('tenant_id', $request->user()->tenant_id)
-            ->where('tipo', 'nao_oficial')
-            ->orderBy('id')
-            ->get(['id', 'status', 'phone', 'connected_since']);
+        $query = WhatsappCanal::where('tenant_id', $request->user()->tenant_id)
+            ->where('tipo', 'nao_oficial');
+
+        // Achado real 2026-08-19: WhatsApp Business e WhatsApp Messenger são apps
+        // diferentes por trás da mesma conexão não-oficial (Uazapi/Baileys) — sem
+        // filtrar por app, a tela de Configurações não sabe separar os dois blocos.
+        // Parâmetro opcional: quem não passa (ex. integrações antigas) continua
+        // vendo todos os não-oficiais juntos, sem quebrar nada existente.
+        if ($request->filled('app')) {
+            $query->where('app', $request->query('app'));
+        }
+
+        $canais = $query->orderBy('id')->get(['id', 'status', 'phone', 'connected_since', 'app']);
 
         return response()->json($canais);
     }
@@ -29,6 +38,10 @@ class WhatsappCanalController extends Controller
     {
         $tenantId = $request->user()->tenant_id;
         $nome     = 'tenant-' . $tenantId . '-' . Str::random(6);
+
+        // Default 'business' preserva o comportamento de antes desta mudança
+        // (todo canal não-oficial existente era, na prática, WhatsApp Business).
+        $app = $request->input('app', 'business');
 
         $result = $this->uazapi->criarInstancia($nome);
 
@@ -42,6 +55,7 @@ class WhatsappCanalController extends Controller
             'tenant_id'     => $tenantId,
             'tipo'          => 'nao_oficial',
             'provider'      => 'uazapi',
+            'app'           => $app,
             'status'        => 'connecting',
             'webhook_token' => $webhookToken,
             'config'        => [

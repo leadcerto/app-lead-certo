@@ -19,7 +19,7 @@ class ConfiguracoesWhatsappOficialViewTest extends TestCase
         $response = $this->actingAs($user)->get(route('configuracoes'));
 
         $response->assertOk();
-        $response->assertSee('WhatsApp Oficial');
+        $response->assertSee('WhatsApp Business (API Oficial — CoverCut)');
         $response->assertSee('Conectar número oficial');
     }
 }

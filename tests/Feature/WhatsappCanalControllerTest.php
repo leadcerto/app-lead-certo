@@ -56,7 +56,69 @@ class WhatsappCanalControllerTest extends TestCase
         $response->assertCreated();
         $this->assertDatabaseHas('whatsapp_canais', [
             'tenant_id' => $tenant->id, 'tipo' => 'nao_oficial', 'provider' => 'uazapi', 'status' => 'connecting',
+            'app' => 'business',
         ]);
+    }
+
+    // ─── app: WhatsApp Business vs WhatsApp Messenger (achado 2026-08-19) ──────
+
+    public function test_filtra_canais_nao_oficiais_por_app(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+        WhatsappCanal::factory()->create(['tenant_id' => $tenant->id, 'tipo' => 'nao_oficial', 'app' => 'business']);
+        WhatsappCanal::factory()->create(['tenant_id' => $tenant->id, 'tipo' => 'nao_oficial', 'app' => 'messenger']);
+
+        $responseBusiness = $this->actingAs($user)->getJson('/api/painel/whatsapp/canais?app=business');
+        $responseMessenger = $this->actingAs($user)->getJson('/api/painel/whatsapp/canais?app=messenger');
+
+        $responseBusiness->assertOk();
+        $this->assertCount(1, $responseBusiness->json());
+        $this->assertSame('business', $responseBusiness->json('0.app'));
+
+        $responseMessenger->assertOk();
+        $this->assertCount(1, $responseMessenger->json());
+        $this->assertSame('messenger', $responseMessenger->json('0.app'));
+    }
+
+    public function test_cria_canal_do_app_messenger_quando_informado(): void
+    {
+        Http::fake([
+            '*/instance/create' => Http::response([
+                'token'    => 'novo-token',
+                'instance' => ['id' => 1, 'name' => 'inst-1', 'status' => 'connecting'],
+            ], 200),
+            '*/webhook' => Http::response(['ok' => true], 200),
+        ]);
+
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+
+        $response = $this->actingAs($user)->postJson('/api/painel/whatsapp/canais', ['app' => 'messenger']);
+
+        $response->assertCreated();
+        $this->assertDatabaseHas('whatsapp_canais', [
+            'tenant_id' => $tenant->id, 'tipo' => 'nao_oficial', 'app' => 'messenger',
+        ]);
+    }
+
+    public function test_sem_app_informado_assume_business_por_padrao(): void
+    {
+        Http::fake([
+            '*/instance/create' => Http::response([
+                'token'    => 'novo-token',
+                'instance' => ['id' => 1, 'name' => 'inst-1', 'status' => 'connecting'],
+            ], 200),
+            '*/webhook' => Http::response(['ok' => true], 200),
+        ]);
+
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+
+        $response = $this->actingAs($user)->postJson('/api/painel/whatsapp/canais');
+
+        $response->assertCreated();
+        $this->assertDatabaseHas('whatsapp_canais', ['id' => $response->json('id'), 'app' => 'business']);
     }
 
     public function test_nao_acessa_canal_de_outro_tenant(): void

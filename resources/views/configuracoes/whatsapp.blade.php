@@ -20,18 +20,25 @@
         </a>
     </div>
 
-    <div x-data="whatsappCanais()" x-init="carregar()">
+    {{--
+        Achado real 2026-08-19 (Leonardo): existem 3 tipos de conexão distintos, não 2.
+        Escanear o QR de um bloco com o app errado dá problema — cada bloco abaixo é
+        isolado (JS próprio, filtro próprio por `app`), pra nunca misturar QR de um
+        tipo com outro. Nomes exatamente como definidos por ele, pra ninguém confundir.
+    --}}
+
+    <div x-data="whatsappCanais('business')" x-init="carregar()">
 
     <div class="flex items-center justify-between mb-2">
-        <h1 class="text-xl font-bold text-gray-800">WhatsApp Não-Oficial</h1>
+        <h1 class="text-xl font-bold text-gray-800">WhatsApp Business (API Não Oficial — uazapi)</h1>
         <button @click="conectarNovo()" :disabled="conectando"
                 class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors disabled:opacity-50">
             + Conectar novo número
         </button>
     </div>
     <p class="text-xs text-gray-500 mb-6">
-        Conexão direta via QR Code (WhatsApp comum, tecnologia Baileys) — sem garantias de entrega da Meta.
-        Use para prospecção. Para o número que recebe leads de anúncios, veja a API Oficial (em breve nesta página).
+        Conexão direta via QR Code com o app <strong>WhatsApp Business</strong> (tecnologia Baileys) — sem garantias de entrega da Meta.
+        Use para prospecção. Escaneie este QR com o app WhatsApp Business, nunca com o Messenger comum.
     </p>
 
     <template x-if="erro">
@@ -79,7 +86,73 @@
 
         <template x-if="canais.length === 0 && !conectando">
             <div class="text-center py-8 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-xl">
-                Nenhum número não-oficial conectado ainda.
+                Nenhum número WhatsApp Business (não-oficial) conectado ainda.
+            </div>
+        </template>
+    </div>
+
+    </div>
+
+    <div class="mt-10" x-data="whatsappCanais('messenger')" x-init="carregar()">
+
+    <div class="flex items-center justify-between mb-2">
+        <h1 class="text-xl font-bold text-gray-800">WhatsApp Messenger (API Não Oficial — uazapi)</h1>
+        <button @click="conectarNovo()" :disabled="conectando"
+                class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors disabled:opacity-50">
+            + Conectar novo número
+        </button>
+    </div>
+    <p class="text-xs text-gray-500 mb-6">
+        Conexão direta via QR Code com o app <strong>WhatsApp Messenger</strong> comum (tecnologia Baileys) — sem garantias de entrega da Meta.
+        Permite Comunidades e Grupos. Escaneie este QR com o app WhatsApp Messenger, nunca com o Business.
+    </p>
+
+    <template x-if="erro">
+        <div class="mb-4 p-3 rounded-lg bg-red-50 border border-red-200">
+            <p class="text-sm text-red-600" x-text="erro"></p>
+        </div>
+    </template>
+
+    <div class="space-y-4">
+        <template x-for="canal in canais" :key="canal.id">
+            <div class="bg-white rounded-2xl shadow-sm p-5">
+                <div class="flex items-center justify-between gap-3 mb-3">
+                    <div class="flex items-center gap-2">
+                        <template x-if="canal.status === 'connected'">
+                            <span class="flex items-center gap-2 text-green-600 font-medium text-sm">
+                                <span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+                                Conectado <span class="text-gray-400 font-normal" x-text="canal.phone"></span>
+                            </span>
+                        </template>
+                        <template x-if="canal.status !== 'connected'">
+                            <span class="flex items-center gap-2 text-gray-500 font-medium text-sm">
+                                <span class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+                                Desconectado
+                            </span>
+                        </template>
+                    </div>
+                    <button @click="excluirCanal(canal)" class="text-red-300 hover:text-red-500 text-xs">Remover</button>
+                </div>
+
+                <template x-if="canal.status !== 'connected'">
+                    <div class="flex justify-center">
+                        <template x-if="canal.qrcode">
+                            <img :src="'data:image/png;base64,' + canal.qrcode" class="w-48 h-48 border border-gray-200 rounded-xl p-2">
+                        </template>
+                        <template x-if="!canal.qrcode">
+                            <button @click="gerarQr(canal)"
+                                    class="w-48 h-48 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center text-gray-400 hover:border-green-400 hover:text-green-500 text-sm font-medium transition-colors">
+                                Gerar QR Code
+                            </button>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <template x-if="canais.length === 0 && !conectando">
+            <div class="text-center py-8 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-xl">
+                Nenhum número WhatsApp Messenger conectado ainda.
             </div>
         </template>
     </div>
@@ -89,14 +162,14 @@
     <div class="mt-10" x-data="whatsappCanaisOficiais()" x-init="carregar()">
 
     <div class="flex items-center justify-between mb-2">
-        <h1 class="text-xl font-bold text-gray-800">WhatsApp Oficial (Business API)</h1>
+        <h1 class="text-xl font-bold text-gray-800">WhatsApp Business (API Oficial — CoverCut)</h1>
         <button @click="mostrarFormulario = true" x-show="!mostrarFormulario"
                 class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors">
             + Conectar número oficial
         </button>
     </div>
     <p class="text-xs text-gray-500 mb-6">
-        API oficial da Meta, via Covercut. Cadastre o número primeiro no painel da Covercut, depois cole os dados aqui.
+        API oficial da Meta (sempre WhatsApp Business), hoje via CoverCut. Cadastre o número primeiro no painel da CoverCut, depois cole os dados aqui.
         Só responde quem já escreveu — nunca envia mensagem por conta própria.
     </p>
 
@@ -162,15 +235,16 @@
 </div>
 
 <script>
-function whatsappCanais() {
+function whatsappCanais(app) {
     return {
+        app: app, // 'business' ou 'messenger' — isola cada bloco do outro, nunca mistura
         canais: [],
         conectando: false,
         erro: null,
         intervalos: {},
 
         async carregar() {
-            const res = await fetch('/api/painel/whatsapp/canais', {
+            const res = await fetch('/api/painel/whatsapp/canais?app=' + this.app, {
                 headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
             });
             if (res.ok) this.canais = await res.json();
@@ -185,6 +259,7 @@ function whatsappCanais() {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                 },
+                body: JSON.stringify({ app: this.app }),
             });
             this.conectando = false;
             if (res.ok) {
