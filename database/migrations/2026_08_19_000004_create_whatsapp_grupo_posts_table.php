@@ -22,7 +22,11 @@ return new class extends Migration
             $table->string('conteudo', 500);
             $table->timestamp('postado_em');
 
-            $table->index(['whatsapp_canal_id', 'grupo_chatid', 'postado_em']);
+            // Nome curto explícito — o nome auto-gerado pelo Laravel pra esses 3
+            // campos passa dos 64 caracteres que o MySQL aceita como identificador
+            // (achado real no deploy: SQLite local não tem esse limite, só apareceu
+            // em produção/MySQL — o próprio deploy.sh parou e restaurou o site sozinho).
+            $table->index(['whatsapp_canal_id', 'grupo_chatid', 'postado_em'], 'wgp_canal_grupo_data_idx');
         });
     }
 
