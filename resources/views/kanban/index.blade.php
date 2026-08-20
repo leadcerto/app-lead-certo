@@ -218,20 +218,6 @@
                         </div>
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap justify-end">
-                        <div class="flex items-center gap-1">
-                            <select x-model="moverColunaAlvo"
-                                    class="text-xs border border-gray-300 rounded-lg px-2 py-1.5 bg-white text-gray-700">
-                                <template x-for="c in colunas" :key="c.key">
-                                    <option :value="c.key" x-text="c.label"></option>
-                                </template>
-                            </select>
-                            <button @click="moverColunaConfirmar(ticketAtivo, moverColunaAlvo)"
-                                    :disabled="moverColunaAlvo === ticketAtivo.coluna_kanban"
-                                    class="text-xs bg-blue-100 text-blue-700 px-2.5 py-1.5 rounded-lg hover:bg-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                    title="Mover manualmente pra outra coluna">
-                                Mover
-                            </button>
-                        </div>
                         <template x-if="ticketAtivo.vendedor_id && !['resolvido','encerrado'].includes(ticketAtivo.status)">
                             <div class="flex gap-1">
                                 <button @click="liberar(ticketAtivo.id)"
@@ -265,11 +251,29 @@
                     </div>
                 </div>
 
-                {{-- Coluna atual do lead — deixa explícito além do dropdown "Mover" --}}
-                <div class="px-5 py-1.5 bg-gray-50 border-b text-xs text-gray-500 flex items-center gap-1.5">
-                    <span>Coluna atual:</span>
-                    <span class="font-medium text-gray-700"
-                          x-text="colunas.find(c => c.key === ticketAtivo.coluna_kanban)?.label || ticketAtivo.coluna_kanban"></span>
+                {{-- Coluna atual do lead + trocar de coluna, tudo na mesma linha
+                     (achado 2026-08-20: dropdown+Mover ficava separado lá em cima,
+                     Leonardo pediu pra juntar aqui) --}}
+                <div class="px-5 py-1.5 bg-gray-50 border-b text-xs text-gray-500 flex items-center gap-1.5 flex-wrap justify-between">
+                    <div class="flex items-center gap-1.5">
+                        <span>Coluna atual:</span>
+                        <span class="font-medium text-gray-700"
+                              x-text="colunas.find(c => c.key === ticketAtivo.coluna_kanban)?.label || ticketAtivo.coluna_kanban"></span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <select x-model="moverColunaAlvo"
+                                class="text-xs border border-gray-300 rounded-lg px-2 py-1 bg-white text-gray-700">
+                            <template x-for="c in colunas" :key="c.key">
+                                <option :value="c.key" x-text="c.label"></option>
+                            </template>
+                        </select>
+                        <button @click="moverColunaConfirmar(ticketAtivo, moverColunaAlvo)"
+                                :disabled="moverColunaAlvo === ticketAtivo.coluna_kanban"
+                                class="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-lg hover:bg-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                title="Mover manualmente pra outra coluna">
+                            Mover
+                        </button>
+                    </div>
                 </div>
 
                 {{-- Notas do contato --}}
