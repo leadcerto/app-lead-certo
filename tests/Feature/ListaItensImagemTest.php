@@ -91,6 +91,47 @@ class ListaItensImagemTest extends TestCase
         $this->assertStringContainsString('Sofá 3 lugares', $ticket->lista_itens);
     }
 
+    /**
+     * Achado real 2026-08-20 (Leonardo): 3 bicicletas viraram 9 itens
+     * separados na lista ("Bicicleta", "Pedais", "Guidão", "Rodas
+     * dianteiras"...) — o modelo estava listando peças/componentes do
+     * mesmo objeto como se fossem itens à parte. Confirma que o prompt
+     * enviado pro OpenRouter agora instrui explicitamente a tratar cada
+     * objeto completo como 1 item só.
+     */
+    public function test_prompt_de_visao_instrui_a_nao_fragmentar_objeto_em_pecas(): void
+    {
+        $this->fakeOpenRouterListaItens('- 3 bicicletas');
+
+        $tenant  = $this->criarTenantComCanal('wh-itens-frag', 'inst-itens-frag');
+        $contato = Contato::factory()->create(['telefone' => '5511944445555']);
+        TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $this->postJson('/api/webhook/uazapi/wh-itens-frag', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'    => false,
+                'isGroup'   => false,
+                'chatid'    => '5511944445555@s.whatsapp.net',
+                'mediaType' => 'image',
+                'messageid' => 'msg-itens-frag',
+                'content'   => ['URL' => 'https://mmg.whatsapp.net/v/fake.jpg', 'mimetype' => 'image/jpeg'],
+            ],
+        ]);
+
+        Http::assertSent(function ($request) {
+            if (! str_contains($request->url(), 'openrouter.ai')) {
+                return false;
+            }
+            $texto = json_encode($request->data());
+            return str_contains($texto, 'nunca liste as pe') || str_contains($texto, 'UM item s');
+        });
+    }
+
     public function test_segunda_imagem_acumula_na_lista_existente(): void
     {
         $this->fakeOpenRouterListaItens("- Mesa de jantar");

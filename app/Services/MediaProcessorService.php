@@ -178,8 +178,12 @@ class MediaProcessorService
 
         $prompt .= "\n\nDepois da descrição, pule uma linha e escreva exatamente \"ITENS:\" seguido de uma lista "
             . "em tópicos curtos (um item por linha, começando com '-') do que aparece na imagem relacionado a: "
-            . "{$foco}. Seja objetivo, sem frases longas (ex: '- Sofá 3 lugares'). Se nada relevante aparecer, "
-            . 'escreva "ITENS: nada identificado".';
+            . "{$foco}. Seja objetivo, sem frases longas (ex: '- Sofá 3 lugares'). "
+            . 'IMPORTANTE: cada objeto completo é UM item só — nunca liste as peças/partes que compõem esse '
+            . 'mesmo objeto como itens separados (ex.: uma bicicleta é "- 1 bicicleta", nunca vira "- Bicicleta", '
+            . '"- Pedais", "- Guidão", "- Rodas" cada um numa linha; um sofá é "- 1 sofá 3 lugares", não vira braço, '
+            . 'assento e almofadas separados). Se houver mais de um do mesmo objeto, informe a quantidade num item '
+            . 'só (ex.: "- 3 bicicletas"). Se nada relevante aparecer, escreva "ITENS: nada identificado".';
 
         try {
             // OpenRouter route=fallback tenta cada modelo em ordem até um responder
