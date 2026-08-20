@@ -93,7 +93,7 @@
                                               class="inline-block w-2 h-2 rounded-full bg-yellow-400 flex-shrink-0"></span>
                                     </div>
                                     <p class="text-xs text-gray-400 mt-0.5"
-                                       x-text="[ticket.contato?.telefone, ticket.contato?.id].filter(Boolean).join(' · ')"></p>
+                                       x-text="[ticket.contato?.telefone, ticket.contato?.id, '#' + ticket.id].filter(Boolean).join(' · ')"></p>
                                 </div>
                                 <div class="flex flex-col items-end gap-1">
                                     <template x-if="ticket.agente_responsavel === 'bot'">
@@ -198,7 +198,7 @@
                                     class="text-xs text-gray-400 hover:underline">×</button>
                         </div>
                         <p class="text-xs text-gray-400"
-                           x-text="[ticketAtivo.contato?.telefone, ticketAtivo.contato?.id].filter(Boolean).join(' · ')"></p>
+                           x-text="[ticketAtivo.contato?.telefone, ticketAtivo.contato?.id, 'Ticket #' + ticketAtivo.id].filter(Boolean).join(' · ')"></p>
                         {{-- Retorno agendado --}}
                         <div class="flex items-center gap-1 mt-1">
                             <svg class="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -376,8 +376,13 @@
                             </svg>
                             <span class="text-xs font-semibold text-amber-800">Agente aguardando orientação</span>
                         </div>
+                        <template x-if="ticketAtivo.alerta_pendente">
+                            <div class="bg-white border border-amber-200 rounded-lg p-2 mb-2">
+                                <p class="text-xs font-semibold text-amber-800" x-text="ticketAtivo.alerta_pendente.titulo"></p>
+                                <p class="text-xs text-gray-700 mt-0.5 whitespace-pre-wrap" x-text="ticketAtivo.alerta_pendente.conteudo"></p>
+                            </div>
+                        </template>
                         <p class="text-xs text-amber-700 mb-2">
-                            O agente pausou essa conversa porque não tinha certeza de como responder.
                             Escreva a orientação abaixo — o agente usa isso pra montar a resposta e mandar pro lead sozinho.
                         </p>
                         <textarea x-model="orientacaoTexto"

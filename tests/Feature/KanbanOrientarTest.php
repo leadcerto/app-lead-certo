@@ -55,6 +55,34 @@ class KanbanOrientarTest extends TestCase
         Bus::assertDispatched(\App\Jobs\SdrResponderJob::class);
     }
 
+    /**
+     * Achado real 2026-08-20: só fechava alerta tipo 'duvida_ia' — pra um
+     * ticket pausado pelos outros 2 guardrails (rejeicao_area_alucinada,
+     * handoff_prematuro), o ticket despausava mas o alerta ficava com
+     * resposta/respondido_em nulos pra sempre.
+     */
+    public function test_orienta_fecha_alerta_de_rejeicao_de_area_alucinada(): void
+    {
+        Bus::fake();
+        $tenant = Tenant::factory()->create();
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $ticket = $this->criarTicketAguardandoOrientacao($tenant);
+        $alerta = AlertaInterno::create([
+            'tenant_id' => $tenant->id, 'ticket_id' => $ticket->id, 'tipo' => 'rejeicao_area_alucinada',
+            'titulo' => 'Agente recusou atendimento por área sem instrução pra isso', 'conteudo' => 'Resposta bloqueada: "..."',
+        ]);
+
+        $response = $this->actingAs($user)->postJson("/api/painel/kanban/ticket/{$ticket->id}/orientar", [
+            'orientacao' => 'Atendemos sim essa região, pode seguir com o orçamento normal.',
+        ]);
+
+        $response->assertOk();
+
+        $alertaFresco = $alerta->fresh();
+        $this->assertNotNull($alertaFresco->resposta);
+        $this->assertNotNull($alertaFresco->respondido_em);
+    }
+
     public function test_orientar_ticket_que_nao_esta_aguardando_retorna_erro(): void
     {
         $tenant  = Tenant::factory()->create();

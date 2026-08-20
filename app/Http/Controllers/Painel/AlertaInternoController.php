@@ -15,10 +15,16 @@ class AlertaInternoController extends Controller
 
         // Regra 2 (Bloco 5) — dúvidas não respondidas nunca saem da lista por
         // volume de outros tipos de alerta (ex: ticket_travado, gerado a
-        // cada 15min pelo Bloco 4). Prioridade: todas as dúvidas pendentes
-        // primeiro, depois os demais tipos mais recentes até completar 20.
+        // cada 15min pelo Bloco 4). Prioridade: todos os alertas que pausam
+        // um ticket (dúvida explícita, rejeição de área alucinada, handoff
+        // prematuro — achado real 2026-08-20: só 'duvida_ia' tinha
+        // prioridade, os outros dois guardrails podiam sumir da lista dos
+        // 20 mais recentes sem ninguém nunca ver) primeiro, depois os demais
+        // tipos mais recentes até completar 20.
+        $tiposQuePausam = ['duvida_ia', 'rejeicao_area_alucinada', 'handoff_prematuro'];
+
         $duvidasPendentes = AlertaInterno::where('tenant_id', $tenantId)
-            ->where('tipo', 'duvida_ia')
+            ->whereIn('tipo', $tiposQuePausam)
             ->whereNull('resposta')
             ->orderByDesc('created_at')
             ->get();
@@ -27,8 +33,8 @@ class AlertaInternoController extends Controller
 
         $outros = $restantes > 0
             ? AlertaInterno::where('tenant_id', $tenantId)
-                ->where(function ($q) {
-                    $q->where('tipo', '!=', 'duvida_ia')->orWhereNotNull('resposta');
+                ->where(function ($q) use ($tiposQuePausam) {
+                    $q->whereNotIn('tipo', $tiposQuePausam)->orWhereNotNull('resposta');
                 })
                 ->orderByDesc('created_at')
                 ->limit($restantes)

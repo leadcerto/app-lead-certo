@@ -178,6 +178,20 @@ class KanbanController extends Controller
             }
         }
 
+        // Achado real 2026-08-20 (Leonardo): o painel "Aguardando orientação"
+        // só mostrava um campo vazio, sem dizer qual foi a dúvida real do
+        // agente — impossível responder direito sem saber o que ele não
+        // soube. Anexa aqui o alerta que causou a pausa (qualquer um dos 3
+        // tipos que pausam: dúvida explícita [DUVIDA:], rejeição de área
+        // alucinada, handoff prematuro), pro front mostrar o texto de verdade.
+        if ($model->aguardando_orientacao_em) {
+            $model->alerta_pendente = \App\Models\AlertaInterno::where('ticket_id', $model->id)
+                ->whereIn('tipo', ['duvida_ia', 'rejeicao_area_alucinada', 'handoff_prematuro'])
+                ->whereNull('respondido_em')
+                ->latest('created_at')
+                ->first(['id', 'tipo', 'titulo', 'conteudo', 'created_at']);
+        }
+
         return response()->json($model);
     }
 
@@ -331,9 +345,14 @@ class KanbanController extends Controller
             return response()->json(['message' => 'Este ticket está com um atendente humano — libere pra IA antes de orientar.'], 422);
         }
 
+        // Achado real 2026-08-20: só fechava alerta tipo 'duvida_ia' — pra
+        // um ticket pausado por 'rejeicao_area_alucinada' ou
+        // 'handoff_prematuro', o ticket despausava normalmente mas o alerta
+        // ficava com resposta/respondido_em nulos pra sempre, aparecendo
+        // como "ainda pendente" indefinidamente na lista de alertas.
         $alerta = \App\Models\AlertaInterno::where('tenant_id', $model->tenant_id)
             ->where('ticket_id', $ticket)
-            ->where('tipo', 'duvida_ia')
+            ->whereIn('tipo', ['duvida_ia', 'rejeicao_area_alucinada', 'handoff_prematuro'])
             ->whereNull('resposta')
             ->latest('id')
             ->first();

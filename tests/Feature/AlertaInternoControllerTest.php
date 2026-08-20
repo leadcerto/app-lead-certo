@@ -164,6 +164,38 @@ class AlertaInternoControllerTest extends TestCase
         $response->assertJsonPath('data.0.id', $recente->id);
     }
 
+    /**
+     * Achado real 2026-08-20: só 'duvida_ia' tinha prioridade — os outros 2
+     * guardrails que também pausam um ticket (rejeicao_area_alucinada,
+     * handoff_prematuro) podiam sumir da lista dos 20 mais recentes.
+     */
+    public function test_rejeicao_de_area_e_handoff_prematuro_tambem_nunca_saem_da_lista(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = $this->criarUsuario($tenant);
+
+        $area = AlertaInterno::create([
+            'tenant_id' => $tenant->id, 'tipo' => 'rejeicao_area_alucinada',
+            'titulo' => 'Recusou área', 'conteudo' => 'x', 'created_at' => now()->subDays(2),
+        ]);
+        $handoff = AlertaInterno::create([
+            'tenant_id' => $tenant->id, 'tipo' => 'handoff_prematuro',
+            'titulo' => 'Handoff prematuro', 'conteudo' => 'x', 'created_at' => now()->subDays(2),
+        ]);
+        for ($i = 0; $i < 25; $i++) {
+            AlertaInterno::create([
+                'tenant_id' => $tenant->id, 'tipo' => 'ticket_travado',
+                'titulo' => "Travado {$i}", 'conteudo' => 'x',
+            ]);
+        }
+
+        $response = $this->actingAs($user)->getJson('/api/painel/alertas');
+
+        $ids = collect($response->json('data'))->pluck('id');
+        $this->assertTrue($ids->contains($area->id));
+        $this->assertTrue($ids->contains($handoff->id));
+    }
+
     public function test_lista_completa_20_com_multiplas_duvidas_pendentes(): void
     {
         $tenant = Tenant::factory()->create();
