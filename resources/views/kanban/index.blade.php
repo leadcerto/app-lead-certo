@@ -168,6 +168,12 @@
                             <span x-show="ticketAtivo.contato?.auditoria_pendente"
                                   class="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded font-normal"
                                   title="Nome sugerido aguarda aprovação do Auditor">Em revisão</span>
+                            {{-- Idioma do lead (item 11 do roteiro, 2026-08-20) — só aparece
+                                 quando é diferente de português, que é o padrão silencioso --}}
+                            <span x-show="ticketAtivo.idioma_lead && ticketAtivo.idioma_lead !== 'pt'"
+                                  class="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-normal uppercase"
+                                  title="Idioma detectado do lead — mensagens traduzidas automaticamente nos dois sentidos"
+                                  x-text="ticketAtivo.idioma_lead"></span>
                             <button @click="editandoNome = true; nomeEdit = ticketAtivo.contato?.nome_local || ticketAtivo.contato?.nome || ''"
                                     class="text-gray-300 hover:text-gray-500 transition-colors">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -431,9 +437,17 @@
                                     : 'bg-green-600 text-white rounded-bl-xl rounded-tl-xl rounded-br-sm'"
                                  class="max-w-xs px-3.5 py-2.5 text-sm rounded-2xl">
 
-                                {{-- Texto --}}
+                                {{-- Texto — se tem conteudo_pt (tradução), mostra em português como
+                                     principal e o original como referência pequena embaixo (item 11
+                                     do roteiro, 2026-08-20: atendente sempre lê em português) --}}
                                 <template x-if="msg.tipo === 'texto'">
-                                    <p x-text="msg.conteudo" class="whitespace-pre-wrap break-words"></p>
+                                    <div>
+                                        <p x-text="msg.conteudo_pt || msg.conteudo" class="whitespace-pre-wrap break-words"></p>
+                                        <template x-if="msg.conteudo_pt">
+                                            <p class="text-xs mt-1 opacity-70 italic whitespace-pre-wrap break-words"
+                                               x-text="'Original (' + msg.idioma.toUpperCase() + '): ' + msg.conteudo"></p>
+                                        </template>
+                                    </div>
                                 </template>
 
                                 {{-- Imagem --}}

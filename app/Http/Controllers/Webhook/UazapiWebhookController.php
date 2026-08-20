@@ -341,6 +341,32 @@ class UazapiWebhookController extends Controller
             }
         }
 
+        // Item 11 do roteiro (2026-08-20): detecta o idioma do lead na
+        // primeira mensagem substancial e traduz pro português (pro
+        // atendente ler no Kanban) — só detecta 1x por ticket
+        // (idioma_lead ainda null), não em toda mensagem, pra não gerar
+        // custo de IA repetido depois que o idioma já está confirmado.
+        // Só roda em texto/áudio (palavra do próprio lead) — nunca em
+        // imagem/vídeo, cujo $conteudo é a DESCRIÇÃO gerada pela nossa
+        // própria IA de visão (já em português, não é o lead "falando").
+        // Também pula qualquer placeholder do sistema (todos começam com
+        // "[", ex.: "[Áudio recebido — não foi possível transcrever]") —
+        // não é texto real do lead pra detectar idioma.
+        $idiomaMensagem = null;
+        $conteudoPt     = null;
+        if ($conteudo && in_array($tipoMensagem, ['texto', 'audio'], true)
+            && ! str_starts_with(trim($conteudo), '[') && is_null($ticket->idioma_lead)) {
+            $traducao       = app(\App\Services\TraducaoService::class);
+            $idiomaDetectado = $traducao->detectarIdioma($conteudo);
+            if ($idiomaDetectado) {
+                $ticket->update(['idioma_lead' => $idiomaDetectado]);
+                $idiomaMensagem = $idiomaDetectado;
+                if ($idiomaDetectado !== 'pt') {
+                    $conteudoPt = $traducao->traduzir($conteudo, 'pt', $idiomaDetectado);
+                }
+            }
+        }
+
         // Salva a mensagem
         if ($conteudo) {
             Mensagem::create([
@@ -349,6 +375,8 @@ class UazapiWebhookController extends Controller
                 'remetente'         => 'lead',
                 'tipo'              => $tipoMensagem,
                 'conteudo'          => $conteudo,
+                'idioma'            => $idiomaMensagem,
+                'conteudo_pt'       => $conteudoPt,
                 'midia_url'         => $midiaUrl,
                 'provider_message_id' => $msg['messageid'] ?? null,
                 'enviado_em'        => now(),

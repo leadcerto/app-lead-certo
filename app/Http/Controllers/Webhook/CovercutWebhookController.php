@@ -246,6 +246,26 @@ class CovercutWebhookController extends Controller
             }
         }
 
+        // Item 11 do roteiro (2026-08-20): mesmo tratamento de detecção de
+        // idioma + tradução do lado Uazapi — regra de paridade entre canais.
+        // Só roda em texto/áudio, nunca em imagem/vídeo (descrição da nossa
+        // própria IA de visão, não é o lead "falando"). Também pula
+        // qualquer placeholder do sistema (todos começam com "[").
+        $idiomaMensagem = null;
+        $conteudoPt     = null;
+        if ($conteudo && in_array($tipoMensagem, ['texto', 'audio'], true)
+            && ! str_starts_with(trim($conteudo), '[') && is_null($ticket->idioma_lead)) {
+            $traducao        = app(\App\Services\TraducaoService::class);
+            $idiomaDetectado = $traducao->detectarIdioma($conteudo);
+            if ($idiomaDetectado) {
+                $ticket->update(['idioma_lead' => $idiomaDetectado]);
+                $idiomaMensagem = $idiomaDetectado;
+                if ($idiomaDetectado !== 'pt') {
+                    $conteudoPt = $traducao->traduzir($conteudo, 'pt', $idiomaDetectado);
+                }
+            }
+        }
+
         if ($conteudo) {
             Mensagem::create([
                 'ticket_id'            => $ticket->id,
@@ -253,6 +273,8 @@ class CovercutWebhookController extends Controller
                 'remetente'            => 'lead',
                 'tipo'                 => $tipoMensagem,
                 'conteudo'             => $conteudo,
+                'idioma'               => $idiomaMensagem,
+                'conteudo_pt'          => $conteudoPt,
                 'midia_url'            => $midiaUrl,
                 'provider_message_id'  => $messageId,
                 'enviado_em'           => now(),

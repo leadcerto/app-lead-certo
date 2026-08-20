@@ -259,12 +259,30 @@ class SdrResponderService
         }
         $resposta = trim(preg_replace('/\[OBJETIVO_CUMPRIDO:\d+\]/', '', $resposta));
 
+        // ── 4.6. Traduzir pro idioma do lead, se for o caso (item 11 do roteiro) ──
+        // A resposta continua sendo gerada em português normalmente — só
+        // traduz na hora de enviar. Falha de tradução nunca bloqueia o
+        // envio: manda o texto original mesmo, em português, em vez de
+        // não mandar nada.
+        $respostaParaEnviar = $resposta;
+        $idiomaEnviado       = 'pt';
+        $respostaPtOriginal  = null;
+
+        if ($ticket->idioma_lead && $ticket->idioma_lead !== 'pt') {
+            $traduzida = app(\App\Services\TraducaoService::class)->traduzir($resposta, $ticket->idioma_lead);
+            if ($traduzida) {
+                $respostaParaEnviar = $traduzida;
+                $idiomaEnviado       = $ticket->idioma_lead;
+                $respostaPtOriginal  = $resposta;
+            }
+        }
+
         // ── 5. Enviar pelo canal certo (Uazapi ou Covercut, resolvido pelo ticket) ──
         $telefone = $ticket->contato?->telefone;
         $canal    = $ticket->canal;
 
         if ($telefone && $canal) {
-            $enviado = $canal->servico()->enviarTexto($canal, $telefone, $resposta);
+            $enviado = $canal->servico()->enviarTexto($canal, $telefone, $respostaParaEnviar);
             if (! $enviado) {
                 // Achado Importante 3 da revisão final: um bloqueio determinístico
                 // (ex: janela expirada no Covercut) não pode gravar uma Mensagem "bot"
@@ -302,13 +320,18 @@ class SdrResponderService
         }
 
         // ── 6. Persistir resposta ────────────────────────────────────────────
+        // `conteudo` é o que foi realmente enviado pelo WhatsApp (traduzido,
+        // se for o caso) — `conteudo_pt` guarda o original em português pra
+        // quem estiver lendo no Kanban (ver item 11 do roteiro).
         Mensagem::create([
-            'ticket_id'  => $ticket->id,
-            'tenant_id'  => $ticket->tenant_id,
-            'remetente'  => 'bot',
-            'tipo'       => 'texto',
-            'conteudo'   => $resposta,
-            'enviado_em' => now(),
+            'ticket_id'   => $ticket->id,
+            'tenant_id'   => $ticket->tenant_id,
+            'remetente'   => 'bot',
+            'tipo'        => 'texto',
+            'conteudo'    => $respostaParaEnviar,
+            'idioma'      => $idiomaEnviado,
+            'conteudo_pt' => $respostaPtOriginal,
+            'enviado_em'  => now(),
         ]);
 
         // ── 7. Rede de segurança ──────────────────────────────────────────────

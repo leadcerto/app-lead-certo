@@ -228,6 +228,7 @@ class TicketAtendimento extends Model
         'sdr_persona_id',
         'vendedor_id',
         'etapa_ia',
+        'idioma_lead',
         'endereco_saida',
         'endereco_destino',
         'lista_itens',

@@ -99,6 +99,8 @@ class Mensagem extends Model
         'remetente',
         'tipo',
         'conteudo',
+        'idioma',
+        'conteudo_pt',
         'midia_url',
         'provider_message_id',
         'enviado_em',
