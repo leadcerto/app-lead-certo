@@ -94,6 +94,42 @@ class SdrResponderService
             return null;
         }
 
+        // ── 3.6. Rejeição de área alucinada (achado real 2026-08-19/20) ──────
+        // O modelo respondeu recusando atendimento por área ("atende só aqui no
+        // Rio e região") sem nenhuma instrução dizendo isso — confirmado 5x em
+        // produção, sempre respondendo pergunta que não tinha nada a ver com área
+        // (ex.: "vcs são de onde?"), em endereço que ESTAVA dentro da área real. A
+        // instrução de autovalidação (Regra 7, acima) já pede pra nunca inventar
+        // informação, mas o modelo não segue de forma confiável — trava de código
+        // como rede de segurança, mesmo tratamento do [DUVIDA:]: pausa e alerta,
+        // nunca deixa a mentira sair pro lead.
+        if (preg_match('/atend(?:e|emos)\s+s[oó]\s+aqui\s+no\s+rio\s+e\s+regi[aã]o/iu', $resposta)) {
+            $ticket->update([
+                'aguardando_orientacao_em' => now(),
+                'mensagem_espera_enviada'  => false,
+            ]);
+
+            try {
+                app(\App\Services\AlertaInternoService::class)->criar(
+                    $ticket->tenant_id,
+                    'rejeicao_area_alucinada',
+                    'Agente recusou atendimento por área sem instrução pra isso',
+                    "Resposta bloqueada antes de enviar: \"{$resposta}\"",
+                    $ticket->id,
+                );
+            } catch (\Exception $e) {
+                Log::warning('SdrResponder: falha ao criar alerta de rejeição alucinada', [
+                    'ticket_id' => $ticket->id, 'erro' => $e->getMessage(),
+                ]);
+            }
+
+            Log::warning('SdrResponder: bloqueada rejeição de área alucinada, ticket pausado', [
+                'ticket_id' => $ticket->id, 'resposta' => $resposta,
+            ]);
+
+            return null;
+        }
+
         // ── 4. Detectar token de movimento de coluna e aplicar ──────────────
         // Token = chave da coluna em maiúsculas entre colchetes. Gerado dinamicamente
         // a partir das colunas reais do tenant — se o franqueado renomear uma coluna,
