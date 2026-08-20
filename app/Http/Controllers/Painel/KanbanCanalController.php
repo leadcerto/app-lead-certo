@@ -17,14 +17,19 @@ class KanbanCanalController extends Controller
 
         $vinculadosIds = $kanban->canais()->pluck('whatsapp_canais.id')->all();
 
+        // Achado real 2026-08-20: sem o campo 'app', a tela não conseguia
+        // distinguir WhatsApp Business de WhatsApp Messenger aqui — mostrava só
+        // "Não-Oficial" genérico, igual pros dois tipos, confundindo qual número
+        // é qual (mesmo problema que a tela de Configurações já tinha corrigido).
         $canais = WhatsappCanal::where('tenant_id', $tenantId)
             ->orderBy('tipo')
             ->orderBy('id')
-            ->get(['id', 'tipo', 'provider', 'status', 'phone'])
+            ->get(['id', 'tipo', 'provider', 'app', 'status', 'phone'])
             ->map(fn (WhatsappCanal $c) => [
                 'id'        => $c->id,
                 'tipo'      => $c->tipo,
                 'provider'  => $c->provider,
+                'app'       => $c->app,
                 'status'    => $c->status,
                 'phone'     => $c->phone,
                 'vinculado' => in_array($c->id, $vinculadosIds, true),

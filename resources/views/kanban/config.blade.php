@@ -83,8 +83,9 @@
                     <input type="checkbox" :checked="c.vinculado" @change="toggleCanal(c)" class="rounded border-gray-300 text-green-600">
                     <span class="text-xs font-medium px-1.5 py-0.5 rounded"
                           :class="c.tipo === 'oficial' ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-600'"
-                          x-text="c.tipo === 'oficial' ? 'Oficial' : 'Não-Oficial'"></span>
-                    <span class="text-sm text-gray-700 flex-1" x-text="c.phone || '(ainda não conectado)'"></span>
+                          x-text="labelCanal(c)"></span>
+                    <span class="text-sm text-gray-700 flex-1"
+                          x-text="c.phone || (c.status === 'connected' ? 'Conectado (número ainda não sincronizado)' : '(ainda não conectado)')"></span>
                     <span class="text-xs" :class="c.status === 'connected' ? 'text-green-600' : 'text-gray-400'" x-text="c.status"></span>
                 </label>
             </template>
@@ -1798,6 +1799,14 @@ function kanbanConfig() {
         async carregarCanais() {
             const res = await this.api('/api/painel/kanban/canais');
             if (res.ok) this.canaisDisponiveis = await res.json();
+        },
+
+        // Achado real 2026-08-20: "Não-Oficial" genérico confundia WhatsApp
+        // Business com WhatsApp Messenger — mesma distinção já usada na tela de
+        // Configurações (business/messenger via c.app), reaproveitada aqui.
+        labelCanal(c) {
+            if (c.tipo === 'oficial') return 'WhatsApp Business (Oficial)';
+            return c.app === 'messenger' ? 'WhatsApp Messenger (Não Oficial)' : 'WhatsApp Business (Não Oficial)';
         },
 
         async toggleCanal(canal) {

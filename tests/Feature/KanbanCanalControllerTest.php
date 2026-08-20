@@ -34,6 +34,22 @@ class KanbanCanalControllerTest extends TestCase
         $this->assertTrue(collect($response->json())->firstWhere('id', $canal->id)['vinculado']);
     }
 
+    public function test_lista_inclui_o_app_de_cada_canal(): void
+    {
+        // Achado real 2026-08-20: sem 'app' na resposta, a tela não conseguia
+        // distinguir WhatsApp Business de WhatsApp Messenger, mostrava "Não-
+        // Oficial" genérico pros dois — mesma confusão que a tela de
+        // Configurações já tinha corrigido antes.
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+        WhatsappCanal::factory()->create(['tenant_id' => $tenant->id, 'app' => 'messenger']);
+
+        $response = $this->actingAs($user)->getJson('/api/painel/kanban/canais');
+
+        $response->assertOk();
+        $this->assertSame('messenger', $response->json('0.app'));
+    }
+
     public function test_sincroniza_canais_vinculados(): void
     {
         $tenant = Tenant::factory()->create();
