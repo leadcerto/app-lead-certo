@@ -22,7 +22,9 @@
             @csrf
             <input type="text" name="nome" required maxlength="100" placeholder="Nome do cargo"
                    class="w-full text-sm border border-gray-300 rounded-lg px-2 py-1.5">
-            <textarea name="descricao" required maxlength="2000" placeholder="Descrição das funções (pode ser um rascunho, sem problema)"
+            <textarea name="descricao" required maxlength="2000" placeholder="Descrição técnica das funções (uso interno, pode ser um rascunho)"
+                      class="w-full text-sm border border-gray-300 rounded-lg px-2 py-1.5" rows="2"></textarea>
+            <textarea name="descricao_cliente" maxlength="2000" placeholder="Descrição amigável, em primeira pessoa, pro cliente ler (ex.: 'Vou te ajudar a...')"
                       class="w-full text-sm border border-gray-300 rounded-lg px-2 py-1.5" rows="2"></textarea>
             <select name="cargo_pai_id" class="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
                 <option value="">Sem cargo superior (topo do organograma)</option>

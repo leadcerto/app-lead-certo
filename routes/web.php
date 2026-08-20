@@ -188,12 +188,11 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::post('/{user}/acessos/{acesso}/toggle', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'acessosToggle'])->name('acessos.toggle');
     });
 
-    // Suporte — fala com um SETOR, não com uma pessoa por nome. Qualquer
-    // usuário logado da empresa, sem restrição de perfil. Redesenho
-    // 2026-08-20 (Leonardo).
+    // Suporte — um bloco por agente (foto + composer estilo WhatsApp
+    // interno), roteado por SETOR por trás. Qualquer usuário logado da
+    // empresa, sem restrição de perfil. Redesenho 2026-08-20 (Leonardo).
     Route::prefix('equipe')->name('equipe.')->group(function () {
         Route::get('/suporte', [\App\Http\Controllers\Painel\FeedbackAgenteController::class, 'setores'])->name('setores');
-        Route::get('/setor/{cargo}/conversar', [\App\Http\Controllers\Painel\FeedbackAgenteController::class, 'show'])->name('conversar');
         Route::post('/setor/{cargo}/conversar', [\App\Http\Controllers\Painel\FeedbackAgenteController::class, 'store'])->name('conversar.store');
     });
 

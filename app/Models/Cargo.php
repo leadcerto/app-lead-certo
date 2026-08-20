@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Cargo extends Model
 {
-    protected $fillable = ['nome', 'descricao', 'cargo_pai_id', 'ordem', 'ativo', 'visivel_para_clientes'];
+    protected $fillable = ['nome', 'descricao', 'descricao_cliente', 'cargo_pai_id', 'ordem', 'ativo', 'visivel_para_clientes'];
 
     protected function casts(): array
     {

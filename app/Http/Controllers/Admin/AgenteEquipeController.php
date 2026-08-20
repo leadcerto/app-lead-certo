@@ -182,15 +182,17 @@ class AgenteEquipeController extends Controller
     public function cargosStore(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'nome'         => 'required|string|max:100',
-            'descricao'    => 'required|string|max:2000',
-            'cargo_pai_id' => 'nullable|integer|exists:cargos,id',
-            'ordem'        => 'nullable|integer|min:1',
+            'nome'              => 'required|string|max:100',
+            'descricao'         => 'required|string|max:2000',
+            'descricao_cliente' => 'nullable|string|max:2000',
+            'cargo_pai_id'      => 'nullable|integer|exists:cargos,id',
+            'ordem'             => 'nullable|integer|min:1',
         ]);
 
         Cargo::create([
             'nome'                   => $validated['nome'],
             'descricao'              => $validated['descricao'],
+            'descricao_cliente'      => $validated['descricao_cliente'] ?? null,
             'cargo_pai_id'           => $validated['cargo_pai_id'] ?? null,
             'ordem'                  => $validated['ordem'] ?? 1,
             'ativo'                  => true,

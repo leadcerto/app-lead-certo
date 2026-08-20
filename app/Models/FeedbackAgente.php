@@ -10,7 +10,7 @@ class FeedbackAgente extends Model
     protected $table = 'feedbacks_agente';
 
     protected $fillable = [
-        'user_id', 'cargo_id', 'tenant_id', 'autor_user_id', 'mensagem', 'resposta',
+        'user_id', 'cargo_id', 'tenant_id', 'autor_user_id', 'mensagem', 'midia_url', 'tipo_midia', 'resposta',
         'status', 'relatorio_analise', 'implementacao_faz_sentido',
         'tempo_estimado_execucao', 'empresas_beneficiadas_estimado',
     ];
