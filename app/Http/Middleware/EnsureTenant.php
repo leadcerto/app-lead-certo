@@ -16,8 +16,10 @@ class EnsureTenant
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
-        // Admin (tenant_id null) acessa tudo; pode filtrar por ?tenant_id=X
-        if ($user->isAdmin()) {
+        // Admin acessa tudo; equipe de marketing compartilhada (ex.: Nathanel)
+        // tem o mesmo alcance de tenant, mas ferramentas mais restritas via
+        // podeAcessar() — ambos podem filtrar por ?tenant_id=X.
+        if ($user->podeTrocarTenant()) {
             $tenantId = $request->query('tenant_id');
         } else {
             $tenantId = $user->tenant_id;

@@ -31,20 +31,37 @@ class User extends Authenticatable
     // ── Matriz de permissões por recurso ──────────────────────────────────────
 
     private const PERMISSOES = [
-        'dashboard'         => ['admin', 'dono', 'diretor', 'gerente', 'gestor', 'vendedor', 'growth_manager', 'revops'],
+        'dashboard'         => ['admin', 'dono', 'diretor', 'gerente', 'gestor', 'vendedor', 'growth_manager', 'revops', 'diretor_marketing'],
         'kanban'            => ['admin', 'dono', 'diretor', 'gerente', 'gestor', 'vendedor', 'pos_venda'],
         'contatos'          => ['admin', 'dono', 'diretor', 'gerente', 'gestor', 'vendedor', 'growth_manager'],
         'integracoes'       => ['admin', 'dono', 'growth_manager'],
         'configuracoes'     => ['admin', 'dono'],
         'auditor'           => ['admin', 'dono', 'diretor', 'auditor'],
-        'personas'          => ['admin', 'dono', 'diretor', 'growth_manager'],
-        'campanhas'         => ['admin', 'dono', 'diretor', 'growth_manager'],
+        'personas'          => ['admin', 'dono', 'diretor', 'growth_manager', 'diretor_marketing'],
+        'campanhas'         => ['admin', 'dono', 'diretor', 'growth_manager', 'diretor_marketing'],
         'revops'            => ['admin', 'dono', 'diretor', 'revops'],
         'usuarios'          => ['admin', 'dono'],
         'contatos.editar'   => ['admin', 'dono', 'diretor', 'gerente', 'gestor'],
         'kanban.encerrar'   => ['admin', 'dono', 'diretor', 'gerente', 'gestor', 'vendedor'],
-        'avaliacoes_gmb'    => ['admin', 'dono', 'diretor'],
+        'avaliacoes_gmb'    => ['admin', 'dono', 'diretor', 'diretor_marketing'],
         'avaliador_dash'    => ['admin', 'avaliador'],
+        // Os 4 sub-perfis dormentes (ver EQUIPE_MARKETING abaixo) ainda não
+        // aparecem em nenhuma linha acima de propósito — cada um ganha
+        // permissão própria e mais estreita só quando for de fato ativado.
+    ];
+
+    /**
+     * Perfis da "equipe de marketing compartilhada" (ver TAREFAS.md,
+     * "Equipe Lead Certo com acesso universal a todas as empresas",
+     * 2026-08-20) — atendem TODAS as empresas da Lead Certo, não uma só.
+     * Só 'diretor_marketing' (Nathanel) está em uso hoje; os 4 seguintes
+     * são perfis dormentes, criados de antemão pra ativação sob demanda
+     * (ver organograma 2.1.1-2.1.4 em TAREFAS.md) — nenhum usuário deve
+     * ter esses perfis ainda.
+     */
+    private const EQUIPE_MARKETING = [
+        'diretor_marketing', 'gestor_trafego', 'gestor_criacao',
+        'gestor_copywriting', 'gestor_seo',
     ];
 
     // ── Helpers de permissão ──────────────────────────────────────────────────
@@ -57,6 +74,23 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->perfil === 'admin';
+    }
+
+    public function isEquipeMarketing(): bool
+    {
+        return in_array($this->perfil, self::EQUIPE_MARKETING, true);
+    }
+
+    /**
+     * Quem pode trocar de tenant via ?tenant_id= (ver EnsureTenant) — hoje
+     * admin (acesso total) e a equipe de marketing compartilhada (acesso
+     * universal, mas restrito às ferramentas do próprio perfil via
+     * podeAcessar()). Tenant "casa" desses usuários (ex.: diretor_marketing
+     * = tenant Lead Certo) só é metadado de identidade, não limita o alcance.
+     */
+    public function podeTrocarTenant(): bool
+    {
+        return $this->isAdmin() || $this->isEquipeMarketing();
     }
 
     public function isDono(): bool
@@ -88,6 +122,11 @@ class User extends Authenticatable
             'revops'         => 'RevOps',
             'pos_venda'      => 'Pós-Venda',
             'avaliador'      => 'Avaliador',
+            'diretor_marketing'   => 'Diretora de Marketing',
+            'gestor_trafego'      => 'Gestor de Tráfego',
+            'gestor_criacao'      => 'Gestor de Criação',
+            'gestor_copywriting'  => 'Gestor de Copywriting',
+            'gestor_seo'          => 'Gestor de SEO',
             default          => ucfirst($this->perfil),
         };
     }

@@ -15,10 +15,12 @@ use Illuminate\Support\Facades\Route;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ROTAS DO ADMIN — Google Meu Negócio
-// Acesso: perfis com permissão 'avaliacoes_gmb' (admin, dono, diretor)
+// Acesso: perfis com permissão 'avaliacoes_gmb' (admin, dono, diretor,
+// diretor_marketing) — a lista aqui precisa ficar em sync com
+// User::PERMISSOES['avaliacoes_gmb'], são checadas em pontos diferentes.
 // ══════════════════════════════════════════════════════════════════════════════
 
-Route::middleware(['auth', 'tenant', 'role:admin,dono,diretor'])->prefix('admin/gmb')->name('admin.')->group(function () {
+Route::middleware(['auth', 'tenant', 'role:admin,dono,diretor,diretor_marketing'])->prefix('admin/gmb')->name('admin.')->group(function () {
 
     // ── Perfis GMB (CRUD) ─────────────────────────────────────────────────
     Route::resource('perfis-gmb', PerfilGmbController::class)
