@@ -1735,7 +1735,7 @@ function kanbanConfig() {
             const res = await this.api('/api/painel/kanban/info');
             if (res.ok) {
                 const json = await res.json();
-                this.nomeKanban = json.nome ?? '';
+                this.nomeKanban = json.nome || 'Novo Kanban';
                 this.conhecimentoGeral = json.conhecimento_geral ?? '';
             }
         },
