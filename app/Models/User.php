@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -15,7 +16,7 @@ class User extends Authenticatable
 
     protected $fillable = [
         'tenant_id', 'nome', 'email', 'password', 'perfil', 'ativo',
-        'city', 'state', 'whatsapp',
+        'city', 'state', 'whatsapp', 'avatar_url',
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -152,6 +153,16 @@ class User extends Authenticatable
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function cargos(): BelongsToMany
+    {
+        return $this->belongsToMany(Cargo::class, 'agente_cargo');
+    }
+
+    public function servicosExecutados(): HasMany
+    {
+        return $this->hasMany(ServicoExecutado::class);
     }
 
     public function agendamentosAvaliacao(): HasMany

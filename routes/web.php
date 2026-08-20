@@ -172,6 +172,24 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::post('/', [EmpresaController::class, 'store'])->name('store');
     });
 
+    // Perfil dos agentes da equipe Lead Certo (Adriana, Nathanel...) — pedido
+    // do Leonardo 2026-08-20: identidade, cargos e histórico de serviços.
+    Route::middleware('role:admin')->prefix('admin/equipe')->name('admin.equipe.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'index'])->name('index');
+        Route::get('/cargos', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'cargosIndex'])->name('cargos');
+        Route::post('/cargos', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'cargosStore'])->name('cargos.store');
+        Route::get('/{user}', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'show'])->name('show');
+        Route::patch('/{user}', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'update'])->name('update');
+        Route::post('/{user}/cargos', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'sincronizarCargos'])->name('sincronizar-cargos');
+        Route::post('/{user}/servicos', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'registrarServico'])->name('registrar-servico');
+    });
+
+    // Fale com o agente — qualquer usuário logado da empresa, sem
+    // restrição de perfil. Pedido do Leonardo 2026-08-20.
+    Route::prefix('equipe/{user}')->name('equipe.')->group(function () {
+        Route::get('/conversar', [\App\Http\Controllers\Painel\FeedbackAgenteController::class, 'show'])->name('conversar');
+        Route::post('/conversar', [\App\Http\Controllers\Painel\FeedbackAgenteController::class, 'store'])->name('conversar.store');
+    });
 
     // Secretária Eletrônica — dono e admin
     Route::get('/secretaria-eletronica', fn () => view('secretaria-eletronica.index'))
