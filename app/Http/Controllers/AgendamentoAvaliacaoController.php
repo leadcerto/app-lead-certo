@@ -28,7 +28,7 @@ class AgendamentoAvaliacaoController extends Controller
             ? Carbon::parse($request->query('semana'))
             : Carbon::today();
 
-        $agendamentos = AgendamentoAvaliacao::where('tenant_id', $request->user()->tenant_id)
+        $agendamentos = AgendamentoAvaliacao::where('tenant_id', $request->user()->tenantAtual())
             ->daSemana($semana)
             ->with(['perfil', 'template.categoria', 'avaliador'])
             ->orderBy('data_agendada')
@@ -40,7 +40,7 @@ class AgendamentoAvaliacaoController extends Controller
             return $ag->data_agendada->translatedFormat('l, d/m');
         });
 
-        $perfis = PerfilGmb::where('tenant_id', $request->user()->tenant_id)
+        $perfis = PerfilGmb::where('tenant_id', $request->user()->tenantAtual())
             ->ativos()
             ->orderBy('nome')
             ->get();
@@ -55,7 +55,7 @@ class AgendamentoAvaliacaoController extends Controller
      */
     public function create(Request $request)
     {
-        $perfis = PerfilGmb::where('tenant_id', $request->user()->tenant_id)
+        $perfis = PerfilGmb::where('tenant_id', $request->user()->tenantAtual())
             ->ativos()->orderBy('nome')->get();
 
         return view('admin.agendamentos-avaliacao.create', compact('perfis'));
@@ -66,7 +66,7 @@ class AgendamentoAvaliacaoController extends Controller
      */
     public function store(Request $request)
     {
-        $tenantId = $request->user()->tenant_id;
+        $tenantId = $request->user()->tenantAtual();
 
         $validated = $request->validate([
             'perfil_id' => ['required', Rule::exists('perfis_gmb', 'id')->where('tenant_id', $tenantId)],
@@ -100,7 +100,7 @@ class AgendamentoAvaliacaoController extends Controller
      */
     public function lote(Request $request)
     {
-        $perfis = PerfilGmb::where('tenant_id', $request->user()->tenant_id)
+        $perfis = PerfilGmb::where('tenant_id', $request->user()->tenantAtual())
             ->ativos()->orderBy('nome')->get();
 
         $semana = Carbon::today();
@@ -122,7 +122,7 @@ class AgendamentoAvaliacaoController extends Controller
             $resultado = $this->agendamentoService->agendarEmLote(
                 $validated['matriz'],
                 Carbon::parse($validated['semana_referencia']),
-                $request->user()->tenant_id,
+                $request->user()->tenantAtual(),
             );
 
             $msg = "{$resultado['criados']} agendamento(s) criado(s).";
@@ -142,7 +142,7 @@ class AgendamentoAvaliacaoController extends Controller
      */
     public function alterarStatus(Request $request, AgendamentoAvaliacao $agendamento)
     {
-        abort_if($agendamento->tenant_id !== $request->user()->tenant_id, 403);
+        abort_if($agendamento->tenant_id !== $request->user()->tenantAtual(), 403);
 
         $validated = $request->validate([
             'status' => 'required|in:pendente,enviado,concluido',
@@ -161,9 +161,9 @@ class AgendamentoAvaliacaoController extends Controller
      */
     public function trocarAvaliador(Request $request, AgendamentoAvaliacao $agendamento)
     {
-        abort_if($agendamento->tenant_id !== $request->user()->tenant_id, 403);
+        abort_if($agendamento->tenant_id !== $request->user()->tenantAtual(), 403);
 
-        $tenantId = $request->user()->tenant_id;
+        $tenantId = $request->user()->tenantAtual();
 
         $validated = $request->validate([
             'avaliador_id' => [
@@ -184,7 +184,7 @@ class AgendamentoAvaliacaoController extends Controller
      */
     public function refazerTemplate(Request $request, AgendamentoAvaliacao $agendamento)
     {
-        abort_if($agendamento->tenant_id !== $request->user()->tenant_id, 403);
+        abort_if($agendamento->tenant_id !== $request->user()->tenantAtual(), 403);
 
         $template = $this->sorteioService->sortear(
             $agendamento->perfil,
@@ -206,7 +206,7 @@ class AgendamentoAvaliacaoController extends Controller
      */
     public function alertarAvaliadores(Request $request)
     {
-        $tenantId = $request->user()->tenant_id;
+        $tenantId = $request->user()->tenantAtual();
 
         $agendamentosPendentes = AgendamentoAvaliacao::where('tenant_id', $tenantId)
             ->pendentes()

@@ -12,7 +12,7 @@ class PerfilGmbController extends Controller
      */
     public function index(Request $request)
     {
-        $perfis = PerfilGmb::where('tenant_id', $request->user()->tenant_id)
+        $perfis = PerfilGmb::where('tenant_id', $request->user()->tenantAtual())
             ->withCount(['contatos as contatos_pendentes_count' => fn ($q) => $q->naoContatados()])
             ->orderBy('nome')
             ->paginate(20);
@@ -42,7 +42,7 @@ class PerfilGmbController extends Controller
             'ativo' => 'boolean',
         ]);
 
-        $validated['tenant_id'] = $request->user()->tenant_id;
+        $validated['tenant_id'] = $request->user()->tenantAtual();
         $validated['ativo'] = $validated['ativo'] ?? true;
 
         PerfilGmb::create($validated);
@@ -61,7 +61,7 @@ class PerfilGmbController extends Controller
      */
     public function edit(Request $request, PerfilGmb $perfisGmb)
     {
-        abort_if($perfisGmb->tenant_id !== $request->user()->tenant_id, 403);
+        abort_if($perfisGmb->tenant_id !== $request->user()->tenantAtual(), 403);
 
         return view('admin.perfis-gmb.edit', ['perfil' => $perfisGmb]);
     }
@@ -71,7 +71,7 @@ class PerfilGmbController extends Controller
      */
     public function update(Request $request, PerfilGmb $perfisGmb)
     {
-        abort_if($perfisGmb->tenant_id !== $request->user()->tenant_id, 403);
+        abort_if($perfisGmb->tenant_id !== $request->user()->tenantAtual(), 403);
 
         $validated = $request->validate([
             'nome' => 'required|string|max:200',
@@ -95,7 +95,7 @@ class PerfilGmbController extends Controller
      */
     public function destroy(Request $request, PerfilGmb $perfisGmb)
     {
-        abort_if($perfisGmb->tenant_id !== $request->user()->tenant_id, 403);
+        abort_if($perfisGmb->tenant_id !== $request->user()->tenantAtual(), 403);
 
         $perfisGmb->update(['ativo' => false]);
 

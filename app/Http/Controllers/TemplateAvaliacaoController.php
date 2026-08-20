@@ -19,7 +19,7 @@ class TemplateAvaliacaoController extends Controller
      */
     public function index(Request $request)
     {
-        $templates = TemplateAvaliacao::where('templates_avaliacao.tenant_id', $request->user()->tenant_id)
+        $templates = TemplateAvaliacao::where('templates_avaliacao.tenant_id', $request->user()->tenantAtual())
             ->join('categorias_template', 'categorias_template.id', '=', 'templates_avaliacao.categoria_id')
             ->orderBy('categorias_template.nome')
             ->orderBy('templates_avaliacao.codigo')
@@ -35,7 +35,7 @@ class TemplateAvaliacaoController extends Controller
      */
     public function create(Request $request)
     {
-        $categorias = CategoriaTemplate::where('tenant_id', $request->user()->tenant_id)
+        $categorias = CategoriaTemplate::where('tenant_id', $request->user()->tenantAtual())
             ->orderBy('nome')
             ->get();
 
@@ -54,7 +54,7 @@ class TemplateAvaliacaoController extends Controller
             'ativo'        => 'boolean',
         ]);
 
-        $validated['tenant_id'] = $request->user()->tenant_id;
+        $validated['tenant_id'] = $request->user()->tenantAtual();
         $validated['ativo'] = $validated['ativo'] ?? true;
 
         // Verificar unicidade do código no tenant
@@ -83,9 +83,9 @@ class TemplateAvaliacaoController extends Controller
      */
     public function edit(Request $request, TemplateAvaliacao $templatesAvaliacao)
     {
-        abort_if($templatesAvaliacao->tenant_id !== $request->user()->tenant_id, 403);
+        abort_if($templatesAvaliacao->tenant_id !== $request->user()->tenantAtual(), 403);
 
-        $categorias = CategoriaTemplate::where('tenant_id', $request->user()->tenant_id)
+        $categorias = CategoriaTemplate::where('tenant_id', $request->user()->tenantAtual())
             ->orderBy('nome')
             ->get();
 
@@ -97,7 +97,7 @@ class TemplateAvaliacaoController extends Controller
      */
     public function update(Request $request, TemplateAvaliacao $templatesAvaliacao)
     {
-        abort_if($templatesAvaliacao->tenant_id !== $request->user()->tenant_id, 403);
+        abort_if($templatesAvaliacao->tenant_id !== $request->user()->tenantAtual(), 403);
 
         $validated = $request->validate([
             'codigo'       => 'required|string|max:30',
@@ -129,7 +129,7 @@ class TemplateAvaliacaoController extends Controller
      */
     public function destroy(Request $request, TemplateAvaliacao $templatesAvaliacao)
     {
-        abort_if($templatesAvaliacao->tenant_id !== $request->user()->tenant_id, 403);
+        abort_if($templatesAvaliacao->tenant_id !== $request->user()->tenantAtual(), 403);
 
         $templatesAvaliacao->update(['ativo' => false]);
 
@@ -144,7 +144,7 @@ class TemplateAvaliacaoController extends Controller
      */
     public function gerarComIa(Request $request)
     {
-        $tenantId = $request->user()->tenant_id;
+        $tenantId = $request->user()->tenantAtual();
 
         $validated = $request->validate([
             'categoria_id'            => ['required', Rule::exists('categorias_template', 'id')->where('tenant_id', $tenantId)],
@@ -177,7 +177,7 @@ class TemplateAvaliacaoController extends Controller
      */
     public function categorias(Request $request)
     {
-        $categorias = CategoriaTemplate::where('tenant_id', $request->user()->tenant_id)
+        $categorias = CategoriaTemplate::where('tenant_id', $request->user()->tenantAtual())
             ->withCount('templates')
             ->orderBy('nome')
             ->get();
@@ -196,7 +196,7 @@ class TemplateAvaliacaoController extends Controller
         ]);
 
         CategoriaTemplate::create([
-            'tenant_id'      => $request->user()->tenant_id,
+            'tenant_id'      => $request->user()->tenantAtual(),
             'nome'           => $validated['nome'],
             'palavras_chave' => $this->palavrasChaveParaArray($validated['palavras_chave'] ?? null),
         ]);
@@ -211,7 +211,7 @@ class TemplateAvaliacaoController extends Controller
      */
     public function updateCategoria(Request $request, CategoriaTemplate $categoria)
     {
-        abort_if($categoria->tenant_id !== $request->user()->tenant_id, 403);
+        abort_if($categoria->tenant_id !== $request->user()->tenantAtual(), 403);
 
         $validated = $request->validate([
             'palavras_chave' => 'nullable|string|max:500',
@@ -244,7 +244,7 @@ class TemplateAvaliacaoController extends Controller
      */
     public function destroyCategoria(Request $request, CategoriaTemplate $categoria)
     {
-        abort_if($categoria->tenant_id !== $request->user()->tenant_id, 403);
+        abort_if($categoria->tenant_id !== $request->user()->tenantAtual(), 403);
 
         if ($categoria->templates()->exists()) {
             return back()->withErrors(['categoria' => 'Categoria possui templates vinculados.']);

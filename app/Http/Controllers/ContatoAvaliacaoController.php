@@ -16,7 +16,7 @@ class ContatoAvaliacaoController extends Controller
 {
     public function index(Request $request, PerfilGmb $perfil)
     {
-        abort_if($perfil->tenant_id !== $request->user()->tenant_id, 403);
+        abort_if($perfil->tenant_id !== $request->user()->tenantAtual(), 403);
 
         $contatos = $perfil->contatos()->orderByDesc('created_at')->get();
 
@@ -29,7 +29,7 @@ class ContatoAvaliacaoController extends Controller
      */
     public function store(Request $request, PerfilGmb $perfil)
     {
-        abort_if($perfil->tenant_id !== $request->user()->tenant_id, 403);
+        abort_if($perfil->tenant_id !== $request->user()->tenantAtual(), 403);
 
         $validated = $request->validate([
             'lista' => 'required|string',
@@ -65,7 +65,7 @@ class ContatoAvaliacaoController extends Controller
 
     public function destroy(Request $request, ContatoAvaliacao $contato)
     {
-        abort_if($contato->tenant_id !== $request->user()->tenant_id, 403);
+        abort_if($contato->tenant_id !== $request->user()->tenantAtual(), 403);
 
         $perfil = $contato->perfil_id;
         $contato->delete();

@@ -93,6 +93,22 @@ class User extends Authenticatable
         return $this->isAdmin() || $this->isEquipeMarketing();
     }
 
+    /**
+     * Tenant que o usuário está de fato operando AGORA — respeita a troca
+     * feita via ?tenant_id= (ver EnsureTenant/podeTrocarTenant), cai pro
+     * tenant "casa" do próprio usuário quando não há troca em sessão.
+     *
+     * Achado real 2026-08-20: ~30 controllers do painel liam
+     * $request->user()->tenant_id direto, ignorando essa troca por completo
+     * — inclusive os 4 controllers de GMB que a Nathanel usa. Este helper
+     * existe pra ser o único ponto de leitura correto; controllers que
+     * ainda leem tenant_id direto do usuário devem migrar pra ele.
+     */
+    public function tenantAtual(): ?int
+    {
+        return session('tenant_id') ?? $this->tenant_id;
+    }
+
     public function isDono(): bool
     {
         return in_array($this->perfil, ['admin', 'dono'], true);
