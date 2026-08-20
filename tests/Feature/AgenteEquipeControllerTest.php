@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AcessoAgente;
 use App\Models\Cargo;
 use App\Models\ServicoExecutado;
 use App\Models\Tenant;
@@ -110,5 +111,63 @@ class AgenteEquipeControllerTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Teste');
+    }
+
+    /**
+     * Sugestão 2 (2026-08-20): bloco de acessos concedidos — nunca guarda
+     * senha, só o identificador.
+     */
+    public function test_admin_registra_acesso_sem_guardar_senha(): void
+    {
+        $leadCerto = Tenant::factory()->create(['id' => 2]);
+        $agente    = $this->agenteLeadCerto($leadCerto);
+
+        $response = $this->actingAs($this->admin())->post("/admin/equipe/{$agente->id}/acessos", [
+            'servico'       => 'Gmail',
+            'identificador' => 'nathanelllfernandees@gmail.com',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('acessos_agente', [
+            'user_id' => $agente->id, 'servico' => 'Gmail', 'identificador' => 'nathanelllfernandees@gmail.com', 'ativo' => true,
+        ]);
+    }
+
+    public function test_admin_desativa_e_reativa_um_acesso(): void
+    {
+        $leadCerto = Tenant::factory()->create(['id' => 2]);
+        $agente    = $this->agenteLeadCerto($leadCerto);
+        $acesso    = AcessoAgente::create(['user_id' => $agente->id, 'servico' => 'Gmail', 'identificador' => 'x@x.com', 'ativo' => true]);
+
+        $this->actingAs($this->admin())->post("/admin/equipe/{$agente->id}/acessos/{$acesso->id}/toggle");
+        $this->assertFalse($acesso->fresh()->ativo);
+
+        $this->actingAs($this->admin())->post("/admin/equipe/{$agente->id}/acessos/{$acesso->id}/toggle");
+        $this->assertTrue($acesso->fresh()->ativo);
+    }
+
+    /**
+     * Sugestão 3/5 (2026-08-20): cargo sem ninguém ocupando aparece com
+     * selo "Dormente", e cargo com cargo_pai aparece recuado embaixo dele.
+     */
+    public function test_cargo_sem_agente_mostra_selo_dormente(): void
+    {
+        Cargo::create(['nome' => 'Gestor de SEO', 'descricao' => 'x', 'ordem' => 1]);
+
+        $response = $this->actingAs($this->admin())->get('/admin/equipe/cargos');
+
+        $response->assertOk();
+        $response->assertSee('Dormente');
+    }
+
+    public function test_cargo_com_pai_aparece_junto_do_pai(): void
+    {
+        $pai   = Cargo::create(['nome' => 'Diretora de Marketing', 'descricao' => 'x', 'ordem' => 1]);
+        $filho = Cargo::create(['nome' => 'Gestor de SEO', 'descricao' => 'y', 'ordem' => 2, 'cargo_pai_id' => $pai->id]);
+
+        $response = $this->actingAs($this->admin())->get('/admin/equipe/cargos');
+
+        $response->assertOk();
+        $response->assertSeeInOrder(['Diretora de Marketing', 'Gestor de SEO']);
     }
 }

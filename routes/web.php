@@ -182,6 +182,8 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::patch('/{user}', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'update'])->name('update');
         Route::post('/{user}/cargos', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'sincronizarCargos'])->name('sincronizar-cargos');
         Route::post('/{user}/servicos', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'registrarServico'])->name('registrar-servico');
+        Route::post('/{user}/acessos', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'acessosStore'])->name('acessos.store');
+        Route::post('/{user}/acessos/{acesso}/toggle', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'acessosToggle'])->name('acessos.toggle');
     });
 
     // Fale com o agente — qualquer usuário logado da empresa, sem

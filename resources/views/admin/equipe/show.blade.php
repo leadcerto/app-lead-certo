@@ -23,6 +23,7 @@
             <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 mt-2 text-sm">
                 <div class="flex gap-2"><dt class="text-gray-400">E-mail:</dt><dd class="text-gray-700">{{ $agente->email }}</dd></div>
                 <div class="flex gap-2"><dt class="text-gray-400">WhatsApp:</dt><dd class="text-gray-700">{{ $agente->whatsapp ?? '—' }}</dd></div>
+                <div class="flex gap-2"><dt class="text-gray-400">Na equipe desde:</dt><dd class="text-gray-700">{{ $agente->created_at->format('d/m/Y') }}</dd></div>
             </dl>
 
             <form action="{{ route('admin.equipe.update', $agente->id) }}" method="POST" class="mt-3 flex flex-wrap gap-2 items-center">
@@ -61,6 +62,61 @@
         <a href="{{ route('admin.equipe.cargos') }}" class="block mt-2 text-xs text-gray-400 hover:text-gray-600">Ver/criar cargos da estrutura &rarr;</a>
     </div>
 
+    {{-- Acessos concedidos (sugestão 2, 2026-08-20) — nunca guarda senha,
+         só o identificador (e-mail/número/usuário), pra visualizar rápido
+         o que já está montado sem abrir a documentação. --}}
+    <div class="bg-white rounded-xl shadow p-6 mt-4">
+        <h2 class="font-semibold text-gray-800 mb-1">🔑 Acessos concedidos</h2>
+        <p class="text-xs text-gray-400 mb-3">Nunca guarda senha aqui — só o que existe e qual identificador.</p>
+
+        <div class="space-y-1.5">
+            @forelse($agente->acessos as $acesso)
+                <div class="flex items-center justify-between gap-2 p-2 rounded-lg {{ $acesso->ativo ? '' : 'opacity-50' }}">
+                    <span class="text-sm">
+                        <span class="font-medium text-gray-700">{{ $acesso->servico }}</span>
+                        <span class="text-gray-400"> — {{ $acesso->identificador }}</span>
+                    </span>
+                    <form action="{{ route('admin.equipe.acessos.toggle', [$agente->id, $acesso->id]) }}" method="POST">
+                        @csrf
+                        <button class="text-xs {{ $acesso->ativo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500' }} px-2 py-0.5 rounded-full">
+                            {{ $acesso->ativo ? 'Ativo' : 'Inativo' }}
+                        </button>
+                    </form>
+                </div>
+            @empty
+                <p class="text-sm text-gray-400 text-center py-2">Nenhum acesso registrado ainda.</p>
+            @endforelse
+        </div>
+
+        <form action="{{ route('admin.equipe.acessos.store', $agente->id) }}" method="POST" class="flex flex-wrap gap-2 mt-3">
+            @csrf
+            <input type="text" name="servico" required maxlength="100" placeholder="Serviço (ex.: Gmail, WhatsApp Messenger)"
+                   class="text-xs border border-gray-300 rounded-lg px-2 py-1 flex-1 min-w-[160px]">
+            <input type="text" name="identificador" required maxlength="200" placeholder="E-mail/número/usuário — nunca senha"
+                   class="text-xs border border-gray-300 rounded-lg px-2 py-1 flex-1 min-w-[160px]">
+            <button class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-lg">Adicionar</button>
+        </form>
+    </div>
+
+    {{-- Atividade real no Kanban (sugestão 6, 2026-08-20) — puxada
+         automaticamente dos tickets que o agente atende de verdade,
+         distinta do log manual de serviços executados abaixo. --}}
+    @if($atividadeKanban->isNotEmpty())
+    <div class="bg-white rounded-xl shadow p-6 mt-4">
+        <h2 class="font-semibold text-gray-800 mb-1">📋 Atividade real no Kanban</h2>
+        <p class="text-xs text-gray-400 mb-3">Últimos tickets que {{ $agente->nome }} atendeu de verdade, puxado automaticamente.</p>
+        <div class="divide-y divide-gray-100">
+            @foreach($atividadeKanban as $ticket)
+                <div class="flex items-center justify-between gap-2 py-2 text-sm">
+                    <span class="text-gray-700">{{ $ticket->contato?->nome ?? $ticket->contato?->telefone ?? 'Contato #' . $ticket->contato_id }} <span class="text-gray-400">· #{{ $ticket->id }} · {{ $ticket->coluna_kanban }}</span></span>
+                    <span class="text-xs text-gray-400 flex-shrink-0">{{ $ticket->updated_at->format('d/m/Y H:i') }}</span>
+                </div>
+            @endforeach
+        </div>
+        <a href="{{ route('kanban') }}?tenant_id={{ $agente->tenant_id }}" target="_blank" class="block mt-2 text-xs text-blue-600 hover:underline">Ver Kanban completo dela &rarr;</a>
+    </div>
+    @endif
+
     {{-- Feedback de clientes (item pedido 2026-08-20) --}}
     <div class="bg-white rounded-xl shadow p-6 mt-4">
         <h2 class="font-semibold text-gray-800 mb-1">💬 Feedback dos clientes</h2>
@@ -68,6 +124,13 @@
             Mensagens que empresas logadas mandaram direto pra {{ $agente->nome }} — cada uma recebe uma resposta padrão
             confirmando que o assunto vai pra próxima reunião da equipe.
         </p>
+        <div class="flex flex-wrap gap-3 text-xs text-gray-500 mb-3">
+            <span>{{ $feedbackResumo['total'] }} no total</span>
+            <span>{{ $feedbackResumo['este_mes'] }} este mês</span>
+            @foreach($feedbackResumo['por_empresa'] as $nomeEmpresa => $qtd)
+                <span class="bg-gray-100 px-2 py-0.5 rounded-full">{{ $nomeEmpresa }}: {{ $qtd }}</span>
+            @endforeach
+        </div>
         @forelse($feedbacks as $fb)
             <div class="border-b border-gray-100 py-3 last:border-0">
                 <div class="flex justify-between items-baseline">

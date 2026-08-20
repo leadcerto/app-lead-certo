@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcessoAgente;
 use App\Models\Cargo;
 use App\Models\FeedbackAgente;
 use App\Models\ServicoExecutado;
+use App\Models\TicketAtendimento;
 use App\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -36,7 +38,7 @@ class AgenteEquipeController extends Controller
 
     public function show(int $user): View
     {
-        $agente = User::with(['cargos'])->findOrFail($user);
+        $agente = User::with(['cargos', 'acessos'])->findOrFail($user);
 
         $servicos = ServicoExecutado::where('user_id', $user)
             ->orderByDesc('executado_em')
@@ -52,7 +54,62 @@ class AgenteEquipeController extends Controller
 
         $feedbacks = FeedbackAgente::where('user_id', $user)->with('tenant')->latest()->limit(30)->get();
 
-        return view('admin.equipe.show', compact('agente', 'servicos', 'cargos', 'resumo', 'feedbacks'));
+        // Sugestão 4 (2026-08-20): resumo agregado do feedback, não só a
+        // lista crua — total, este mês, e por empresa (sinal de satisfação
+        // com algum volume, não só "teve ou não teve").
+        $feedbackResumo = [
+            'total'      => FeedbackAgente::where('user_id', $user)->count(),
+            'este_mes'   => FeedbackAgente::where('user_id', $user)->where('created_at', '>=', now()->startOfMonth())->count(),
+            'por_empresa' => FeedbackAgente::where('user_id', $user)
+                ->with('tenant:id,nome')
+                ->get()
+                ->groupBy(fn ($f) => $f->tenant?->nome ?? 'Empresa removida')
+                ->map->count()
+                ->sortDesc(),
+        ];
+
+        // Sugestão 6 (2026-08-20): atividade real no Kanban do próprio
+        // tenant do agente (ex.: tickets que a Adriana atendeu como
+        // vendedora no Kanban de suporte da Lead Certo) — distinta do log
+        // manual de serviços executados.
+        $atividadeKanban = TicketAtendimento::withoutGlobalScopes()
+            ->where('tenant_id', $agente->tenant_id)
+            ->where('vendedor_id', $agente->id)
+            ->with('contato:id,nome,telefone')
+            ->orderByDesc('updated_at')
+            ->limit(10)
+            ->get(['id', 'contato_id', 'coluna_kanban', 'status', 'updated_at']);
+
+        return view('admin.equipe.show', compact(
+            'agente', 'servicos', 'cargos', 'resumo', 'feedbacks', 'feedbackResumo', 'atividadeKanban'
+        ));
+    }
+
+    public function acessosStore(Request $request, int $user): RedirectResponse
+    {
+        User::findOrFail($user);
+
+        $validated = $request->validate([
+            'servico'       => 'required|string|max:100',
+            'identificador' => 'required|string|max:200',
+        ]);
+
+        AcessoAgente::create([
+            'user_id'       => $user,
+            'servico'       => $validated['servico'],
+            'identificador' => $validated['identificador'],
+            'ativo'         => true,
+        ]);
+
+        return back()->with('sucesso', 'Acesso registrado.');
+    }
+
+    public function acessosToggle(int $user, int $acesso): RedirectResponse
+    {
+        $registro = AcessoAgente::where('user_id', $user)->findOrFail($acesso);
+        $registro->update(['ativo' => ! $registro->ativo]);
+
+        return back()->with('sucesso', 'Acesso atualizado.');
     }
 
     public function update(Request $request, int $user): RedirectResponse
@@ -113,7 +170,13 @@ class AgenteEquipeController extends Controller
     {
         $cargos = Cargo::withCount('agentes')->with('cargoPai')->orderBy('ordem')->get();
 
-        return view('admin.equipe.cargos', compact('cargos'));
+        // Sugestão 5 (2026-08-20): agrupa por hierarquia (cargo_pai_id) pra
+        // a view renderizar os subordinados recuados embaixo do cargo pai,
+        // em vez de uma lista plana sem relação visual entre eles.
+        $topo         = $cargos->whereNull('cargo_pai_id')->values();
+        $subordinados = $cargos->whereNotNull('cargo_pai_id')->groupBy('cargo_pai_id');
+
+        return view('admin.equipe.cargos', compact('cargos', 'topo', 'subordinados'));
     }
 
     public function cargosStore(Request $request): RedirectResponse

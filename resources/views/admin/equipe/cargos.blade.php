@@ -34,18 +34,15 @@
         </form>
     </div>
 
+    {{-- Hierarquia: cargo do topo, com os subordinados recuados embaixo --}}
     <div class="bg-white rounded-xl shadow divide-y divide-gray-100">
-        @forelse($cargos as $cargo)
-            <div class="p-4">
-                <div class="flex items-baseline justify-between gap-2">
-                    <span class="font-medium text-gray-800">{{ $cargo->nome }}</span>
-                    <span class="text-xs text-gray-400">{{ $cargo->agentes_count }} agente(s) ocupando</span>
+        @forelse($topo as $cargo)
+            @include('admin.equipe._cargo-linha', ['cargo' => $cargo])
+            @foreach($subordinados->get($cargo->id, collect()) as $filho)
+                <div class="pl-8 border-l-2 border-blue-100 ml-6">
+                    @include('admin.equipe._cargo-linha', ['cargo' => $filho])
                 </div>
-                @if($cargo->cargoPai)
-                    <span class="text-xs text-gray-400">reporta pra {{ $cargo->cargoPai->nome }}</span>
-                @endif
-                <p class="text-sm text-gray-600 mt-1">{{ $cargo->descricao }}</p>
-            </div>
+            @endforeach
         @empty
             <p class="text-sm text-gray-400 text-center py-8">Nenhum cargo cadastrado ainda.</p>
         @endforelse

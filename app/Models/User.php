@@ -165,6 +165,11 @@ class User extends Authenticatable
         return $this->hasMany(ServicoExecutado::class);
     }
 
+    public function acessos(): HasMany
+    {
+        return $this->hasMany(AcessoAgente::class);
+    }
+
     public function agendamentosAvaliacao(): HasMany
     {
         return $this->hasMany(AgendamentoAvaliacao::class, 'avaliador_id');
