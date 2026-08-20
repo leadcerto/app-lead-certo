@@ -218,20 +218,10 @@
                         </div>
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap justify-end">
-                        <template x-if="ticketAtivo.vendedor_id && !['resolvido','encerrado'].includes(ticketAtivo.status)">
-                            <div class="flex gap-1">
-                                <button @click="liberar(ticketAtivo.id)"
-                                        class="text-xs bg-yellow-100 text-yellow-700 px-2.5 py-1.5 rounded-lg hover:bg-yellow-200 transition-colors"
-                                        title="Devolve o controle ao bot (IA responde na próxima mensagem do lead)">
-                                    Devolver
-                                </button>
-                                <button @click="liberarEAcionarIA(ticketAtivo.id)"
-                                        class="text-xs bg-purple-100 text-purple-700 px-2.5 py-1.5 rounded-lg hover:bg-purple-200 transition-colors"
-                                        title="Devolve e aciona a IA agora, sem precisar esperar o lead responder">
-                                    Devolver + IA
-                                </button>
-                            </div>
-                        </template>
+                        {{-- Botões "Devolver"/"Devolver + IA" removidos em 2026-08-20 —
+                             decisão do Leonardo: o agente já para sozinho quando um
+                             humano assume e volta sozinho depois do timeout configurado
+                             (ver ReassumirAgente), devolução manual era redundante. --}}
                         <template x-if="!['resolvido','encerrado'].includes(ticketAtivo.status)">
                             <button @click="marcarPendente(ticketAtivo.id)"
                                     :class="ticketAtivo.pendente_desde ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-orange-100 text-orange-600 hover:bg-orange-200'"
@@ -992,23 +982,8 @@ function kanban() {
             if (res.ok) await this.carregarNotas(this.ticketAtivo.contato.id);
         },
 
-        async liberar(id) {
-            const res = await this.api(`/api/painel/kanban/ticket/${id}/liberar`, 'POST');
-            if (res.ok) {
-                this.ticketAtivo.vendedor_id        = null;
-                this.ticketAtivo.agente_responsavel = 'bot';
-                await this.carregar();
-            }
-        },
-
-        async liberarEAcionarIA(id) {
-            const res = await this.api(`/api/painel/kanban/ticket/${id}/liberar-ia`, 'POST');
-            if (res.ok) {
-                this.ticketAtivo.vendedor_id        = null;
-                this.ticketAtivo.agente_responsavel = 'bot';
-                await this.carregar();
-            }
-        },
+        // liberar()/liberarEAcionarIA() removidos em 2026-08-20 junto com os
+        // botões "Devolver"/"Devolver + IA" — ver comentário no header do modal.
 
         async marcarPendente(id) {
             const res = await this.api(`/api/painel/kanban/ticket/${id}/pendente`, 'POST');

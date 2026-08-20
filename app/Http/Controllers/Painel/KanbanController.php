@@ -297,31 +297,14 @@ class KanbanController extends Controller
         return response()->json(['ticket_id' => $ticket, 'encerrado' => true]);
     }
 
-    public function liberar(int $ticket): JsonResponse
-    {
-        $model = TicketAtendimento::findOrFail($ticket);
-
-        $model->update([
-            'vendedor_id'        => null,
-            'agente_responsavel' => 'bot',
-        ]);
-
-        return response()->json(['ticket_id' => $ticket, 'liberado' => true]);
-    }
-
-    public function liberarEAcionarIA(int $ticket): JsonResponse
-    {
-        $model = TicketAtendimento::findOrFail($ticket);
-
-        $model->update([
-            'vendedor_id'        => null,
-            'agente_responsavel' => 'bot',
-        ]);
-
-        dispatch(new \App\Jobs\SdrResponderJob($ticket, '', false, true));
-
-        return response()->json(['ticket_id' => $ticket, 'liberado' => true, 'ia_acionada' => true]);
-    }
+    // liberar()/liberarEAcionarIA() (botões "Devolver"/"Devolver + IA")
+    // removidos em 2026-08-20 — decisão do Leonardo: essa devolução manual
+    // era redundante com o mecanismo automático que já existe
+    // (ReassumirAgente, `conversas:reassumir-agente`, agendado no
+    // scheduler) — o agente já para de agir quando um humano assume, e
+    // volta sozinho depois do timeout configurado por coluna, analisando o
+    // contexto atual da conversa inteira. Não tinha nenhum teste cobrindo
+    // esses 2 endpoints (confirmado antes de remover).
 
     /**
      * Regra 2 (Bloco 3): o humano orienta uma dúvida do agente por aqui — não
