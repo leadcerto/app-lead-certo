@@ -59,10 +59,76 @@ class NomeExtracaoService
                 if (in_array($primeiraWord, self::NAO_NOMES, true) || in_array(mb_strtolower($nome, 'UTF-8'), self::NAO_NOMES, true)) {
                     continue;
                 }
-                return mb_convert_case($nome, MB_CASE_TITLE, 'UTF-8');
+                return $this->formatarNome($nome);
             }
         }
 
         return null;
+    }
+
+    /**
+     * Valida se um pushName (nome de perfil do WhatsApp) parece um nome de
+     * pessoa de verdade, antes de usá-lo como valor inicial do contato.
+     *
+     * Achado real 2026-08-20 (Leonardo): pushName de conta comercial/anúncio
+     * ("Kasia Ramos proteção veicular", "Mudatech") passava direto por essa
+     * validação (antes só rejeitava vazio/curto/só-números/prefixo "~" de
+     * status) e virava o "nome" do contato — bloqueando pra sempre a
+     * re-avaliação por IA (IdentificarNomeConversaJob e o comando
+     * `contatos:limpar-nomes` só reprocessam contato sem nome real). Mesmo
+     * critério de tamanho/palavras-chave de empresa já usado em
+     * IdentificarNomeConversaJob::validarNome(), pra ficar consistente.
+     *
+     * Também achado: essa validação só existia no lado Uazapi de mensagem de
+     * texto — nem o caminho de chamada perdida (Uazapi) nem o Covercut
+     * validavam nada, pushName ia direto pro banco.
+     */
+    public function pushNameValido(?string $nome): bool
+    {
+        if (! $nome || mb_strlen(trim($nome)) < 2) {
+            return false;
+        }
+
+        $nome = trim($nome);
+
+        // WhatsApp coloca ~ antes de nomes de status — não é nome real
+        if (str_starts_with($nome, '~')) {
+            return false;
+        }
+
+        // Só dígitos ou formatação de telefone
+        $soNumeros = preg_replace('/[\s\-\+\(\)\.]+/', '', $nome);
+        if (ctype_digit($soNumeros) && strlen($soNumeros) >= 8) {
+            return false;
+        }
+
+        // Só emojis / caracteres não-alfabéticos
+        if (! preg_match('/\p{L}/u', $nome)) {
+            return false;
+        }
+
+        // Nome de pessoa real dificilmente passa de 5 palavras — texto de
+        // propaganda/descrição de negócio costuma ser mais longo.
+        if (str_word_count($nome) > 5) {
+            return false;
+        }
+
+        // Palavras que indicam nome de empresa/negócio, não de pessoa.
+        if (preg_match('/\b(empresa|companhia|ltda|s\.?a\.?|mei|portal|equipe|consultor|consultora|corretor|corretora|proteção|seguro|seguros)\b/iu', $nome)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Normaliza a capitalização de um nome — primeira letra de cada palavra
+     * maiúscula, resto minúsculo. Usado sempre que um nome é salvo, pra
+     * cobrir tanto o texto extraído da conversa quanto o pushName cru do
+     * WhatsApp (que às vezes chega todo em minúsculas, ex.: "maria").
+     */
+    public function formatarNome(string $nome): string
+    {
+        return mb_convert_case(trim($nome), MB_CASE_TITLE, 'UTF-8');
     }
 }

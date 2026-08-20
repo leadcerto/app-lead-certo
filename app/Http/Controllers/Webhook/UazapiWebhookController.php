@@ -163,8 +163,10 @@ class UazapiWebhookController extends Controller
 
     private function processarMensagemLead(Tenant $tenant, string $telefone, ?string $conteudo, ?string $pushName, array $msg, \App\Models\WhatsappCanal $canal): void
     {
-        // Valida pushName — rejeita lixo como "~Deus", números, muito curto
-        $nomeValido = $this->validarPushName($pushName) ? $pushName : null;
+        // Valida pushName — rejeita lixo como "~Deus", números, muito curto,
+        // e (achado 2026-08-20) texto de propaganda/nome de negócio.
+        $nomeExtracao = app(\App\Services\NomeExtracaoService::class);
+        $nomeValido   = $nomeExtracao->pushNameValido($pushName) ? $nomeExtracao->formatarNome($pushName) : null;
 
         // Detecta origem a partir da mensagem (links rastreados com texto pré-preenchido)
         $origemDetectada = $this->detectarOrigem($conteudo);
@@ -399,11 +401,18 @@ class UazapiWebhookController extends Controller
 
     private function processarChamadaWhatsApp(Tenant $tenant, string $telefone, ?string $pushName, \App\Models\WhatsappCanal $canal): void
     {
-        // Ignora se já há ticket ativo (evita duplicar sequência)
-        $contato = $this->buscarOuCriarContato($telefone, ['nome' => $pushName ?: 'Sem Nome', 'origem' => 'whatsapp']);
+        // Achado real 2026-08-20: esse caminho (chamada perdida) nunca
+        // validava o pushName — ia direto pro banco sem passar por
+        // validarPushName()/pushNameValido(), diferente do caminho de
+        // mensagem de texto acima. Corrigido pra usar o mesmo validador.
+        $nomeExtracao = app(\App\Services\NomeExtracaoService::class);
+        $nomeValido   = $nomeExtracao->pushNameValido($pushName) ? $nomeExtracao->formatarNome($pushName) : null;
 
-        if ($pushName && $this->semNomeReal($contato)) {
-            $contato->update(['nome' => $pushName]);
+        // Ignora se já há ticket ativo (evita duplicar sequência)
+        $contato = $this->buscarOuCriarContato($telefone, ['nome' => $nomeValido ?: 'Sem Nome', 'origem' => 'whatsapp']);
+
+        if ($nomeValido && $this->semNomeReal($contato)) {
+            $contato->update(['nome' => $nomeValido]);
         }
 
         VinculoContatoTenant::firstOrCreate([
@@ -487,27 +496,10 @@ class UazapiWebhookController extends Controller
         return $c->semNomeReal();
     }
 
-    private function validarPushName(?string $nome): bool
-    {
-        if (! $nome || mb_strlen(trim($nome)) < 2) return false;
-
-        $nome = trim($nome);
-
-        // WhatsApp coloca ~ antes de nomes de status — não é nome real
-        if (str_starts_with($nome, '~')) return false;
-
-        // Só dígitos ou formatação de telefone
-        $soNumeros = preg_replace('/[\s\-\+\(\)\.]+/', '', $nome);
-        if (ctype_digit($soNumeros) && strlen($soNumeros) >= 8) return false;
-
-        // Muito curto (1 char ou só espaços)
-        if (mb_strlen(preg_replace('/\s+/', '', $nome)) < 2) return false;
-
-        // Só emojis / caracteres não-alfabéticos
-        if (! preg_match('/\p{L}/u', $nome)) return false;
-
-        return true;
-    }
+    // A validação de pushName (antes um método privado duplicado aqui) foi
+    // movida pra NomeExtracaoService::pushNameValido() em 2026-08-20, pra
+    // ser compartilhada com o Covercut e com o caminho de chamada perdida
+    // (que nunca validava nada antes).
 
     /**
      * Detecta a origem do lead a partir do texto da primeira mensagem.

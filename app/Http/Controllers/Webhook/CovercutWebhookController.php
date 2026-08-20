@@ -133,10 +133,22 @@ class CovercutWebhookController extends Controller
         $telefone = $this->normalizarTelefone($telefoneRaw);
         $pushName = $payload['contact']['name'] ?? null;
 
+        // Achado real 2026-08-20: esse lado nunca validava o pushName (ia
+        // direto pro banco, diferente do Uazapi que já rejeitava lixo óbvio)
+        // — nem tinha o mesmo tratamento de "atualiza se contato existente
+        // ainda não tem nome real". Corrigido pra usar o mesmo validador
+        // compartilhado (regra de paridade entre canais).
+        $nomeExtracao = app(\App\Services\NomeExtracaoService::class);
+        $nomeValido   = $nomeExtracao->pushNameValido($pushName) ? $nomeExtracao->formatarNome($pushName) : null;
+
         $temReferralAnuncio = isset($payload['message']['referral']) || isset($payload['message']['ctwa_clid']);
         $janelaExpiraEm = $temReferralAnuncio ? now()->addHours(72) : now()->addHours(24);
 
-        $contato = $this->buscarOuCriarContato($telefone, ['nome' => $pushName ?: 'Sem Nome', 'origem' => 'whatsapp']);
+        $contato = $this->buscarOuCriarContato($telefone, ['nome' => $nomeValido ?: 'Sem Nome', 'origem' => 'whatsapp']);
+
+        if ($nomeValido && $contato->semNomeReal()) {
+            $contato->update(['nome' => $nomeValido]);
+        }
 
         VinculoContatoTenant::firstOrCreate(['contato_id' => $contato->id, 'tenant_id' => $tenant->id]);
 
