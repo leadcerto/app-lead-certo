@@ -130,6 +130,59 @@ class SdrResponderService
             return null;
         }
 
+        // ── 3.7. Handoff prematuro pro orçamento (achado real 2026-08-20) ────
+        // O modelo às vezes manda a frase fixa de encerramento (ver Regra de
+        // handoff em montarHistorico()) achando que terminou o checklist sem
+        // ter terminado de verdade — caso real: ticket com só 1 mensagem do
+        // lead, nenhum endereço, e o modelo mandou "Já peguei toda a visão...
+        // vou passar pro setor de orçamento" mesmo assim. Mesma rede de
+        // segurança do guardrail de área: só deixa passar se os objetivos
+        // ativos da coluna atual estiverem REALMENTE marcados como cumpridos
+        // (não confia só na palavra do modelo).
+        if (preg_match('/j[aá]\s+peguei\s+toda\s+a\s+vis[aã]o|vou\s+passar\s+essa\s+ficha\s+agora\s+pro\s+nosso\s+setor\s+de\s+or[çc]amento/iu', $resposta)) {
+            $idsAtivos = KanbanColunaObjetivo::withoutGlobalScopes()
+                ->where('tenant_id', $ticket->tenant_id)
+                ->where('coluna_kanban', $ticket->coluna_kanban)
+                ->where('ativo', true)
+                ->pluck('id')
+                ->all();
+
+            // Mesmo critério de "Coluna sem nenhum objetivo configurado ...
+            // trata como cumprido" já usado em objetivosCumpridosAoEncerrar()
+            // (TicketAtendimento) — objetivos são opt-in, não dá pra julgar
+            // incompleto o que a coluna nem rastreia.
+            $cumpridos      = $ticket->objetivos_cumpridos ?? [];
+            $checklistFecha = empty($idsAtivos) || empty(array_diff($idsAtivos, $cumpridos));
+
+            if (! $checklistFecha) {
+                $ticket->update([
+                    'aguardando_orientacao_em' => now(),
+                    'mensagem_espera_enviada'  => false,
+                ]);
+
+                try {
+                    app(\App\Services\AlertaInternoService::class)->criar(
+                        $ticket->tenant_id,
+                        'handoff_prematuro',
+                        'Agente tentou encerrar o checklist sem ter terminado',
+                        "Resposta bloqueada antes de enviar: \"{$resposta}\" — objetivos pendentes: "
+                            . implode(', ', array_diff($idsAtivos, $cumpridos)),
+                        $ticket->id,
+                    );
+                } catch (\Exception $e) {
+                    Log::warning('SdrResponder: falha ao criar alerta de handoff prematuro', [
+                        'ticket_id' => $ticket->id, 'erro' => $e->getMessage(),
+                    ]);
+                }
+
+                Log::warning('SdrResponder: bloqueado handoff prematuro, ticket pausado', [
+                    'ticket_id' => $ticket->id, 'resposta' => $resposta,
+                ]);
+
+                return null;
+            }
+        }
+
         // ── 4. Detectar token de movimento de coluna e aplicar ──────────────
         // Token = chave da coluna em maiúsculas entre colchetes. Gerado dinamicamente
         // a partir das colunas reais do tenant — se o franqueado renomear uma coluna,
