@@ -97,6 +97,35 @@
         </div>
     </div>
 
+    {{-- Nome do Kanban (achado 2026-08-20: não dava pra renomear "Vendas" pra
+         algo como "Suporte" — campo próprio, salva independente do resto). --}}
+    <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-6">
+        <div class="flex items-center gap-2 mb-2">
+            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+            </svg>
+            <span class="text-sm font-semibold text-gray-700">Nome deste Kanban</span>
+        </div>
+        <p class="text-xs text-gray-400 mb-3">Aparece no menu e nos relatórios — mude pra algo que faça sentido pro que esse Kanban faz (ex: "Suporte", "Vendas", "Prospecção").</p>
+        <div class="flex items-center gap-2">
+            <input
+                type="text"
+                @input="nomeKanban = $event.target.value; nomeKanbanAlterado = true; nomeKanbanSalvo = false"
+                :value="nomeKanban"
+                placeholder="Ex: Vendas"
+                maxlength="100"
+                class="flex-1 text-sm border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-gray-400 bg-gray-50"
+            >
+            <button @click="salvarNomeKanban()"
+                    :disabled="!nomeKanbanAlterado || !nomeKanban.trim()"
+                    class="text-sm bg-gray-700 hover:bg-gray-800 disabled:opacity-40 text-white px-4 py-3 rounded-lg transition-colors whitespace-nowrap">
+                <span x-show="nomeKanbanSalvando">Salvando...</span>
+                <span x-show="!nomeKanbanSalvando && !nomeKanbanAlterado">✓ Salvo</span>
+                <span x-show="!nomeKanbanSalvando && nomeKanbanAlterado">Salvar</span>
+            </button>
+        </div>
+    </div>
+
     {{-- Base de conhecimento geral do Kanban --}}
     <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-6">
         <div class="flex items-center gap-2 mb-2">
@@ -1583,6 +1612,10 @@ function kanbanConfig() {
         novaVariacaoTexto: {},  // { [mensagemId]: string } — campo de criação manual de variação
 
         // Base de conhecimento geral do Kanban (não por coluna)
+        nomeKanban: '',
+        nomeKanbanAlterado: false,
+        nomeKanbanSalvando: false,
+        nomeKanbanSalvo: false,
         conhecimentoGeral: '',
         conhecimentoGeralAlterado: false,
         conhecimentoGeralSalvando: false,
@@ -1702,7 +1735,20 @@ function kanbanConfig() {
             const res = await this.api('/api/painel/kanban/info');
             if (res.ok) {
                 const json = await res.json();
+                this.nomeKanban = json.nome ?? '';
                 this.conhecimentoGeral = json.conhecimento_geral ?? '';
+            }
+        },
+
+        async salvarNomeKanban() {
+            this.nomeKanbanSalvando = true;
+            const res = await this.api('/api/painel/kanban/info', 'PUT', {
+                nome: this.nomeKanban.trim(),
+            });
+            this.nomeKanbanSalvando = false;
+            if (res.ok) {
+                this.nomeKanbanAlterado = false;
+                this.nomeKanbanSalvo = true;
             }
         },
 
