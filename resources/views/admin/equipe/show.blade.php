@@ -117,12 +117,16 @@
     </div>
     @endif
 
-    {{-- Feedback de clientes (item pedido 2026-08-20) --}}
+    {{-- Feedback de clientes — redesenho 2026-08-20 (Leonardo): vira um
+         caso rastreável (status + relatório de viabilidade), não só "vai
+         pra reunião". Filosofia: atender a necessidade da MAIORIA, não
+         pedido pontual de uma empresa só — por isso o campo de quantas
+         empresas seriam beneficiadas. --}}
     <div class="bg-white rounded-xl shadow p-6 mt-4">
         <h2 class="font-semibold text-gray-800 mb-1">💬 Feedback dos clientes</h2>
         <p class="text-xs text-gray-400 mb-3">
-            Mensagens que empresas logadas mandaram direto pra {{ $agente->nome }} — cada uma recebe uma resposta padrão
-            confirmando que o assunto vai pra próxima reunião da equipe.
+            Mensagens que empresas logadas mandaram pro setor de {{ $agente->nome }} — cada caso vira uma análise de
+            viabilidade (faz sentido implementar? tempo estimado? quantas empresas se beneficiariam?).
         </p>
         <div class="flex flex-wrap gap-3 text-xs text-gray-500 mb-3">
             <span>{{ $feedbackResumo['total'] }} no total</span>
@@ -133,12 +137,46 @@
         </div>
         @forelse($feedbacks as $fb)
             <div class="border-b border-gray-100 py-3 last:border-0">
-                <div class="flex justify-between items-baseline">
-                    <span class="text-sm font-medium text-gray-700">{{ $fb->tenant?->nome ?? 'Empresa removida' }}</span>
-                    <span class="text-xs text-gray-400">{{ $fb->created_at->format('d/m/Y H:i') }}</span>
+                <div class="flex justify-between items-baseline gap-2 flex-wrap">
+                    <span class="text-sm font-medium text-gray-700">
+                        {{ $fb->tenant?->nome ?? 'Empresa removida' }}
+                        <span class="text-xs text-gray-400 font-normal">· {{ $fb->cargo?->nome ?? 'setor removido' }}</span>
+                    </span>
+                    <span @class([
+                        'text-xs px-2 py-0.5 rounded-full font-medium',
+                        'bg-gray-100 text-gray-500' => $fb->status === 'pendente',
+                        'bg-blue-100 text-blue-700' => $fb->status === 'em_analise',
+                        'bg-green-100 text-green-700' => $fb->status === 'concluido',
+                    ])>{{ ['pendente' => 'Pendente', 'em_analise' => 'Em análise', 'concluido' => 'Concluído'][$fb->status] }}</span>
                 </div>
                 <p class="text-sm text-gray-600 mt-1">{{ $fb->mensagem }}</p>
                 <p class="text-xs text-gray-400 mt-1 italic">↳ {{ $fb->resposta }}</p>
+
+                <details class="mt-2">
+                    <summary class="text-xs text-blue-600 cursor-pointer hover:underline">Análise de viabilidade</summary>
+                    <form action="{{ route('admin.equipe.feedback.analise', $fb->id) }}" method="POST" class="bg-gray-50 rounded-lg p-3 mt-2 space-y-2">
+                        @csrf
+                        <select name="status" class="text-xs border border-gray-300 rounded-lg px-2 py-1">
+                            <option value="pendente" {{ $fb->status === 'pendente' ? 'selected' : '' }}>Pendente</option>
+                            <option value="em_analise" {{ $fb->status === 'em_analise' ? 'selected' : '' }}>Em análise</option>
+                            <option value="concluido" {{ $fb->status === 'concluido' ? 'selected' : '' }}>Concluído</option>
+                        </select>
+                        <textarea name="relatorio_analise" placeholder="Relatório da análise — faz sentido implementar? por quê?"
+                                  class="w-full text-xs border border-gray-300 rounded-lg px-2 py-1" rows="2">{{ $fb->relatorio_analise }}</textarea>
+                        <div class="flex flex-wrap gap-2 items-center">
+                            <select name="implementacao_faz_sentido" class="text-xs border border-gray-300 rounded-lg px-2 py-1">
+                                <option value="" {{ is_null($fb->implementacao_faz_sentido) ? 'selected' : '' }}>Faz sentido? —</option>
+                                <option value="1" {{ $fb->implementacao_faz_sentido === true ? 'selected' : '' }}>Sim</option>
+                                <option value="0" {{ $fb->implementacao_faz_sentido === false ? 'selected' : '' }}>Não</option>
+                            </select>
+                            <input type="text" name="tempo_estimado_execucao" value="{{ $fb->tempo_estimado_execucao }}"
+                                   placeholder="Tempo estimado" class="text-xs border border-gray-300 rounded-lg px-2 py-1 w-32">
+                            <input type="number" name="empresas_beneficiadas_estimado" value="{{ $fb->empresas_beneficiadas_estimado }}"
+                                   min="0" placeholder="Empresas beneficiadas" class="text-xs border border-gray-300 rounded-lg px-2 py-1 w-36">
+                            <button class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg font-medium ml-auto">Salvar análise</button>
+                        </div>
+                    </form>
+                </details>
             </div>
         @empty
             <p class="text-sm text-gray-400 text-center py-4">Nenhum feedback recebido ainda.</p>

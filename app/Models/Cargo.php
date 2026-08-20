@@ -9,11 +9,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Cargo extends Model
 {
-    protected $fillable = ['nome', 'descricao', 'cargo_pai_id', 'ordem', 'ativo'];
+    protected $fillable = ['nome', 'descricao', 'cargo_pai_id', 'ordem', 'ativo', 'visivel_para_clientes'];
 
     protected function casts(): array
     {
-        return ['ativo' => 'boolean'];
+        return ['ativo' => 'boolean', 'visivel_para_clientes' => 'boolean'];
     }
 
     public function agentes(): BelongsToMany

@@ -1,20 +1,13 @@
 @extends('layouts.app')
-@section('title', 'Falar com ' . $agente->nome)
+@section('title', $setor->nome)
 
 @section('content')
 <div class="max-w-2xl mx-auto">
-    <div class="bg-white rounded-xl shadow p-6 flex items-center gap-4">
-        @if($agente->avatar_url)
-            <img src="{{ $agente->avatar_url }}" class="w-16 h-16 rounded-full object-cover flex-shrink-0" alt="">
-        @else
-            <div class="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-2xl font-bold text-gray-500 flex-shrink-0">
-                {{ mb_substr($agente->nome, 0, 1) }}
-            </div>
-        @endif
-        <div>
-            <h1 class="text-lg font-bold text-gray-800">Falar com {{ $agente->nome }}</h1>
-            <p class="text-sm text-gray-500">Manda sua dúvida, sugestão ou o que achou da plataforma — a gente lê e leva pra reunião de equipe.</p>
-        </div>
+    <a href="{{ route('equipe.setores') }}" class="text-sm text-gray-400 hover:text-gray-600">&larr; Setores</a>
+
+    <div class="bg-white rounded-xl shadow p-6 mt-3">
+        <h1 class="text-lg font-bold text-gray-800">{{ $setor->nome }}</h1>
+        <p class="text-sm text-gray-500">{{ $setor->descricao }}</p>
     </div>
 
     @if(session('sucesso'))
@@ -37,7 +30,7 @@
         @endforelse
     </div>
 
-    <form action="{{ route('equipe.conversar.store', $agente->id) }}" method="POST" class="bg-white rounded-xl shadow p-4 mt-4 flex gap-2">
+    <form action="{{ route('equipe.conversar.store', $setor->id) }}" method="POST" class="bg-white rounded-xl shadow p-4 mt-4 flex gap-2">
         @csrf
         <textarea name="mensagem" required maxlength="2000" placeholder="Escreva sua mensagem..."
                   class="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2" rows="2"></textarea>

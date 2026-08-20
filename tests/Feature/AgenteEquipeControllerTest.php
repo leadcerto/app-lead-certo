@@ -170,4 +170,44 @@ class AgenteEquipeControllerTest extends TestCase
         $response->assertOk();
         $response->assertSeeInOrder(['Diretora de Marketing', 'Gestor de SEO']);
     }
+
+    /**
+     * Redesenho 2026-08-20: cargo marcado como visível aparece na tela de
+     * Suporte pro cliente escolher — admin liga/desliga isso.
+     */
+    public function test_admin_alterna_visibilidade_do_cargo_pro_cliente(): void
+    {
+        $cargo = Cargo::create(['nome' => 'Suporte', 'descricao' => 'x', 'ordem' => 1, 'visivel_para_clientes' => false]);
+
+        $this->actingAs($this->admin())->post("/admin/equipe/cargos/{$cargo->id}/toggle-visivel");
+        $this->assertTrue($cargo->fresh()->visivel_para_clientes);
+
+        $this->actingAs($this->admin())->post("/admin/equipe/cargos/{$cargo->id}/toggle-visivel");
+        $this->assertFalse($cargo->fresh()->visivel_para_clientes);
+    }
+
+    public function test_admin_registra_analise_de_viabilidade_do_feedback(): void
+    {
+        $leadCerto = Tenant::factory()->create(['id' => 2]);
+        $agente    = $this->agenteLeadCerto($leadCerto);
+        $cargo     = Cargo::create(['nome' => 'Suporte', 'descricao' => 'x', 'ordem' => 1, 'visivel_para_clientes' => true]);
+        $feedback  = \App\Models\FeedbackAgente::create([
+            'user_id' => $agente->id, 'cargo_id' => $cargo->id, 'tenant_id' => Tenant::factory()->create()->id,
+            'mensagem' => 'Gostaria de poder exportar relatório em PDF', 'resposta' => 'x',
+        ]);
+
+        $response = $this->actingAs($this->admin())->post("/admin/equipe/feedback/{$feedback->id}/analise", [
+            'status'                          => 'concluido',
+            'relatorio_analise'               => 'Faz sentido, vários clientes pediram algo parecido.',
+            'implementacao_faz_sentido'       => '1',
+            'tempo_estimado_execucao'         => '2 semanas',
+            'empresas_beneficiadas_estimado'  => 8,
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('feedbacks_agente', [
+            'id' => $feedback->id, 'status' => 'concluido',
+            'implementacao_faz_sentido' => true, 'empresas_beneficiadas_estimado' => 8,
+        ]);
+    }
 }

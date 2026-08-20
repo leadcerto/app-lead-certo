@@ -52,7 +52,7 @@ class AgenteEquipeController extends Controller
             'minutos_totais' => ServicoExecutado::where('user_id', $user)->sum('tempo_gasto_minutos'),
         ];
 
-        $feedbacks = FeedbackAgente::where('user_id', $user)->with('tenant')->latest()->limit(30)->get();
+        $feedbacks = FeedbackAgente::where('user_id', $user)->with(['tenant', 'cargo'])->latest()->limit(30)->get();
 
         // Sugestão 4 (2026-08-20): resumo agregado do feedback, não só a
         // lista crua — total, este mês, e por empresa (sinal de satisfação
@@ -189,13 +189,41 @@ class AgenteEquipeController extends Controller
         ]);
 
         Cargo::create([
-            'nome'         => $validated['nome'],
-            'descricao'    => $validated['descricao'],
-            'cargo_pai_id' => $validated['cargo_pai_id'] ?? null,
-            'ordem'        => $validated['ordem'] ?? 1,
-            'ativo'        => true,
+            'nome'                   => $validated['nome'],
+            'descricao'              => $validated['descricao'],
+            'cargo_pai_id'           => $validated['cargo_pai_id'] ?? null,
+            'ordem'                  => $validated['ordem'] ?? 1,
+            'ativo'                  => true,
+            'visivel_para_clientes'  => $request->boolean('visivel_para_clientes'),
         ]);
 
         return back()->with('sucesso', 'Cargo criado.');
+    }
+
+    public function cargosToggleVisivel(int $cargo): RedirectResponse
+    {
+        $registro = Cargo::findOrFail($cargo);
+        $registro->update(['visivel_para_clientes' => ! $registro->visivel_para_clientes]);
+
+        return back()->with('sucesso', 'Visibilidade pro cliente atualizada.');
+    }
+
+    // ── Feedback dos clientes: análise de viabilidade ──────────────────────
+
+    public function feedbackAnalise(Request $request, int $feedback): RedirectResponse
+    {
+        $registro = FeedbackAgente::findOrFail($feedback);
+
+        $validated = $request->validate([
+            'status'                          => 'required|in:pendente,em_analise,concluido',
+            'relatorio_analise'               => 'nullable|string|max:5000',
+            'implementacao_faz_sentido'       => 'nullable|boolean',
+            'tempo_estimado_execucao'         => 'nullable|string|max:100',
+            'empresas_beneficiadas_estimado'  => 'nullable|integer|min:0',
+        ]);
+
+        $registro->update($validated);
+
+        return back()->with('sucesso', 'Análise registrada.');
     }
 }

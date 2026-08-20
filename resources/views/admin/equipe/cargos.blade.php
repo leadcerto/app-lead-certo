@@ -30,6 +30,10 @@
                     <option value="{{ $c->id }}">Reporta pra: {{ $c->nome }}</option>
                 @endforeach
             </select>
+            <label class="flex items-center gap-1.5 text-xs text-gray-600">
+                <input type="checkbox" name="visivel_para_clientes" value="1">
+                Aparece na tela de Suporte pros clientes escolherem
+            </label>
             <button class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-medium">Criar cargo</button>
         </form>
     </div>

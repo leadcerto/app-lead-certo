@@ -178,6 +178,8 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::get('/', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'index'])->name('index');
         Route::get('/cargos', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'cargosIndex'])->name('cargos');
         Route::post('/cargos', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'cargosStore'])->name('cargos.store');
+        Route::post('/cargos/{cargo}/toggle-visivel', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'cargosToggleVisivel'])->name('cargos.toggle-visivel');
+        Route::post('/feedback/{feedback}/analise', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'feedbackAnalise'])->name('feedback.analise');
         Route::get('/{user}', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'show'])->name('show');
         Route::patch('/{user}', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'update'])->name('update');
         Route::post('/{user}/cargos', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'sincronizarCargos'])->name('sincronizar-cargos');
@@ -186,11 +188,13 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::post('/{user}/acessos/{acesso}/toggle', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'acessosToggle'])->name('acessos.toggle');
     });
 
-    // Fale com o agente — qualquer usuário logado da empresa, sem
-    // restrição de perfil. Pedido do Leonardo 2026-08-20.
-    Route::prefix('equipe/{user}')->name('equipe.')->group(function () {
-        Route::get('/conversar', [\App\Http\Controllers\Painel\FeedbackAgenteController::class, 'show'])->name('conversar');
-        Route::post('/conversar', [\App\Http\Controllers\Painel\FeedbackAgenteController::class, 'store'])->name('conversar.store');
+    // Suporte — fala com um SETOR, não com uma pessoa por nome. Qualquer
+    // usuário logado da empresa, sem restrição de perfil. Redesenho
+    // 2026-08-20 (Leonardo).
+    Route::prefix('equipe')->name('equipe.')->group(function () {
+        Route::get('/suporte', [\App\Http\Controllers\Painel\FeedbackAgenteController::class, 'setores'])->name('setores');
+        Route::get('/setor/{cargo}/conversar', [\App\Http\Controllers\Painel\FeedbackAgenteController::class, 'show'])->name('conversar');
+        Route::post('/setor/{cargo}/conversar', [\App\Http\Controllers\Painel\FeedbackAgenteController::class, 'store'])->name('conversar.store');
     });
 
     // Secretária Eletrônica — dono e admin
