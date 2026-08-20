@@ -132,7 +132,24 @@ class WhatsappCanalController extends Controller
     {
         abort_if($canal->tenant_id !== auth()->user()->tenant_id, 404);
 
-        $this->uazapi->deletarInstancia($canal->tokenUazapi());
+        // Achado real 2026-08-20: o retorno de deletarInstancia() nunca era
+        // checado — se a exclusão na Uazapi falhasse (ou o token já estivesse
+        // inválido), o registro local sumia mesmo assim e a instância ficava
+        // órfã do lado de lá, sem token salvo em lugar nenhum pra apagar depois.
+        // Isso já tinha acontecido pelo menos 2x antes (test-buttons, tenant-1 —
+        // o Frete Rio antigo) e bateu o limite de instâncias da conta. Agora,
+        // se a Uazapi falhar, o registro local NÃO é apagado — fica visível pro
+        // franqueado tentar de novo, em vez de sumir e virar órfão silencioso.
+        $token = $canal->tokenUazapi();
+
+        if ($token && ! $this->uazapi->deletarInstancia($token)) {
+            \Illuminate\Support\Facades\Log::warning('WhatsappCanalController: falha ao remover instância na Uazapi, canal local mantido', [
+                'canal_id' => $canal->id, 'tenant_id' => $canal->tenant_id,
+            ]);
+
+            return response()->json(['message' => 'Não foi possível remover o número na Uazapi. Tente novamente em instantes.'], 500);
+        }
+
         $canal->delete();
 
         return response()->json(['excluido' => true]);

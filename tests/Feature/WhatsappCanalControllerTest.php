@@ -154,6 +154,38 @@ class WhatsappCanalControllerTest extends TestCase
         $this->assertTrue($kanban->canais()->whereKey($canalId)->exists());
     }
 
+    // ─── Exclusão: nunca deixar órfão na Uazapi (achado real 2026-08-20) ───────
+
+    public function test_exclusao_bem_sucedida_remove_o_canal_local(): void
+    {
+        Http::fake(['*/instance' => Http::response(['ok' => true], 200)]);
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+        $canal  = WhatsappCanal::factory()->create(['tenant_id' => $tenant->id, 'config' => ['instance_token' => 'tok']]);
+
+        $response = $this->actingAs($user)->deleteJson("/api/painel/whatsapp/canais/{$canal->id}");
+
+        $response->assertOk();
+        $this->assertDatabaseMissing('whatsapp_canais', ['id' => $canal->id]);
+    }
+
+    public function test_falha_ao_excluir_na_uazapi_mantem_o_canal_local(): void
+    {
+        // Achado real: registro local desaparecia mesmo quando a Uazapi falhava
+        // em apagar a instância — o token se perdia e a instância ficava órfã na
+        // conta, contando pro limite. Aconteceu 2x antes (test-buttons, tenant-1)
+        // e travou a criação de canal novo (limite de instâncias esgotado).
+        Http::fake(['*/instance' => Http::response(['error' => 'falhou'], 500)]);
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+        $canal  = WhatsappCanal::factory()->create(['tenant_id' => $tenant->id, 'config' => ['instance_token' => 'tok']]);
+
+        $response = $this->actingAs($user)->deleteJson("/api/painel/whatsapp/canais/{$canal->id}");
+
+        $response->assertStatus(500);
+        $this->assertDatabaseHas('whatsapp_canais', ['id' => $canal->id]);
+    }
+
     public function test_vendedor_nao_pode_excluir_canal(): void
     {
         $tenant    = Tenant::factory()->create();
