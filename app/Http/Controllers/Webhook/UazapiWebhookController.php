@@ -318,16 +318,15 @@ class UazapiWebhookController extends Controller
             }
         }
 
-        // Ecoa a transcrição do áudio de volta na própria conversa do WhatsApp —
-        // quem estiver lendo pelo app (sem abrir o painel) consegue ler sem
-        // precisar tocar o áudio. Só dispara se a transcrição de fato aconteceu
-        // (extrairTranscricaoBruta retorna null em qualquer falha).
-        if ($mediaType === 'audio' && $tipoMensagem === 'audio') {
-            $transcricaoBruta = app(MediaProcessorService::class)->extrairTranscricaoBruta($conteudo);
-            if ($transcricaoBruta) {
-                app(EcoTranscricaoService::class)->enviar($canal, $ticket, $telefone, $transcricaoBruta, 'Cliente');
-            }
-        }
+        // Achado real 2026-08-20 (Leonardo): NÃO ecoar a transcrição do áudio
+        // do CLIENTE de volta pra ele mesmo — ele já sabe o que falou, isso
+        // só existe pra o eco do lado do ATENDENTE (ver os outros pontos que
+        // chamam EcoTranscricaoService com $ticket->nomePersonaDisplay()),
+        // onde faz sentido porque o cliente pode não conseguir ouvir áudio.
+        // A transcrição em si continua disponível pro sistema/IA normalmente
+        // — ela já é salva como o próprio conteúdo da mensagem do lead
+        // (`[Áudio transcrito: ...]`), esse eco era só uma duplicata enviada
+        // de volta pro WhatsApp do cliente, sem função nenhuma.
 
         // Extração progressiva de nome a partir do conteúdo (texto ou transcrição de áudio)
         // Roda sempre que o contato ainda não tem nome real (usa telefone como nome)

@@ -408,13 +408,15 @@ class UazapiWebhookMidiaTest extends TestCase
     }
 
     /**
-     * Nova funcionalidade (2026-08-03): além de transcrever pro contexto do bot,
-     * a transcrição também é ecoada como mensagem de texto na própria conversa
-     * do WhatsApp — quem lê pelo app (sem abrir o painel) consegue ler sem tocar
-     * o áudio. Ver CovercutWebhookMidiaTest para o mesmo comportamento no canal
-     * oficial.
+     * Achado real 2026-08-20 (Leonardo): o eco da transcrição do áudio do
+     * LEAD de volta pra ele mesmo não tem função nenhuma (ele já sabe o que
+     * falou) — comportamento removido. A transcrição continua disponível
+     * pro sistema/IA normalmente, só não é mais reenviada como mensagem de
+     * WhatsApp pro cliente. Eco do lado do ATENDENTE continua existindo
+     * (ver test_audio_do_atendente_..._ecoado_com_nome_da_persona abaixo) —
+     * esse sim faz sentido, o cliente pode não conseguir ouvir áudio.
      */
-    public function test_audio_do_lead_e_transcrito_e_ecoado_na_conversa(): void
+    public function test_audio_do_lead_e_transcrito_mas_nao_e_mais_ecoado_na_conversa(): void
     {
         config(['services.groq.key' => 'fake-groq-key']);
 
@@ -450,14 +452,9 @@ class UazapiWebhookMidiaTest extends TestCase
         $this->assertSame('audio', $mensagemLead->tipo);
         $this->assertStringContainsString('oi, quero saber o valor do frete', $mensagemLead->conteudo);
 
-        $eco = Mensagem::where('remetente', 'bot')->latest()->first();
-        $this->assertNotNull($eco, 'Eco da transcrição deveria ter sido salvo');
-        $this->assertSame(
-            "[Segue a transcrição do áudio enviado pelo Cliente]\n\noi, quero saber o valor do frete",
-            $eco->conteudo
-        );
+        $this->assertDatabaseMissing('mensagens', ['remetente' => 'bot', 'ticket_id' => $mensagemLead->ticket_id]);
 
-        Http::assertSent(fn ($request) => str_contains($request->url(), '/send/text')
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/send/text')
             && str_contains($request['text'] ?? '', 'Segue a transcrição do áudio enviado pelo Cliente'));
     }
 
