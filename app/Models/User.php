@@ -32,8 +32,8 @@ class User extends Authenticatable
 
     private const PERMISSOES = [
         'dashboard'         => ['admin', 'dono', 'diretor', 'gerente', 'gestor', 'vendedor', 'growth_manager', 'revops', 'diretor_marketing'],
-        'kanban'            => ['admin', 'dono', 'diretor', 'gerente', 'gestor', 'vendedor', 'pos_venda'],
-        'contatos'          => ['admin', 'dono', 'diretor', 'gerente', 'gestor', 'vendedor', 'growth_manager'],
+        'kanban'            => ['admin', 'dono', 'diretor', 'gerente', 'gestor', 'vendedor', 'pos_venda', 'diretor_marketing'],
+        'contatos'          => ['admin', 'dono', 'diretor', 'gerente', 'gestor', 'vendedor', 'growth_manager', 'diretor_marketing'],
         'integracoes'       => ['admin', 'dono', 'growth_manager'],
         'configuracoes'     => ['admin', 'dono'],
         'auditor'           => ['admin', 'dono', 'diretor', 'auditor'],

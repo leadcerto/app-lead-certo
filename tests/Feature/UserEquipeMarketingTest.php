@@ -20,6 +20,19 @@ class UserEquipeMarketingTest extends TestCase
         $this->assertFalse($nathanel->podeAcessar('usuarios'));
     }
 
+    /**
+     * Achado real 2026-08-20: Nathanel também acumula a função de Gestor
+     * Comercial (análise de Kanban e conversas) — precisa poder acessar o
+     * Kanban e os contatos, não só GMB/campanhas.
+     */
+    public function test_diretor_marketing_acessa_kanban_e_contatos_pra_analise_comercial(): void
+    {
+        $nathanel = User::factory()->create(['perfil' => 'diretor_marketing']);
+
+        $this->assertTrue($nathanel->podeAcessar('kanban'));
+        $this->assertTrue($nathanel->podeAcessar('contatos'));
+    }
+
     public function test_perfis_dormentes_ainda_nao_tem_nenhuma_permissao_de_recurso(): void
     {
         // Intencional: existem só como enum/perfil válido, prontos pra

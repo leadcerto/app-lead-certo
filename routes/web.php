@@ -56,12 +56,12 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     // Kanban — vendedores, gerentes, diretor, dono, admin, pos_venda
     Route::get('/kanban', [KanbanController::class, 'view'])
         ->name('kanban')
-        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda');
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing');
 
     // Contatos — todos menos auditor puro, revops e pos_venda
     Route::get('/contatos/importar', [ContatosController::class, 'view'])
         ->name('contatos.importar')
-        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,growth_manager');
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,growth_manager,diretor_marketing');
 
     // Auditoria de contatos (telefones/nomes inválidos)
     Route::get('/contatos/auditoria', [ContatosController::class, 'auditoriaContatos'])
@@ -213,7 +213,7 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
     Route::delete('/whatsapp/canais-oficiais/{canal}', [\App\Http\Controllers\Painel\WhatsappCanalOficialController::class, 'destroy'])
         ->middleware('role:admin,dono');
     // Kanban
-    Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda')->group(function () {
+    Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing')->group(function () {
         Route::get('/kanban/tickets', [KanbanController::class, 'index']);
         Route::get('/kanban/coluna-objetivos/{coluna}', [\App\Http\Controllers\Painel\KanbanColunaObjetivoController::class, 'index']);
         Route::get('/kanban/ticket/{ticket}', [KanbanController::class, 'show']);
@@ -250,7 +250,7 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
     });
 
     // Contatos
-    Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,growth_manager')->group(function () {
+    Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,growth_manager,diretor_marketing')->group(function () {
         Route::post('/contatos/importar', [ContatosController::class, 'importar']);
         Route::post('/contatos/sincronizar-google', [ContatosController::class, 'sincronizarGoogle']);
         Route::post('/contatos/atualizar-google-sobrenome', [ContatosController::class, 'atualizarGoogleSobrenome']);
@@ -261,11 +261,11 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
 
     // Contato: ficha completa
     Route::get('/contato/{contato}', [ContatosController::class, 'showContato'])
-        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,growth_manager');
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,growth_manager,diretor_marketing');
 
     // Contato: histórico de atendimentos
     Route::get('/contato/{contato}/historico', [ContatosController::class, 'historicoContato'])
-        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,growth_manager');
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,growth_manager,diretor_marketing');
 
     // Contato: cadastro manual
     Route::post('/contatos/criar', [ContatosController::class, 'criarContato'])
@@ -316,10 +316,10 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
 
     // Agenda imediata (sino)
     Route::get('/agenda-imediata', [AgendaImediataController::class, 'index'])
-        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda');
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing');
 
     // Alertas internos do agente
-    Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda')->group(function () {
+    Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing')->group(function () {
         Route::get('/alertas', [AlertaInternoController::class, 'index']);
         Route::post('/alertas/{id}/marcar-lido', [AlertaInternoController::class, 'marcarLido']);
         Route::post('/alertas/marcar-todos-lidos', [AlertaInternoController::class, 'marcarTodosLidos']);
@@ -406,7 +406,7 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
 
     // Variáveis: listagem rápida para card (roles amplos, só leitura)
     Route::get('/kanban/variaveis/listar', [SpintaxVariavelController::class, 'listar'])
-        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda');
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing');
 
     // Formulários — dono e admin
     Route::middleware('role:admin,dono')->group(function () {
@@ -418,7 +418,7 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
 
 
     // Notas por Contato — todos os perfis de atendimento
-    Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda')->group(function () {
+    Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing')->group(function () {
         Route::get('/contato/{contatoId}/notas',      [NotaContatoController::class, 'index']);
         Route::post('/contato/{contatoId}/notas',     [NotaContatoController::class, 'store']);
         Route::delete('/notas/{id}',                  [NotaContatoController::class, 'destroy']);
@@ -426,7 +426,7 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
 
     // Respostas Prontas — admin, dono, vendedor (buscar) · admin, dono (CRUD)
     Route::get('/respostas-prontas/buscar', [RespostaProntaController::class, 'buscar'])
-        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda');
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing');
     Route::middleware('role:admin,dono')->group(function () {
         Route::get('/respostas-prontas',         [RespostaProntaController::class, 'index']);
         Route::post('/respostas-prontas',        [RespostaProntaController::class, 'store']);
