@@ -47,8 +47,13 @@ class UazapiWebhookDeteccaoIdiomaTest extends TestCase
             $mock->shouldReceive('detectarIdioma')->once()
                 ->with('Do you deliver to São Paulo?')
                 ->andReturn('en');
+            // Task 5 (2026-08-21): alvo de tradução da entrada não é mais fixo
+            // em 'pt' — é o idioma do atendente atribuído, ou (sem atendente,
+            // como aqui) o locale do tenant ('es-ES' nesta suíte, de propósito
+            // — ver comentário de criarTenantComCanal()).
+            $mock->shouldReceive('resolverIdiomaAtendente')->once()->andReturn('es-ES');
             $mock->shouldReceive('traduzir')->once()
-                ->with('Do you deliver to São Paulo?', 'pt', 'en')
+                ->with('Do you deliver to São Paulo?', 'es-ES', 'en')
                 ->andReturn('Vocês entregam em São Paulo?');
         });
 
@@ -73,14 +78,33 @@ class UazapiWebhookDeteccaoIdiomaTest extends TestCase
         $this->assertSame('Vocês entregam em São Paulo?', $mensagem->conteudo_pt);
     }
 
-    public function test_nao_detecta_de_novo_quando_idioma_ja_esta_confirmado(): void
+    /**
+     * Task 5 do roteiro de idioma multilíngue (2026-08-21) substituiu o gate
+     * antigo (`is_null($ticket->idioma_lead)`, que impedia qualquer nova
+     * detecção depois da primeira) pela regra anti-oscilação — a detecção
+     * roda em toda mensagem elegível, mas só ATUALIZA idioma_lead quando faz
+     * sentido. Aqui a mensagem detectada bate com o idioma já confirmado,
+     * então não há nada a decidir (a regra anti-oscilação nem é consultada)
+     * e idioma_lead/idioma_origem seguem intactos — mas a tradução da
+     * mensagem em si roda normalmente (não é mais "só a primeira vez").
+     */
+    public function test_mantem_idioma_lead_quando_deteccao_confirma_o_idioma_atual(): void
     {
         Http::fake(['*' => Http::response(['ok' => true], 200)]);
-        $this->mock(TraducaoService::class, fn ($mock) => $mock->shouldNotReceive('detectarIdioma'));
+        $this->mock(TraducaoService::class, function ($mock) {
+            $mock->shouldReceive('detectarIdioma')->once()
+                ->with('Thanks, see you tomorrow.')
+                ->andReturn('en');
+            $mock->shouldNotReceive('deveAtualizarIdiomaLead');
+            $mock->shouldReceive('resolverIdiomaAtendente')->once()->andReturn('es-ES');
+            $mock->shouldReceive('traduzir')->once()
+                ->with('Thanks, see you tomorrow.', 'es-ES', 'en')
+                ->andReturn('Gracias, hasta mañana.');
+        });
 
         $tenant  = $this->criarTenantComCanal('wh-idioma-2', 'inst-idioma-2');
         $contato = Contato::factory()->create(['telefone' => '5511900005678']);
-        TicketAtendimento::create([
+        $ticket  = TicketAtendimento::create([
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
             'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
             'status' => 'aberto', 'aberto_em' => now(), 'idioma_lead' => 'en',
@@ -96,7 +120,11 @@ class UazapiWebhookDeteccaoIdiomaTest extends TestCase
             ],
         ]);
 
-        $this->assertTrue(true); // a asserção real é o mock não ter sido chamado
+        $this->assertSame('en', $ticket->fresh()->idioma_lead);
+
+        $mensagem = Mensagem::where('ticket_id', $ticket->id)->where('remetente', 'lead')->first();
+        $this->assertSame('en', $mensagem->idioma);
+        $this->assertSame('Gracias, hasta mañana.', $mensagem->conteudo_pt);
     }
 
     public function test_nao_detecta_idioma_em_lead_que_escreve_portugues(): void

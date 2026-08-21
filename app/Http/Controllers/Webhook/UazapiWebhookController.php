@@ -353,11 +353,19 @@ class UazapiWebhookController extends Controller
             }
         }
 
-        // Item 11 do roteiro (2026-08-20): detecta o idioma do lead na
-        // primeira mensagem substancial e traduz pro português (pro
-        // atendente ler no Kanban) — só detecta 1x por ticket
-        // (idioma_lead ainda null), não em toda mensagem, pra não gerar
-        // custo de IA repetido depois que o idioma já está confirmado.
+        // Item 11 do roteiro (2026-08-20) + Task 5 do roteiro de idioma
+        // multilíngue (2026-08-21): detecção roda em toda mensagem elegível
+        // (texto/áudio, não-placeholder) — não só na primeira, já que a
+        // Camada 1 (Task 4) pode ter pré-preenchido idioma_lead pelo DDI na
+        // criação do ticket. A Camada 3 (IA) age como rede de segurança pros
+        // casos em que o DDI errou, mas só ATUALIZA idioma_lead/idioma_origem
+        // quando: (a) ainda não havia idioma nenhum, ou (b) a regra
+        // anti-oscilação aprova a troca (deveAtualizarIdiomaLead) E o
+        // idioma_origem atual não está travado por escolha explícita
+        // ('botao', Camada 2) ou manual ('manual', Camada 4) — a IA nunca
+        // sobrepõe silenciosamente uma decisão humana. A tradução em si
+        // usa o idioma real do atendente atribuído ao ticket (ou o locale
+        // do tenant, sem atendente) como alvo — não mais fixo em 'pt'.
         // Só roda em texto/áudio (palavra do próprio lead) — nunca em
         // imagem/vídeo, cujo $conteudo é a DESCRIÇÃO gerada pela nossa
         // própria IA de visão (já em português, não é o lead "falando").
@@ -367,14 +375,40 @@ class UazapiWebhookController extends Controller
         $idiomaMensagem = null;
         $conteudoPt     = null;
         if ($conteudo && in_array($tipoMensagem, ['texto', 'audio'], true)
-            && ! str_starts_with(trim($conteudo), '[') && is_null($ticket->idioma_lead)) {
-            $traducao       = app(\App\Services\TraducaoService::class);
+            && ! str_starts_with(trim($conteudo), '[')) {
+            $traducao = app(\App\Services\TraducaoService::class);
+
             $idiomaDetectado = $traducao->detectarIdioma($conteudo);
             if ($idiomaDetectado) {
-                $ticket->update(['idioma_lead' => $idiomaDetectado]);
+                $idiomaAtual = $ticket->idioma_lead;
+
+                // Regra de prioridade da spec: escolha explícita (Camada 2) e
+                // alteração manual (Camada 4) só perdem pra uma nova escolha
+                // explícita/manual — a IA nunca sobrepõe silenciosamente uma
+                // vez que o cliente ou o atendente já decidiu.
+                $idiomaTravado = in_array($ticket->idioma_origem, ['botao', 'manual'], true);
+
+                if (! $idiomaAtual) {
+                    // Primeira detecção do ticket — sempre aceita, sem regra anti-oscilação
+                    // (não há "idioma atual" ainda pra comparar).
+                    $ticket->update(['idioma_lead' => $idiomaDetectado, 'idioma_origem' => 'ia', 'idioma_atualizado_em' => now()]);
+                    $idiomaAtual = $idiomaDetectado;
+                } elseif ($idiomaDetectado !== $idiomaAtual && ! $idiomaTravado) {
+                    $ultimasMensagens = Mensagem::withoutGlobalScopes()
+                        ->where('ticket_id', $ticket->id)->where('remetente', 'lead')
+                        ->orderByDesc('enviado_em')->limit(2)->pluck('idioma')->reverse()->values();
+
+                    if ($traducao->deveAtualizarIdiomaLead($idiomaAtual, $idiomaDetectado, $ultimasMensagens, $conteudo)) {
+                        $ticket->update(['idioma_lead' => $idiomaDetectado, 'idioma_origem' => 'ia', 'idioma_atualizado_em' => now()]);
+                        $idiomaAtual = $idiomaDetectado;
+                    }
+                }
+
                 $idiomaMensagem = $idiomaDetectado;
+
                 if ($idiomaDetectado !== 'pt') {
-                    $conteudoPt = $traducao->traduzir($conteudo, 'pt', $idiomaDetectado);
+                    $idiomaAlvo = $traducao->resolverIdiomaAtendente($ticket->vendedor_id, $tenant->locale);
+                    $conteudoPt = $traducao->traduzir($conteudo, $idiomaAlvo, $idiomaDetectado);
                 }
             }
         }
