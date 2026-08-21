@@ -481,11 +481,49 @@
                                                                        @change="toggleAtivaVariacao(seq.id, msg, variacao)"
                                                                        class="w-3 h-3 accent-green-600">
                                                             </label>
+                                                            <button x-show="!variacao.protegida && editandoVariacaoId !== variacao.id"
+                                                                    @click="iniciarEditarVariacao(variacao)"
+                                                                    class="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                                                                    title="Editar texto">
+                                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                                                </svg>
+                                                            </button>
                                                             <button x-show="!variacao.protegida"
                                                                     @click="excluirVariacao(seq.id, msg, variacao)"
                                                                     class="text-red-300 hover:text-red-500 flex-shrink-0 text-xs">✕ excluir</button>
                                                         </div>
-                                                        <p class="text-xs text-gray-700 whitespace-pre-wrap break-words" x-text="variacao.conteudo"></p>
+
+                                                        {{-- Pedido do Leonardo (2026-08-21): cada uma das 6 variações nasce
+                                                             como cópia do texto original, inativa — o humano edita aqui
+                                                             direto, ou pede uma versão nova à IA sem mexer nas outras 5. --}}
+                                                        <template x-if="editandoVariacaoId !== variacao.id">
+                                                            <div>
+                                                                <p class="text-xs text-gray-700 whitespace-pre-wrap break-words" x-text="variacao.conteudo"></p>
+                                                                <button x-show="!variacao.protegida"
+                                                                        @click="regenerarVariacaoIndividual(seq.id, msg, variacao)"
+                                                                        :disabled="regenerandoVariacaoId === variacao.id"
+                                                                        class="mt-2 text-xs text-purple-600 hover:text-purple-700 disabled:opacity-40 font-medium">
+                                                                    <span x-show="regenerandoVariacaoId !== variacao.id">🔄 Pedir nova versão à IA</span>
+                                                                    <span x-show="regenerandoVariacaoId === variacao.id">Gerando...</span>
+                                                                </button>
+                                                            </div>
+                                                        </template>
+                                                        <template x-if="editandoVariacaoId === variacao.id">
+                                                            <div>
+                                                                <textarea x-model="editVariacaoConteudo" rows="3"
+                                                                          x-init="autoResize($el)"
+                                                                          @input="autoResize($event.target)"
+                                                                          class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none overflow-hidden"></textarea>
+                                                                <div class="mt-1.5 flex gap-2">
+                                                                    <button @click="salvarVariacao(seq.id, msg, variacao)"
+                                                                            class="text-xs bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700">Salvar</button>
+                                                                    <button @click="cancelarEditarVariacao()"
+                                                                            class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1">Cancelar</button>
+                                                                </div>
+                                                            </div>
+                                                        </template>
                                                     </div>
                                                 </template>
                                             </div>
@@ -1602,8 +1640,12 @@ function kanbanConfig() {
         variacoesPor: {},       // { [mensagemId]: [ {id, conteudo, origem, protegida, ativa}, ... ] }
         abaVariacaoAberta: {},  // { [mensagemId]: bool } — controla se o painel de variações está expandido
         variacaoAbaAtiva: {},   // { [mensagemId]: variacaoId } — qual aba de variação está selecionada (null = primeira/original)
-        gerandoVariacoes: {},   // { [mensagemId]: bool } — spinner durante chamada IA
+        gerandoVariacoes: {},   // { [mensagemId]: bool } — spinner durante chamada IA em lote (as 6 de uma vez)
         novaVariacaoTexto: {},  // { [mensagemId]: string } — campo de criação manual de variação
+
+        editandoVariacaoId: null,  // id da variação sendo editada agora (só uma por vez, igual editandoMsgId)
+        editVariacaoConteudo: '',  // texto em edição
+        regenerandoVariacaoId: null, // id da variação com "pedir nova versão à IA" em andamento (uma por vez)
 
         // Base de conhecimento geral do Kanban (não por coluna)
         nomeKanban: '',
@@ -2092,6 +2134,44 @@ function kanbanConfig() {
             } else {
                 const erro = await res.json().catch(() => null);
                 this.mostrarToast(erro?.message || 'Esta versão não pode ser excluída.', 'erro');
+            }
+        },
+
+        iniciarEditarVariacao(variacao) {
+            this.editandoVariacaoId    = variacao.id;
+            this.editVariacaoConteudo  = variacao.conteudo;
+        },
+
+        cancelarEditarVariacao() {
+            this.editandoVariacaoId = null;
+        },
+
+        async salvarVariacao(seqId, msg, variacao) {
+            const conteudo = this.editVariacaoConteudo.trim();
+            if (!conteudo) return;
+            const res = await this.api(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}/variacoes/${variacao.id}`, 'PUT', { conteudo });
+            if (res.ok) {
+                this.editandoVariacaoId = null;
+                await this.carregarVariacoes(seqId, msg);
+            } else {
+                const erro = await res.json().catch(() => null);
+                this.mostrarToast(erro?.message || 'Não foi possível salvar a variação.', 'erro');
+            }
+        },
+
+        // Pedido do Leonardo (2026-08-21): regenerar só UMA variação com IA,
+        // sem mexer nas outras 5 — diferente do "Gerar variações com IA" em
+        // lote (gerarVariacoes acima), que substitui as 6 de uma vez.
+        async regenerarVariacaoIndividual(seqId, msg, variacao) {
+            this.regenerandoVariacaoId = variacao.id;
+            const res = await this.api(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}/variacoes/${variacao.id}/regenerar`, 'POST');
+            this.regenerandoVariacaoId = null;
+            if (res.ok) {
+                await this.carregarVariacoes(seqId, msg);
+                this.mostrarToast('Nova versão gerada!', 'sucesso');
+            } else {
+                const erro = await res.json().catch(() => null);
+                this.mostrarToast(erro?.message || 'Não foi possível gerar uma nova versão agora.', 'erro');
             }
         },
 

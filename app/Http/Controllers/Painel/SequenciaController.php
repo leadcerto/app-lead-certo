@@ -447,4 +447,27 @@ PROMPT,
 
         return response()->json(['criadas' => $criadas]);
     }
+
+    /**
+     * Pedido do Leonardo (2026-08-21): pedir à IA uma nova versão de UMA
+     * variação específica, sem regenerar as outras 5.
+     */
+    public function regenerarVariacao(Request $request, int $sequenciaId, int $msgId, int $id, SequenciaVariacaoIaService $variacaoIa): JsonResponse
+    {
+        $this->mensagemDoTenant($request, $sequenciaId, $msgId);
+
+        $variacao = SequenciaMensagemVariacao::where('id', $id)
+            ->where('sequencia_mensagem_id', $msgId)
+            ->firstOrFail();
+
+        if ($variacao->protegida) {
+            return response()->json(['message' => 'A versão original não pode ser regenerada — edite a mensagem em vez disso.'], 422);
+        }
+
+        if (! $variacaoIa->regenerarUma($variacao)) {
+            return response()->json(['message' => 'IA temporariamente indisponível. Tente novamente em instantes.'], 503);
+        }
+
+        return response()->json($variacao->fresh());
+    }
 }
