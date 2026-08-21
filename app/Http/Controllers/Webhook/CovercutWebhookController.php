@@ -201,6 +201,16 @@ class CovercutWebhookController extends Controller
                     } else {
                         $persona = $tenant->personas()->where('is_default', true)->where('ativo', true)->first();
 
+                        // Camada 1 de detecção de idioma (Task 4 do roteiro
+                        // 2026-08-21): sugere idioma pelo DDI do telefone —
+                        // só é aplicado como idioma_lead/idioma_origem quando
+                        // bate com o locale do tenant (senão é só uma
+                        // sugestão fraca, não confirmação — ver
+                        // PaisIdiomaService). Mesma lógica do Uazapi — regra
+                        // de paridade entre canais.
+                        $idiomaSugerido = app(\App\Services\PaisIdiomaService::class)->sugerirIdioma($contato->telefone);
+                        $idiomaBate     = $idiomaSugerido && $idiomaSugerido === $tenant->locale;
+
                         $ticket = TicketAtendimento::create([
                             'tenant_id'             => $tenant->id,
                             'contato_id'            => $contato->id,
@@ -213,6 +223,10 @@ class CovercutWebhookController extends Controller
                             'aberto_em'             => now(),
                             'janela_expira_em'      => $janelaExpiraEm,
                             'janela_origem_anuncio' => $temReferralAnuncio,
+                            'idioma_pais_ddi'       => $idiomaSugerido,
+                            'idioma_lead'           => $idiomaBate ? substr($idiomaSugerido, 0, 2) : null,
+                            'idioma_origem'         => $idiomaBate ? 'ddi' : null,
+                            'idioma_atualizado_em'  => $idiomaBate ? now() : null,
                         ]);
                         $ticketNovo = true;
                     }

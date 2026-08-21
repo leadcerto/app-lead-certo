@@ -251,6 +251,14 @@ class UazapiWebhookController extends Controller
                         // Abre novo ticket
                         $persona = $tenant->personas()->where('is_default', true)->where('ativo', true)->first();
 
+                        // Camada 1 de detecção de idioma (Task 4 do roteiro
+                        // 2026-08-21): sugere idioma pelo DDI do telefone —
+                        // só é aplicado como idioma_lead/idioma_origem quando
+                        // bate com o locale do tenant (senão é só uma
+                        // sugestão fraca, não confirmação — ver PaisIdiomaService).
+                        $idiomaSugerido = app(\App\Services\PaisIdiomaService::class)->sugerirIdioma($contato->telefone);
+                        $idiomaBate     = $idiomaSugerido && $idiomaSugerido === $tenant->locale;
+
                         $ticket = TicketAtendimento::create([
                             'tenant_id'          => $tenant->id,
                             'contato_id'         => $contato->id,
@@ -261,6 +269,10 @@ class UazapiWebhookController extends Controller
                             'status'             => 'aberto',
                             'origem'             => $origemDetectada,
                             'aberto_em'          => now(),
+                            'idioma_pais_ddi'     => $idiomaSugerido,
+                            'idioma_lead'         => $idiomaBate ? substr($idiomaSugerido, 0, 2) : null,
+                            'idioma_origem'       => $idiomaBate ? 'ddi' : null,
+                            'idioma_atualizado_em' => $idiomaBate ? now() : null,
                         ]);
                         $ticketNovo = true;
                     }

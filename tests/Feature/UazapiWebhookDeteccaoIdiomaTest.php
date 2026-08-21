@@ -22,7 +22,16 @@ class UazapiWebhookDeteccaoIdiomaTest extends TestCase
 
     private function criarTenantComCanal(string $webhookToken, string $instanceToken): Tenant
     {
-        $tenant = Tenant::factory()->create();
+        // locale != 'pt-BR' de propósito: todo telefone usado neste arquivo
+        // tem DDI 55 (Brasil). Desde a Task 4 (Camada 1 — DDI na criação do
+        // ticket), um DDI que bate com o locale do tenant já preenche
+        // idioma_lead/idioma_origem no create() do ticket, antes deste
+        // bloco (Camada 3 — detecção por IA a partir da mensagem) rodar.
+        // Um locale divergente do DDI mantém idioma_lead null na criação,
+        // isolando o que este arquivo testa (Camada 3 sozinha) da Camada 1
+        // — a interação entre as duas é responsabilidade da Task 5 (alvo
+        // dinâmico + regra anti-oscilação), com seus próprios testes.
+        $tenant = Tenant::factory()->create(['locale' => 'es-ES']);
         WhatsappCanal::factory()->create([
             'tenant_id'     => $tenant->id,
             'webhook_token' => $webhookToken,
