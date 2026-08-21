@@ -1,5 +1,13 @@
 # Erro claro pra áudio incompatível no canal Oficial (Covercut) — Design Técnico
 
+> **⚠️ Decisão revertida em 2026-08-21.** Leonardo esbarrou nesse erro ao vivo em
+> produção e pediu a conversão de verdade em vez de só avisar. `ffmpeg` foi
+> instalado na VPS e `AudioConversorService::paraOgg()` converte webm/wav pra
+> ogg antes de mandar pro Covercut — a mensagem de erro abaixo continua
+> existindo só como rede de segurança (se a conversão falhar). Este documento
+> fica como histórico da decisão original, não reflete mais o comportamento
+> atual.
+
 > Follow-up da entrega `2026-07-31-envio-midia-canal-oficial-design.md`. A revisão final daquela entrega achou que áudio gravado no painel do Kanban pode sair em `.webm`, formato que a Meta Cloud API não aceita — o envio falha com o erro genérico "Falha ao enviar pelo WhatsApp", sem explicar o motivo real ao atendente.
 
 ## 1. Contexto e problema
