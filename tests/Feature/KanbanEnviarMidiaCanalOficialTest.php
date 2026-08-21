@@ -179,8 +179,20 @@ class KanbanEnviarMidiaCanalOficialTest extends TestCase
         Http::assertNotSent(fn ($request) => str_contains($request->url(), 'groq'));
     }
 
-    public function test_audio_webm_falha_com_erro_especifico_no_canal_oficial(): void
+    /**
+     * Reversão de 2026-08-21 (ver AudioConversorServiceTest): webm/wav agora
+     * são convertidos pra ogg via ffmpeg antes de mandar pro Covercut, em vez
+     * de só rejeitados. `Process::fake()` simula o ffmpeg criando o arquivo
+     * de destino de verdade — sem ffmpeg instalado no ambiente de teste.
+     */
+    public function test_audio_webm_e_convertido_e_enviado_no_canal_oficial(): void
     {
+        \Illuminate\Support\Facades\Process::fake(function ($process) {
+            $destino = collect($process->command)->last();
+            file_put_contents($destino, 'audio-convertido-fake');
+            return \Illuminate\Support\Facades\Process::result(exitCode: 0);
+        });
+
         $ticket = $this->criarTicketOficial();
         $user   = User::factory()->create(['tenant_id' => $ticket->tenant_id, 'perfil' => 'dono', 'ativo' => true]);
 
@@ -195,14 +207,19 @@ class KanbanEnviarMidiaCanalOficialTest extends TestCase
             'arquivo' => $arquivo,
         ]);
 
-        $response->assertStatus(422);
-        $response->assertJsonFragment(['message' => 'O canal Oficial (WhatsApp Business) não aceita áudio nesse formato (.webm). Anexe um arquivo de áudio nos formatos .mp3, .ogg ou .m4a.']);
-        Http::assertNothingSent();
-        Storage::disk('public')->assertDirectoryEmpty('kanban-midia');
+        $response->assertCreated();
+        Http::assertSent(fn ($request) => $request['type'] === 'audio' && $request['audio']['voice'] === true);
+        $this->assertDatabaseHas('mensagens', ['ticket_id' => $ticket->id, 'tipo' => 'audio']);
     }
 
-    public function test_audio_wav_falha_com_erro_especifico_no_canal_oficial(): void
+    public function test_audio_wav_e_convertido_e_enviado_no_canal_oficial(): void
     {
+        \Illuminate\Support\Facades\Process::fake(function ($process) {
+            $destino = collect($process->command)->last();
+            file_put_contents($destino, 'audio-convertido-fake');
+            return \Illuminate\Support\Facades\Process::result(exitCode: 0);
+        });
+
         $ticket = $this->criarTicketOficial();
         $user   = User::factory()->create(['tenant_id' => $ticket->tenant_id, 'perfil' => 'dono', 'ativo' => true]);
 
@@ -213,7 +230,34 @@ class KanbanEnviarMidiaCanalOficialTest extends TestCase
             'arquivo' => $arquivo,
         ]);
 
+        $response->assertCreated();
+        Http::assertSent(fn ($request) => $request['type'] === 'audio');
+    }
+
+    /**
+     * Rede de segurança: se o ffmpeg não estiver disponível/der erro no
+     * servidor, cai de volta na mensagem de erro clara que já existia antes
+     * — nunca manda o arquivo incompatível pro Covercut, nunca quebra com
+     * erro genérico.
+     */
+    public function test_audio_webm_com_falha_de_conversao_cai_no_erro_especifico(): void
+    {
+        \Illuminate\Support\Facades\Process::fake(
+            fn () => \Illuminate\Support\Facades\Process::result(exitCode: 127, errorOutput: 'ffmpeg: not found')
+        );
+
+        $ticket = $this->criarTicketOficial();
+        $user   = User::factory()->create(['tenant_id' => $ticket->tenant_id, 'perfil' => 'dono', 'ativo' => true]);
+
+        $arquivo = UploadedFile::fake()->create('audio.webm', 10, 'video/webm');
+
+        $response = $this->actingAs($user)->post("/api/painel/kanban/ticket/{$ticket->id}/midia", [
+            'tipo'    => 'audio',
+            'arquivo' => $arquivo,
+        ]);
+
         $response->assertStatus(422);
+        $response->assertJsonFragment(['message' => 'O canal Oficial (WhatsApp Business) não aceita áudio nesse formato (.webm). Anexe um arquivo de áudio nos formatos .mp3, .ogg ou .m4a.']);
         Http::assertNothingSent();
         Storage::disk('public')->assertDirectoryEmpty('kanban-midia');
     }

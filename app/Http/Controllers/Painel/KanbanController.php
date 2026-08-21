@@ -10,6 +10,7 @@ use App\Models\KanbanColuna;
 use App\Models\Mensagem;
 use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
+use App\Services\AudioConversorService;
 use App\Services\EcoTranscricaoService;
 use App\Services\MediaProcessorService;
 use App\Services\SequenciaService;
@@ -18,6 +19,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class KanbanController extends Controller
@@ -516,16 +518,35 @@ class KanbanController extends Controller
             return response()->json(['message' => 'Nenhum canal de WhatsApp vinculado a este atendimento.'], 502);
         }
 
+        // Item revertido em 2026-08-21 (ver docs/superpowers/specs/2026-07-31-erro-formato-audio-canal-oficial-design.md
+        // pro histórico da decisão original): áudio gravado no microfone do
+        // painel sai em .webm, que a Meta Cloud API não aceita. Antes só
+        // avisava o atendente; agora converte pra .ogg (opus) via ffmpeg
+        // antes de mandar. Se a conversão falhar (ffmpeg ausente/erro), cai
+        // de volta na mensagem de erro clara — nunca manda o arquivo
+        // incompatível, nunca quebra com erro genérico.
+        $mimeParaTranscricao = $arquivo->getMimeType();
+
         if ($tipo === 'audio' && $ehCovercut) {
             $extensaoAudio = $arquivo->guessExtension() ?: strtolower($arquivo->getClientOriginalExtension());
             if (! in_array($extensaoAudio, self::AUDIO_EXTENSOES_ACEITAS_COVERCUT, true)) {
-                return response()->json([
-                    'message' => "O canal Oficial (WhatsApp Business) não aceita áudio nesse formato (.{$extensaoAudio}). Anexe um arquivo de áudio nos formatos .mp3, .ogg ou .m4a.",
-                ], 422);
+                $convertido = app(AudioConversorService::class)->paraOgg($arquivo->getRealPath());
+
+                if (! $convertido) {
+                    return response()->json([
+                        'message' => "O canal Oficial (WhatsApp Business) não aceita áudio nesse formato (.{$extensaoAudio}). Anexe um arquivo de áudio nos formatos .mp3, .ogg ou .m4a.",
+                    ], 422);
+                }
+
+                $path = Storage::disk('public')->putFileAs(
+                    'kanban-midia', new \Illuminate\Http\File($convertido), Str::random(40) . '.ogg'
+                );
+                @unlink($convertido);
+                $mimeParaTranscricao = 'audio/ogg';
             }
         }
 
-        $path     = $arquivo->store('kanban-midia', 'public');
+        $path     ??= $arquivo->store('kanban-midia', 'public');
         $url      = url('storage/' . $path);
         $filename = $arquivo->getClientOriginalName();
 
@@ -557,7 +578,7 @@ class KanbanController extends Controller
 
                 $transcricaoBruta = app(MediaProcessorService::class)->transcreverArquivo(
                     Storage::disk('public')->get($path),
-                    $arquivo->getMimeType(),
+                    $mimeParaTranscricao,
                     $transcricaoAtiva
                 );
             } catch (\Throwable $e) {
