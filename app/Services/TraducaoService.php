@@ -73,4 +73,49 @@ class TraducaoService
 
         return $resposta ? trim($resposta) : null;
     }
+
+    /**
+     * Alvo de tradução pra mensagens de ENTRADA (cliente → atendente):
+     * o idioma real do atendente atribuído ao ticket, se houver; senão o
+     * locale padrão do tenant. Nunca retorna vazio.
+     */
+    public function resolverIdiomaAtendente(?int $vendedorId, string $localeTenant): string
+    {
+        if ($vendedorId) {
+            $idiomaVendedor = \App\Models\User::find($vendedorId)?->idioma;
+            if ($idiomaVendedor) {
+                return $idiomaVendedor;
+            }
+        }
+
+        return $localeTenant ?: 'pt-BR';
+    }
+
+    /**
+     * Regra anti-oscilação (Camada 3 do desenho de detecção): uma mensagem
+     * curta isolada nunca muda o idioma corrente da conversa sozinha. Só
+     * atualiza quando o texto é claramente longo (uma frase inteira, não um
+     * "ok"/"thanks") OU quando as duas últimas mensagens do lead já estavam
+     * no idioma recém-detectado (padrão consistente, não um one-off).
+     */
+    public function deveAtualizarIdiomaLead(
+        string $idiomaAtual,
+        string $idiomaDetectado,
+        \Illuminate\Support\Collection $ultimasMensagensIdioma,
+        string $textoAtual
+    ): bool {
+        if ($idiomaDetectado === $idiomaAtual) {
+            return false;
+        }
+
+        $textoLongo = mb_strlen(trim($textoAtual)) > 40;
+        if ($textoLongo) {
+            return true;
+        }
+
+        $duasUltimasNoIdiomaDetectado = $ultimasMensagensIdioma->count() >= 2
+            && $ultimasMensagensIdioma->slice(-2)->every(fn ($i) => $i === $idiomaDetectado);
+
+        return $duasUltimasNoIdiomaDetectado;
+    }
 }
