@@ -122,9 +122,8 @@ class FollowupConversas extends Command
                     INNER JOIN (SELECT ticket_id, MAX(id) as max_id FROM mensagens GROUP BY ticket_id) m2
                     ON m1.id = m2.max_id
                 ) as ultima'), 'ultima.ticket_id', '=', 't.id')
-                ->whereNotIn('t.etapa_ia', ['handoff'])
                 ->where('t.status', 'aberto')
-                ->select('t.id', 't.tenant_id', 't.coluna_kanban', 't.followup_estagio_enviado', 't.agente_responsavel', DB::raw('COALESCE(ultima.ultima_em, t.aberto_em) as ultima_em'))
+                ->select('t.id', 't.tenant_id', 't.coluna_kanban', 't.followup_estagio_enviado', 't.agente_responsavel', 't.etapa_ia', DB::raw('COALESCE(ultima.ultima_em, t.aberto_em) as ultima_em'))
                 ->get()
             : collect();
 
@@ -143,7 +142,14 @@ class FollowupConversas extends Command
             $ticket = null; // carregado sob demanda, só se alguma ação for aplicável
 
             // ── Estágios de mensagem (1/2/3) — só pra ticket com o bot no controle ──
-            if ($row->agente_responsavel === 'bot' && $row->followup_estagio_enviado < 3) {
+            // etapa_ia='handoff' checado explicitamente (não só agente_responsavel)
+            // porque é o sinal real de "já passou pro humano" — não faz sentido o
+            // bot "cutucar" o lead nesse caso. Achado real (Leonardo, 2026-08-21,
+            // ticket #2241/Karla): esse filtro ANTES cortava esses tickets da
+            // consulta de candidatos inteira, o que também bloqueava o auto-mover
+            // (abaixo) — corrigido pra só valer aqui, no bloco que é realmente
+            // bot-only.
+            if ($row->agente_responsavel === 'bot' && $row->etapa_ia !== 'handoff' && $row->followup_estagio_enviado < 3) {
                 $limite1 = $config?->followup_estagio1_segundos ?? 3600;
                 $limite2 = $config?->followup_estagio2_segundos ?? 7200;
                 $limite3 = $config?->followup_estagio3_segundos ?? 21600;

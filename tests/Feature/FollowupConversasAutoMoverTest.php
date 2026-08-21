@@ -467,6 +467,51 @@ class FollowupConversasAutoMoverTest extends TestCase
         $this->assertSame(0, $ticket->fresh()->followup_estagio_enviado);
     }
 
+    /**
+     * Achado real (Leonardo, 2026-08-21): ticket da Karla (#2241 em produção)
+     * ficou 44 dias parado em "Aguardando Lead" mesmo com auto-mover
+     * configurado e ativo — porque a query de candidatos do início do método
+     * filtra `whereNotIn('etapa_ia', ['handoff'])` pra TODOS os fins, não só
+     * pros Estágios de mensagem. `etapa_ia` vira 'handoff' exatamente quando
+     * o bot passa o controle pro humano — ou seja, qualquer ticket que um
+     * humano assumiu ficava fora da lista de candidatos por completo,
+     * contradizendo o próprio propósito do auto-mover (ver comentário de
+     * 2026-08-13 no código: "não faz sentido restringir só ao bot"). Achado
+     * ao investigar: 12 tickets reais da Frete Rio nessa mesma situação,
+     * parados entre 34 e 45 dias.
+     */
+    public function test_move_automaticamente_ticket_em_handoff_assumido_por_humano(): void
+    {
+        $tenant  = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'config' => ['instance_token' => 'tok'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511955556666']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'aguardando_orcamento', 'agente_responsavel' => 'humano', 'etapa_ia' => 'handoff',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+        Mensagem::create([
+            'ticket_id' => $ticket->id, 'tenant_id' => $tenant->id,
+            'remetente' => 'humano', 'tipo' => 'texto', 'conteudo' => 'ok',
+            'enviado_em' => now()->subDays(44),
+        ]);
+
+        KanbanColunaConfig::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'aguardando_orcamento',
+            'auto_mover_ativo' => true, 'auto_mover_coluna_destino' => 'encerrado',
+            'auto_mover_segundos' => 5 * 86400,
+        ]);
+
+        $this->artisan('conversas:followup')->assertExitCode(0);
+
+        $ticket->refresh();
+        $this->assertSame('encerrado', $ticket->coluna_kanban);
+        $this->assertSame('encerrado', $ticket->status);
+    }
+
     public function test_mover_para_coluna_de_papel_encerramento_renomeada_encerra_o_ticket(): void
     {
         $tenant = \App\Models\Tenant::factory()->create();
