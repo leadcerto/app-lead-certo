@@ -13,6 +13,7 @@ class Tenant extends Model
 
     protected $fillable = [
         'nome',
+        'locale',
         'nicho',
         'status',
         'email',

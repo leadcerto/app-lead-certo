@@ -229,6 +229,11 @@ class TicketAtendimento extends Model
         'vendedor_id',
         'etapa_ia',
         'idioma_lead',
+        'idioma_pais_ddi',
+        'idioma_origem',
+        'idioma_confianca',
+        'idioma_atualizado_em',
+        'idioma_aguardando_escolha',
         'endereco_saida',
         'endereco_destino',
         'lista_itens',
@@ -270,6 +275,9 @@ class TicketAtendimento extends Model
             'aguardando_orientacao_em' => 'datetime',
             'mensagem_espera_enviada'  => 'boolean',
             'tentativas_envio_falhas' => 'integer',
+            'idioma_confianca'          => 'decimal:2',
+            'idioma_atualizado_em'      => 'datetime',
+            'idioma_aguardando_escolha' => 'boolean',
         ];
     }
 
