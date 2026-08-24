@@ -229,6 +229,18 @@ class CovercutWebhookController extends Controller
                             'idioma_atualizado_em'  => $idiomaBate ? now() : null,
                         ]);
                         $ticketNovo = true;
+
+                        // Camada 2 (Task 8 do roteiro 2026-08-21): quando o DDI sugeriu
+                        // um idioma mas ele diverge do locale do tenant, a sugestão
+                        // fraca da Camada 1 não foi aplicada acima — em vez de ficar
+                        // sem idioma nenhum até a Camada 3 (IA) agir na próxima
+                        // mensagem, pergunta explicitamente ao lead qual idioma prefere.
+                        // Mesma lógica do Uazapi — regra de paridade entre canais.
+                        if ($idiomaSugerido && ! $idiomaBate) {
+                            app(\App\Services\IdiomaEscolhaService::class)->enviarEscolha(
+                                $ticket, ['pt-BR' => 'Português', 'en-US' => 'English', 'es-ES' => 'Español']
+                            );
+                        }
                     }
                 }
 
