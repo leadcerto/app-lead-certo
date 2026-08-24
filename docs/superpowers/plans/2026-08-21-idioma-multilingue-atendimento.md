@@ -789,8 +789,16 @@ Em `CovercutWebhookController.php`, no bloco de detecção (linhas ~254-267 na v
 
                 $idiomaMensagem = $idiomaDetectado;
 
-                if ($idiomaDetectado !== 'pt') {
-                    $idiomaAlvo = $traducao->resolverIdiomaAtendente($ticket->vendedor_id, $tenant->locale);
+                // Achado real na revisão da Task 5 (2026-08-21): o alvo virou
+                // dinâmico (locale de 5 chars, ex. 'es-ES'), mas o guard
+                // continuava comparando contra o literal 'pt' — deixava de
+                // traduzir quando o atendente não é brasileiro e o cliente
+                // escreve em português, e desperdiçava chamada de IA quando
+                // cliente e atendente já falam o mesmo idioma (comparação de
+                // string cheia nunca batia, 'es' !== 'es-ES'). Resolve o
+                // alvo ANTES do guard e compara só os 2 primeiros chars.
+                $idiomaAlvo = $traducao->resolverIdiomaAtendente($ticket->vendedor_id, $tenant->locale);
+                if (substr($idiomaAlvo, 0, 2) !== $idiomaDetectado) {
                     $conteudoPt = $traducao->traduzir($conteudo, $idiomaAlvo, $idiomaDetectado);
                 }
             }
@@ -905,8 +913,14 @@ trocar pra passar o idioma do usuário autenticado como origem:
 ```php
         if ($model->idioma_lead && $model->idioma_lead !== 'pt') {
             $idiomaOrigemAtendente = $request->user()->idioma ?? 'pt-BR';
+            // Mesmo achado da revisão da Task 5: traduzir() compara
+            // $idiomaAlvo === $idiomaOrigem por string cheia — passar o
+            // locale de 5 chars ('es-ES') faria isso nunca bater contra o
+            // idioma_lead de 2 chars ('es'), mesmo quando já são o mesmo
+            // idioma, desperdiçando uma chamada de IA. Normaliza pros 2
+            // primeiros chars antes de chamar.
             $traduzido = app(\App\Services\TraducaoService::class)->traduzir(
-                $request->conteudo, $model->idioma_lead, $idiomaOrigemAtendente
+                $request->conteudo, $model->idioma_lead, substr($idiomaOrigemAtendente, 0, 2)
             );
             if ($traduzido) {
                 $textoParaEnviar = $traduzido;
@@ -923,8 +937,11 @@ respondendo em nome da operação):
 ```php
         if ($ticket->idioma_lead && $ticket->idioma_lead !== 'pt') {
             $idiomaOrigemBot = $ticket->tenant->locale ?? 'pt-BR';
+            // Mesma normalização da nota acima (enviarMensagem) — traduzir()
+            // compara por string cheia, então o locale de 5 chars precisa
+            // virar 2 chars antes de comparar contra idioma_lead.
             $traduzida = app(\App\Services\TraducaoService::class)->traduzir(
-                $resposta, $ticket->idioma_lead, $idiomaOrigemBot
+                $resposta, $ticket->idioma_lead, substr($idiomaOrigemBot, 0, 2)
             );
             if ($traduzida) {
                 $respostaParaEnviar = $traduzida;
