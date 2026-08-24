@@ -41,10 +41,13 @@ class KanbanEnviarMensagemTraducaoTest extends TestCase
         $ticket = $this->criarTicket($tenant, 'en');
         $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
 
+        // O usuário de teste não define 'idioma' explícito, caindo no default
+        // 'pt-BR' da migration da Task 1 — truncado pros 2 primeiros chars
+        // antes de virar o $idiomaOrigem passado pra traduzir(), então 'pt'.
         $this->mock(TraducaoService::class, function ($mock) {
             $mock->shouldReceive('traduzir')
                 ->once()
-                ->with('Oi, tudo bem?', 'en')
+                ->with('Oi, tudo bem?', 'en', 'pt')
                 ->andReturn('Hi, how are you?');
         });
 

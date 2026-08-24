@@ -48,10 +48,13 @@ class SdrResponderServiceTraducaoTest extends TestCase
         $this->mock(OpenRouterService::class, function ($mock) {
             $mock->shouldReceive('chat')->once()->andReturn('Perfeito, vou verificar isso pra você.');
         });
+        // O tenant de teste não define 'locale' explícito, caindo no default
+        // 'pt-BR' da migration da Task 1 — truncado pros 2 primeiros chars
+        // antes de virar o $idiomaOrigem passado pra traduzir(), então 'pt'.
         $this->mock(\App\Services\TraducaoService::class, function ($mock) {
             $mock->shouldReceive('traduzir')
                 ->once()
-                ->with('Perfeito, vou verificar isso pra você.', 'en')
+                ->with('Perfeito, vou verificar isso pra você.', 'en', 'pt')
                 ->andReturn('Perfect, I will check that for you.');
         });
 

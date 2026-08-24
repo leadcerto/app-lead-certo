@@ -269,7 +269,13 @@ class SdrResponderService
         $respostaPtOriginal  = null;
 
         if ($ticket->idioma_lead && $ticket->idioma_lead !== 'pt') {
-            $traduzida = app(\App\Services\TraducaoService::class)->traduzir($resposta, $ticket->idioma_lead);
+            $idiomaOrigemBot = $ticket->tenant->locale ?? 'pt-BR';
+            // Mesma normalização da nota acima (enviarMensagem) — traduzir()
+            // compara por string cheia, então o locale de 5 chars precisa
+            // virar 2 chars antes de comparar contra idioma_lead.
+            $traduzida = app(\App\Services\TraducaoService::class)->traduzir(
+                $resposta, $ticket->idioma_lead, substr($idiomaOrigemBot, 0, 2)
+            );
             if ($traduzida) {
                 $respostaParaEnviar = $traduzida;
                 $idiomaEnviado       = $ticket->idioma_lead;

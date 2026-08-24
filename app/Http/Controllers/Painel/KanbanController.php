@@ -269,7 +269,16 @@ class KanbanController extends Controller
         $conteudoPt       = null;
 
         if ($model->idioma_lead && $model->idioma_lead !== 'pt') {
-            $traduzido = app(\App\Services\TraducaoService::class)->traduzir($request->conteudo, $model->idioma_lead);
+            $idiomaOrigemAtendente = $request->user()->idioma ?? 'pt-BR';
+            // Mesmo achado da revisão da Task 5: traduzir() compara
+            // $idiomaAlvo === $idiomaOrigem por string cheia — passar o
+            // locale de 5 chars ('es-ES') faria isso nunca bater contra o
+            // idioma_lead de 2 chars ('es'), mesmo quando já são o mesmo
+            // idioma, desperdiçando uma chamada de IA. Normaliza pros 2
+            // primeiros chars antes de chamar.
+            $traduzido = app(\App\Services\TraducaoService::class)->traduzir(
+                $request->conteudo, $model->idioma_lead, substr($idiomaOrigemAtendente, 0, 2)
+            );
             if ($traduzido) {
                 $textoParaEnviar = $traduzido;
                 $idiomaEnviado    = $model->idioma_lead;
