@@ -132,6 +132,13 @@ class UazapiWebhookDeteccaoIdiomaTest extends TestCase
         Http::fake(['*' => Http::response(['ok' => true], 200)]);
         $this->mock(TraducaoService::class, function ($mock) {
             $mock->shouldReceive('detectarIdioma')->once()->andReturn('pt');
+            // Achado real (revisão da Task 5): resolverIdiomaAtendente() agora
+            // roda sempre (o guard de tradução compara contra o alvo real, não
+            // mais o literal 'pt' — ver comentário no controller). Aqui o alvo
+            // resolvido também é português (atendente sem idioma customizado,
+            // caindo no tenant), então a tradução continua sendo pulada — mas
+            // agora por bater com o alvo de verdade, não por coincidência.
+            $mock->shouldReceive('resolverIdiomaAtendente')->once()->andReturn('pt-BR');
             $mock->shouldNotReceive('traduzir');
         });
 
@@ -153,5 +160,141 @@ class UazapiWebhookDeteccaoIdiomaTest extends TestCase
 
         $mensagem = Mensagem::where('ticket_id', $ticket->id)->where('remetente', 'lead')->first();
         $this->assertNull($mensagem->conteudo_pt);
+    }
+
+    /**
+     * Paridade com CovercutWebhookController (regra de paridade entre canais,
+     * CLAUDE.md): regra de prioridade da spec — escolha explícita (Camada 2)
+     * ou manual (Camada 4) nunca é sobreposta silenciosamente pela IA, mesmo
+     * que o texto seja longo/consistente o bastante pra passar na regra
+     * anti-oscilação normalmente. Ver
+     * DeteccaoIdiomaAlvoDinamicoTest::test_ia_nao_sobrepoe_idioma_definido_por_escolha_explicita
+     * (equivalente no lado Covercut).
+     */
+    public function test_ia_nao_sobrepoe_idioma_definido_por_escolha_explicita(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $texto = 'I would like to know if my reservation for next week is already confirmed, please.';
+
+        $this->mock(TraducaoService::class, function ($mock) use ($texto) {
+            $mock->shouldReceive('detectarIdioma')->once()->with($texto)->andReturn('en');
+            $mock->shouldNotReceive('deveAtualizarIdiomaLead');
+            $mock->shouldReceive('resolverIdiomaAtendente')->once()->andReturn('pt-BR');
+            $mock->shouldReceive('traduzir')->once()->andReturn('Tradução qualquer');
+        });
+
+        $tenant  = $this->criarTenantComCanal('wh-idioma-4', 'inst-idioma-4');
+        $contato = Contato::factory()->create(['telefone' => '5511900002222']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'idioma_lead' => 'es', 'idioma_origem' => 'botao',
+        ]);
+
+        $this->postJson('/api/webhook/uazapi/wh-idioma-4', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe' => false, 'isGroup' => false,
+                'chatid' => '5511900002222@s.whatsapp.net',
+                'messageid' => 'msg-idioma-4',
+                'text' => $texto,
+            ],
+        ]);
+
+        // idioma_lead continua 'es' (escolha explícita), mesmo a mensagem sendo
+        // claramente em inglês e longa o bastante pra passar na regra normal.
+        $this->assertSame('es', $ticket->fresh()->idioma_lead);
+        $this->assertSame('botao', $ticket->fresh()->idioma_origem);
+    }
+
+    /**
+     * Paridade com CovercutWebhookController: caso 3 dos critérios de
+     * aceite da spec — DDI bate com o tenant (idioma_lead pré-preenchido pela
+     * Camada 1, idioma_origem='ddi', não travado) mas a IA consulta a regra
+     * anti-oscilação, que autoriza a troca. Ver
+     * DeteccaoIdiomaAlvoDinamicoTest::test_ia_atualiza_idioma_quando_regra_anti_oscilacao_autoriza
+     * (equivalente no lado Covercut).
+     */
+    public function test_ia_atualiza_idioma_quando_regra_anti_oscilacao_autoriza(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $texto = 'I would like to know if my reservation for next week is already confirmed, please.';
+
+        $this->mock(TraducaoService::class, function ($mock) use ($texto) {
+            $mock->shouldReceive('detectarIdioma')->once()->with($texto)->andReturn('en');
+            $mock->shouldReceive('deveAtualizarIdiomaLead')->once()
+                ->with('pt', 'en', \Mockery::type(\Illuminate\Support\Collection::class), $texto)
+                ->andReturn(true);
+            $mock->shouldReceive('resolverIdiomaAtendente')->once()->andReturn('pt-BR');
+            $mock->shouldReceive('traduzir')->once()->andReturn('Tradução qualquer');
+        });
+
+        $tenant  = $this->criarTenantComCanal('wh-idioma-5', 'inst-idioma-5');
+        $contato = Contato::factory()->create(['telefone' => '5511900003333']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'idioma_lead' => 'pt', 'idioma_origem' => 'ddi',
+        ]);
+
+        $this->postJson('/api/webhook/uazapi/wh-idioma-5', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe' => false, 'isGroup' => false,
+                'chatid' => '5511900003333@s.whatsapp.net',
+                'messageid' => 'msg-idioma-5',
+                'text' => $texto,
+            ],
+        ]);
+
+        $this->assertSame('en', $ticket->fresh()->idioma_lead);
+        $this->assertSame('ia', $ticket->fresh()->idioma_origem);
+        $this->assertNotNull($ticket->fresh()->idioma_atualizado_em);
+    }
+
+    /**
+     * Regressão do Finding 1 (revisão da Task 5): antes da correção, o guard
+     * de tradução comparava contra o literal 'pt' em vez do alvo real
+     * resolvido — uma mensagem em português deixava de ser traduzida mesmo
+     * quando o atendente lê em outro idioma. Aqui o alvo é 'es-ES'
+     * (resolverIdiomaAtendente) e o cliente escreve em português: a tradução
+     * TEM que rodar.
+     */
+    public function test_traduz_quando_cliente_escreve_portugues_mas_alvo_do_atendente_e_outro_idioma(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        $texto = 'Olá, gostaria de saber se minha reserva já está confirmada, por favor.';
+
+        $this->mock(TraducaoService::class, function ($mock) use ($texto) {
+            $mock->shouldReceive('detectarIdioma')->once()->with($texto)->andReturn('pt');
+            $mock->shouldReceive('resolverIdiomaAtendente')->once()->andReturn('es-ES');
+            $mock->shouldReceive('traduzir')->once()
+                ->with($texto, 'es-ES', 'pt')
+                ->andReturn('Hola, quisiera saber si mi reserva ya está confirmada, por favor.');
+        });
+
+        $tenant  = $this->criarTenantComCanal('wh-idioma-6', 'inst-idioma-6');
+        $contato = Contato::factory()->create(['telefone' => '5511900004444']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $this->postJson('/api/webhook/uazapi/wh-idioma-6', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe' => false, 'isGroup' => false,
+                'chatid' => '5511900004444@s.whatsapp.net',
+                'messageid' => 'msg-idioma-6',
+                'text' => $texto,
+            ],
+        ]);
+
+        $mensagem = Mensagem::where('ticket_id', $ticket->id)->where('remetente', 'lead')->first();
+        $this->assertSame('Hola, quisiera saber si mi reserva ya está confirmada, por favor.', $mensagem->conteudo_pt);
+        $this->assertSame('pt', $ticket->fresh()->idioma_lead);
     }
 }

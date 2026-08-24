@@ -220,4 +220,53 @@ class DeteccaoIdiomaAlvoDinamicoTest extends TestCase
         $this->assertSame('en', $mensagem->idioma);
         $this->assertSame('ok obrigado', $mensagem->conteudo_pt);
     }
+
+    /**
+     * Regressão do Finding 1 (revisão da Task 5): antes da correção, o guard
+     * de tradução comparava contra o literal 'pt' em vez do alvo real
+     * resolvido — uma mensagem em português deixava de ser traduzida mesmo
+     * quando o atendente lê em outro idioma. Aqui o alvo é 'es-ES'
+     * (resolverIdiomaAtendente) e o cliente escreve em português: a tradução
+     * TEM que rodar. Ver equivalente no lado Uazapi:
+     * UazapiWebhookDeteccaoIdiomaTest::test_traduz_quando_cliente_escreve_portugues_mas_alvo_do_atendente_e_outro_idioma
+     */
+    public function test_traduz_quando_cliente_escreve_portugues_mas_alvo_do_atendente_e_outro_idioma(): void
+    {
+        $tenant  = Tenant::factory()->create(['locale' => 'pt-BR']);
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '123456', 'webhook_secret' => 'segredo-pt-alvo-diferente'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511900005555']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id, 'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'humano',
+            'status' => 'aberto', 'aberto_em' => now(), 'janela_expira_em' => now()->addHours(10),
+        ]);
+
+        $texto = 'Olá, gostaria de saber se minha reserva já está confirmada, por favor.';
+
+        $this->mock(TraducaoService::class, function ($mock) use ($texto) {
+            $mock->shouldReceive('detectarIdioma')->once()->with($texto)->andReturn('pt');
+            $mock->shouldReceive('resolverIdiomaAtendente')->once()->andReturn('es-ES');
+            $mock->shouldReceive('traduzir')->once()
+                ->with($texto, 'es-ES', 'pt')
+                ->andReturn('Hola, quisiera saber si mi reserva ya está confirmada, por favor.');
+        });
+
+        $body       = json_encode([
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '123456',
+            'contact' => ['wa_id' => '5511900005555', 'name' => 'Cliente'],
+            'message' => ['id' => 'wamid.pt-alvo-diferente-1', 'type' => 'text', 'text' => $texto],
+        ]);
+        $assinatura = hash_hmac('sha256', $body, 'segredo-pt-alvo-diferente');
+
+        $this->call('POST', '/api/webhook/covercut', [], [], [], [
+            'CONTENT_TYPE' => 'application/json', 'HTTP_X-BSP-Signature' => $assinatura,
+        ], $body);
+
+        $mensagem = Mensagem::where('ticket_id', $ticket->id)->where('remetente', 'lead')->first();
+        $this->assertSame('Hola, quisiera saber si mi reserva ya está confirmada, por favor.', $mensagem->conteudo_pt);
+        $this->assertSame('pt', $ticket->fresh()->idioma_lead);
+    }
 }

@@ -307,8 +307,18 @@ class CovercutWebhookController extends Controller
 
                 $idiomaMensagem = $idiomaDetectado;
 
-                if ($idiomaDetectado !== 'pt') {
-                    $idiomaAlvo = $traducao->resolverIdiomaAtendente($ticket->vendedor_id, $tenant->locale);
+                // Achado real (revisão da Task 5): o alvo de tradução não é
+                // mais o literal 'pt' — é o idioma resolvido do atendente
+                // (resolverIdiomaAtendente), que pode ser qualquer locale
+                // (ex.: 'es-ES'). Comparar contra o alvo (2 primeiras letras,
+                // já que detectarIdioma() devolve ISO 639-1 de 2 letras e o
+                // alvo pode vir como locale de 5) evita dois bugs: deixar de
+                // traduzir quando o cliente escreve em português mas o
+                // atendente lê em outro idioma, e desperdiçar chamada de IA
+                // pedindo pra "traduzir pra 'es-ES'" (não é um código ISO
+                // 639-1 válido) quando o idioma já bate.
+                $idiomaAlvo = $traducao->resolverIdiomaAtendente($ticket->vendedor_id, $tenant->locale);
+                if (substr($idiomaAlvo, 0, 2) !== $idiomaDetectado) {
                     $conteudoPt = $traducao->traduzir($conteudo, $idiomaAlvo, $idiomaDetectado);
                 }
             }
