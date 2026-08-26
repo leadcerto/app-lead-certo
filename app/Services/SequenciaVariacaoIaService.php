@@ -30,6 +30,10 @@ class SequenciaVariacaoIaService
      */
     public function gerarVariacoesIniciais(SequenciaMensagem $mensagem): int
     {
+        if (trim((string) $mensagem->conteudo) === '') {
+            return 0;
+        }
+
         $jaTemVariacao = $mensagem->variacoes()->where('protegida', false)->exists();
         if ($jaTemVariacao) {
             return 0;

@@ -83,7 +83,9 @@ class SequenciaControllerGeraVariacoesAutomaticoTest extends TestCase
         $response->assertOk();
         $this->assertFalse($antiga->fresh()->ativa);
         // Mesma regra de segurança do storeMensagem: variação nova via IA nasce
-        // inativa, precisa de revisão humana antes de entrar no sorteio.
-        $this->assertSame(6, $msg->variacoes()->where('origem', 'ia')->where('ativa', false)->count());
+        // inativa, precisa de revisão humana antes de entrar no sorteio. Exclui
+        // a $antiga (também origem=ia/ativa=false, mas por ter sido desativada
+        // na regeneração, não por ter nascido assim) pra contar só as 6 novas.
+        $this->assertSame(6, $msg->variacoes()->where('origem', 'ia')->where('ativa', false)->where('id', '!=', $antiga->id)->count());
     }
 }
