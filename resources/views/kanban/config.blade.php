@@ -190,7 +190,7 @@
                         @input="objetivo[col.key] = $event.target.value; objetivoAlterado[col.key] = true; objetivoSalvo[col.key] = false; autoResize($event.target)"
                         :value="objetivo[col.key] ?? ''"
                         :placeholder="col.objetivoEx"
-                        rows="2"
+                        rows="5"
                         class="w-full text-sm border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none bg-gray-50 overflow-hidden"
                     ></textarea>
                     <div class="flex justify-end mt-2">
