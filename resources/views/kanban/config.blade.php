@@ -495,12 +495,17 @@
                                                              "1" (Original/protegida) edita msg.conteudo direto — mesmo
                                                              endpoint de sempre, que já sincroniza os dois lados; as
                                                              variações 2-7 editam o próprio conteúdo, endpoint de variação. --}}
+                                                        {{-- x-effect (não x-init): as 7 abas ficam todas montadas ao mesmo
+                                                             tempo, só escondidas via x-show — a que está escondida no
+                                                             momento do mount tem scrollHeight=0, então autoResize() precisa
+                                                             rodar de novo quando a aba realmente fica visível (mesmo padrão
+                                                             já usado nos outros campos desta tela). --}}
                                                         <template x-if="variacao.protegida">
                                                             <textarea :value="msg.conteudo || ''"
                                                                       @input="msg.conteudo = $event.target.value; autoResize($event.target)"
                                                                       @blur="salvarConteudoOriginal(seq.id, msg)"
-                                                                      x-init="autoResize($el)"
-                                                                      rows="3"
+                                                                      x-effect="(msg.conteudo, (variacaoAbaAtiva[msg.id] ?? (variacoesPor[msg.id] || [])[0]?.id) === variacao.id) && $nextTick(() => autoResize($el))"
+                                                                      rows="5"
                                                                       class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none overflow-hidden"></textarea>
                                                         </template>
                                                         <template x-if="!variacao.protegida">
@@ -508,8 +513,8 @@
                                                                 <textarea :value="variacao.conteudo || ''"
                                                                           @input="variacao.conteudo = $event.target.value; autoResize($event.target)"
                                                                           @blur="salvarVariacaoInline(seq.id, msg, variacao)"
-                                                                          x-init="autoResize($el)"
-                                                                          rows="3"
+                                                                          x-effect="(variacao.conteudo, (variacaoAbaAtiva[msg.id] ?? (variacoesPor[msg.id] || [])[0]?.id) === variacao.id) && $nextTick(() => autoResize($el))"
+                                                                          rows="5"
                                                                           class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none overflow-hidden"></textarea>
                                                                 <button @click="regenerarVariacaoIndividual(seq.id, msg, variacao)"
                                                                         :disabled="regenerandoVariacaoId === variacao.id"
