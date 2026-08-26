@@ -139,9 +139,20 @@ class ContatoSyncService
 
                     if ($similaridade >= self::LIMIAR_SIMILARIDADE || ! $existente->nome) {
                         // Mesma pessoa → atualiza campos vazios e garante vínculo
+                        // Achado real (Leonardo, 2026-08-16): "Sem Nome" é uma string
+                        // preenchida, não vazia — empty() nunca deixava o nome real
+                        // digitado no Google (pelo time do cliente) sobrescrever um
+                        // "Sem Nome" travado aqui. Usa o mesmo critério de
+                        // Contato::semNomeReal() (vazio, igual ao telefone, ou
+                        // literalmente "Sem Nome") só pro campo nome — os outros
+                        // campos não têm esse problema de placeholder.
                         $atualizar = [];
                         foreach ($dados as $campo => $valor) {
-                            if (! in_array($campo, ['origem', 'opt_out']) && empty($existente->$campo) && $valor) {
+                            if (in_array($campo, ['origem', 'opt_out']) || ! $valor) {
+                                continue;
+                            }
+                            $estaVazio = $campo === 'nome' ? $existente->semNomeReal() : empty($existente->$campo);
+                            if ($estaVazio) {
                                 $atualizar[$campo] = $valor;
                             }
                         }
