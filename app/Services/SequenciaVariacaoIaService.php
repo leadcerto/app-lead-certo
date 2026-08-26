@@ -11,40 +11,31 @@ class SequenciaVariacaoIaService
     public function __construct(private OpenRouterService $openRouter) {}
 
     /**
-     * Cria as 6 variações iniciais de uma mensagem como CÓPIAS do conteúdo
-     * escrito pelo humano — sem chamar IA. Redesenho de 2026-08-21 (Leonardo:
-     * "ficou muito estranho e complicado de entender"): a versão anterior
-     * chamava a IA na hora de criar a mensagem e as 6 já saíam ATIVAS no
-     * sorteio sem nenhuma revisão. Agora as 6 cópias nascem inativas —
-     * o humano edita cada uma (ou pede uma versão nova à IA, ver
-     * `regenerarUma()`) e só então ativa no sorteio quando estiver pronta.
-     * Não faz nada se a mensagem não tem texto ou se já existe alguma
-     * variação não-protegida (evita duplicar a criação).
+     * Cria as 6 variações iniciais de uma mensagem, via IA — mas nascem todas
+     * INATIVAS no sorteio. Histórico: a versão original (até 2026-08-20)
+     * chamava IA e já saía tudo ATIVO sem revisão ("estranho e complicado" —
+     * Leonardo, 2026-08-21); o redesenho seguinte trocou a IA por 6 cópias
+     * verbatim do texto original pra resolver isso, mas foi longe demais —
+     * Leonardo apontou (2026-08-16... na prática mesma virada de sessão)
+     * que as 6 abas ficavam idênticas, sem nenhuma variedade de verdade.
+     * Este é o meio-termo: continua chamando a IA pra ter texto realmente
+     * diferente entre as abas (mesmo prompt/regras de `chamarIaEGerar()`,
+     * reusado por `regenerar()` também), só que sempre `ativa=false` — o
+     * humano revisa e ativa cada uma que aprovar, a Original protegida
+     * continua sendo a única que envia até isso acontecer.
+     * Não faz nada se a mensagem não tem texto, se já existe alguma variação
+     * não-protegida (evita duplicar a criação), ou se a IA estiver
+     * indisponível no momento (a mensagem principal continua funcionando
+     * normalmente via a variação Original, protegida).
      */
     public function gerarVariacoesIniciais(SequenciaMensagem $mensagem): int
     {
-        $conteudo = trim((string) $mensagem->conteudo);
-        if ($conteudo === '') {
-            return 0;
-        }
-
         $jaTemVariacao = $mensagem->variacoes()->where('protegida', false)->exists();
         if ($jaTemVariacao) {
             return 0;
         }
 
-        for ($i = 0; $i < 6; $i++) {
-            SequenciaMensagemVariacao::create([
-                'tenant_id'             => $mensagem->tenant_id,
-                'sequencia_mensagem_id' => $mensagem->id,
-                'conteudo'              => $conteudo,
-                'origem'                => 'humano',
-                'protegida'             => false,
-                'ativa'                 => false,
-            ]);
-        }
-
-        return 6;
+        return $this->chamarIaEGerar($mensagem, 'sequencia_variacoes_iniciais');
     }
 
     /**
@@ -120,9 +111,11 @@ PROMPT,
     }
 
     /**
-     * Regeneração manual: desativa (soft) as variações IA atuais e gera 6 novas.
-     * Usada pelo endpoint de "regenerar variações" quando o humano edita a
-     * mensagem original e quer variações atualizadas.
+     * Regeneração manual (botão "Gerar variações com IA" em lote): desativa
+     * (soft) as variações IA atuais e gera 6 novas — inativas, mesma regra
+     * de `gerarVariacoesIniciais()`, pra manter as duas entradas consistentes
+     * (o humano sempre revisa e ativa antes de qualquer variação nova entrar
+     * no sorteio de envio).
      */
     public function regenerar(SequenciaMensagem $mensagem): int
     {
@@ -201,7 +194,7 @@ PROMPT,
                 'conteudo'              => $texto,
                 'origem'                => 'ia',
                 'protegida'             => false,
-                'ativa'                 => true,
+                'ativa'                 => false,
             ]);
             $criadas++;
         }

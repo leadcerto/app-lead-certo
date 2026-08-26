@@ -12,15 +12,16 @@ use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
- * Redesenho 2026-08-21 (Leonardo): "ficou muito estranho e complicado de
- * entender" — a versão anterior chamava a IA na hora de criar a mensagem e
- * já deixava as 6 variações ATIVAS no sorteio sem revisão nenhuma. Agora
- * `gerarVariacoesIniciais()` cria 6 CÓPIAS determinísticas do texto original
- * (sem IA, sem custo, sem risco de resposta esquisita indo pro sorteio sem
- * revisão) — todas INATIVAS até o humano revisar/editar e ativar. A geração
- * por IA vira uma ação explícita, por variação, via `regenerarUma()` (ver
- * SequenciaVariacaoIaServiceRegenerarUmaTest) ou em lote via `regenerar()`
- * (endpoint "Gerar variações com IA" já existente, sem mudança).
+ * Segundo redesenho (2026-08-16, mesma virada de sessão em que o
+ * Leonardo testemunhou o resultado do primeiro): o redesenho de 2026-08-21
+ * trocou a chamada de IA por 6 cópias verbatim do texto original — resolvia
+ * o problema de conteúdo indo pro sorteio sem revisão, mas foi longe demais:
+ * as 6 abas de Variações ficavam com texto idêntico, sem nenhuma variedade.
+ * Meio-termo adotado agora: `gerarVariacoesIniciais()` volta a chamar a IA
+ * (mesmo prompt/regras que já existiam em `chamarIaEGerar()`, reusado por
+ * `regenerar()`), mas as 6 continuam nascendo INATIVAS — o humano revisa e
+ * ativa cada uma que aprovar; a variação Original (protegida) continua
+ * sendo a única ativa até isso acontecer, então o envio nunca quebra.
  */
 class SequenciaVariacaoIaServiceTest extends TestCase
 {
@@ -36,26 +37,51 @@ class SequenciaVariacaoIaServiceTest extends TestCase
         ]);
     }
 
-    public function test_cria_6_copias_do_conteudo_original_sem_chamar_ia(): void
+    private function fakeRespostaIa(array $textos): void
+    {
+        $json = json_encode(['variacoes' => array_map(
+            fn ($texto, $i) => ['ordem' => $i + 1, 'conteudo' => $texto],
+            $textos,
+            array_keys($textos),
+        )]);
+
+        Http::fake(['openrouter.ai/*' => Http::response([
+            'choices' => [['message' => ['content' => $json]]],
+            'usage'   => ['prompt_tokens' => 10, 'completion_tokens' => 20],
+        ], 200)]);
+    }
+
+    public function test_gera_6_variacoes_via_ia_todas_inativas(): void
     {
         $tenant = Tenant::factory()->create();
         $msg    = $this->criarMensagem($tenant, 'Olá {nome}, tudo bem?');
-
-        Http::fake(); // se chamar qualquer HTTP, o teste falha por request inesperada
+        $textos = ['V1', 'V2', 'V3', 'V4', 'V5', 'V6'];
+        $this->fakeRespostaIa($textos);
 
         $criadas = app(SequenciaVariacaoIaService::class)->gerarVariacoesIniciais($msg);
 
         $this->assertSame(6, $criadas);
-        Http::assertNothingSent();
 
         $variacoes = SequenciaMensagemVariacao::where('sequencia_mensagem_id', $msg->id)
             ->where('protegida', false)->get();
         $this->assertCount(6, $variacoes);
         foreach ($variacoes as $v) {
-            $this->assertSame('Olá {nome}, tudo bem?', $v->conteudo);
-            $this->assertSame('humano', $v->origem);
+            $this->assertContains($v->conteudo, $textos);
+            $this->assertSame('ia', $v->origem);
             $this->assertFalse($v->ativa);
         }
+    }
+
+    public function test_ia_indisponivel_nao_gera_nada_mas_nao_quebra(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $msg    = $this->criarMensagem($tenant);
+        Http::fake(['openrouter.ai/*' => Http::response('erro interno', 500)]);
+
+        $criadas = app(SequenciaVariacaoIaService::class)->gerarVariacoesIniciais($msg);
+
+        $this->assertSame(0, $criadas);
+        $this->assertSame(0, SequenciaMensagemVariacao::where('sequencia_mensagem_id', $msg->id)->where('protegida', false)->count());
     }
 
     public function test_nao_gera_de_novo_se_ja_existe_variacao_nao_protegida(): void
@@ -66,10 +92,12 @@ class SequenciaVariacaoIaServiceTest extends TestCase
             'tenant_id' => $tenant->id, 'sequencia_mensagem_id' => $msg->id,
             'conteudo' => 'Já existente', 'origem' => 'humano', 'protegida' => false, 'ativa' => false,
         ]);
+        Http::fake(); // se chamar qualquer HTTP, o teste falha por request inesperada
 
         $criadas = app(SequenciaVariacaoIaService::class)->gerarVariacoesIniciais($msg);
 
         $this->assertSame(0, $criadas);
+        Http::assertNothingSent();
         $this->assertSame(1, SequenciaMensagemVariacao::where('sequencia_mensagem_id', $msg->id)->where('protegida', false)->count());
     }
 
@@ -77,10 +105,12 @@ class SequenciaVariacaoIaServiceTest extends TestCase
     {
         $tenant = Tenant::factory()->create();
         $msg    = $this->criarMensagem($tenant, '');
+        Http::fake();
 
         $criadas = app(SequenciaVariacaoIaService::class)->gerarVariacoesIniciais($msg);
 
         $this->assertSame(0, $criadas);
+        Http::assertNothingSent();
         $this->assertSame(0, SequenciaMensagemVariacao::where('sequencia_mensagem_id', $msg->id)->count());
     }
 }

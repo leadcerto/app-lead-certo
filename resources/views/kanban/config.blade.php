@@ -452,12 +452,12 @@
                                                 <div class="flex items-end gap-1 overflow-x-auto">
                                                     <template x-for="(variacao, idx) in (variacoesPor[msg.id] || [])" :key="variacao.id">
                                                         <button @click="variacaoAbaAtiva[msg.id] = variacao.id"
-                                                                class="relative flex-shrink-0 min-w-[2rem] px-2.5 py-1.5 text-xs font-semibold rounded-t-lg border border-b-0 transition-colors"
+                                                                class="relative flex-shrink-0 min-w-[2rem] px-2.5 py-1.5 text-xs rounded-t-lg border border-b-0 transition-colors"
                                                                 :class="[
                                                                     (variacaoAbaAtiva[msg.id] ?? (variacoesPor[msg.id] || [])[0]?.id) === variacao.id
-                                                                        ? 'bg-white border-gray-200 text-purple-700 z-10'
-                                                                        : 'bg-gray-100 border-gray-100 text-gray-400 hover:text-gray-600 hover:bg-gray-200',
-                                                                    (!variacao.protegida && !variacao.ativa) ? 'opacity-40' : ''
+                                                                        ? 'bg-white border-gray-200 text-purple-700 font-bold z-10'
+                                                                        : 'bg-gray-200 border-gray-200 text-gray-600 font-semibold hover:text-gray-800 hover:bg-gray-300',
+                                                                    (!variacao.protegida && !variacao.ativa) ? 'opacity-50' : ''
                                                                 ]"
                                                                 :title="(variacao.protegida ? 'Original' : ('Variação ' + idx)) + (!variacao.protegida && !variacao.ativa ? ' (inativa no sorteio)' : '')">
                                                             <span x-text="idx + 1"></span>
@@ -495,14 +495,21 @@
                                                                     class="text-red-300 hover:text-red-500 flex-shrink-0 text-xs">✕ excluir</button>
                                                         </div>
 
+                                                        {{-- Achado real (Leonardo, 2026-08-16): a aba "Original" (protegida)
+                                                             repetia o mesmo texto que já aparece no card da mensagem, ali
+                                                             em cima — redundante, "aparecendo em cima, aparecendo embaixo".
+                                                             Agora só aponta pro campo real, sem duplicar o conteúdo. --}}
+                                                        <template x-if="variacao.protegida">
+                                                            <p class="text-xs text-gray-500 italic">Esta é a mensagem principal desta etapa — para editar o texto, use o campo da mensagem, logo acima nesta tela.</p>
+                                                        </template>
+
                                                         {{-- Pedido do Leonardo (2026-08-21): cada uma das 6 variações nasce
                                                              como cópia do texto original, inativa — o humano edita aqui
                                                              direto, ou pede uma versão nova à IA sem mexer nas outras 5. --}}
-                                                        <template x-if="editandoVariacaoId !== variacao.id">
+                                                        <template x-if="!variacao.protegida && editandoVariacaoId !== variacao.id">
                                                             <div>
                                                                 <p class="text-xs text-gray-700 whitespace-pre-wrap break-words" x-text="variacao.conteudo"></p>
-                                                                <button x-show="!variacao.protegida"
-                                                                        @click="regenerarVariacaoIndividual(seq.id, msg, variacao)"
+                                                                <button @click="regenerarVariacaoIndividual(seq.id, msg, variacao)"
                                                                         :disabled="regenerandoVariacaoId === variacao.id"
                                                                         class="mt-2 text-xs text-purple-600 hover:text-purple-700 disabled:opacity-40 font-medium">
                                                                     <span x-show="regenerandoVariacaoId !== variacao.id">🔄 Pedir nova versão à IA</span>
@@ -510,7 +517,7 @@
                                                                 </button>
                                                             </div>
                                                         </template>
-                                                        <template x-if="editandoVariacaoId === variacao.id">
+                                                        <template x-if="!variacao.protegida && editandoVariacaoId === variacao.id">
                                                             <div>
                                                                 <textarea x-model="editVariacaoConteudo" rows="3"
                                                                           x-init="autoResize($el)"
@@ -2077,10 +2084,18 @@ function kanbanConfig() {
         async carregarVariacoes(seqId, msg) {
             const res = await this.api(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}/variacoes`);
             this.variacoesPor[msg.id] = res.ok ? await res.json() : [];
-            // Volta pra primeira aba (original) sempre que a lista recarrega — evita
-            // ficar preso numa aba cujo id não existe mais (ex: depois de gerar
-            // variações novas, que substituem as antigas).
-            this.variacaoAbaAtiva[msg.id] = null;
+            // Achado real (Leonardo, 2026-08-16): resetar a aba ativa em TODA
+            // chamada (inclusive depois de salvar uma edição ou pedir nova versão
+            // à IA numa variação específica) fazia a tela sempre voltar pra
+            // "Original", sem dar nenhum sinal de que o salvamento funcionou —
+            // precisava clicar de novo na aba pra conferir. Agora só volta pra
+            // primeira aba se o id que estava selecionado realmente sumiu da
+            // lista recarregada (ex: foi excluído, ou a geração em lote
+            // substituiu as 6 variações antigas por outras com ids novos).
+            const aindaExiste = (this.variacoesPor[msg.id] || []).some(v => v.id === this.variacaoAbaAtiva[msg.id]);
+            if (!aindaExiste) {
+                this.variacaoAbaAtiva[msg.id] = null;
+            }
         },
 
         async toggleAbaVariacoes(seqId, msg) {
