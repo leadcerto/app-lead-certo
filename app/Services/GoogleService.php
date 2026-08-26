@@ -144,7 +144,7 @@ class GoogleService
 
     /**
      * Cria um contato no Google.
-     * Estrutura: givenName=nome limpo · middleName=ID do banco · familyName=descriptor do WhatsApp
+     * Estrutura: givenName=nome limpo · middleName=ID do banco · familyName=descriptor do WhatsApp · organizations=empresa
      * Retorna o resourceName ("people/c123456789") ou null em caso de erro.
      */
     public function criarContato(GoogleToken $token, Contato $contato, ?string $pushName = null): ?string
@@ -174,6 +174,13 @@ class GoogleService
 
         if ($contato->email) {
             $body['emailAddresses'] = [['value' => $contato->email, 'type' => 'work']];
+        }
+
+        // Pedido do Leonardo (2026-08-16): campo "Empresa" do mapeamento
+        // Lead Certo ↔ Google Contatos faltava — nome/nome do meio/sobrenome/
+        // e-mail/telefone já eram enviados, só "Empresa" nunca ia junto.
+        if ($contato->empresa) {
+            $body['organizations'] = [['name' => $contato->empresa]];
         }
 
         try {
@@ -260,6 +267,15 @@ class GoogleService
         if ($contato->email) {
             $body['emailAddresses'] = [['value' => $contato->email, 'type' => 'work']];
             $updateFields .= ',emailAddresses';
+        }
+
+        // Pedido do Leonardo (2026-08-16): mesmo campo "Empresa" adicionado
+        // em criarContato() — falta o campo no updatePersonFields, o Google
+        // ignora silenciosamente qualquer coisa no body que não estiver
+        // listada ali.
+        if ($contato->empresa) {
+            $body['organizations'] = [['name' => $contato->empresa]];
+            $updateFields .= ',organizations';
         }
 
         try {
