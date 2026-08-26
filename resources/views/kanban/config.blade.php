@@ -318,8 +318,12 @@
                                 <p class="text-sm text-gray-400 text-center py-4 bg-white border border-gray-200 rounded-lg">Nenhuma mensagem ainda — clique em "+ Adicionar mensagem" abaixo.</p>
                             </template>
 
+                            {{-- Pedido do Leonardo (2026-08-16): manter o bloco de Variações aberto
+                                 por padrão — o texto da mensagem só vive lá dentro (aba "1") agora,
+                                 então precisa já estar visível sem clique extra. --}}
                             <template x-for="(msg, idx) in (mensagensPor[seq.id] || [])" :key="msg.id">
-                                <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                <div class="bg-white border border-gray-200 rounded-lg p-4"
+                                     x-init="if (abaVariacaoAberta[msg.id] === undefined) { abaVariacaoAberta[msg.id] = true; carregarVariacoes(seq.id, msg); }">
                                     <div class="flex items-start gap-3">
                                         <span class="w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center flex-shrink-0"
                                               style="background:#dcfce7;color:#16a34a"
@@ -330,8 +334,9 @@
                                                     <template x-if="msg.imagem_url">
                                                         <img :src="msg.imagem_url" class="mb-2 max-h-24 rounded-lg object-cover border border-gray-200">
                                                     </template>
-                                                    <p class="text-sm text-gray-800 whitespace-pre-wrap break-words"
-                                                       x-text="msg.conteudo || '(só imagem)'"></p>
+                                                    {{-- Pedido do Leonardo (2026-08-16): o texto vive só na aba "1" de
+                                                         Variações logo abaixo (editável direto lá) — não duplica mais
+                                                         aqui em cima. --}}
                                                     <div class="mt-1 flex items-center gap-3 flex-wrap">
                                                         <span class="text-xs text-gray-400"
                                                               x-text="msg.delay_segundos === 0 ? 'Envio imediato' : 'Aguarda ' + formatDelay(msg.delay_segundos)"></span>
@@ -364,12 +369,6 @@
                                                                     class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center">✕</button>
                                                         </div>
                                                     </template>
-                                                    <textarea x-model="editMsgConteudo" rows="3"
-                                                              x-init="autoResize($el)"
-                                                              @input="autoResize($event.target)"
-                                                              class="w-full text-sm border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none overflow-hidden"
-                                                              placeholder="Texto da mensagem..."></textarea>
-
                                                     @include('kanban.partials._botoes-editor', ['arrayExpr' => 'editMsgBotoes'])
 
                                                     <div class="flex items-center gap-3 flex-wrap">
@@ -452,15 +451,19 @@
                                                 <div class="flex items-end gap-1 overflow-x-auto">
                                                     <template x-for="(variacao, idx) in (variacoesPor[msg.id] || [])" :key="variacao.id">
                                                         <button @click="variacaoAbaAtiva[msg.id] = variacao.id"
-                                                                class="relative flex-shrink-0 min-w-[2rem] px-2.5 py-1.5 text-xs font-semibold rounded-t-lg border border-b-0 transition-colors"
+                                                                class="relative flex-shrink-0 min-w-[2rem] px-2.5 py-1.5 text-xs rounded-t-lg border border-b-0 transition-colors"
                                                                 :class="[
                                                                     (variacaoAbaAtiva[msg.id] ?? (variacoesPor[msg.id] || [])[0]?.id) === variacao.id
-                                                                        ? 'bg-white border-gray-200 text-purple-700 z-10'
-                                                                        : 'bg-gray-100 border-gray-100 text-gray-400 hover:text-gray-600 hover:bg-gray-200',
-                                                                    (!variacao.protegida && !variacao.ativa) ? 'opacity-40' : ''
+                                                                        ? 'bg-white border-gray-200 text-purple-700 font-bold z-10'
+                                                                        : 'bg-gray-200 border-gray-200 text-gray-600 font-semibold hover:text-gray-800 hover:bg-gray-300',
+                                                                    (!variacao.protegida && !variacao.ativa) ? 'opacity-50' : ''
                                                                 ]"
-                                                                :title="(variacao.protegida ? 'Original' : ('Variação ' + idx)) + (!variacao.protegida && !variacao.ativa ? ' (inativa no sorteio)' : '')">
+                                                                :title="(variacao.protegida ? 'Original' : ('Variação ' + idx)) + (variacao.ativa ? ' — ativa no sorteio' : ' (inativa no sorteio)')">
                                                             <span x-text="idx + 1"></span>
+                                                            {{-- Pedido do Leonardo (2026-08-16): sinalizar com cor qual aba
+                                                                 está ativa no sorteio de envio, sem precisar abrir cada uma. --}}
+                                                            <span x-show="variacao.ativa"
+                                                                  class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-green-500 border border-white"></span>
                                                         </button>
                                                     </template>
                                                 </div>
@@ -481,28 +484,34 @@
                                                                        @change="toggleAtivaVariacao(seq.id, msg, variacao)"
                                                                        class="w-3 h-3 accent-green-600">
                                                             </label>
-                                                            <button x-show="!variacao.protegida && editandoVariacaoId !== variacao.id"
-                                                                    @click="iniciarEditarVariacao(variacao)"
-                                                                    class="text-gray-400 hover:text-gray-600 flex-shrink-0"
-                                                                    title="Editar texto">
-                                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                                                </svg>
-                                                            </button>
                                                             <button x-show="!variacao.protegida"
                                                                     @click="excluirVariacao(seq.id, msg, variacao)"
                                                                     class="text-red-300 hover:text-red-500 flex-shrink-0 text-xs">✕ excluir</button>
                                                         </div>
 
-                                                        {{-- Pedido do Leonardo (2026-08-21): cada uma das 6 variações nasce
-                                                             como cópia do texto original, inativa — o humano edita aqui
-                                                             direto, ou pede uma versão nova à IA sem mexer nas outras 5. --}}
-                                                        <template x-if="editandoVariacaoId !== variacao.id">
+                                                        {{-- Pedido do Leonardo (2026-08-16): editar qualquer variação —
+                                                             inclusive a Original — só de clicar na caixa e escrever, sem
+                                                             botão/modo de edição separado. Salva ao sair do campo. A aba
+                                                             "1" (Original/protegida) edita msg.conteudo direto — mesmo
+                                                             endpoint de sempre, que já sincroniza os dois lados; as
+                                                             variações 2-7 editam o próprio conteúdo, endpoint de variação. --}}
+                                                        <template x-if="variacao.protegida">
+                                                            <textarea :value="msg.conteudo || ''"
+                                                                      @input="msg.conteudo = $event.target.value; autoResize($event.target)"
+                                                                      @blur="salvarConteudoOriginal(seq.id, msg)"
+                                                                      x-init="autoResize($el)"
+                                                                      rows="3"
+                                                                      class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none overflow-hidden"></textarea>
+                                                        </template>
+                                                        <template x-if="!variacao.protegida">
                                                             <div>
-                                                                <p class="text-xs text-gray-700 whitespace-pre-wrap break-words" x-text="variacao.conteudo"></p>
-                                                                <button x-show="!variacao.protegida"
-                                                                        @click="regenerarVariacaoIndividual(seq.id, msg, variacao)"
+                                                                <textarea :value="variacao.conteudo || ''"
+                                                                          @input="variacao.conteudo = $event.target.value; autoResize($event.target)"
+                                                                          @blur="salvarVariacaoInline(seq.id, msg, variacao)"
+                                                                          x-init="autoResize($el)"
+                                                                          rows="3"
+                                                                          class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none overflow-hidden"></textarea>
+                                                                <button @click="regenerarVariacaoIndividual(seq.id, msg, variacao)"
                                                                         :disabled="regenerandoVariacaoId === variacao.id"
                                                                         class="mt-2 text-xs text-purple-600 hover:text-purple-700 disabled:opacity-40 font-medium">
                                                                     <span x-show="regenerandoVariacaoId !== variacao.id">🔄 Pedir nova versão à IA</span>
@@ -510,39 +519,9 @@
                                                                 </button>
                                                             </div>
                                                         </template>
-                                                        <template x-if="editandoVariacaoId === variacao.id">
-                                                            <div>
-                                                                <textarea x-model="editVariacaoConteudo" rows="3"
-                                                                          x-init="autoResize($el)"
-                                                                          @input="autoResize($event.target)"
-                                                                          class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none overflow-hidden"></textarea>
-                                                                <div class="mt-1.5 flex gap-2">
-                                                                    <button @click="salvarVariacao(seq.id, msg, variacao)"
-                                                                            class="text-xs bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700">Salvar</button>
-                                                                    <button @click="cancelarEditarVariacao()"
-                                                                            class="text-xs text-gray-500 hover:text-gray-700 px-2 py-1">Cancelar</button>
-                                                                </div>
-                                                            </div>
-                                                        </template>
                                                     </div>
                                                 </template>
                                             </div>
-
-                                            <div class="flex items-center gap-2">
-                                                <input type="text" x-model="novaVariacaoTexto[msg.id]"
-                                                       @keydown.enter="adicionarVariacaoManual(seq.id, msg)"
-                                                       placeholder="Adicionar variação manual..."
-                                                       class="flex-1 text-xs border border-gray-300 rounded-lg px-2 py-1.5">
-                                                <button @click="adicionarVariacaoManual(seq.id, msg)"
-                                                        class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1.5 rounded-lg">+</button>
-                                            </div>
-
-                                            <button @click="gerarVariacoes(seq.id, msg)"
-                                                    :disabled="gerandoVariacoes[msg.id]"
-                                                    class="text-xs text-purple-600 hover:text-purple-700 disabled:opacity-40 font-medium">
-                                                <span x-show="!gerandoVariacoes[msg.id]">✨ Gerar variações com IA</span>
-                                                <span x-show="gerandoVariacoes[msg.id]">Gerando...</span>
-                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -1616,7 +1595,6 @@ function kanbanConfig() {
         novoObrigatorio: {},
 
         editandoMsgId: null,
-        editMsgConteudo: '',
         editMsgDelay: 0,
         editMsgDelayUnidade: 'min',
         editMsgJitter: 0,
@@ -1640,11 +1618,7 @@ function kanbanConfig() {
         variacoesPor: {},       // { [mensagemId]: [ {id, conteudo, origem, protegida, ativa}, ... ] }
         abaVariacaoAberta: {},  // { [mensagemId]: bool } — controla se o painel de variações está expandido
         variacaoAbaAtiva: {},   // { [mensagemId]: variacaoId } — qual aba de variação está selecionada (null = primeira/original)
-        gerandoVariacoes: {},   // { [mensagemId]: bool } — spinner durante chamada IA em lote (as 6 de uma vez)
-        novaVariacaoTexto: {},  // { [mensagemId]: string } — campo de criação manual de variação
-
-        editandoVariacaoId: null,  // id da variação sendo editada agora (só uma por vez, igual editandoMsgId)
-        editVariacaoConteudo: '',  // texto em edição
+        gerandoVariacoes: {},   // { [mensagemId]: bool } — spinner durante chamada IA em lote (endpoint ainda existe, sem botão na UI)
         regenerandoVariacaoId: null, // id da variação com "pedir nova versão à IA" em andamento (uma por vez)
 
         // Base de conhecimento geral do Kanban (não por coluna)
@@ -1967,7 +1941,6 @@ function kanbanConfig() {
 
         iniciarEditarMsg(msg) {
             this.editandoMsgId    = msg.id;
-            this.editMsgConteudo  = msg.conteudo;
             const d = this.segundosParaDisplay(msg.delay_segundos);
             this.editMsgDelay        = d.valor;
             this.editMsgDelayUnidade = d.unidade;
@@ -2000,11 +1973,14 @@ function kanbanConfig() {
         },
 
         async salvarMsg(seqId, msg) {
+            // O texto (conteudo) não faz mais parte desta edição — vive só na
+            // aba "1" de Variações, editável direto e salvo à parte (ver
+            // salvarConteudoOriginal()). Este formulário cuida só de imagem,
+            // tempo de espera, botões e envio obrigatório.
             const botoes = (this.editMsgBotoes || []).filter(b => (b.text || '').trim() !== '');
 
             const fd = new FormData();
             fd.append('_method', 'PUT');
-            fd.append('conteudo', this.editMsgConteudo);
             fd.append('delay_segundos', this.delayParaSegundos(this.editMsgDelay, this.editMsgDelayUnidade));
             fd.append('delay_jitter_segundos', this.editMsgJitter || 0);
             if (this.editMsgImagem) fd.append('imagem', this.editMsgImagem);
@@ -2077,10 +2053,49 @@ function kanbanConfig() {
         async carregarVariacoes(seqId, msg) {
             const res = await this.api(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}/variacoes`);
             this.variacoesPor[msg.id] = res.ok ? await res.json() : [];
-            // Volta pra primeira aba (original) sempre que a lista recarrega — evita
-            // ficar preso numa aba cujo id não existe mais (ex: depois de gerar
-            // variações novas, que substituem as antigas).
-            this.variacaoAbaAtiva[msg.id] = null;
+            // Achado real (Leonardo, 2026-08-16): resetar a aba ativa em TODA
+            // chamada (inclusive depois de salvar uma edição ou pedir nova versão
+            // à IA numa variação específica) fazia a tela sempre voltar pra
+            // "Original", sem dar nenhum sinal de que o salvamento funcionou —
+            // precisava clicar de novo na aba pra conferir. Agora só volta pra
+            // primeira aba se o id que estava selecionado realmente sumiu da
+            // lista recarregada (ex: foi excluído, ou a geração em lote
+            // substituiu as 6 variações antigas por outras com ids novos).
+            const aindaExiste = (this.variacoesPor[msg.id] || []).some(v => v.id === this.variacaoAbaAtiva[msg.id]);
+            if (!aindaExiste) {
+                this.variacaoAbaAtiva[msg.id] = null;
+            }
+        },
+
+        // Pedido do Leonardo (2026-08-16): editar o texto de qualquer variação
+        // (inclusive a Original) só de clicar na caixa e escrever — sem botão
+        // de editar, sem modo separado. Salva ao sair do campo (@blur).
+
+        // Aba "1" (Original/protegida): o texto vive no campo conteudo da
+        // própria mensagem — reusa o mesmo endpoint de sempre (PUT
+        // mensagens/{id}), que já sincroniza a variação protegida no backend
+        // (ver SequenciaController::updateMensagem). Sem FormData/reload —
+        // a tela já mostra o texto certo, o usuário acabou de digitá-lo.
+        async salvarConteudoOriginal(seqId, msg) {
+            const conteudo = (msg.conteudo || '').trim();
+            if (!conteudo) return;
+            const res = await this.api(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}`, 'PUT', { conteudo });
+            if (!res.ok) {
+                const erro = await res.json().catch(() => null);
+                this.mostrarToast(erro?.message || 'Não foi possível salvar a mensagem.', 'erro');
+            }
+        },
+
+        // Variações 2-7 (não-protegidas): mesma lógica, endpoint próprio de
+        // variação. Sem reload — evita perder o foco/cursor no meio da edição.
+        async salvarVariacaoInline(seqId, msg, variacao) {
+            const conteudo = (variacao.conteudo || '').trim();
+            if (!conteudo) return;
+            const res = await this.api(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}/variacoes/${variacao.id}`, 'PUT', { conteudo });
+            if (!res.ok) {
+                const erro = await res.json().catch(() => null);
+                this.mostrarToast(erro?.message || 'Não foi possível salvar a variação.', 'erro');
+            }
         },
 
         async toggleAbaVariacoes(seqId, msg) {
@@ -2104,18 +2119,6 @@ function kanbanConfig() {
             }
         },
 
-        async adicionarVariacaoManual(seqId, msg) {
-            const conteudo = (this.novaVariacaoTexto[msg.id] || '').trim();
-            if (!conteudo) return;
-            const res = await this.api(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}/variacoes`, 'POST', { conteudo });
-            if (res.ok) {
-                this.novaVariacaoTexto[msg.id] = '';
-                await this.carregarVariacoes(seqId, msg);
-            } else {
-                this.mostrarToast('Não foi possível adicionar a variação.', 'erro');
-            }
-        },
-
         async toggleAtivaVariacao(seqId, msg, variacao) {
             const res = await this.api(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}/variacoes/${variacao.id}`, 'PUT', { ativa: !variacao.ativa });
             if (res.ok) {
@@ -2134,28 +2137,6 @@ function kanbanConfig() {
             } else {
                 const erro = await res.json().catch(() => null);
                 this.mostrarToast(erro?.message || 'Esta versão não pode ser excluída.', 'erro');
-            }
-        },
-
-        iniciarEditarVariacao(variacao) {
-            this.editandoVariacaoId    = variacao.id;
-            this.editVariacaoConteudo  = variacao.conteudo;
-        },
-
-        cancelarEditarVariacao() {
-            this.editandoVariacaoId = null;
-        },
-
-        async salvarVariacao(seqId, msg, variacao) {
-            const conteudo = this.editVariacaoConteudo.trim();
-            if (!conteudo) return;
-            const res = await this.api(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}/variacoes/${variacao.id}`, 'PUT', { conteudo });
-            if (res.ok) {
-                this.editandoVariacaoId = null;
-                await this.carregarVariacoes(seqId, msg);
-            } else {
-                const erro = await res.json().catch(() => null);
-                this.mostrarToast(erro?.message || 'Não foi possível salvar a variação.', 'erro');
             }
         },
 

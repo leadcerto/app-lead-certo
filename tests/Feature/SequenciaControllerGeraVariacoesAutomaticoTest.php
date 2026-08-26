@@ -21,28 +21,37 @@ class SequenciaControllerGeraVariacoesAutomaticoTest extends TestCase
     }
 
     /**
-     * Redesenho 2026-08-21: storeMensagem não chama mais a IA na hora de
-     * criar — cria 6 cópias inativas do texto original na hora (grátis,
-     * instantâneo, sem depender do OpenRouter estar de pé). Ver
-     * SequenciaVariacaoIaServiceTest pro detalhe do serviço.
+     * Segundo redesenho (2026-08-16): storeMensagem volta a chamar a IA na
+     * hora de criar (mesmo prompt de `chamarIaEGerar()`), mas as 6 nascem
+     * INATIVAS — resolve tanto o problema original (conteúdo indo pro
+     * sorteio sem revisão) quanto o do redesenho anterior (6 cópias
+     * idênticas, sem variedade nenhuma). Ver SequenciaVariacaoIaServiceTest
+     * pro detalhe do serviço.
      */
-    public function test_storeMensagem_cria_as_6_copias_inativas_sem_chamar_ia(): void
+    public function test_storeMensagem_cria_as_6_variacoes_via_ia_inativas(): void
     {
         $tenant    = Tenant::factory()->create();
         $user      = $this->criarUsuarioDono($tenant);
         $sequencia = Sequencia::create(['tenant_id' => $tenant->id, 'nome' => 'Boas-vindas', 'coluna_kanban' => 'lead_novo', 'ativo' => true]);
-        Http::fake();
+        $json      = json_encode(['variacoes' => [
+            ['ordem' => 1, 'conteudo' => 'V1'], ['ordem' => 2, 'conteudo' => 'V2'],
+            ['ordem' => 3, 'conteudo' => 'V3'], ['ordem' => 4, 'conteudo' => 'V4'],
+            ['ordem' => 5, 'conteudo' => 'V5'], ['ordem' => 6, 'conteudo' => 'V6'],
+        ]]);
+        Http::fake(['openrouter.ai/*' => Http::response([
+            'choices' => [['message' => ['content' => $json]]],
+            'usage'   => ['prompt_tokens' => 10, 'completion_tokens' => 20],
+        ], 200)]);
 
         $response = $this->actingAs($user)->post("/api/painel/sequencias/{$sequencia->id}/mensagens", [
             'conteudo' => 'Olá {nome}!', 'delay_segundos' => 0,
         ]);
 
         $response->assertCreated();
-        Http::assertNothingSent();
 
         $msg = SequenciaMensagem::first();
         $this->assertSame(1, $msg->variacoes()->where('origem', 'humano')->where('protegida', true)->count());
-        $this->assertSame(6, $msg->variacoes()->where('protegida', false)->count());
+        $this->assertSame(6, $msg->variacoes()->where('origem', 'ia')->where('protegida', false)->count());
         $this->assertSame(0, $msg->variacoes()->where('ativa', true)->where('protegida', false)->count());
     }
 
@@ -73,6 +82,10 @@ class SequenciaControllerGeraVariacoesAutomaticoTest extends TestCase
 
         $response->assertOk();
         $this->assertFalse($antiga->fresh()->ativa);
-        $this->assertSame(6, $msg->variacoes()->where('origem', 'ia')->where('ativa', true)->count());
+        // Mesma regra de segurança do storeMensagem: variação nova via IA nasce
+        // inativa, precisa de revisão humana antes de entrar no sorteio. Exclui
+        // a $antiga (também origem=ia/ativa=false, mas por ter sido desativada
+        // na regeneração, não por ter nascido assim) pra contar só as 6 novas.
+        $this->assertSame(6, $msg->variacoes()->where('origem', 'ia')->where('ativa', false)->where('id', '!=', $antiga->id)->count());
     }
 }
