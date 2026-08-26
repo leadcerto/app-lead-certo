@@ -1,5 +1,14 @@
 # Lead Certo — Regras de Desenvolvimento
 
+## Coordenação entre ferramentas de IA
+
+O Leonardo usa Claude Code e Google Antigravity/Gemini neste mesmo
+repositório, às vezes em sessões diferentes. **Leia `../TAREFAS.md` (raiz do
+repo) no início de toda sessão** — seção mais recente "🔖 PONTO DE RETOMADA",
+identificada pela data no título, não pela posição no arquivo — e escreva uma
+entrada nova lá antes de encerrar. Ver `../AGENTS.md` pro protocolo completo,
+válido pra qualquer ferramenta de IA, não só esta.
+
 ## Stack
 
 - Laravel 13 · PHP 8.4 · MySQL 8 · Alpine.js v3 · Tailwind CSS
