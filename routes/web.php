@@ -311,9 +311,9 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
     // Auditor — apenas auditor, diretor, dono, admin
     Route::middleware('role:admin,dono,diretor,auditor')->group(function () {
         Route::get('/auditor/stats',                                 [AuditorController::class, 'stats']);
-        Route::get('/auditor/pendentes',                             [AuditorController::class, 'pendentes']);
-        Route::post('/auditor/pendente/{vinculo}/aprovar',           [AuditorController::class, 'aprovarNome']);
-        Route::post('/auditor/pendente/{vinculo}/rejeitar',          [AuditorController::class, 'rejeitarNome']);
+        Route::get('/auditor/pendentes',                                     [AuditorController::class, 'pendentesCampos']);
+        Route::post('/auditor/pendente/{vinculo}/campo/{campo}/aprovar',     [AuditorController::class, 'aprovarCampo']);
+        Route::post('/auditor/pendente/{vinculo}/campo/{campo}/rejeitar',    [AuditorController::class, 'rejeitarCampo']);
         Route::post('/auditor/contato/{contato}/sinalizar',          [AuditorController::class, 'sinalizar']);
         Route::post('/auditor/contato/{contato}/aprovar-cadastro',   [AuditorController::class, 'aprovarCadastro']);
         Route::post('/auditor/contato/{contato}/inativar',           [AuditorController::class, 'inativar']);
