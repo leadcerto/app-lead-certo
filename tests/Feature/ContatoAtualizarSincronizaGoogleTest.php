@@ -7,6 +7,7 @@ use App\Models\GoogleToken;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\VinculoContatoTenant;
+use App\Services\GoogleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -14,6 +15,12 @@ use Tests\TestCase;
 class ContatoAtualizarSincronizaGoogleTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Os testes específicos com fakes vão  configurar Http::fake() apropriadamente
+    }
 
     private function criarTenantComGoogle(): Tenant
     {
@@ -92,7 +99,8 @@ class ContatoAtualizarSincronizaGoogleTest extends TestCase
         ]);
 
         $response->assertOk();
-        Http::assertNothingSent();
+        // Job roda e faz HTTP ao criar VinculoContatoTenant, então checar que PATCH não fez updateContact
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'updateContact'));
     }
 
     /**
@@ -143,6 +151,7 @@ class ContatoAtualizarSincronizaGoogleTest extends TestCase
         ]);
 
         $response->assertOk();
-        Http::assertNothingSent();
+        // Job roda e faz HTTP ao criar VinculoContatoTenant, então checar que PATCH não fez updateContact
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'updateContact'));
     }
 }
