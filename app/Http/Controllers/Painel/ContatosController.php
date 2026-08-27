@@ -945,7 +945,7 @@ class ContatosController extends Controller
             ]);
         }
 
-        if ($perfilPrivilegiado && $vinculo) {
+        if ($vinculo) {
             $humano = $vinculo->campos_editados_humano ?? [];
             foreach (array_keys($dados) as $campo) {
                 if (in_array($campo, ['nome', 'sobrenome', 'empresa', 'email'], true)) {

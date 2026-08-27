@@ -40,4 +40,34 @@ class ContatosControllerSyncHumanoTest extends TestCase
         $this->assertArrayHasKey('empresa', $vinculo->campos_editados_humano);
         $this->assertSame('Fretes ABC', $vinculo->google_valores_enviados['empresa'] ?? null);
     }
+
+    public function test_edicao_por_usuario_nao_privilegiado_tambem_marca_campo_editado_humano(): void
+    {
+        // Ruling do controller (2026-08-26): qualquer usuário logado editando pelo
+        // painel marca campos_editados_humano, independente de perfil. A distinção
+        // dono/admin vs vendedor é sobre auditoria de conflito de NOME (ver bloco
+        // acima), não sobre "isso conta como edição humana pro sync do Google".
+        Http::fake(['*updateContact*' => Http::response(['etag' => 'etag-novo'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'vendedor', 'ativo' => true]);
+        GoogleToken::create([
+            'tenant_id' => $tenant->id, 'google_email' => 'a@b.com',
+            'access_token' => 'tok', 'refresh_token' => 'ref', 'token_type' => 'Bearer',
+            'expires_at' => now()->addHour(), 'scopes' => ['contacts'],
+        ]);
+        $contato = Contato::factory()->create(['empresa' => null]);
+        VinculoContatoTenant::create([
+            'contato_id' => $contato->id, 'tenant_id' => $tenant->id,
+            'google_resource_name' => 'people/c123', 'google_etag' => 'etag-antigo',
+        ]);
+
+        $this->actingAs($user)
+            ->patchJson("/api/painel/contato/{$contato->id}", ['empresa' => 'Fretes ABC'])
+            ->assertOk();
+
+        $vinculo = VinculoContatoTenant::where('contato_id', $contato->id)->first();
+        $this->assertArrayHasKey('empresa', $vinculo->campos_editados_humano);
+        $this->assertSame('Fretes ABC', $vinculo->google_valores_enviados['empresa'] ?? null);
+    }
 }
