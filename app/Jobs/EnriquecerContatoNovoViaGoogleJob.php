@@ -42,8 +42,28 @@ class EnriquecerContatoNovoViaGoogleJob implements ShouldQueue
             return;
         }
 
+        // Achado da revisão de branch: o job achava o contato no Google e
+        // jogava fora resourceName/etag, extraindo só os valores de campo. Sem
+        // gravar o vínculo, o PushContatoParaGoogleJob (disparado por outro
+        // caminho) não tinha como saber que esse contato JÁ existe lá e criava
+        // um cartão DUPLICADO na agenda do cliente. Só preenche quando o
+        // vínculo ainda não aponta pra ninguém — se já aponta, o etag da busca
+        // pode ser de outro resource e sobrescrever quebraria o próximo PATCH.
+        if (! $vinculo->google_resource_name && ! empty($pessoa['resourceName'])) {
+            $vinculo->update(array_filter([
+                'google_resource_name' => $pessoa['resourceName'],
+                'google_etag'          => $pessoa['etag'] ?? null,
+            ]));
+        }
+
+        // Mesma razão de ContatoSyncService::processarPessoa(): displayName é
+        // composto pelo Google a partir de givenName + middleName + familyName,
+        // e o middleName carrega o ID do banco que nós mesmos gravamos lá.
+        $nomeRaw = trim((string) ($pessoa['names'][0]['givenName'] ?? ''))
+            ?: ($pessoa['names'][0]['displayName'] ?? null);
+
         $valores = [
-            'nome'      => isset($pessoa['names'][0]['displayName']) ? $sync->limparNome($pessoa['names'][0]['displayName']) : null,
+            'nome'      => $nomeRaw ? $sync->limparNome($nomeRaw) : null,
             'sobrenome' => $pessoa['names'][0]['familyName'] ?? null,
             'empresa'   => $pessoa['organizations'][0]['name'] ?? null,
             'email'     => $pessoa['emailAddresses'][0]['value'] ?? null,

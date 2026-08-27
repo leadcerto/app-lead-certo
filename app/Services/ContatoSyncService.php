@@ -129,7 +129,18 @@ class ContatoSyncService
 
     private function processarPessoa(array $pessoa, int $tenantId, array &$resultado): void
     {
-        $nomeRaw = $pessoa['names'][0]['displayName'] ?? null;
+        // givenName é a fonte primária do nome, NÃO displayName. O displayName
+        // é composto pelo PRÓPRIO Google a partir de givenName + middleName +
+        // familyName — e GoogleService::criarContato()/enriquecerContato()
+        // gravam o ID do banco no middleName e o sobrenome no familyName. Ler
+        // do displayName trazia esse eco de volta ("Marcia 5000 Souza"),
+        // limparNome() derrubava só o índice numérico e sobrava "Marcia Souza"
+        // comparado contra a linha de base "Marcia" → conflito falso em todo
+        // contato com sobrenome no primeiro sync pós-deploy. displayName segue
+        // como fallback pros contatos digitados fora daqui, que às vezes só
+        // têm o "nome completo" num campo só, sem givenName separado.
+        $nomeRaw = trim((string) ($pessoa['names'][0]['givenName'] ?? ''))
+            ?: ($pessoa['names'][0]['displayName'] ?? null);
 
         if (! $nomeRaw) {
             $resultado['ignorados']++;
@@ -229,6 +240,27 @@ class ContatoSyncService
                             $this->resolverCampoGoogle($existente, $vinculoExistente, $campo, $dados[$campo] ?? null);
                         }
 
+                        // Achado da revisão de branch: resolverCampoGoogle() só
+                        // cobre os 4 campos sincronizados. Sem este merge, um
+                        // contato JÁ EXISTENTE parava de receber profissão,
+                        // endereço, cidade, aniversário, apelido, e-mail 2,
+                        // telefone 2, redes sociais etc. vindos do Google —
+                        // contato NOVO continuava ganhando tudo via
+                        // Contato::create($dados), então o buraco era invisível.
+                        // Regra do loop antigo, preservada: só preenche campo
+                        // local VAZIO, nunca sobrescreve. 'tipo_contato' fica de
+                        // fora porque tem regra própria logo abaixo.
+                        $preencher = [];
+                        foreach ($dados as $campo => $valor) {
+                            if (in_array($campo, self::CAMPOS_SINCRONIZADOS, true)) continue;
+                            if (in_array($campo, ['origem', 'opt_out', 'tipo_contato'], true)) continue;
+                            if (! $valor) continue;
+                            if (empty($existente->$campo)) {
+                                $preencher[$campo] = $valor;
+                            }
+                        }
+                        if ($preencher) $existente->update($preencher);
+
                         // Tipo detectado do Google sempre sobrepõe 'lead' (categoria padrão)
                         if ($tipoDetectado && ($existente->fresh()->tipo_contato === 'lead' || ! $existente->tipo_contato)) {
                             $existente->update(['tipo_contato' => $tipoDetectado]);
@@ -292,10 +324,20 @@ class ContatoSyncService
 
         $tel2 = ! empty($fones[1]) ? $this->limparTelefone($fones[1]['value'] ?? '') : null;
 
+        // Campo de nome só-dígitos é o ID do banco que NÓS gravamos lá, não
+        // nome de ninguém — importar de volta escreveria o próprio ID interno
+        // no cadastro do contato. Acontece nos dois campos: criarContato()/
+        // enriquecerContato() usam o middleName como marcador de vínculo, e o
+        // endpoint legado atualizarGoogleSobrenome() ainda grava o ID no
+        // familyName (convenção antiga).
+        $soDigitos  = fn (string $v) => $v !== '' && ctype_digit($v) ? '' : $v;
+        $nomeDoMeio = $soDigitos(trim($nomeData['middleName'] ?? ''));
+        $sobrenome  = $soDigitos(trim($nomeData['familyName'] ?? ''));
+
         return array_filter([
             'nome'           => $nome,
-            'nome_do_meio'   => trim($nomeData['middleName'] ?? '') ?: null,
-            'sobrenome'      => trim($nomeData['familyName'] ?? '') ?: null,
+            'nome_do_meio'   => $nomeDoMeio ?: null,
+            'sobrenome'      => $sobrenome ?: null,
             'prefixo'        => trim($nomeData['honorificPrefix'] ?? '') ?: null,
             'sufixo'         => trim($nomeData['honorificSuffix'] ?? '') ?: null,
             'apelido'        => trim($pessoa['nicknames'][0]['value'] ?? '') ?: null,

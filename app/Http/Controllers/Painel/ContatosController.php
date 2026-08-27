@@ -933,7 +933,7 @@ class ContatosController extends Controller
             $nomeLocal = $dados['nome'];
             unset($dados['nome']); // master intacto
 
-            $this->marcarCamposEditadosHumano($vinculo, $dados);
+            $this->marcarCamposEditadosHumano($vinculo, $dados, $contato);
 
             $contato->update($dados); // aplica outros campos (email, profissao, etc.)
             $this->sincronizarComGoogle($contato, $tenantId, $dados);
@@ -946,7 +946,7 @@ class ContatosController extends Controller
             ]);
         }
 
-        $this->marcarCamposEditadosHumano($vinculo, $dados);
+        $this->marcarCamposEditadosHumano($vinculo, $dados, $contato);
 
         $contato->update($dados);
         $this->sincronizarComGoogle($contato, $tenantId, $dados);
@@ -956,25 +956,43 @@ class ContatosController extends Controller
 
     /**
      * Marca em campos_editados_humano os campos sincronizados (nome, sobrenome,
-     * empresa, email) que de fato serão aplicados ao Contato ($dados) nesta
-     * requisição. Precisa rodar nos dois ramos de atualizarContato — inclusive
-     * no ramo de auditoria de nome divergente, onde $dados já teve 'nome'
-     * removido antes de chegar aqui, então só os demais campos sincronizados
-     * presentes na requisição são marcados.
+     * empresa, email) que de fato MUDARAM de valor nesta requisição. Precisa
+     * rodar nos dois ramos de atualizarContato — inclusive no ramo de auditoria
+     * de nome divergente, onde $dados já teve 'nome' removido antes de chegar
+     * aqui, então só os demais campos sincronizados são considerados.
+     *
+     * Achado da revisão de branch: marcar todo campo PRESENTE em $dados era
+     * errado — a ficha do painel (resources/views/contatos/importar.blade.php,
+     * salvarFicha()) manda o formulário INTEIRO em toda gravação, então editar
+     * só "observações" travava nome/sobrenome/empresa/email como editados por
+     * humano pra sempre, e toda correção futura vinda do Google passava a cair
+     * na fila de auditoria em vez de aplicar sozinha.
+     *
+     * ATENÇÃO: tem que ser chamado ANTES de $contato->update($dados) — depois
+     * disso $contato->$campo já reflete o valor novo e a comparação nunca
+     * detecta mudança nenhuma.
      */
-    private function marcarCamposEditadosHumano(?VinculoContatoTenant $vinculo, array $dados): void
+    private function marcarCamposEditadosHumano(?VinculoContatoTenant $vinculo, array $dados, Contato $contato): void
     {
         if (! $vinculo) {
             return;
         }
 
         $humano = $vinculo->campos_editados_humano ?? [];
-        foreach (array_keys($dados) as $campo) {
-            if (in_array($campo, ['nome', 'sobrenome', 'empresa', 'email'], true)) {
-                $humano[$campo] = now()->toIso8601String();
+        $mudou  = false;
+
+        foreach (['nome', 'sobrenome', 'empresa', 'email'] as $campo) {
+            if (! array_key_exists($campo, $dados)) {
+                continue;
             }
+            if ((string) $dados[$campo] === (string) $contato->$campo) {
+                continue; // veio no payload, mas com o mesmo valor que já estava salvo
+            }
+            $humano[$campo] = now()->toIso8601String();
+            $mudou = true;
         }
-        if ($humano) {
+
+        if ($mudou) {
             $vinculo->update(['campos_editados_humano' => $humano]);
         }
     }
@@ -1003,7 +1021,9 @@ class ContatosController extends Controller
             return;
         }
 
-        $novoEtag = app(GoogleService::class)->enriquecerContato(
+        $google = app(GoogleService::class);
+
+        $novoEtag = $google->enriquecerContato(
             $token,
             $vinculo->google_resource_name,
             $vinculo->google_etag,
@@ -1016,10 +1036,33 @@ class ContatosController extends Controller
 
         $valoresEnviados = $vinculo->google_valores_enviados ?? [];
         foreach ($camposSincronizados as $campo) {
-            $valoresEnviados[$campo] = (string) $contato->$campo;
+            $valoresEnviados[$campo] = $this->valorEnviadoAoGoogle($google, $contato, $campo);
         }
 
         $vinculo->update(['google_etag' => $novoEtag, 'google_valores_enviados' => $valoresEnviados]);
+    }
+
+    /**
+     * Valor que o Google REALMENTE recebeu, não o valor cru do banco.
+     * `GoogleService::enriquecerContato()` manda givenName = limparNome(nome)
+     * (ou 'Sem Nome') e familyName = limparNome(sobrenome) — gravar o valor cru
+     * na linha de base fazia o pull seguinte comparar o que voltou do Google
+     * contra algo que nunca foi enviado, gerando conflito falso. empresa/email
+     * vão verbatim, não precisam de tratamento.
+     */
+    private function valorEnviadoAoGoogle(GoogleService $google, Contato $contato, string $campo): string
+    {
+        $valor = (string) $contato->$campo;
+
+        if ($campo === 'nome') {
+            return $contato->semNomeReal() ? 'Sem Nome' : $google->limparNome($valor);
+        }
+
+        if ($campo === 'sobrenome') {
+            return $valor === '' ? '' : $google->limparNome($valor);
+        }
+
+        return $valor;
     }
 
     private function encontrarColuna(array $cabecalho, array $opcoes): ?int

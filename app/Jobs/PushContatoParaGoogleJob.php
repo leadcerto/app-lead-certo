@@ -51,17 +51,44 @@ class PushContatoParaGoogleJob implements ShouldQueue
         $vinculo->update(['google_resource_name' => $resourceName]);
         Log::info("Contato #{$this->contatoId} enviado ao Google: {$resourceName}");
 
-        $valoresEnviados = [];
-        foreach (['nome', 'sobrenome', 'empresa', 'email'] as $campo) {
-            if (! empty($contato->$campo)) {
-                $valoresEnviados[$campo] = (string) $contato->$campo;
-            }
-        }
-        if ($valoresEnviados) {
-            $vinculo->update(['google_valores_enviados' => $valoresEnviados]);
-        }
+        $vinculo->update(['google_valores_enviados' => $this->linhaBaseEnviada($google, $contato)]);
 
         $this->atribuirEtiquetas($google, $token, $vinculo, $contato, $resourceName);
+    }
+
+    /**
+     * A linha de base tem que ser o que foi REALMENTE enviado ao Google, não o
+     * valor cru do banco: GoogleService::criarContato() manda
+     * givenName = limparNome($contato->nome) (ou 'Sem Nome') e
+     * familyName = limparNome($descriptor). Gravar o valor cru fazia o pull
+     * seguinte comparar o que voltou do Google contra algo que nunca foi
+     * enviado — conflito falso em todo contato com nome fora do title case ou
+     * com sobrenome. As chaves aqui espelham exatamente o que o pull lê:
+     * 'nome' ← givenName, 'sobrenome' ← familyName.
+     */
+    private function linhaBaseEnviada(GoogleService $google, Contato $contato): array
+    {
+        $linhaBase = [
+            'nome' => $contato->semNomeReal() ? 'Sem Nome' : $google->limparNome((string) $contato->nome),
+        ];
+
+        // Mesma resolução de descriptor de GoogleService::criarContato(): sem
+        // sobrenome local, o familyName enviado vem do pushName do WhatsApp.
+        $descriptor = $contato->sobrenome
+            ?: ($this->pushName ? $google->extrairDescriptor($this->pushName) : null);
+
+        if ($descriptor) {
+            $linhaBase['sobrenome'] = $google->limparNome($descriptor);
+        }
+
+        // empresa/email vão verbatim pro Google — nada a transformar.
+        foreach (['empresa', 'email'] as $campo) {
+            if (! empty($contato->$campo)) {
+                $linhaBase[$campo] = (string) $contato->$campo;
+            }
+        }
+
+        return $linhaBase;
     }
 
     private function atribuirEtiquetas(
