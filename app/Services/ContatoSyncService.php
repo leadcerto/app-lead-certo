@@ -332,7 +332,6 @@ class ContatoSyncService
         return [
             'google_resource_name' => $pessoa['resourceName'] ?? null,
             'google_etag'          => $pessoa['etag'] ?? null,
-            'google_given_name'    => $pessoa['names'][0]['givenName'] ?? null,
         ];
     }
 

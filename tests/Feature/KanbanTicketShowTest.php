@@ -44,7 +44,7 @@ class KanbanTicketShowTest extends TestCase
         ]);
         VinculoContatoTenant::create([
             'contato_id' => $contato->id, 'tenant_id' => $tenant->id,
-            'nome_sugerido' => 'Ciclano', 'auditoria_pendente' => true,
+            'campos_pendentes_auditoria' => ['nome' => ['sugerido' => 'Ciclano', 'origem' => 'google']],
         ]);
         $user = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
 

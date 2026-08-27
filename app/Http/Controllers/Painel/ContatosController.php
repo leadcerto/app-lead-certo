@@ -597,7 +597,6 @@ class ContatosController extends Controller
                             [
                                 'google_resource_name' => $pessoa['resourceName'] ?? null,
                                 'google_etag'          => $pessoa['etag'] ?? null,
-                                'google_given_name'    => $pessoa['names'][0]['givenName'] ?? null,
                             ]
                         );
 
@@ -640,7 +639,7 @@ class ContatosController extends Controller
         foreach ($vinculos as $vinculo) {
             if (! $vinculo->contato) continue;
 
-            $givenName  = $vinculo->google_given_name ?? $vinculo->contato->nome;
+            $givenName  = $vinculo->contato->nome;
             $familyName = (string) $vinculo->contato->id;
 
             $ok = $google->atualizarNomeContato(

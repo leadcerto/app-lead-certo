@@ -29,7 +29,8 @@
     $verGmbAvaliador = $user?->podeAcessar('avaliador_dash');
 
     $pendentesAuditoria = $verAuditor
-        ? \App\Models\VinculoContatoTenant::where('auditoria_pendente', true)->count()
+        ? \App\Models\VinculoContatoTenant::whereNotNull('campos_pendentes_auditoria')->get()
+            ->sum(fn ($v) => count($v->campos_pendentes_auditoria ?? []))
         : 0;
 
     $pendentesContatosAuditoria = $verContatos
