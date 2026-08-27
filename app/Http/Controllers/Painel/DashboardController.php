@@ -94,7 +94,7 @@ class DashboardController extends Controller
     public function automacoes(): JsonResponse
     {
         $rotinas = [
-            ['nome' => 'Sincronizar Google Contacts', 'log' => 'google-sync.log',        'horario' => 'a cada 6h'],
+            ['nome' => 'Sincronizar Google Contacts', 'log' => 'google-sync.log',        'horario' => 'a cada 15min'],
             ['nome' => 'Modelos OpenRouter',           'log' => 'openrouter-modelos.log', 'horario' => '00:01 diário'],
             ['nome' => 'Identificar Nomes (IA)',       'log' => 'identificar-nomes.log',  'horario' => '00:05 diário'],
             ['nome' => 'Limpar Nomes (IA)',            'log' => 'limpar-nomes.log',       'horario' => '00:10 diário'],
