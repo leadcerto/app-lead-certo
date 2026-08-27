@@ -31,6 +31,21 @@ class AuditorControllerCampoTest extends TestCase
         ]);
     }
 
+    private function vinculoComPendentesEmail(): VinculoContatoTenant
+    {
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
+
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create(['email' => 'marcia.souza@example.com']);
+
+        return VinculoContatoTenant::create([
+            'contato_id' => $contato->id, 'tenant_id' => $tenant->id,
+            'campos_pendentes_auditoria' => [
+                'email' => ['sugerido' => 'marcia.s@newexample.com', 'origem' => 'google'],
+            ],
+        ]);
+    }
+
     public function test_lista_pendentes_uma_linha_por_campo(): void
     {
         $vinculo = $this->vinculoComDoisPendentes();
@@ -71,5 +86,24 @@ class AuditorControllerCampoTest extends TestCase
         $this->assertSame('Transportes Silva', $vinculo->contato->fresh()->empresa);
         $this->assertArrayNotHasKey('empresa', $vinculo->campos_pendentes_auditoria);
         $this->assertArrayHasKey('nome', $vinculo->campos_pendentes_auditoria); // intacto
+    }
+
+    public function test_email_pendente_retorna_mascarado_nao_cru(): void
+    {
+        $vinculo = $this->vinculoComPendentesEmail();
+        $user    = User::factory()->create(['tenant_id' => $vinculo->tenant_id, 'perfil' => 'admin']);
+
+        $res = $this->actingAs($user)->getJson('/api/painel/auditor/pendentes')->assertOk();
+
+        $item = collect($res->json('data'))->first();
+
+        // Email cru não deve aparecer em valor_atual
+        $this->assertNotSame('marcia.souza@example.com', $item['valor_atual']);
+        // Email cru não deve aparecer em valor_sugerido
+        $this->assertNotSame('marcia.s@newexample.com', $item['valor_sugerido']);
+
+        // Ambos devem estar mascarados (formato ***.***.@...)
+        $this->assertStringContainsString('*', $item['valor_atual']);
+        $this->assertStringContainsString('*', $item['valor_sugerido']);
     }
 }
