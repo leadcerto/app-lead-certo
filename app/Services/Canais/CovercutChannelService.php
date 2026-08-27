@@ -17,6 +17,23 @@ use Illuminate\Support\Facades\Log;
  */
 class CovercutChannelService implements CanalWhatsappInterface
 {
+    /**
+     * Código de erro da Meta Cloud API (repassado pela Covercut) pra "telefone
+     * não é um número WhatsApp válido" — confirmado via
+     * api.covercut.com.br/docs/#codigos-de-erro (2026-08-26). Casado numa regex
+     * sobre o corpo bruto da resposta (em vez de decodificar um formato de
+     * envelope específico) porque não temos confirmação de como a Covercut
+     * aninha o erro da Meta no JSON — mais resiliente a variação de formato.
+     */
+    private const CODIGO_ERRO_NUMERO_INVALIDO = '131026';
+
+    private bool $ultimoErroNumeroInvalido = false;
+
+    public function ultimoEnvioFalhouPorNumeroInvalido(): bool
+    {
+        return $this->ultimoErroNumeroInvalido;
+    }
+
     public function enviarTexto(WhatsappCanal $canal, string $telefone, string $texto): bool
     {
         return $this->enviar($canal, $telefone, [
@@ -87,6 +104,8 @@ class CovercutChannelService implements CanalWhatsappInterface
      */
     private function enviar(WhatsappCanal $canal, string $telefone, array $corpo): bool
     {
+        $this->ultimoErroNumeroInvalido = false;
+
         if (! $this->dentroDaJanela($canal, $telefone)) {
             return false;
         }
@@ -121,11 +140,14 @@ class CovercutChannelService implements CanalWhatsappInterface
         }
 
         if (! $response->successful()) {
+            $this->ultimoErroNumeroInvalido = str_contains($response->body(), self::CODIGO_ERRO_NUMERO_INVALIDO);
+
             Log::warning('CovercutChannelService: falha ao enviar mensagem', [
-                'canal_id' => $canal->id,
-                'tipo'     => $corpo['type'] ?? 'desconhecido',
-                'status'   => $response->status(),
-                'body'     => $response->body(),
+                'canal_id'        => $canal->id,
+                'tipo'            => $corpo['type'] ?? 'desconhecido',
+                'status'          => $response->status(),
+                'body'            => $response->body(),
+                'numero_invalido' => $this->ultimoErroNumeroInvalido,
             ]);
         }
 

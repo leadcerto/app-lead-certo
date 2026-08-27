@@ -316,13 +316,19 @@
                             </td>
                                 <td class="py-3 pr-4 text-gray-500" x-text="chamada.chamou_em"></td>
                                 <td class="py-3 pr-4">
-                                    <template x-if="chamada.mensagem_enviada">
+                                    <template x-if="chamada.numero_invalido">
+                                        <span class="inline-flex items-center gap-1 text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full" title="Número não tem WhatsApp — provável spam/telemarketing">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                                            Número sem WhatsApp
+                                        </span>
+                                    </template>
+                                    <template x-if="!chamada.numero_invalido && chamada.mensagem_enviada">
                                         <span class="inline-flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
                                             <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                                             Mensagem enviada
                                         </span>
                                     </template>
-                                    <template x-if="!chamada.mensagem_enviada">
+                                    <template x-if="!chamada.numero_invalido && !chamada.mensagem_enviada">
                                         <span class="inline-flex items-center gap-1 text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
                                             Cooldown / pendente
                                         </span>

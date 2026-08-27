@@ -162,7 +162,8 @@ class SequenciaMensagemJob implements ShouldQueue
             }
 
             if ($this->imagemUrl) {
-                $enviado = $canal->servico()->enviarImagem($canal, $telefone, $this->imagemUrl, $texto);
+                $servico = $canal->servico();
+                $enviado = $servico->enviarImagem($canal, $telefone, $this->imagemUrl, $texto);
 
                 if ($enviado) {
                     Mensagem::create([
@@ -179,11 +180,12 @@ class SequenciaMensagemJob implements ShouldQueue
                     ]);
                 }
 
-                $this->registrarResultadoChamadaPerdida($enviado);
+                $this->registrarResultadoChamadaPerdida($enviado, ! $enviado && $servico->ultimoEnvioFalhouPorNumeroInvalido());
                 return;
             }
 
-            $enviado = $canal->servico()->enviarTexto($canal, $telefone, $texto);
+            $servico = $canal->servico();
+            $enviado = $servico->enviarTexto($canal, $telefone, $texto);
 
             if ($enviado) {
                 Mensagem::create([
@@ -200,7 +202,7 @@ class SequenciaMensagemJob implements ShouldQueue
                 ]);
             }
 
-            $this->registrarResultadoChamadaPerdida($enviado);
+            $this->registrarResultadoChamadaPerdida($enviado, ! $enviado && $servico->ultimoEnvioFalhouPorNumeroInvalido());
             return;
         }
 
@@ -285,7 +287,7 @@ class SequenciaMensagemJob implements ShouldQueue
     // 2026-08-13: a Secretária mostrava "mensagem enviada" mesmo quando o
     // envio de verdade falhava (janela fechada, contato bloqueado, humano
     // assumiu o ticket antes do delay de 5s, etc).
-    private function registrarResultadoChamadaPerdida(bool $sucesso): void
+    private function registrarResultadoChamadaPerdida(bool $sucesso, bool $numeroInvalido = false): void
     {
         if (! $this->chamadaPerdidaId) {
             return;
@@ -294,6 +296,7 @@ class SequenciaMensagemJob implements ShouldQueue
         ChamadaPerdida::where('id', $this->chamadaPerdidaId)->update([
             'mensagem_enviada'    => $sucesso,
             'mensagem_enviada_em' => $sucesso ? now() : null,
+            'numero_invalido'     => $numeroInvalido,
         ]);
     }
 

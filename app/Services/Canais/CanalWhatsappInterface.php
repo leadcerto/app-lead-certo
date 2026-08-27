@@ -43,4 +43,17 @@ interface CanalWhatsappInterface
      * de imagem comum.
      */
     public function enviarSticker(WhatsappCanal $canal, string $telefone, string $url): bool;
+
+    /**
+     * Pedido do Leonardo (2026-08-26): números de spam/telemarketing que ligam
+     * pra Secretária Eletrônica não têm WhatsApp — o sistema mandava mensagem
+     * assim mesmo e marcava como "enviada", deixando o ticket esperando resposta
+     * de um número que nunca vai receber nada. Indica se a falha do ÚLTIMO envio
+     * (enviarTexto/enviarTextoDireto/enviarImagem) nesta instância foi
+     * especificamente porque o telefone não é um número WhatsApp válido — quem
+     * chama usa isso pra distinguir de outras falhas (janela fechada, rede, token)
+     * e marcar a origem (ex: ChamadaPerdida) corretamente. Deve retornar false
+     * quando não houve falha, e também quando o canal não tem como detectar isso.
+     */
+    public function ultimoEnvioFalhouPorNumeroInvalido(): bool;
 }

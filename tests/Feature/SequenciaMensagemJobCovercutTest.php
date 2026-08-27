@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\SequenciaMensagemJob;
+use App\Models\ChamadaPerdida;
 use App\Models\Contato;
 use App\Models\Mensagem;
 use App\Models\Tenant;
@@ -157,5 +158,62 @@ class SequenciaMensagemJobCovercutTest extends TestCase
             && $request->hasHeader('token', 'tok-do-canal'));
 
         $this->assertDatabaseHas('mensagens', ['ticket_id' => $ticket->id, 'conteudo' => 'Oi, tudo bem?']);
+    }
+
+    /**
+     * Pedido do Leonardo (2026-08-26): número de spam/telemarketing que liga pra
+     * Secretária Eletrônica não tem WhatsApp — a chamada perdida precisa refletir
+     * isso (numero_invalido = true), em vez de ficar marcada como se a mensagem
+     * tivesse sido entregue normalmente.
+     */
+    public function test_numero_sem_whatsapp_marca_chamada_perdida_como_numero_invalido(): void
+    {
+        Http::fake(['*/messages/send' => Http::response([
+            'error' => ['message' => 'Recipient not a WhatsApp user', 'code' => 131026],
+        ], 400)]);
+
+        $ticket  = $this->criarTicketCovercut();
+        $chamada = ChamadaPerdida::create([
+            'tenant_id'         => $ticket->tenant_id,
+            'contato_id'        => $ticket->contato_id,
+            'ticket_id'         => $ticket->id,
+            'numero_chamador'   => '5511900000001',
+            'numero_receptor'   => '5511999999999',
+            'chamou_em'         => now(),
+            'duracao_segundos'  => 0,
+            'mensagem_enviada'  => false,
+        ]);
+
+        (new SequenciaMensagemJob($ticket->id, 'Oi! Vi que você ligou...', chamadaPerdidaId: $chamada->id))
+            ->handle(app(HumanizacaoService::class), app(UazapiService::class));
+
+        $this->assertDatabaseMissing('mensagens', ['ticket_id' => $ticket->id]);
+        $chamada->refresh();
+        $this->assertFalse($chamada->mensagem_enviada);
+        $this->assertTrue($chamada->numero_invalido);
+    }
+
+    public function test_falha_de_outro_tipo_nao_marca_chamada_perdida_como_numero_invalido(): void
+    {
+        Http::fake(['*/messages/send' => Http::response(['error' => ['code' => 500]], 500)]);
+
+        $ticket  = $this->criarTicketCovercut();
+        $chamada = ChamadaPerdida::create([
+            'tenant_id'         => $ticket->tenant_id,
+            'contato_id'        => $ticket->contato_id,
+            'ticket_id'         => $ticket->id,
+            'numero_chamador'   => '5511977777777',
+            'numero_receptor'   => '5511999999999',
+            'chamou_em'         => now(),
+            'duracao_segundos'  => 0,
+            'mensagem_enviada'  => false,
+        ]);
+
+        (new SequenciaMensagemJob($ticket->id, 'Oi! Vi que você ligou...', chamadaPerdidaId: $chamada->id))
+            ->handle(app(HumanizacaoService::class), app(UazapiService::class));
+
+        $chamada->refresh();
+        $this->assertFalse($chamada->mensagem_enviada);
+        $this->assertFalse($chamada->numero_invalido);
     }
 }
