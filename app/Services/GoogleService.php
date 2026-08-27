@@ -306,13 +306,20 @@ class GoogleService
      */
     public function limparNome(string $nome): string
     {
-        // Remove prefixos/sufixos inválidos (traços, pontos, asteriscos, espaços)
-        $nome = trim($nome, ' -._*~+#@!');
-        // Normaliza espaços múltiplos
-        $nome = preg_replace('/\s+/', ' ', $nome);
-        // Title case preservando acentuação UTF-8
-        $nome = mb_convert_case($nome, MB_CASE_TITLE, 'UTF-8');
-        return trim($nome);
+        // 1. Remove números de 3-6 dígitos isolados que aparecem após letras
+        //    (índices de agenda como " 7631" — não afeta siglas como "3M" no início)
+        $nome = preg_replace('/(?<=[^\d\s])\s+\d{3,6}(?=\s|$)/u', '', $nome);
+
+        // 2. Remove palavras duplicadas consecutivas (ex: "Kamily Kamily" → "Kamily")
+        $nome = preg_replace('/\b(\w+)\s+\1\b/iu', '$1', $nome);
+
+        // 3. Title case: primeira letra de cada palavra em maiúsculo
+        $nome = mb_convert_case(trim($nome), MB_CASE_TITLE, 'UTF-8');
+
+        // 4. Remove espaços múltiplos
+        $nome = trim(preg_replace('/\s{2,}/', ' ', $nome));
+
+        return $nome;
     }
 
     /**
