@@ -51,6 +51,16 @@ class PushContatoParaGoogleJob implements ShouldQueue
         $vinculo->update(['google_resource_name' => $resourceName]);
         Log::info("Contato #{$this->contatoId} enviado ao Google: {$resourceName}");
 
+        $valoresEnviados = [];
+        foreach (['nome', 'sobrenome', 'empresa', 'email'] as $campo) {
+            if (! empty($contato->$campo)) {
+                $valoresEnviados[$campo] = (string) $contato->$campo;
+            }
+        }
+        if ($valoresEnviados) {
+            $vinculo->update(['google_valores_enviados' => $valoresEnviados]);
+        }
+
         $this->atribuirEtiquetas($google, $token, $vinculo, $contato, $resourceName);
     }
 

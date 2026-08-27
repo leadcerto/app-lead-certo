@@ -41,10 +41,9 @@ class ContatoController extends Controller
                 $contato->update(['nome' => $nome]);
             } elseif (strtolower(trim($nome)) !== strtolower(trim($contato->nome))) {
                 // pushName difere do master → fila de auditoria, master intacto
-                $vinculo->update([
-                    'nome_sugerido'      => $nome,
-                    'auditoria_pendente' => true,
-                ]);
+                $pendentes = $vinculo->campos_pendentes_auditoria ?? [];
+                $pendentes['nome'] = ['sugerido' => $nome, 'origem' => 'whatsapp_pushname'];
+                $vinculo->update(['campos_pendentes_auditoria' => $pendentes]);
             }
         }
 
@@ -53,7 +52,7 @@ class ContatoController extends Controller
             'opt_out'            => false,
             'novo'               => $contato->wasRecentlyCreated,
             'nome'               => $contato->nome,
-            'auditoria_pendente' => (bool) $vinculo->auditoria_pendente,
+            'auditoria_pendente' => (bool) ($vinculo->campos_pendentes_auditoria['nome'] ?? false),
         ]);
     }
 }

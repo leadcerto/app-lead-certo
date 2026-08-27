@@ -915,18 +915,21 @@ class ContatosController extends Controller
         // Regra de governança: nome editado por parceiro/SDR vai para auditoria
         // se o master já tiver um nome diferente. Dono e admin atualizam direto.
         $perfilPrivilegiado = in_array($request->user()->perfil ?? '', ['dono', 'admin']);
+        $vinculo = VinculoContatoTenant::where('contato_id', $contato->id)
+            ->where('tenant_id', $tenantId)
+            ->first();
+
         if (
             ! $perfilPrivilegiado &&
             isset($dados['nome']) &&
             $contato->nome &&
             strtolower(trim($dados['nome'])) !== strtolower(trim($contato->nome))
         ) {
-            VinculoContatoTenant::where('contato_id', $contato->id)
-                ->where('tenant_id', $tenantId)
-                ->update([
-                    'nome_sugerido'      => $dados['nome'],
-                    'auditoria_pendente' => true,
-                ]);
+            if ($vinculo) {
+                $pendentes = $vinculo->campos_pendentes_auditoria ?? [];
+                $pendentes['nome'] = ['sugerido' => $dados['nome'], 'origem' => 'humano_interno'];
+                $vinculo->update(['campos_pendentes_auditoria' => $pendentes]);
+            }
 
             $nomeLocal = $dados['nome'];
             unset($dados['nome']); // master intacto
@@ -940,6 +943,18 @@ class ContatosController extends Controller
                 'nome_local' => $nomeLocal,
                 'mensagem'   => 'Nome enviado para auditoria. Os demais dados foram salvos.',
             ]);
+        }
+
+        if ($perfilPrivilegiado && $vinculo) {
+            $humano = $vinculo->campos_editados_humano ?? [];
+            foreach (array_keys($dados) as $campo) {
+                if (in_array($campo, ['nome', 'sobrenome', 'empresa', 'email'], true)) {
+                    $humano[$campo] = now()->toIso8601String();
+                }
+            }
+            if ($humano) {
+                $vinculo->update(['campos_editados_humano' => $humano]);
+            }
         }
 
         $contato->update($dados);
@@ -956,7 +971,8 @@ class ContatosController extends Controller
      */
     private function sincronizarComGoogle(Contato $contato, int $tenantId, array $camposSalvos): void
     {
-        if (! array_intersect(['nome', 'sobrenome', 'email'], array_keys($camposSalvos))) {
+        $camposSincronizados = array_intersect(['nome', 'sobrenome', 'empresa', 'email'], array_keys($camposSalvos));
+        if (! $camposSincronizados) {
             return;
         }
 
@@ -978,9 +994,16 @@ class ContatosController extends Controller
             $contato
         );
 
-        if ($novoEtag) {
-            $vinculo->update(['google_etag' => $novoEtag]);
+        if (! $novoEtag) {
+            return;
         }
+
+        $valoresEnviados = $vinculo->google_valores_enviados ?? [];
+        foreach ($camposSincronizados as $campo) {
+            $valoresEnviados[$campo] = (string) $contato->$campo;
+        }
+
+        $vinculo->update(['google_etag' => $novoEtag, 'google_valores_enviados' => $valoresEnviados]);
     }
 
     private function encontrarColuna(array $cabecalho, array $opcoes): ?int
