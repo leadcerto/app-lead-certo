@@ -934,6 +934,8 @@ class ContatosController extends Controller
             $nomeLocal = $dados['nome'];
             unset($dados['nome']); // master intacto
 
+            $this->marcarCamposEditadosHumano($vinculo, $dados);
+
             $contato->update($dados); // aplica outros campos (email, profissao, etc.)
             $this->sincronizarComGoogle($contato, $tenantId, $dados);
 
@@ -945,22 +947,37 @@ class ContatosController extends Controller
             ]);
         }
 
-        if ($vinculo) {
-            $humano = $vinculo->campos_editados_humano ?? [];
-            foreach (array_keys($dados) as $campo) {
-                if (in_array($campo, ['nome', 'sobrenome', 'empresa', 'email'], true)) {
-                    $humano[$campo] = now()->toIso8601String();
-                }
-            }
-            if ($humano) {
-                $vinculo->update(['campos_editados_humano' => $humano]);
-            }
-        }
+        $this->marcarCamposEditadosHumano($vinculo, $dados);
 
         $contato->update($dados);
         $this->sincronizarComGoogle($contato, $tenantId, $dados);
 
         return response()->json(['ok' => true, 'auditoria' => false, 'contato' => $contato->fresh()]);
+    }
+
+    /**
+     * Marca em campos_editados_humano os campos sincronizados (nome, sobrenome,
+     * empresa, email) que de fato serão aplicados ao Contato ($dados) nesta
+     * requisição. Precisa rodar nos dois ramos de atualizarContato — inclusive
+     * no ramo de auditoria de nome divergente, onde $dados já teve 'nome'
+     * removido antes de chegar aqui, então só os demais campos sincronizados
+     * presentes na requisição são marcados.
+     */
+    private function marcarCamposEditadosHumano(?VinculoContatoTenant $vinculo, array $dados): void
+    {
+        if (! $vinculo) {
+            return;
+        }
+
+        $humano = $vinculo->campos_editados_humano ?? [];
+        foreach (array_keys($dados) as $campo) {
+            if (in_array($campo, ['nome', 'sobrenome', 'empresa', 'email'], true)) {
+                $humano[$campo] = now()->toIso8601String();
+            }
+        }
+        if ($humano) {
+            $vinculo->update(['campos_editados_humano' => $humano]);
+        }
     }
 
     /**
