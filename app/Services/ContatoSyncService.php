@@ -378,7 +378,7 @@ class ContatoSyncService
         return trim($nome);
     }
 
-    private function limparNome(string $nomeRaw): string
+    public function limparNome(string $nomeRaw): string
     {
         // 1. Remove números de 3-6 dígitos isolados que aparecem após letras
         //    (índices de agenda como " 7631" — não afeta siglas como "3M" no início)

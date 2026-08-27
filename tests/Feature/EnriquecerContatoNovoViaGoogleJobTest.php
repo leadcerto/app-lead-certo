@@ -42,6 +42,11 @@ class EnriquecerContatoNovoViaGoogleJobTest extends TestCase
 
     public function test_sanitiza_display_name_duplicado_antes_de_salvar(): void
     {
+        // Fix round 2: a sanitização de "índice de agenda + palavra duplicada"
+        // é feita por ContatoSyncService::limparNome() (não mais por
+        // GoogleService::limparNome(), que voltou a ser só trim de borda +
+        // title case, igual ao caminho de push já em produção).
+
         Http::fake(['people.googleapis.com/v1/people:searchContacts*' => Http::response([
             'results' => [['person' => [
                 'names'        => [['displayName' => 'Kamily Kamily']],

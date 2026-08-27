@@ -43,7 +43,7 @@ class EnriquecerContatoNovoViaGoogleJob implements ShouldQueue
         }
 
         $valores = [
-            'nome'      => isset($pessoa['names'][0]['displayName']) ? $google->limparNome($pessoa['names'][0]['displayName']) : null,
+            'nome'      => isset($pessoa['names'][0]['displayName']) ? $sync->limparNome($pessoa['names'][0]['displayName']) : null,
             'sobrenome' => $pessoa['names'][0]['familyName'] ?? null,
             'empresa'   => $pessoa['organizations'][0]['name'] ?? null,
             'email'     => $pessoa['emailAddresses'][0]['value'] ?? null,
