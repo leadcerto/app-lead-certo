@@ -159,13 +159,22 @@ class AuditorController extends Controller
         $itens = [];
         foreach ($vinculos as $v) {
             foreach ($v->campos_pendentes_auditoria ?? [] as $campo => $pendencia) {
+                $valorAtual    = $v->contato?->$campo;
+                $valorSugerido = $pendencia['sugerido'] ?? null;
+
+                // Mascarar email quando for o campo em questão (LGPD)
+                if ($campo === 'email') {
+                    $valorAtual    = $this->mascarar($valorAtual ?? '', 'email');
+                    $valorSugerido = $this->mascarar($valorSugerido ?? '', 'email');
+                }
+
                 $itens[] = [
                     'vinculo_id'     => $v->id,
                     'contato_id'     => $v->contato_id,
                     'tenant_id'      => $v->tenant_id,
                     'campo'          => $campo,
-                    'valor_atual'    => $v->contato?->$campo,
-                    'valor_sugerido' => $pendencia['sugerido'] ?? null,
+                    'valor_atual'    => $valorAtual,
+                    'valor_sugerido' => $valorSugerido,
                     'origem'         => $pendencia['origem'] ?? null,
                     'telefone'       => $this->mascarar($v->contato?->telefone ?? '', 'telefone'),
                 ];
