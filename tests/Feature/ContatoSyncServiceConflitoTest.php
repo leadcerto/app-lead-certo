@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\Contato;
+use App\Models\GoogleToken;
 use App\Models\Tenant;
 use App\Models\VinculoContatoTenant;
 use App\Services\ContatoSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class ContatoSyncServiceConflitoTest extends TestCase
@@ -22,6 +24,35 @@ class ContatoSyncServiceConflitoTest extends TestCase
             'contato_id' => $contato->id,
             'tenant_id'  => $tenant->id,
         ], $vinculoAttrs));
+    }
+
+    private function criarToken(Tenant $tenant): GoogleToken
+    {
+        return GoogleToken::create([
+            'tenant_id'     => $tenant->id,
+            'google_email'  => 'franqueado@empresa.com',
+            'access_token'  => 'access-token-teste',
+            'refresh_token' => 'refresh-token-teste',
+            'token_type'    => 'Bearer',
+            'expires_at'    => now()->addHour(),
+            'scopes'        => ['contacts'],
+        ]);
+    }
+
+    private function fakeConexoesGoogle(string $telefone, string $nome, string $empresa): void
+    {
+        Http::fake([
+            '*people/me/connections*' => Http::response([
+                'connections' => [[
+                    'resourceName'   => 'people/c987654321',
+                    'etag'           => 'etag-999',
+                    'names'          => [['displayName' => $nome]],
+                    'phoneNumbers'   => [['value' => $telefone]],
+                    'organizations'  => [['name' => $empresa]],
+                ]],
+                'nextSyncToken' => 'sync-token-xyz',
+            ], 200),
+        ]);
     }
 
     public function test_aceita_correcao_do_google_quando_campo_local_nao_e_humano(): void
@@ -111,5 +142,49 @@ class ContatoSyncServiceConflitoTest extends TestCase
 
         $vinculo->refresh();
         $this->assertArrayNotHasKey('empresa', $vinculo->campos_pendentes_auditoria ?? []);
+    }
+
+    /**
+     * Regressão do desvio documentado no relatório da Task 3 (camposJaHumanos()):
+     * um Contato PRÉ-EXISTENTE (ex: veio da agenda do WhatsApp) sem nenhum
+     * VinculoContatoTenant ainda ganha aqui seu primeiro vínculo Google. Sem
+     * camposJaHumanos() marcando 'empresa' como já-editado-por-humano na
+     * criação do vínculo, resolverCampoGoogle() trataria o campo já
+     * preenchido como "nunca editado" e aceitaria qualquer valor do Google
+     * sem checar — sobrescrevendo dado real de negócio silenciosamente.
+     *
+     * Diferente dos testes acima (que chamam resolverCampoGoogle() direto
+     * sobre um vínculo já montado à mão), este passa pelo fluxo de verdade —
+     * sincronizar() → processarPessoa() → firstOrCreate() — que é o único
+     * lugar onde camposJaHumanos() é exercitado.
+     */
+    public function test_empresa_pre_existente_nao_e_sobrescrita_no_primeiro_vinculo_google(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create([
+            'telefone' => '5521999995555',
+            'nome'     => 'Marcos Souza',
+            'empresa'  => 'Transportes Silva',
+        ]);
+
+        // Mesmo nome dos dois lados — evita cair no ramo de "número
+        // possivelmente reciclado" (o que importa aqui é só o campo empresa).
+        $this->fakeConexoesGoogle('5521999995555', 'Marcos Souza', 'Fretes ABC');
+
+        $token = $this->criarToken($tenant);
+        app(ContatoSyncService::class)->sincronizar($token, $tenant->id);
+
+        $contato->refresh();
+        $this->assertSame('Transportes Silva', $contato->empresa); // não foi sobrescrito
+
+        $vinculo = VinculoContatoTenant::where('contato_id', $contato->id)
+            ->where('tenant_id', $tenant->id)
+            ->first();
+
+        $this->assertNotNull($vinculo, 'primeiro vínculo Google deveria ter sido criado');
+        $this->assertSame(
+            ['sugerido' => 'Fretes ABC', 'origem' => 'google'],
+            $vinculo->campos_pendentes_auditoria['empresa'] ?? null
+        );
     }
 }
