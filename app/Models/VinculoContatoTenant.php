@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Jobs\EnriquecerContatoNovoViaGoogleJob;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -34,6 +35,18 @@ class VinculoContatoTenant extends Model
         'campos_editados_humano',
         'campos_pendentes_auditoria',
     ];
+
+    /**
+     * Busca em tempo real no Google assim que um lead novo ganha vínculo —
+     * pra não esperar até 15 min do próximo cron pra mostrar o nome real.
+     * Ver design seção 10 / EnriquecerContatoNovoViaGoogleJob.
+     */
+    protected static function booted(): void
+    {
+        static::created(function (VinculoContatoTenant $vinculo) {
+            EnriquecerContatoNovoViaGoogleJob::dispatch($vinculo->id);
+        });
+    }
 
     public function contato(): BelongsTo
     {

@@ -411,6 +411,54 @@ class GoogleService
         ];
     }
 
+    /**
+     * Busca pontual por telefone via people:searchContacts — diferente de
+     * listarContatos()/listarContatosDelta() (connections.list, lista tudo
+     * via sync token). Usada só pelo EnriquecerContatoNovoViaGoogleJob, pra
+     * checar um único telefone na hora que um lead novo chega. readMask
+     * explícito, sem memberships — nunca usada pra classificar tipo_contato.
+     */
+    public function buscarContatoPorTelefone(GoogleToken $token, string $telefone): ?array
+    {
+        $token = $this->tokenValido($token);
+        if (! $token) return null;
+
+        try {
+            $res = Http::withToken($token->access_token)
+                ->get('https://people.googleapis.com/v1/people:searchContacts', [
+                    'query'     => $telefone,
+                    'readMask'  => 'names,phoneNumbers,organizations,emailAddresses',
+                ]);
+
+            if (! $res->successful()) {
+                return null;
+            }
+
+            foreach ($res->json('results') ?? [] as $resultado) {
+                $pessoa = $resultado['person'] ?? null;
+                if (! $pessoa) continue;
+
+                foreach ($pessoa['phoneNumbers'] ?? [] as $fone) {
+                    if ($this->telefonesBatem($fone['value'] ?? '', $telefone)) {
+                        return $pessoa;
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning('GoogleService buscarContatoPorTelefone exceção', ['erro' => $e->getMessage()]);
+        }
+
+        return null;
+    }
+
+    private function telefonesBatem(string $a, string $b): bool
+    {
+        $normalizar = fn (string $t) => preg_replace('/\D/', '', $t);
+        $a = $normalizar($a);
+        $b = $normalizar($b);
+        return $a !== '' && (str_ends_with($a, $b) || str_ends_with($b, $a));
+    }
+
     // ── Contact Groups API ────────────────────────────────────────────────────
 
     /**
