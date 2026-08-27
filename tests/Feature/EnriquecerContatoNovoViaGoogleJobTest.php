@@ -40,6 +40,29 @@ class EnriquecerContatoNovoViaGoogleJobTest extends TestCase
         $this->assertSame('Rodrigo Alves', $contato->fresh()->nome);
     }
 
+    public function test_sanitiza_display_name_duplicado_antes_de_salvar(): void
+    {
+        Http::fake(['people.googleapis.com/v1/people:searchContacts*' => Http::response([
+            'results' => [['person' => [
+                'names'        => [['displayName' => 'Kamily Kamily']],
+                'phoneNumbers' => [['value' => '5521999991111']],
+            ]]],
+        ], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        GoogleToken::create([
+            'tenant_id' => $tenant->id, 'google_email' => 'a@b.com',
+            'access_token' => 'tok', 'refresh_token' => 'ref', 'token_type' => 'Bearer',
+            'expires_at' => Carbon::now()->addHour(), 'scopes' => ['contacts'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5521999991111', 'nome' => 'Sem Nome']);
+        $vinculo = VinculoContatoTenant::create(['contato_id' => $contato->id, 'tenant_id' => $tenant->id]);
+
+        (new EnriquecerContatoNovoViaGoogleJob($vinculo->id))->handle(app(GoogleService::class), app(\App\Services\ContatoSyncService::class));
+
+        $this->assertSame('Kamily', $contato->fresh()->nome);
+    }
+
     public function test_sem_google_token_nao_faz_nada(): void
     {
         Http::fake();
