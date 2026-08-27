@@ -19,6 +19,7 @@ class ChamadaPerdida extends Model
         'duracao_segundos',
         'mensagem_enviada',
         'mensagem_enviada_em',
+        'numero_invalido',
         'origem_app',
     ];
 
@@ -26,6 +27,7 @@ class ChamadaPerdida extends Model
         'chamou_em'           => 'datetime',
         'mensagem_enviada_em' => 'datetime',
         'mensagem_enviada'    => 'boolean',
+        'numero_invalido'     => 'boolean',
     ];
 
     public function tenant(): BelongsTo

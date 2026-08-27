@@ -223,4 +223,56 @@ class CovercutChannelServiceTest extends TestCase
         $this->assertFalse($enviado);
         Http::assertNothingSent();
     }
+
+    // ── Número sem WhatsApp (2026-08-26) ────────────────────────────────────
+
+    public function test_detecta_numero_sem_whatsapp_pelo_codigo_de_erro_da_meta(): void
+    {
+        Http::fake(['*/messages/send' => Http::response([
+            'error' => ['message' => 'Recipient phone number not in allowed list', 'code' => 131026],
+        ], 400)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = $this->canalOficial($tenant->id);
+        $servico = app(CovercutChannelService::class);
+
+        $enviado = $servico->enviarTexto($canal, '5511900000001', 'Oi!');
+
+        $this->assertFalse($enviado);
+        $this->assertTrue($servico->ultimoEnvioFalhouPorNumeroInvalido());
+    }
+
+    public function test_nao_marca_numero_invalido_pra_outros_tipos_de_falha(): void
+    {
+        Http::fake(['*/messages/send' => Http::response([
+            'error' => ['message' => 'Internal server error', 'code' => 500],
+        ], 500)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = $this->canalOficial($tenant->id);
+        $servico = app(CovercutChannelService::class);
+
+        $enviado = $servico->enviarTexto($canal, '5511977777777', 'Oi!');
+
+        $this->assertFalse($enviado);
+        $this->assertFalse($servico->ultimoEnvioFalhouPorNumeroInvalido());
+    }
+
+    public function test_flag_de_numero_invalido_reseta_a_cada_novo_envio(): void
+    {
+        Http::fakeSequence()
+            ->push(['error' => ['code' => 131026]], 400)
+            ->push(['id' => 'wamid.ok'], 200);
+
+        $tenant  = Tenant::factory()->create();
+        $canal   = $this->canalOficial($tenant->id);
+        $servico = app(CovercutChannelService::class);
+
+        $servico->enviarTexto($canal, '5511900000001', 'Oi!');
+        $this->assertTrue($servico->ultimoEnvioFalhouPorNumeroInvalido());
+
+        $enviado = $servico->enviarTexto($canal, '5511999999999', 'Oi de novo!');
+        $this->assertTrue($enviado);
+        $this->assertFalse($servico->ultimoEnvioFalhouPorNumeroInvalido());
+    }
 }

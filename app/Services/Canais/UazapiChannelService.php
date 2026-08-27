@@ -144,4 +144,18 @@ class UazapiChannelService implements CanalWhatsappInterface
 
         return $enviado;
     }
+
+    /**
+     * Paridade com CovercutChannelService (regra fundamental, CLAUDE.md) —
+     * genuinamente não se aplica aqui hoje: a API da Uazapi (wrapper Baileys)
+     * aceita o envio e devolve sucesso mesmo pra número sem WhatsApp — não há
+     * confirmado nenhum código de erro equivalente ao 131026 da Meta na resposta
+     * de /send/text (instância de teste estava desconectada em 2026-08-26, não
+     * deu pra confirmar o formato real de erro). Sempre false até isso ser
+     * investigado com uma instância conectada — ver TAREFAS.md.
+     */
+    public function ultimoEnvioFalhouPorNumeroInvalido(): bool
+    {
+        return false;
+    }
 }
