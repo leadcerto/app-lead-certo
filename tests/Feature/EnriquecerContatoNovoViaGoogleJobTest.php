@@ -10,6 +10,7 @@ use App\Models\VinculoContatoTenant;
 use App\Services\GoogleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -33,6 +34,7 @@ class EnriquecerContatoNovoViaGoogleJobTest extends TestCase
             'expires_at' => Carbon::now()->addHour(), 'scopes' => ['contacts'],
         ]);
         $contato = Contato::factory()->create(['telefone' => '5521999998888', 'nome' => 'Sem Nome']);
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
         $vinculo = VinculoContatoTenant::create(['contato_id' => $contato->id, 'tenant_id' => $tenant->id]);
 
         (new EnriquecerContatoNovoViaGoogleJob($vinculo->id))->handle(app(GoogleService::class), app(\App\Services\ContatoSyncService::class));
@@ -61,6 +63,7 @@ class EnriquecerContatoNovoViaGoogleJobTest extends TestCase
             'expires_at' => Carbon::now()->addHour(), 'scopes' => ['contacts'],
         ]);
         $contato = Contato::factory()->create(['telefone' => '5521999991111', 'nome' => 'Sem Nome']);
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
         $vinculo = VinculoContatoTenant::create(['contato_id' => $contato->id, 'tenant_id' => $tenant->id]);
 
         (new EnriquecerContatoNovoViaGoogleJob($vinculo->id))->handle(app(GoogleService::class), app(\App\Services\ContatoSyncService::class));
@@ -74,6 +77,7 @@ class EnriquecerContatoNovoViaGoogleJobTest extends TestCase
 
         $tenant  = Tenant::factory()->create(); // sem GoogleToken
         $contato = Contato::factory()->create(['telefone' => '5521999997777', 'nome' => 'Sem Nome']);
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
         $vinculo = VinculoContatoTenant::create(['contato_id' => $contato->id, 'tenant_id' => $tenant->id]);
 
         (new EnriquecerContatoNovoViaGoogleJob($vinculo->id))->handle(app(GoogleService::class), app(\App\Services\ContatoSyncService::class));
@@ -93,6 +97,7 @@ class EnriquecerContatoNovoViaGoogleJobTest extends TestCase
             'expires_at' => Carbon::now()->addHour(), 'scopes' => ['contacts'],
         ]);
         $contato = Contato::factory()->create(['telefone' => '5521999996666', 'nome' => 'Sem Nome']);
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
         $vinculo = VinculoContatoTenant::create(['contato_id' => $contato->id, 'tenant_id' => $tenant->id]);
 
         (new EnriquecerContatoNovoViaGoogleJob($vinculo->id))->handle(app(GoogleService::class), app(\App\Services\ContatoSyncService::class));
