@@ -198,6 +198,11 @@ class CovercutWebhookController extends Controller
                         // se manteve encerrado, nada é enviado ao lead — mesmo padrão do Uazapi.
                     } elseif ($ticketEncerrado) {
                         $ticket = $ticketEncerrado;
+                    } elseif ($contato->excluidoDoFunilComercial()) {
+                        // Pedido do Leonardo (2026-08-28): contato marcado numa
+                        // etiqueta do Google que não é "lead" não entra no
+                        // funil comercial — não abre ticket novo pra ele.
+                        return [null, false];
                     } else {
                         $persona = $tenant->personas()->where('is_default', true)->where('ativo', true)->first();
 
@@ -220,6 +225,10 @@ class CovercutWebhookController extends Controller
 
                 return [$ticket, $ticketNovo];
             });
+
+        if (! $ticket) {
+            return; // contato excluído do funil comercial — nada mais a processar
+        }
 
         [$conteudo, $tipoMensagem, $midiaUrl] = $this->resolverConteudoEMidia($payload['message'] ?? [], $canal, $ticket, $messageId);
 

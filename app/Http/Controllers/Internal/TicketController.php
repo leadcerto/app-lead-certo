@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Internal;
 
 use App\Http\Controllers\Controller;
+use App\Models\Contato;
 use App\Models\TicketAtendimento;
 use App\Services\SdrResponderService;
 use Illuminate\Http\JsonResponse;
@@ -26,6 +27,17 @@ class TicketController extends Controller
         $novo = false;
 
         if (! $ticket) {
+            // Pedido do Leonardo (2026-08-28): contato marcado numa etiqueta
+            // do Google que não é "lead" não entra no funil comercial.
+            $contato = Contato::find($request->contato_id);
+            if ($contato?->excluidoDoFunilComercial()) {
+                return response()->json([
+                    'ticket_id' => null,
+                    'novo'      => false,
+                    'excluido'  => true,
+                ]);
+            }
+
             $kanban = \App\Models\Kanban::withoutGlobalScopes()->where('tenant_id', $request->tenant_id)->where('tipo', 'vendas')->first();
             $canal  = $kanban ? app(\App\Services\SelecaoCanalWhatsappService::class)->naoOficialAleatorioParaKanban($kanban) : null;
 
