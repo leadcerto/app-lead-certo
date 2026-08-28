@@ -1588,7 +1588,7 @@ function kanbanConfig() {
         mensagensPor: {},
         modalAberto: false,
         editando: null,
-        form: { nome: '', descricao: '', coluna_kanban: '', horario_ativo: false, horario_inicio: null, horario_fim: null, sequencia_repouso_id: null },
+        form: { nome: '', descricao: '', coluna_kanban: '', horario_ativo: true, horario_inicio: '11:00', horario_fim: '13:00', sequencia_repouso_id: null },
 
         novoConteudo: {},
         novoDelay: {},
@@ -1854,7 +1854,7 @@ function kanbanConfig() {
 
         novaSequencia(colunaKey) {
             this.editando = null;
-            this.form = { nome: '', descricao: '', coluna_kanban: colunaKey, horario_ativo: false, horario_inicio: null, horario_fim: null, sequencia_repouso_id: null };
+            this.form = { nome: '', descricao: '', coluna_kanban: colunaKey, horario_ativo: true, horario_inicio: '11:00', horario_fim: '13:00', sequencia_repouso_id: null };
             this.modalAberto = true;
         },
 
