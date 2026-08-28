@@ -27,15 +27,15 @@ class MarcarNovoLeadEtiquetaJobTest extends TestCase
             'expires_at' => now()->addHour(), 'scopes' => ['contacts'],
         ]);
 
-        // Task 3: provision leads_em_analise group (required condition for job to run)
-        $emAnalise = Etiqueta::create(['tenant_id' => null, 'slug' => 'leads_em_analise', 'nome' => 'Leads em Análise', 'ativo' => true]);
+        // As 4 etiquetas de validação já existem via migration (RefreshDatabase
+        // reaplica a cada teste) -- busca, não recria.
+        $emAnalise = Etiqueta::whereNull('tenant_id')->where('slug', 'leads_em_analise')->firstOrFail();
         EtiquetaGoogleGrupo::create([
             'etiqueta_id' => $emAnalise->id, 'tenant_id' => $tenant->id,
             'google_group_resource_name' => 'contactGroups/analise-1',
         ]);
 
-        // Task 4: novos_leads group
-        $novosLeads = Etiqueta::create(['tenant_id' => null, 'slug' => 'novos_leads', 'nome' => 'Novos Leads', 'ativo' => true]);
+        $novosLeads = Etiqueta::whereNull('tenant_id')->where('slug', 'novos_leads')->firstOrFail();
         EtiquetaGoogleGrupo::create([
             'etiqueta_id' => $novosLeads->id, 'tenant_id' => $tenant->id,
             'google_group_resource_name' => 'contactGroups/novos-1',
