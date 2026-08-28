@@ -126,8 +126,9 @@ class KanbanController extends Controller
         $todosTickets->each(function ($ticket) use ($vinculos) {
             if ($ticket->contato && $vinculos->has($ticket->contato_id)) {
                 $v = $vinculos[$ticket->contato_id];
-                $ticket->contato->nome_local        = $v->nome_sugerido;
-                $ticket->contato->auditoria_pendente = $v->auditoria_pendente;
+                $pendenteNome = $v->campos_pendentes_auditoria['nome'] ?? null;
+                $ticket->contato->nome_local        = $pendenteNome['sugerido'] ?? null;
+                $ticket->contato->auditoria_pendente = (bool) $pendenteNome;
             }
         });
 
@@ -175,8 +176,9 @@ class KanbanController extends Controller
                 ->first();
 
             if ($vinculo) {
-                $model->contato->nome_local        = $vinculo->nome_sugerido;
-                $model->contato->auditoria_pendente = $vinculo->auditoria_pendente;
+                $pendenteNome = $vinculo->campos_pendentes_auditoria['nome'] ?? null;
+                $model->contato->nome_local        = $pendenteNome['sugerido'] ?? null;
+                $model->contato->auditoria_pendente = (bool) $pendenteNome;
             }
         }
 

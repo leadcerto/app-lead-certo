@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\EnriquecerContatoNovoViaGoogleJob;
 use App\Models\Contato;
 use App\Models\GoogleToken;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\VinculoContatoTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -80,6 +82,7 @@ class ContatoAtualizarSincronizaGoogleTest extends TestCase
 
     public function test_nao_chama_google_quando_contato_nao_esta_vinculado_ao_google(): void
     {
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
         Http::fake();
 
         $tenant  = $this->criarTenantComGoogle();
@@ -126,6 +129,7 @@ class ContatoAtualizarSincronizaGoogleTest extends TestCase
 
     public function test_editar_apenas_profissao_nao_chama_google(): void
     {
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
         Http::fake();
 
         $tenant  = $this->criarTenantComGoogle();

@@ -597,7 +597,6 @@ class ContatosController extends Controller
                             [
                                 'google_resource_name' => $pessoa['resourceName'] ?? null,
                                 'google_etag'          => $pessoa['etag'] ?? null,
-                                'google_given_name'    => $pessoa['names'][0]['givenName'] ?? null,
                             ]
                         );
 
@@ -640,7 +639,7 @@ class ContatosController extends Controller
         foreach ($vinculos as $vinculo) {
             if (! $vinculo->contato) continue;
 
-            $givenName  = $vinculo->google_given_name ?? $vinculo->contato->nome;
+            $givenName  = $vinculo->contato->nome;
             $familyName = (string) $vinculo->contato->id;
 
             $ok = $google->atualizarNomeContato(
@@ -915,21 +914,26 @@ class ContatosController extends Controller
         // Regra de governança: nome editado por parceiro/SDR vai para auditoria
         // se o master já tiver um nome diferente. Dono e admin atualizam direto.
         $perfilPrivilegiado = in_array($request->user()->perfil ?? '', ['dono', 'admin']);
+        $vinculo = VinculoContatoTenant::where('contato_id', $contato->id)
+            ->where('tenant_id', $tenantId)
+            ->first();
+
         if (
             ! $perfilPrivilegiado &&
             isset($dados['nome']) &&
             $contato->nome &&
             strtolower(trim($dados['nome'])) !== strtolower(trim($contato->nome))
         ) {
-            VinculoContatoTenant::where('contato_id', $contato->id)
-                ->where('tenant_id', $tenantId)
-                ->update([
-                    'nome_sugerido'      => $dados['nome'],
-                    'auditoria_pendente' => true,
-                ]);
+            if ($vinculo) {
+                $pendentes = $vinculo->campos_pendentes_auditoria ?? [];
+                $pendentes['nome'] = ['sugerido' => $dados['nome'], 'origem' => 'humano_interno'];
+                $vinculo->update(['campos_pendentes_auditoria' => $pendentes]);
+            }
 
             $nomeLocal = $dados['nome'];
             unset($dados['nome']); // master intacto
+
+            $this->marcarCamposEditadosHumano($vinculo, $dados, $contato);
 
             $contato->update($dados); // aplica outros campos (email, profissao, etc.)
             $this->sincronizarComGoogle($contato, $tenantId, $dados);
@@ -942,10 +946,55 @@ class ContatosController extends Controller
             ]);
         }
 
+        $this->marcarCamposEditadosHumano($vinculo, $dados, $contato);
+
         $contato->update($dados);
         $this->sincronizarComGoogle($contato, $tenantId, $dados);
 
         return response()->json(['ok' => true, 'auditoria' => false, 'contato' => $contato->fresh()]);
+    }
+
+    /**
+     * Marca em campos_editados_humano os campos sincronizados (nome, sobrenome,
+     * empresa, email) que de fato MUDARAM de valor nesta requisição. Precisa
+     * rodar nos dois ramos de atualizarContato — inclusive no ramo de auditoria
+     * de nome divergente, onde $dados já teve 'nome' removido antes de chegar
+     * aqui, então só os demais campos sincronizados são considerados.
+     *
+     * Achado da revisão de branch: marcar todo campo PRESENTE em $dados era
+     * errado — a ficha do painel (resources/views/contatos/importar.blade.php,
+     * salvarFicha()) manda o formulário INTEIRO em toda gravação, então editar
+     * só "observações" travava nome/sobrenome/empresa/email como editados por
+     * humano pra sempre, e toda correção futura vinda do Google passava a cair
+     * na fila de auditoria em vez de aplicar sozinha.
+     *
+     * ATENÇÃO: tem que ser chamado ANTES de $contato->update($dados) — depois
+     * disso $contato->$campo já reflete o valor novo e a comparação nunca
+     * detecta mudança nenhuma.
+     */
+    private function marcarCamposEditadosHumano(?VinculoContatoTenant $vinculo, array $dados, Contato $contato): void
+    {
+        if (! $vinculo) {
+            return;
+        }
+
+        $humano = $vinculo->campos_editados_humano ?? [];
+        $mudou  = false;
+
+        foreach (['nome', 'sobrenome', 'empresa', 'email'] as $campo) {
+            if (! array_key_exists($campo, $dados)) {
+                continue;
+            }
+            if ((string) $dados[$campo] === (string) $contato->$campo) {
+                continue; // veio no payload, mas com o mesmo valor que já estava salvo
+            }
+            $humano[$campo] = now()->toIso8601String();
+            $mudou = true;
+        }
+
+        if ($mudou) {
+            $vinculo->update(['campos_editados_humano' => $humano]);
+        }
     }
 
     /**
@@ -956,7 +1005,8 @@ class ContatosController extends Controller
      */
     private function sincronizarComGoogle(Contato $contato, int $tenantId, array $camposSalvos): void
     {
-        if (! array_intersect(['nome', 'sobrenome', 'email'], array_keys($camposSalvos))) {
+        $camposSincronizados = array_intersect(['nome', 'sobrenome', 'empresa', 'email'], array_keys($camposSalvos));
+        if (! $camposSincronizados) {
             return;
         }
 
@@ -971,16 +1021,61 @@ class ContatosController extends Controller
             return;
         }
 
-        $novoEtag = app(GoogleService::class)->enriquecerContato(
+        $google = app(GoogleService::class);
+
+        $novoEtag = $google->enriquecerContato(
             $token,
             $vinculo->google_resource_name,
             $vinculo->google_etag,
             $contato
         );
 
-        if ($novoEtag) {
-            $vinculo->update(['google_etag' => $novoEtag]);
+        if (! $novoEtag) {
+            return;
         }
+
+        $sync = app(ContatoSyncService::class);
+
+        $valoresEnviados = $vinculo->google_valores_enviados ?? [];
+        foreach ($camposSincronizados as $campo) {
+            $valoresEnviados[$campo] = $this->valorEnviadoAoGoogle($google, $sync, $contato, $campo);
+        }
+
+        $vinculo->update(['google_etag' => $novoEtag, 'google_valores_enviados' => $valoresEnviados]);
+    }
+
+    /**
+     * Valor que o Google REALMENTE recebeu, não o valor cru do banco.
+     * `GoogleService::enriquecerContato()` manda givenName = limparNome(nome)
+     * (ou 'Sem Nome') e familyName = limparNome(sobrenome) — gravar o valor cru
+     * na linha de base fazia o pull seguinte comparar o que voltou do Google
+     * contra algo que nunca foi enviado, gerando conflito falso. empresa/email
+     * vão verbatim, não precisam de tratamento.
+     *
+     * O 'nome' leva os DOIS sanitizadores em cadeia: o push manda
+     * GoogleService::limparNome($nome) como givenName, e o pull aplica
+     * ContatoSyncService::limparNome() EM CIMA do que volta — e esse segundo
+     * ainda remove índice de agenda de 3-6 dígitos e palavra duplicada
+     * consecutiva. Guardar só o valor enviado deixava a linha de base
+     * divergindo do que o ciclo completo produz na volta pra nomes como
+     * "Distribuidora Central 4500" ou "Kamily Kamily" → o nome que o humano
+     * acabou de digitar aqui voltava do Google como conflito de auditoria.
+     * O 'sobrenome' fica fora dessa cadeia de propósito: o pull lê familyName
+     * com trim puro (ContatoSyncService::extrairDados), sem limparNome().
+     */
+    private function valorEnviadoAoGoogle(GoogleService $google, ContatoSyncService $sync, Contato $contato, string $campo): string
+    {
+        $valor = (string) $contato->$campo;
+
+        if ($campo === 'nome') {
+            return $contato->semNomeReal() ? 'Sem Nome' : $sync->limparNome($google->limparNome($valor));
+        }
+
+        if ($campo === 'sobrenome') {
+            return $valor === '' ? '' : $google->limparNome($valor);
+        }
+
+        return $valor;
     }
 
     private function encontrarColuna(array $cabecalho, array $opcoes): ?int

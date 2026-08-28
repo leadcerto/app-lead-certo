@@ -85,7 +85,7 @@
                 <svg class="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                <p class="text-sm">Nenhuma sugestão de nome pendente</p>
+                <p class="text-sm">Nenhuma sugestão pendente</p>
             </div>
         </template>
 
@@ -94,23 +94,28 @@
                 <thead class="bg-gray-50 border-b border-gray-200">
                     <tr>
                         <th class="text-left px-4 py-3 text-xs text-gray-500 font-medium">ID Contato</th>
-                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-medium">Nome no Master</th>
-                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-medium">Nome Sugerido</th>
+                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-medium">Campo</th>
+                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-medium">Valor Atual</th>
+                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-medium">Valor Sugerido</th>
                         <th class="text-left px-4 py-3 text-xs text-gray-500 font-medium">Telefone</th>
                         <th class="text-left px-4 py-3 text-xs text-gray-500 font-medium">Origem</th>
                         <th class="text-right px-4 py-3 text-xs text-gray-500 font-medium">Ação</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
-                    <template x-for="item in pendentes" :key="item.vinculo_id">
+                    <template x-for="item in pendentes" :key="`${item.vinculo_id}-${item.campo}`">
                         <tr class="hover:bg-gray-50">
                             <td class="px-4 py-3 text-gray-400 font-mono text-xs" x-text="'#' + item.contato_id"></td>
                             <td class="px-4 py-3">
-                                <span class="text-gray-500 italic" x-text="item.nome_master || '(sem nome)'"></span>
+                                <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono"
+                                      x-text="item.campo"></span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="text-gray-500 italic" x-text="item.valor_atual || '(vazio)'"></span>
                             </td>
                             <td class="px-4 py-3">
                                 <span class="font-medium text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded"
-                                      x-text="item.nome_sugerido"></span>
+                                      x-text="item.valor_sugerido"></span>
                             </td>
                             <td class="px-4 py-3 text-gray-500 font-mono text-xs" x-text="item.telefone"></td>
                             <td class="px-4 py-3">
@@ -119,11 +124,11 @@
                             </td>
                             <td class="px-4 py-3 text-right">
                                 <div class="flex items-center justify-end gap-2">
-                                    <button @click="aprovarNome(item)"
+                                    <button @click="aprovarCampo(item)"
                                             class="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-lg transition-colors">
                                         Aprovar
                                     </button>
-                                    <button @click="rejeitarNome(item)"
+                                    <button @click="rejeitarCampo(item)"
                                             class="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg transition-colors">
                                         Rejeitar
                                     </button>
@@ -490,19 +495,19 @@ function auditor() {
             }
         },
 
-        async aprovarNome(item) {
-            const res = await this.api(`/api/painel/auditor/pendente/${item.vinculo_id}/aprovar`, 'POST');
+        async aprovarCampo(item) {
+            const res = await this.api(`/api/painel/auditor/pendente/${item.vinculo_id}/campo/${item.campo}/aprovar`, 'POST');
             if (res.ok) {
-                this.pendentes = this.pendentes.filter(p => p.vinculo_id !== item.vinculo_id);
+                this.pendentes = this.pendentes.filter(p => !(p.vinculo_id === item.vinculo_id && p.campo === item.campo));
                 await this.carregarStats();
             }
         },
 
-        async rejeitarNome(item) {
-            if (! confirm(`Rejeitar sugestão "${item.nome_sugerido}" e manter "${item.nome_master}"?`)) return;
-            const res = await this.api(`/api/painel/auditor/pendente/${item.vinculo_id}/rejeitar`, 'POST');
+        async rejeitarCampo(item) {
+            if (! confirm(`Rejeitar sugestão "${item.valor_sugerido}" pro campo "${item.campo}" e manter "${item.valor_atual}"?`)) return;
+            const res = await this.api(`/api/painel/auditor/pendente/${item.vinculo_id}/campo/${item.campo}/rejeitar`, 'POST');
             if (res.ok) {
-                this.pendentes = this.pendentes.filter(p => p.vinculo_id !== item.vinculo_id);
+                this.pendentes = this.pendentes.filter(p => !(p.vinculo_id === item.vinculo_id && p.campo === item.campo));
                 await this.carregarStats();
             }
         },

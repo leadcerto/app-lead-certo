@@ -2,10 +2,13 @@
 
 use Illuminate\Support\Facades\Schedule;
 
-// Sincroniza contatos do Google para todos os tenants a cada 6 horas
-// Delta sync: só busca novos/alterados desde o último sync via SyncToken
+// Sincroniza contatos do Google para todos os tenants a cada 15 minutos
+// Delta sync: só busca novos/alterados desde o último sync via SyncToken —
+// intervalo reduzido de 6h pra 15min (pedido do Leonardo, 2026-08-26: "time
+// é fundamental" pro lead inicial; o delta sync é barato o suficiente pra
+// rodar bem mais frequente sem pesar na cota da API do Google).
 Schedule::command('contatos:sincronizar-google')
-    ->everySixHours()
+    ->everyFifteenMinutes()
     ->withoutOverlapping()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/google-sync.log'));

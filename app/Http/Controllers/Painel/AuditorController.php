@@ -25,7 +25,8 @@ class AuditorController extends Controller
     public function stats(): JsonResponse
     {
         $total          = Contato::count();
-        $pendentes      = VinculoContatoTenant::where('auditoria_pendente', true)->count();
+        $pendentes      = VinculoContatoTenant::whereNotNull('campos_pendentes_auditoria')->get()
+            ->sum(fn ($v) => count($v->campos_pendentes_auditoria ?? []));
         $conflitos      = ContatoPendente::where('status', 'aguardando')->count();
         $inconsistentes = Contato::where('status_validacao', 'inconsistente')->count();
         $semNome        = Contato::whereNull('nome')->orWhere('nome', '')->count();
@@ -146,76 +147,96 @@ class AuditorController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    // ── Sugestões de Nome Pendentes ───────────────────────────────────────────
+    // ── Campos pendentes de auditoria (qualquer origem: google, humano_interno, whatsapp_pushname) ──
 
-    public function pendentes(Request $request): JsonResponse
+    public function pendentesCampos(Request $request): JsonResponse
     {
-        $pendentes = VinculoContatoTenant::with(['contato'])
-            ->where('auditoria_pendente', true)
-            ->whereNotNull('nome_sugerido')
+        $vinculos = VinculoContatoTenant::with('contato')
+            ->whereNotNull('campos_pendentes_auditoria')
             ->orderBy('contato_id')
-            ->paginate(50);
+            ->get();
 
-        $itens = $pendentes->map(function ($v) {
-            return [
-                'vinculo_id'     => $v->id,
-                'contato_id'     => $v->contato_id,
-                'tenant_id'      => $v->tenant_id,
-                'nome_master'    => $v->contato?->nome,
-                'nome_sugerido'  => $v->nome_sugerido,
-                'telefone'       => $this->mascarar($v->contato?->telefone ?? '', 'telefone'),
-                'origem'         => $v->contato?->origem,
-            ];
-        });
+        $itens = [];
+        foreach ($vinculos as $v) {
+            foreach ($v->campos_pendentes_auditoria ?? [] as $campo => $pendencia) {
+                $valorAtual    = $v->contato?->$campo;
+                $valorSugerido = $pendencia['sugerido'] ?? null;
 
-        return response()->json([
-            'data'  => $itens,
-            'total' => $pendentes->total(),
-        ]);
-    }
+                // Mascarar email quando for o campo em questão (LGPD)
+                if ($campo === 'email') {
+                    $valorAtual    = $this->mascarar($valorAtual ?? '', 'email');
+                    $valorSugerido = $this->mascarar($valorSugerido ?? '', 'email');
+                }
 
-    // ── Aprovar sugestão de nome (copia para master) ──────────────────────────
-
-    public function aprovarNome(Request $request, VinculoContatoTenant $vinculo): JsonResponse
-    {
-        if (! $vinculo->auditoria_pendente || ! $vinculo->nome_sugerido) {
-            return response()->json(['erro' => 'Nenhuma sugestão pendente neste vínculo.'], 422);
+                $itens[] = [
+                    'vinculo_id'     => $v->id,
+                    'contato_id'     => $v->contato_id,
+                    'tenant_id'      => $v->tenant_id,
+                    'campo'          => $campo,
+                    'valor_atual'    => $valorAtual,
+                    'valor_sugerido' => $valorSugerido,
+                    'origem'         => $pendencia['origem'] ?? null,
+                    'telefone'       => $this->mascarar($v->contato?->telefone ?? '', 'telefone'),
+                ];
+            }
         }
 
-        $nomeMaster  = $vinculo->contato?->nome;
-        $nomeSugerido = $vinculo->nome_sugerido;
+        return response()->json(['data' => $itens, 'total' => count($itens)]);
+    }
 
-        $vinculo->contato?->update(['nome' => $nomeSugerido]);
+    public function aprovarCampo(Request $request, VinculoContatoTenant $vinculo, string $campo): JsonResponse
+    {
+        $pendencia = $vinculo->campos_pendentes_auditoria[$campo] ?? null;
+        if (! $pendencia) {
+            return response()->json(['erro' => 'Nenhuma sugestão pendente pra este campo.'], 422);
+        }
 
-        $vinculo->update(['nome_sugerido' => null, 'auditoria_pendente' => false]);
+        $valorAntigo = $vinculo->contato?->$campo;
+        $valorNovo   = $pendencia['sugerido'];
+
+        $vinculo->contato?->update([$campo => $valorNovo]);
+
+        $pendentes = $vinculo->campos_pendentes_auditoria;
+        unset($pendentes[$campo]);
+
+        $humano = $vinculo->campos_editados_humano ?? [];
+        $humano[$campo] = now()->toIso8601String(); // aprovar é uma decisão humana
+
+        $vinculo->update([
+            'campos_pendentes_auditoria' => $pendentes ?: null,
+            'campos_editados_humano'     => $humano,
+        ]);
 
         AuditLog::registrar(
             tabela:      'contatos',
             registroId:  $vinculo->contato_id,
-            acao:        'aprovar_nome',
-            campo:       'nome',
-            valorAntigo: $nomeMaster,
-            valorNovo:   $nomeSugerido,
-            contexto:    ['vinculo_id' => $vinculo->id, 'tenant_id' => $vinculo->tenant_id]
+            acao:        'aprovar_campo',
+            campo:       $campo,
+            valorAntigo: $valorAntigo,
+            valorNovo:   $valorNovo,
+            contexto:    ['vinculo_id' => $vinculo->id, 'tenant_id' => $vinculo->tenant_id, 'origem' => $pendencia['origem'] ?? null]
         );
 
         return response()->json(['ok' => true]);
     }
 
-    // ── Rejeitar sugestão de nome (descarta, mantém master) ──────────────────
-
-    public function rejeitarNome(VinculoContatoTenant $vinculo): JsonResponse
+    public function rejeitarCampo(VinculoContatoTenant $vinculo, string $campo): JsonResponse
     {
-        $nomeSugerido = $vinculo->nome_sugerido;
+        $pendencia = $vinculo->campos_pendentes_auditoria[$campo] ?? null;
+        if (! $pendencia) {
+            return response()->json(['erro' => 'Nenhuma sugestão pendente pra este campo.'], 422);
+        }
 
-        $vinculo->update(['nome_sugerido' => null, 'auditoria_pendente' => false]);
+        $pendentes = $vinculo->campos_pendentes_auditoria;
+        unset($pendentes[$campo]);
+        $vinculo->update(['campos_pendentes_auditoria' => $pendentes ?: null]);
 
         AuditLog::registrar(
             tabela:      'vinculos_contato_tenant',
             registroId:  $vinculo->id,
-            acao:        'rejeitar_nome',
-            campo:       'nome_sugerido',
-            valorAntigo: $nomeSugerido,
+            acao:        'rejeitar_campo',
+            campo:       $campo,
+            valorAntigo: $pendencia['sugerido'] ?? null,
             valorNovo:   null,
             contexto:    ['contato_id' => $vinculo->contato_id, 'tenant_id' => $vinculo->tenant_id]
         );
