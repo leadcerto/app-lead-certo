@@ -21,31 +21,23 @@ class MarcarNovoLeadEtiquetaJobTest extends TestCase
     public function test_marca_novos_leads_quando_grupo_ja_provisionado(): void
     {
         $tenant = Tenant::factory()->create();
-        $token  = GoogleToken::create([
+        GoogleToken::create([
             'tenant_id' => $tenant->id, 'google_email' => 'a@b.com',
             'access_token' => 'tok', 'refresh_token' => 'ref', 'token_type' => 'Bearer',
             'expires_at' => now()->addHour(), 'scopes' => ['contacts'],
         ]);
 
         // Task 3: provision leads_em_analise group (required condition for job to run)
-        $emAnalise = Etiqueta::whereNull('tenant_id')->where('slug', 'leads_em_analise')->first();
-        if (!$emAnalise) {
-            $emAnalise = Etiqueta::create(['tenant_id' => null, 'slug' => 'leads_em_analise', 'nome' => 'Leads em Análise', 'ativo' => true]);
-        }
-        EtiquetaGoogleGrupo::firstOrCreate([
+        $emAnalise = Etiqueta::create(['tenant_id' => null, 'slug' => 'leads_em_analise', 'nome' => 'Leads em Análise', 'ativo' => true]);
+        EtiquetaGoogleGrupo::create([
             'etiqueta_id' => $emAnalise->id, 'tenant_id' => $tenant->id,
-        ], [
             'google_group_resource_name' => 'contactGroups/analise-1',
         ]);
 
         // Task 4: novos_leads group
-        $novosLeads = Etiqueta::whereNull('tenant_id')->where('slug', 'novos_leads')->first();
-        if (!$novosLeads) {
-            $novosLeads = Etiqueta::create(['tenant_id' => null, 'slug' => 'novos_leads', 'nome' => 'Novos Leads', 'ativo' => true]);
-        }
-        EtiquetaGoogleGrupo::firstOrCreate([
+        $novosLeads = Etiqueta::create(['tenant_id' => null, 'slug' => 'novos_leads', 'nome' => 'Novos Leads', 'ativo' => true]);
+        EtiquetaGoogleGrupo::create([
             'etiqueta_id' => $novosLeads->id, 'tenant_id' => $tenant->id,
-        ], [
             'google_group_resource_name' => 'contactGroups/novos-1',
         ]);
 

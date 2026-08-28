@@ -51,7 +51,7 @@ class MarcarNovoLeadEtiquetaJob implements ShouldQueue
         $ok = $google->modificarMembrosGrupo($token, $grupo->google_group_resource_name, resourceNamesToAdd: [$vinculo->google_resource_name]);
 
         if ($ok) {
-            $vinculo->etiquetas()->attach($novosLeads->id);
+            $vinculo->etiquetas()->syncWithoutDetaching([$novosLeads->id]);
         }
     }
 }
