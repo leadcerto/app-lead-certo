@@ -27,6 +27,14 @@ class MarcarNovoLeadEtiquetaJobTest extends TestCase
             'expires_at' => now()->addHour(), 'scopes' => ['contacts'],
         ]);
 
+        // Task 3: provision leads_em_analise group (required condition for job to run)
+        $emAnalise = Etiqueta::create(['tenant_id' => null, 'slug' => 'leads_em_analise', 'nome' => 'Leads em Análise', 'ativo' => true]);
+        EtiquetaGoogleGrupo::create([
+            'etiqueta_id' => $emAnalise->id, 'tenant_id' => $tenant->id,
+            'google_group_resource_name' => 'contactGroups/analise-1',
+        ]);
+
+        // Task 4: novos_leads group
         $etiqueta = Etiqueta::create(['tenant_id' => null, 'slug' => 'novos_leads', 'nome' => 'Novos Leads', 'ativo' => true]);
         EtiquetaGoogleGrupo::create([
             'etiqueta_id' => $etiqueta->id, 'tenant_id' => $tenant->id,
