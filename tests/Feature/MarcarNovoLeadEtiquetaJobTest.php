@@ -33,6 +33,15 @@ class MarcarNovoLeadEtiquetaJobTest extends TestCase
         $this->assertSame('contactGroups/analise-1', $grupo->google_group_resource_name);
     }
 
+    public function test_etiqueta_pode_ser_encontrada_por_slug(): void
+    {
+        $etiqueta = Etiqueta::create(['tenant_id' => null, 'slug' => 'novos_leads', 'nome' => 'Novos Leads', 'ativo' => true]);
+
+        $found = Etiqueta::whereNull('tenant_id')->where('slug', 'novos_leads')->first();
+        $this->assertNotNull($found);
+        $this->assertSame($etiqueta->id, $found->id);
+    }
+
     public function test_marca_novos_leads_quando_grupo_ja_provisionado(): void
     {
         $tenant = Tenant::factory()->create();
