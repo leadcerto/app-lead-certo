@@ -43,7 +43,7 @@ class MarcarNovoLeadEtiquetaJobTest extends TestCase
         $found = Etiqueta::whereNull('tenant_id')->where('slug', 'novos_leads')->first();
         $this->assertNotNull($found);
         $this->assertEquals('novos_leads', $found->slug);
-        $this->assertGreater(Etiqueta::whereNull('tenant_id')->count(), $initial_count);
+        $this->assertGreaterThan($initial_count, Etiqueta::whereNull('tenant_id')->count());
     }
 
     public function test_marca_novos_leads_quando_grupo_ja_provisionado(): void
