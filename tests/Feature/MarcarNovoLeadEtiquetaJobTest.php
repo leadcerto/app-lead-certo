@@ -18,6 +18,20 @@ class MarcarNovoLeadEtiquetaJobTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_verifica_setup_grupos_googleGrupoParaTenant(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $emAnalise = Etiqueta::create(['tenant_id' => null, 'slug' => 'leads_em_analise', 'nome' => 'Leads em Análise', 'ativo' => true]);
+        EtiquetaGoogleGrupo::create([
+            'etiqueta_id' => $emAnalise->id, 'tenant_id' => $tenant->id,
+            'google_group_resource_name' => 'contactGroups/analise-1',
+        ]);
+
+        $grupo = $emAnalise->googleGrupoParaTenant($tenant->id);
+        $this->assertNotNull($grupo);
+        $this->assertSame('contactGroups/analise-1', $grupo->google_group_resource_name);
+    }
+
     public function test_marca_novos_leads_quando_grupo_ja_provisionado(): void
     {
         $tenant = Tenant::factory()->create();
