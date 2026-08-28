@@ -933,10 +933,10 @@ class ContatosController extends Controller
             $nomeLocal = $dados['nome'];
             unset($dados['nome']); // master intacto
 
-            $this->marcarCamposEditadosHumano($vinculo, $dados, $contato);
+            $camposMudaram = $this->marcarCamposEditadosHumano($vinculo, $dados, $contato);
 
             $contato->update($dados); // aplica outros campos (email, profissao, etc.)
-            $this->sincronizarComGoogle($contato, $tenantId, $dados);
+            $this->sincronizarComGoogle($contato, $tenantId, $camposMudaram);
 
             return response()->json([
                 'ok'         => true,
@@ -946,10 +946,10 @@ class ContatosController extends Controller
             ]);
         }
 
-        $this->marcarCamposEditadosHumano($vinculo, $dados, $contato);
+        $camposMudaram = $this->marcarCamposEditadosHumano($vinculo, $dados, $contato);
 
         $contato->update($dados);
-        $this->sincronizarComGoogle($contato, $tenantId, $dados);
+        $this->sincronizarComGoogle($contato, $tenantId, $camposMudaram);
 
         return response()->json(['ok' => true, 'auditoria' => false, 'contato' => $contato->fresh()]);
     }
@@ -971,15 +971,16 @@ class ContatosController extends Controller
      * ATENÇÃO: tem que ser chamado ANTES de $contato->update($dados) — depois
      * disso $contato->$campo já reflete o valor novo e a comparação nunca
      * detecta mudança nenhuma.
+     *
+     * Retorna a lista dos campos que realmente mudaram — sincronizarComGoogle()
+     * reaproveita essa mesma lista (achado da revisão de branch: sem isso,
+     * salvar a ficha disparava PATCH pro Google mesmo quando nenhum dos 4
+     * campos sincronizados tinha mudado de verdade, gastando chamada de API e
+     * rotacionando o etag à toa).
      */
-    private function marcarCamposEditadosHumano(?VinculoContatoTenant $vinculo, array $dados, Contato $contato): void
+    private function marcarCamposEditadosHumano(?VinculoContatoTenant $vinculo, array $dados, Contato $contato): array
     {
-        if (! $vinculo) {
-            return;
-        }
-
-        $humano = $vinculo->campos_editados_humano ?? [];
-        $mudou  = false;
+        $mudaram = [];
 
         foreach (['nome', 'sobrenome', 'empresa', 'email'] as $campo) {
             if (! array_key_exists($campo, $dados)) {
@@ -988,13 +989,18 @@ class ContatosController extends Controller
             if ((string) $dados[$campo] === (string) $contato->$campo) {
                 continue; // veio no payload, mas com o mesmo valor que já estava salvo
             }
-            $humano[$campo] = now()->toIso8601String();
-            $mudou = true;
+            $mudaram[] = $campo;
         }
 
-        if ($mudou) {
+        if ($vinculo && $mudaram) {
+            $humano = $vinculo->campos_editados_humano ?? [];
+            foreach ($mudaram as $campo) {
+                $humano[$campo] = now()->toIso8601String();
+            }
             $vinculo->update(['campos_editados_humano' => $humano]);
         }
+
+        return $mudaram;
     }
 
     /**
@@ -1003,9 +1009,9 @@ class ContatosController extends Controller
      * Web, e não dá pra buscar o contato por nome lá. Método legado
      * (`enriquecerContato`) já existia mas nunca era chamado nesse fluxo.
      */
-    private function sincronizarComGoogle(Contato $contato, int $tenantId, array $camposSalvos): void
+    private function sincronizarComGoogle(Contato $contato, int $tenantId, array $camposMudaram): void
     {
-        $camposSincronizados = array_intersect(['nome', 'sobrenome', 'empresa', 'email'], array_keys($camposSalvos));
+        $camposSincronizados = array_intersect(['nome', 'sobrenome', 'empresa', 'email'], $camposMudaram);
         if (! $camposSincronizados) {
             return;
         }

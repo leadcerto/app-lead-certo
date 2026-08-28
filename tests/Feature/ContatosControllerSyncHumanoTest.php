@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\EnriquecerContatoNovoViaGoogleJob;
 use App\Models\Contato;
 use App\Models\GoogleToken;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\VinculoContatoTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -139,6 +141,10 @@ class ContatosControllerSyncHumanoTest extends TestCase
             'empresa' => 'Fretes ABC',
             'email'   => 'joao@fretes.com',
         ]);
+        // Sem isso, o hook VinculoContatoTenant::created() dispara o job de
+        // busca em tempo real de verdade (fila sync em teste) e o
+        // assertNothingSent() abaixo pegaria a chamada dele, não a do PATCH.
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
         VinculoContatoTenant::create([
             'contato_id' => $contato->id, 'tenant_id' => $tenant->id,
             'google_resource_name' => 'people/c123', 'google_etag' => 'etag-antigo',
@@ -160,6 +166,12 @@ class ContatosControllerSyncHumanoTest extends TestCase
             'reenviar a ficha sem alterar campo sincronizado não pode travá-los como editados por humano'
         );
         $this->assertSame('Ligou hoje pedindo orçamento', $contato->fresh()->observacoes);
+
+        // Achado da revisão de branch: sincronizarComGoogle() disparava PATCH
+        // pro Google toda vez que a ficha era salva, mesmo sem nenhum dos 4
+        // campos sincronizados ter mudado de verdade.
+        Http::assertNothingSent();
+        $this->assertSame('etag-antigo', $vinculo->refresh()->google_etag, 'sem chamada ao Google, o etag não pode rotacionar');
     }
 
     public function test_apenas_o_campo_sincronizado_que_mudou_e_marcado_editado_humano(): void
