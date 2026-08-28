@@ -96,14 +96,16 @@ class TelefoneReparoServiceTest extends TestCase
         $this->assertFalse($this->service->ehCanonico('33987654321')); // DDD 33, sem o 55
     }
 
-    public function test_55_duplicado_com_resto_valido_produz_candidato_correto(): void
+    public function test_55_duplicado_na_fronteira_exata_de_13_caracteres_produz_candidato(): void
     {
-        // Bug fix: strlen >= 13 (não > 13) permite processar o caso de 13 caracteres.
-        // "55" + "5521994359537" (numero ja canonico, so duplicaram o prefixo)
-        // -- remover o 55 duplicado tem que achar o candidato canonico de volta,
-        // provando que a logica rodou de verdade nesse tamanho (13 caracteres).
-        // len=16, remove 55 duplicado -> 5521994359537 (13, ja canonico)
-        $candidatos = $this->service->candidatos('555521994359537');
-        $this->assertContains('5521994359537', $candidatos);
+        // 13 caracteres exatos -- e a fronteira que diferenciava a guarda
+        // antiga (> 13, bloqueava este caso) da nova (>= 13, deixa rodar).
+        // Verificado manualmente: sem a correcao, candidatos() retorna [].
+        $telefone = '5502161234567';
+        $this->assertSame(13, strlen($telefone));
+
+        $candidatos = $this->service->candidatos($telefone);
+
+        $this->assertContains('5521961234567', $candidatos);
     }
 }
