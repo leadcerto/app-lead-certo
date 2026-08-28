@@ -52,4 +52,43 @@ class GoogleServiceBuscarPorTelefoneTest extends TestCase
 
         $this->assertNull($resultado);
     }
+
+    /**
+     * Achado da revisão de branch: um card do Google com telefone curto/
+     * truncado não pode casar por sufixo com um telefone completo nosso —
+     * antes só exigia "não vazio", então "8888" (4 dígitos) casava com
+     * qualquer número terminado em 8888.
+     */
+    public function test_telefone_curto_no_card_do_google_nao_casa_por_sufixo(): void
+    {
+        Http::fake(['people.googleapis.com/v1/people:searchContacts*' => Http::response([
+            'results' => [[
+                'person' => [
+                    'names'        => [['displayName' => 'Alguém']],
+                    'phoneNumbers' => [['value' => '8888']],
+                ],
+            ]],
+        ], 200)]);
+
+        $resultado = app(GoogleService::class)->buscarContatoPorTelefone($this->tokenValido(), '5521999998888');
+
+        $this->assertNull($resultado);
+    }
+
+    /** DDI/zero de discagem ainda casam por sufixo — os dois lados têm 8+ dígitos. */
+    public function test_telefone_sem_ddi_ainda_casa_por_sufixo(): void
+    {
+        Http::fake(['people.googleapis.com/v1/people:searchContacts*' => Http::response([
+            'results' => [[
+                'person' => [
+                    'names'        => [['displayName' => 'Rodrigo Alves']],
+                    'phoneNumbers' => [['value' => '21999998888']], // sem o 55
+                ],
+            ]],
+        ], 200)]);
+
+        $resultado = app(GoogleService::class)->buscarContatoPorTelefone($this->tokenValido(), '5521999998888');
+
+        $this->assertSame('Rodrigo Alves', $resultado['names'][0]['displayName']);
+    }
 }

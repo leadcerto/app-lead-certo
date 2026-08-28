@@ -451,12 +451,30 @@ class GoogleService
         return null;
     }
 
+    /**
+     * Achado da revisão de branch: comparava só "$a não vazio" — um número
+     * vazio ou muito curto (card do Google com telefone truncado, por
+     * exemplo) casava por sufixo com qualquer telefone real que terminasse
+     * igual, atribuindo resourceName/etag ao vínculo errado. Sufixo só é
+     * aceito quando o lado mais curto já tem dígitos suficientes pra ser um
+     * número de verdade (8 = telefone fixo sem DDD) — abaixo disso, exige
+     * igualdade exata.
+     */
     private function telefonesBatem(string $a, string $b): bool
     {
         $normalizar = fn (string $t) => preg_replace('/\D/', '', $t);
         $a = $normalizar($a);
         $b = $normalizar($b);
-        return $a !== '' && (str_ends_with($a, $b) || str_ends_with($b, $a));
+
+        if ($a === '' || $b === '') {
+            return false;
+        }
+
+        if (min(strlen($a), strlen($b)) < 8) {
+            return $a === $b;
+        }
+
+        return str_ends_with($a, $b) || str_ends_with($b, $a);
     }
 
     // ── Contact Groups API ────────────────────────────────────────────────────
