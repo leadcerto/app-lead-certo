@@ -41,7 +41,7 @@ class MarcarNovoLeadEtiquetaJobTest extends TestCase
             'google_group_resource_name' => 'contactGroups/novos-1',
         ]);
 
-        Http::fake(['people.googleapis.com/v1/contactGroups/novos-1/members:modify' => Http::response(['status' => 'OK'], 200)]);
+        Http::fake(['*members:modify*' => Http::response(['status' => 'OK'], 200)]);
 
         $contato = Contato::factory()->create();
         $vinculo = VinculoContatoTenant::create([
