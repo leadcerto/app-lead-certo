@@ -74,4 +74,19 @@ class Contato extends Model
 
         return $nome === '' || $nome === $this->telefone || mb_strtolower($nome) === 'sem nome';
     }
+
+    /**
+     * Pedido do Leonardo (2026-08-28): o time do cliente marca um contato
+     * numa etiqueta do Google Contatos dele (ex: "Pessoal", "Fornecedor") pra
+     * tirar alguém que não é lead de vendas da esteira comercial —
+     * ContatoSyncService::detectarTipoContato() já lê isso e grava em
+     * tipo_contato. "lead" (o valor padrão de todo cadastro novo) nunca
+     * exclui; qualquer outro tipo preenchido exclui. Checado em todo ponto
+     * que cria um TicketAtendimento novo pra um lead — nunca em pontos que
+     * reabrem/recuperam um ticket já existente.
+     */
+    public function excluidoDoFunilComercial(): bool
+    {
+        return (bool) $this->tipo_contato && $this->tipo_contato !== 'lead';
+    }
 }

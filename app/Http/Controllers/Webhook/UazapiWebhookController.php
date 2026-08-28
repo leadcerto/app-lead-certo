@@ -247,6 +247,11 @@ class UazapiWebhookController extends Controller
                         // ticketNovo permanece false → se reativou, cai no elseif abaixo →
                         // SdrResponderJob; se não, agente_responsavel continua como estava
                         // (não 'bot'), então o elseif não dispara e nada é enviado ao lead.
+                    } elseif ($contato->excluidoDoFunilComercial()) {
+                        // Pedido do Leonardo (2026-08-28): contato marcado numa
+                        // etiqueta do Google que não é "lead" não entra no
+                        // funil comercial — não abre ticket novo pra ele.
+                        return [null, false];
                     } else {
                         // Abre novo ticket
                         $persona = $tenant->personas()->where('is_default', true)->where('ativo', true)->first();
@@ -268,6 +273,10 @@ class UazapiWebhookController extends Controller
 
                 return [$ticket, $ticketNovo];
             });
+
+        if (! $ticket) {
+            return; // contato excluído do funil comercial — nada mais a processar
+        }
 
         // Processa mídia se houver (imagem → visão IA / áudio → transcrição / etc)
         $mediaType = $msg['mediaType'] ?? null;
@@ -461,6 +470,12 @@ class UazapiWebhookController extends Controller
                 'telefone' => $telefone,
                 'ticket'  => $ticketExistente->id,
             ]);
+            return;
+        }
+
+        // Pedido do Leonardo (2026-08-28): contato marcado numa etiqueta do
+        // Google que não é "lead" não entra no funil comercial.
+        if ($contato->excluidoDoFunilComercial()) {
             return;
         }
 

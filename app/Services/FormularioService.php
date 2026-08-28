@@ -128,6 +128,21 @@ class FormularioService
             return ['ok' => true, 'acao' => 'ticket_existente', 'ticket_id' => $ticketExistente->id];
         }
 
+        // Pedido do Leonardo (2026-08-28): contato marcado numa etiqueta do
+        // Google que não é "lead" não entra no funil comercial.
+        if ($contato->excluidoDoFunilComercial()) {
+            FormularioEnvio::create([
+                'formulario_id'  => $formulario->id,
+                'contato_id'     => $contato->id,
+                'ticket_id'      => null,
+                'dominio_origem' => $dominioOrigem,
+                'dados_envio'    => $dados,
+                'processado'     => true,
+            ]);
+
+            return ['ok' => true, 'acao' => 'contato_fora_do_funil_comercial'];
+        }
+
         // Cria ticket
         $kanban = \App\Models\Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->first();
         $canal  = $kanban ? app(\App\Services\SelecaoCanalWhatsappService::class)->naoOficialAleatorioParaKanban($kanban) : null;

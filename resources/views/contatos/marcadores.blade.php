@@ -92,6 +92,30 @@
             <li>Os marcadores são sincronizados com o Google Contacts do franqueado.</li>
         </ul>
     </div>
+
+    {{-- Explicação: Lead Certo - Lead / Lead Certo - Pessoal --}}
+    <div class="mt-4 bg-green-50 border border-green-100 rounded-xl p-4 text-sm text-green-800">
+        <p class="font-medium mb-2">Etiquetas "Lead Certo - Lead" e "Lead Certo - Pessoal"</p>
+        <p class="text-xs text-green-700 mb-3">
+            Ao conectar o Google, o sistema já cria dois marcadores próprios pra organizar o funil comercial —
+            sem mexer em nenhum marcador que você já tinha criado por conta própria:
+        </p>
+        <ul class="text-xs space-y-2 text-green-700">
+            <li class="flex items-start gap-2">
+                <span class="bg-green-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5">Lead Certo - Lead</span>
+                <span>Marcado sozinho, automaticamente, em todo contato novo que o sistema cadastra — não precisa fazer nada aqui.</span>
+            </li>
+            <li class="flex items-start gap-2">
+                <span class="bg-gray-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5">Lead Certo - Pessoal</span>
+                <span>
+                    Pra tirar alguém das vendas — um fornecedor, um contato pessoal, qualquer pessoa que não deva
+                    receber atendimento automático de vendas — é só arrastar o contato pra esse marcador aqui no
+                    Google Contacts. O sistema para de criar atendimento novo pra essa pessoa a partir da próxima
+                    sincronização.
+                </span>
+            </li>
+        </ul>
+    </div>
 </div>
 
 {{-- Modal criar marcador --}}

@@ -83,6 +83,14 @@ class SecretariaEletronicaController extends Controller
             'tenant_id'  => $tenant->id,
         ]);
 
+        // Pedido do Leonardo (2026-08-28): contato marcado numa etiqueta do
+        // Google que não é "lead" (ex: "Pessoal") não entra no funil
+        // comercial — não cria ticket nem dispara mensagem automática.
+        if ($contato->excluidoDoFunilComercial()) {
+            $chamada->update(['contato_id' => $contato->id]);
+            return response()->json(['ok' => true, 'acao' => 'contato_fora_do_funil_comercial']);
+        }
+
         // Achado real (2026-08-12): quando uma ligação anterior desse número já
         // tinha um ticket aberto (mesmo sem nenhuma mensagem enviada — ex: a
         // primeira tentativa falhou por janela do WhatsApp fechada), o sistema
