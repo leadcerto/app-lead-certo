@@ -557,7 +557,7 @@ async function ignorar(id) {
 
 async function excluirContato(contatoId, auditoriaId, eraPendente = false) {
     if (!confirm('Excluir definitivamente este contato? Esta ação não pode ser desfeita.')) return false;
-    const res = await fetch(`/contato/${contatoId}/excluir-definitivo`, {
+    const res = await fetch(`/api/painel/contato/${contatoId}/excluir-definitivo`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF },
     });
