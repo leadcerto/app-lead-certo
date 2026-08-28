@@ -11,7 +11,6 @@ use App\Models\Tenant;
 use App\Models\VinculoContatoTenant;
 use App\Services\GoogleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -44,6 +43,7 @@ class MarcarNovoLeadEtiquetaJobTest extends TestCase
 
         (new MarcarNovoLeadEtiquetaJob($vinculo->id))->handle(app(GoogleService::class));
 
+        $vinculo->refresh();
         $this->assertTrue($vinculo->etiquetas()->where('slug', 'novos_leads')->exists());
         Http::assertSent(fn ($r) => str_contains($r->url(), 'novos-1/members:modify') && in_array('people/c999', $r['resourceNamesToAdd'] ?? []));
     }
