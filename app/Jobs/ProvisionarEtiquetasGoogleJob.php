@@ -54,11 +54,24 @@ class ProvisionarEtiquetasGoogleJob implements ShouldQueue
             return;
         }
 
+        $etiquetaEmAnalise = Etiqueta::whereNull('tenant_id')->where('slug', 'leads_em_analise')->first();
+        $primeiraProvisao  = $etiquetaEmAnalise
+            && ! EtiquetaGoogleGrupo::where('etiqueta_id', $etiquetaEmAnalise->id)
+                ->where('tenant_id', $token->tenant_id)
+                ->exists();
+
         foreach ([...self::SLUGS_FUNIL, ...self::SLUGS_VALIDACAO] as $slug) {
             $this->provisionarGrupo($google, $token, $slug);
         }
 
-        $this->marcarBaseExistenteComoEmAnalise($google, $token);
+        // Só marca a base existente na PRIMEIRA vez que o tenant provisiona
+        // as etiquetas de validação -- se o job rodar de novo (reconexão,
+        // backfill repetido), a base já foi marcada da primeira vez, e
+        // vínculos que já avançaram na validação (lead_certo/invalido/
+        // novos_leads) não podem voltar pra leads_em_analise.
+        if ($primeiraProvisao) {
+            $this->marcarBaseExistenteComoEmAnalise($google, $token);
+        }
     }
 
     private function provisionarGrupo(GoogleService $google, GoogleToken $token, string $slug): void
@@ -97,26 +110,28 @@ class ProvisionarEtiquetasGoogleJob implements ShouldQueue
             return;
         }
 
-        $resourceNames = VinculoContatoTenant::where('tenant_id', $token->tenant_id)
+        $vinculos = VinculoContatoTenant::where('tenant_id', $token->tenant_id)
             ->whereNotNull('google_resource_name')
-            ->pluck('google_resource_name')
-            ->all();
+            ->get();
 
-        if (empty($resourceNames)) {
+        if ($vinculos->isEmpty()) {
             return;
         }
 
-        // API do Google aceita no máximo 500 por chamada de members:modify
-        foreach (array_chunk($resourceNames, 500) as $lote) {
-            $google->modificarMembrosGrupo($token, $grupo->google_group_resource_name, resourceNamesToAdd: $lote);
-        }
+        foreach ($vinculos->chunk(500) as $lote) {
+            $resourceNames = $lote->pluck('google_resource_name')->all();
 
-        $vinculos = VinculoContatoTenant::where('tenant_id', $token->tenant_id)
-            ->whereIn('google_resource_name', $resourceNames)
-            ->get();
+            $ok = $google->modificarMembrosGrupo($token, $grupo->google_group_resource_name, resourceNamesToAdd: $resourceNames);
 
-        foreach ($vinculos as $vinculo) {
-            $vinculo->etiquetas()->syncWithoutDetaching([$etiqueta->id]);
+            if (! $ok) {
+                // Nao marca localmente o que nao foi confirmado no Google --
+                // fica pra uma proxima varredura reprocessar.
+                continue;
+            }
+
+            foreach ($lote as $vinculo) {
+                $vinculo->etiquetas()->syncWithoutDetaching([$etiqueta->id]);
+            }
         }
     }
 }
