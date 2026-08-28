@@ -81,6 +81,15 @@ class ValidarCadastrosContatos extends Command
                         ? $this->preverResultado($vinculo)
                         : $this->validacao->validar($vinculo->contato);
 
+                    // Após validar(), o merge pode ter apagado o vínculo
+                    // (se o contato sobrevivente já tinha vínculo pro mesmo tenant).
+                    // Se isso aconteceu, ele será processado novamente neste mesmo
+                    // lote (se elegível) ou na próxima varredura -- nada a fazer aqui.
+                    if (! $dryRun && ! VinculoContatoTenant::find($vinculo->id)) {
+                        $this->line("  contato #{$vinculo->contato_id}: vínculo mesclado/removido, pulando");
+                        continue;
+                    }
+
                     $etiquetaAlvo = $resultado === 'lead_certo' ? $etiquetaLeadCerto : $etiquetaLeadInvalido;
                     $grupoAlvo    = $resultado === 'lead_certo' ? $grupoLeadCerto : $grupoLeadInvalido;
 
@@ -96,27 +105,40 @@ class ValidarCadastrosContatos extends Command
                     // chamada — não dá pra "mover" entre dois grupos numa
                     // chamada só. Precisa de uma chamada de remove no grupo
                     // de origem e outra de add no grupo de destino.
+                    // Remove que falha é apenas aviso; Add que falha impede
+                    // a atualização local (crítico para manter coerência).
                     $etiquetasOrigemDoVinculo = $vinculo->etiquetas()->whereIn('slug', $slugsOrigem)->get();
 
+                    $removidoOk = true;
                     foreach ($etiquetasOrigemDoVinculo as $etiquetaOrigem) {
                         $grupoOrigem = $etiquetaOrigem->googleGrupoParaTenant($tenantId);
                         if ($grupoOrigem) {
-                            $this->google->modificarMembrosGrupo(
+                            $ok = $this->google->modificarMembrosGrupo(
                                 $token,
                                 $grupoOrigem->google_group_resource_name,
                                 resourceNamesToRemove: [$vinculo->google_resource_name],
                             );
+                            $removidoOk = $removidoOk && $ok;
                         }
                     }
 
-                    $this->google->modificarMembrosGrupo(
+                    $adicionadoOk = $this->google->modificarMembrosGrupo(
                         $token,
                         $grupoAlvo->google_group_resource_name,
                         resourceNamesToAdd: [$vinculo->google_resource_name],
                     );
 
+                    if (! $adicionadoOk) {
+                        $this->warn("  contato #{$vinculo->contato_id}: falha ao adicionar etiqueta no Google, não atualizado localmente");
+                        continue;
+                    }
+
                     $vinculo->etiquetas()->detach($etiquetasOrigemDoVinculo->pluck('id'));
                     $vinculo->etiquetas()->syncWithoutDetaching([$etiquetaAlvo->id]);
+
+                    if (! $removidoOk) {
+                        $this->warn("  contato #{$vinculo->contato_id}: falha ao remover etiqueta de origem no Google (corrigido localmente, Google pode ficar com as duas etiquetas até a próxima varredura)");
+                    }
                 }
             });
 
@@ -137,18 +159,12 @@ class ValidarCadastrosContatos extends Command
     }
 
     /**
-     * Simula o resultado da validação sem tocar no banco nem no Google —
-     * usa a mesma leitura de candidatos do serviço, só não aplica a
-     * mesclagem/autocorreção.
+     * Preve o resultado da validação sem tocar no banco nem no Google —
+     * usa a mesma lógica de classificação de ContatoValidacaoService,
+     * sem executar a ação (mescla/autocorreção).
      */
     private function preverResultado(VinculoContatoTenant $vinculo): string
     {
-        $reparo = app(\App\Services\TelefoneReparoService::class);
-
-        if ($reparo->ehCanonico($vinculo->contato->telefone)) {
-            return 'lead_certo';
-        }
-
-        return empty($reparo->candidatos($vinculo->contato->telefone)) ? 'lead_invalido' : 'lead_certo';
+        return $this->validacao->classificar($vinculo->contato)['estado'];
     }
 }

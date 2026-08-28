@@ -20,7 +20,18 @@ class ContatoValidacaoService
         private ContatoMergeService $merge,
     ) {}
 
-    public function validar(Contato $contato): string
+    /**
+     * Decide o que fazer com um contato SEM executar nada -- usado tanto
+     * por validar() (que decide e executa) quanto pelo preview do
+     * dry-run (que só quer saber o resultado, sem mutar nada).
+     *
+     * @return array{estado: string, acao: string, alvo: mixed, papel?: string}
+     *   estado: 'lead_certo'|'lead_invalido'
+     *   acao: 'nenhuma'|'mesclar'|'autocorrigir'
+     *   alvo: Contato (quando acao='mesclar') | string telefone (quando acao='autocorrigir') | null
+     *   papel: 'antigo'|'canonico' (quando acao='mesclar')
+     */
+    public function classificar(Contato $contato): array
     {
         if ($this->reparo->ehCanonico($contato->telefone)) {
             $duplicata = Contato::where('telefone', $contato->telefone)
@@ -33,19 +44,19 @@ class ContatoValidacaoService
                 // representam o mesmo número real. O de menor id vira o
                 // canônico, o outro é mesclado nele.
                 if ($duplicata->id < $contato->id) {
-                    $this->merge->mesclar($contato, $duplicata);
+                    return ['estado' => 'lead_certo', 'acao' => 'mesclar', 'alvo' => $duplicata, 'papel' => 'canonico'];
                 } else {
-                    $this->merge->mesclar($duplicata, $contato);
+                    return ['estado' => 'lead_certo', 'acao' => 'mesclar', 'alvo' => $duplicata, 'papel' => 'antigo'];
                 }
             }
 
-            return 'lead_certo';
+            return ['estado' => 'lead_certo', 'acao' => 'nenhuma', 'alvo' => null];
         }
 
         $candidatos = $this->reparo->candidatos($contato->telefone);
 
         if (empty($candidatos)) {
-            return 'lead_invalido';
+            return ['estado' => 'lead_invalido', 'acao' => 'nenhuma', 'alvo' => null];
         }
 
         // Verifica TODOS os candidatos, não só o primeiro -- se mais de um
@@ -70,13 +81,11 @@ class ContatoValidacaoService
         $paresDistintos = $paresEncontrados->unique('id');
 
         if ($paresDistintos->count() > 1) {
-            return 'lead_invalido';
+            return ['estado' => 'lead_invalido', 'acao' => 'nenhuma', 'alvo' => null];
         }
 
         if ($paresDistintos->count() === 1) {
-            $this->merge->mesclar($contato, $paresDistintos->first());
-
-            return 'lead_certo';
+            return ['estado' => 'lead_certo', 'acao' => 'mesclar', 'alvo' => $paresDistintos->first(), 'papel' => 'antigo'];
         }
 
         // Nenhum par encontrado -- é o único registro desse número. Só
@@ -87,11 +96,24 @@ class ContatoValidacaoService
         $canonicos = collect($candidatos)->filter(fn ($c) => $this->reparo->ehCanonico($c))->unique()->values();
 
         if ($canonicos->count() === 1) {
-            $contato->update(['telefone' => $canonicos->first()]);
-
-            return 'lead_certo';
+            return ['estado' => 'lead_certo', 'acao' => 'autocorrigir', 'alvo' => $canonicos->first()];
         }
 
-        return 'lead_invalido';
+        return ['estado' => 'lead_invalido', 'acao' => 'nenhuma', 'alvo' => null];
+    }
+
+    public function validar(Contato $contato): string
+    {
+        $classificacao = $this->classificar($contato);
+
+        match ($classificacao['acao']) {
+            'mesclar' => ($classificacao['papel'] ?? 'antigo') === 'canonico'
+                ? $this->merge->mesclar($classificacao['alvo'], $contato)
+                : $this->merge->mesclar($contato, $classificacao['alvo']),
+            'autocorrigir' => $contato->update(['telefone' => $classificacao['alvo']]),
+            default => null,
+        };
+
+        return $classificacao['estado'];
     }
 }
