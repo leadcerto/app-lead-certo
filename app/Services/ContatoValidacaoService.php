@@ -23,6 +23,22 @@ class ContatoValidacaoService
     public function validar(Contato $contato): string
     {
         if ($this->reparo->ehCanonico($contato->telefone)) {
+            $duplicata = Contato::where('telefone', $contato->telefone)
+                ->where('id', '!=', $contato->id)
+                ->orderBy('id')
+                ->first();
+
+            if ($duplicata) {
+                // Telefone EXATO igual não é ambíguo -- os dois
+                // representam o mesmo número real. O de menor id vira o
+                // canônico, o outro é mesclado nele.
+                if ($duplicata->id < $contato->id) {
+                    $this->merge->mesclar($contato, $duplicata);
+                } else {
+                    $this->merge->mesclar($duplicata, $contato);
+                }
+            }
+
             return 'lead_certo';
         }
 
@@ -32,6 +48,11 @@ class ContatoValidacaoService
             return 'lead_invalido';
         }
 
+        // Verifica TODOS os candidatos, não só o primeiro -- se mais de um
+        // registro EXISTENTE distinto bater (via candidatos diferentes),
+        // é ambiguidade real: não dá pra saber qual é a mesma pessoa. Cai
+        // em lead_invalido em vez de mesclar no primeiro que aparecer.
+        $paresEncontrados = collect();
         foreach ($candidatos as $candidato) {
             if ($candidato === $contato->telefone) {
                 continue;
@@ -42,16 +63,31 @@ class ContatoValidacaoService
                 ->first();
 
             if ($par) {
-                $this->merge->mesclar($contato, $par);
-
-                return 'lead_certo';
+                $paresEncontrados->push($par);
             }
         }
 
-        $canonico = collect($candidatos)->first(fn ($c) => $this->reparo->ehCanonico($c));
+        $paresDistintos = $paresEncontrados->unique('id');
 
-        if ($canonico) {
-            $contato->update(['telefone' => $canonico]);
+        if ($paresDistintos->count() > 1) {
+            return 'lead_invalido';
+        }
+
+        if ($paresDistintos->count() === 1) {
+            $this->merge->mesclar($contato, $paresDistintos->first());
+
+            return 'lead_certo';
+        }
+
+        // Nenhum par encontrado -- é o único registro desse número. Só
+        // autocorrige se houver EXATAMENTE UM formato canônico possível
+        // entre os candidatos -- mais de um formato distinto sem nenhum
+        // par existente também é ambiguidade de verdade (não dá pra saber
+        // qual formato é o certo), cai em lead_invalido também.
+        $canonicos = collect($candidatos)->filter(fn ($c) => $this->reparo->ehCanonico($c))->unique()->values();
+
+        if ($canonicos->count() === 1) {
+            $contato->update(['telefone' => $canonicos->first()]);
 
             return 'lead_certo';
         }
