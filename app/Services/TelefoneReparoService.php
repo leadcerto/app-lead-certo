@@ -25,9 +25,6 @@ class TelefoneReparoService
         '49'  => [12, 13, 14], // Alemanha
         '52'  => [12, 13],   // México
         '54'  => [12, 13],   // Argentina
-        '34'  => [11, 12],   // Espanha
-        '1'   => [11],       // EUA/Canadá
-        '33'  => [11, 12],   // França
     ];
 
     public function ehCanonico(string $telefone): bool
@@ -83,7 +80,7 @@ class TelefoneReparoService
         // "55" duplicado — remove um 55 da frente e tenta de novo, mas só
         // quando sobra algo plausível (pelo menos 10 dígitos, senão vira
         // ruído de regex em número curto demais)
-        if (strlen($telefone) > 13 && str_starts_with($telefone, '55')) {
+        if (strlen($telefone) >= 13 && str_starts_with($telefone, '55')) {
             $semDuplicata = substr($telefone, 2);
             if (strlen($semDuplicata) >= 10) {
                 foreach ($this->candidatos($semDuplicata) as $c) {

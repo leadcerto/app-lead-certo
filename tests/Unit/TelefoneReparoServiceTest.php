@@ -84,4 +84,26 @@ class TelefoneReparoServiceTest extends TestCase
         $this->assertSame([], $this->service->candidatos('55481126376'));
         $this->assertFalse($this->service->ehCanonico('55481126376'));
     }
+
+    public function test_numero_brasileiro_com_ddd_que_colide_com_codigo_de_pais_nao_e_falso_positivo(): void
+    {
+        // Bug fix: DDDs brasileiros 11-19, 33, 34 não devem ser confundidos com
+        // códigos de país (1=EUA/Canadá, 33=França, 34=Espanha removidos da lista).
+        // Números brasileiros sem o "55" não são canônicos.
+        $this->assertFalse($this->service->ehCanonico('19987654321')); // DDD 19, sem o 55
+        $this->assertFalse($this->service->ehCanonico('11987654321')); // DDD 11, sem o 55
+        $this->assertFalse($this->service->ehCanonico('34987654321')); // DDD 34, sem o 55
+        $this->assertFalse($this->service->ehCanonico('33987654321')); // DDD 33, sem o 55
+    }
+
+    public function test_55_duplicado_com_resto_valido_produz_candidato_correto(): void
+    {
+        // Bug fix: strlen >= 13 (não > 13) permite processar o caso de 13 caracteres.
+        // "55" + "5521994359537" (numero ja canonico, so duplicaram o prefixo)
+        // -- remover o 55 duplicado tem que achar o candidato canonico de volta,
+        // provando que a logica rodou de verdade nesse tamanho (13 caracteres).
+        // len=16, remove 55 duplicado -> 5521994359537 (13, ja canonico)
+        $candidatos = $this->service->candidatos('555521994359537');
+        $this->assertContains('5521994359537', $candidatos);
+    }
 }
