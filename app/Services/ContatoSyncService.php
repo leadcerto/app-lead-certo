@@ -204,7 +204,17 @@ class ContatoSyncService
                     $resultado['importados']++;
                 } else {
                     // ── Telefone já existe — Identity Resolution ──────────────
-                    $similaridade = $this->similaridadeNome($nome, $existente->nome ?? '');
+                    // Os dois lados passam pelo MESMO sanitizador antes de
+                    // comparar. $nome já veio de limparNome(); o lado local vem
+                    // cru do banco, e sem a mesma passada o eco do nosso próprio
+                    // push virava "pessoa diferente": "Kamily Kamily" (pushName
+                    // do WhatsApp) volta do Google como "Kamily" — 63% de
+                    // similaridade, abaixo do limiar de 75% — e o contato ia
+                    // parar na fila de "número possivelmente reciclado".
+                    $similaridade = $this->similaridadeNome(
+                        $nome,
+                        $this->limparNome((string) ($existente->nome ?? ''))
+                    );
 
                     // "! $existente->nome" sozinho não pega "Sem Nome" (string
                     // preenchida) — sem semNomeReal() aqui, um contato "Sem Nome"

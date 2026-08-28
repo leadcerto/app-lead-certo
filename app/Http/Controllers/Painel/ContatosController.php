@@ -1034,9 +1034,11 @@ class ContatosController extends Controller
             return;
         }
 
+        $sync = app(ContatoSyncService::class);
+
         $valoresEnviados = $vinculo->google_valores_enviados ?? [];
         foreach ($camposSincronizados as $campo) {
-            $valoresEnviados[$campo] = $this->valorEnviadoAoGoogle($google, $contato, $campo);
+            $valoresEnviados[$campo] = $this->valorEnviadoAoGoogle($google, $sync, $contato, $campo);
         }
 
         $vinculo->update(['google_etag' => $novoEtag, 'google_valores_enviados' => $valoresEnviados]);
@@ -1049,13 +1051,24 @@ class ContatosController extends Controller
      * na linha de base fazia o pull seguinte comparar o que voltou do Google
      * contra algo que nunca foi enviado, gerando conflito falso. empresa/email
      * vão verbatim, não precisam de tratamento.
+     *
+     * O 'nome' leva os DOIS sanitizadores em cadeia: o push manda
+     * GoogleService::limparNome($nome) como givenName, e o pull aplica
+     * ContatoSyncService::limparNome() EM CIMA do que volta — e esse segundo
+     * ainda remove índice de agenda de 3-6 dígitos e palavra duplicada
+     * consecutiva. Guardar só o valor enviado deixava a linha de base
+     * divergindo do que o ciclo completo produz na volta pra nomes como
+     * "Distribuidora Central 4500" ou "Kamily Kamily" → o nome que o humano
+     * acabou de digitar aqui voltava do Google como conflito de auditoria.
+     * O 'sobrenome' fica fora dessa cadeia de propósito: o pull lê familyName
+     * com trim puro (ContatoSyncService::extrairDados), sem limparNome().
      */
-    private function valorEnviadoAoGoogle(GoogleService $google, Contato $contato, string $campo): string
+    private function valorEnviadoAoGoogle(GoogleService $google, ContatoSyncService $sync, Contato $contato, string $campo): string
     {
         $valor = (string) $contato->$campo;
 
         if ($campo === 'nome') {
-            return $contato->semNomeReal() ? 'Sem Nome' : $google->limparNome($valor);
+            return $contato->semNomeReal() ? 'Sem Nome' : $sync->limparNome($google->limparNome($valor));
         }
 
         if ($campo === 'sobrenome') {

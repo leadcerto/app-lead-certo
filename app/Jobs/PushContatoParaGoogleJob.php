@@ -7,6 +7,7 @@ use App\Models\Etiqueta;
 use App\Models\EtiquetaGoogleGrupo;
 use App\Models\GoogleToken;
 use App\Models\VinculoContatoTenant;
+use App\Services\ContatoSyncService;
 use App\Services\GoogleService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -25,7 +26,7 @@ class PushContatoParaGoogleJob implements ShouldQueue
         private ?string $pushName = null
     ) {}
 
-    public function handle(GoogleService $google): void
+    public function handle(GoogleService $google, ContatoSyncService $sync): void
     {
         $vinculo = VinculoContatoTenant::where('contato_id', $this->contatoId)
             ->where('tenant_id', $this->tenantId)
@@ -51,7 +52,7 @@ class PushContatoParaGoogleJob implements ShouldQueue
         $vinculo->update(['google_resource_name' => $resourceName]);
         Log::info("Contato #{$this->contatoId} enviado ao Google: {$resourceName}");
 
-        $vinculo->update(['google_valores_enviados' => $this->linhaBaseEnviada($google, $contato)]);
+        $vinculo->update(['google_valores_enviados' => $this->linhaBaseEnviada($google, $sync, $contato)]);
 
         $this->atribuirEtiquetas($google, $token, $vinculo, $contato, $resourceName);
     }
@@ -65,11 +66,28 @@ class PushContatoParaGoogleJob implements ShouldQueue
      * enviado — conflito falso em todo contato com nome fora do title case ou
      * com sobrenome. As chaves aqui espelham exatamente o que o pull lê:
      * 'nome' ← givenName, 'sobrenome' ← familyName.
+     *
+     * O 'nome' leva os DOIS sanitizadores em cadeia porque os dois lados do
+     * ciclo usam funções diferentes: o push manda
+     * GoogleService::limparNome($nome) como givenName, e o pull aplica
+     * ContatoSyncService::limparNome() EM CIMA do givenName que volta — e esse
+     * segundo ainda remove índice de agenda de 3-6 dígitos e palavra duplicada
+     * consecutiva. Gravar só o valor enviado deixava a linha de base divergindo
+     * do que o ciclo completo produz na volta pra "Kamily Kamily" (pushName do
+     * WhatsApp) ou "Padaria 2000" (índice de agenda) → pendência falsa de
+     * auditoria ou ContatoPendente falso de "número reciclado". A linha de base
+     * tem que guardar o resultado do ciclo INTEIRO, não só o que foi enviado.
+     *
+     * O 'sobrenome' NÃO leva a segunda passada de propósito: o pull lê
+     * familyName com trim puro (ContatoSyncService::extrairDados), sem
+     * limparNome() — a assimetria só existe no nome.
      */
-    private function linhaBaseEnviada(GoogleService $google, Contato $contato): array
+    private function linhaBaseEnviada(GoogleService $google, ContatoSyncService $sync, Contato $contato): array
     {
         $linhaBase = [
-            'nome' => $contato->semNomeReal() ? 'Sem Nome' : $google->limparNome((string) $contato->nome),
+            'nome' => $contato->semNomeReal()
+                ? 'Sem Nome'
+                : $sync->limparNome($google->limparNome((string) $contato->nome)),
         ];
 
         // Mesma resolução de descriptor de GoogleService::criarContato(): sem

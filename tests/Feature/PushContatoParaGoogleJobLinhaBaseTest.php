@@ -8,6 +8,8 @@ use App\Models\Contato;
 use App\Models\GoogleToken;
 use App\Models\Tenant;
 use App\Models\VinculoContatoTenant;
+use App\Services\ContatoSyncService;
+use App\Services\GoogleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
@@ -30,7 +32,7 @@ class PushContatoParaGoogleJobLinhaBaseTest extends TestCase
         $contato = Contato::factory()->create(['nome' => 'Marcos', 'empresa' => 'Faxa']);
         $vinculo = VinculoContatoTenant::create(['contato_id' => $contato->id, 'tenant_id' => $tenant->id]);
 
-        (new PushContatoParaGoogleJob($contato->id, $tenant->id))->handle(app(\App\Services\GoogleService::class));
+        (new PushContatoParaGoogleJob($contato->id, $tenant->id))->handle(app(GoogleService::class), app(ContatoSyncService::class));
 
         $vinculo->refresh();
         $this->assertSame('Marcos', $vinculo->google_valores_enviados['nome'] ?? null);
@@ -60,7 +62,7 @@ class PushContatoParaGoogleJobLinhaBaseTest extends TestCase
         Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
         $vinculo = VinculoContatoTenant::create(['contato_id' => $contato->id, 'tenant_id' => $tenant->id]);
 
-        (new PushContatoParaGoogleJob($contato->id, $tenant->id))->handle(app(\App\Services\GoogleService::class));
+        (new PushContatoParaGoogleJob($contato->id, $tenant->id))->handle(app(GoogleService::class), app(ContatoSyncService::class));
 
         $vinculo->refresh();
         $this->assertSame('Marcia', $vinculo->google_valores_enviados['nome'] ?? null);
@@ -82,7 +84,7 @@ class PushContatoParaGoogleJobLinhaBaseTest extends TestCase
         Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
         $vinculo = VinculoContatoTenant::create(['contato_id' => $contato->id, 'tenant_id' => $tenant->id]);
 
-        (new PushContatoParaGoogleJob($contato->id, $tenant->id))->handle(app(\App\Services\GoogleService::class));
+        (new PushContatoParaGoogleJob($contato->id, $tenant->id))->handle(app(GoogleService::class), app(ContatoSyncService::class));
 
         $vinculo->refresh();
         $this->assertSame('Sem Nome', $vinculo->google_valores_enviados['nome'] ?? null);
