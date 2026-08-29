@@ -19,6 +19,7 @@ class ContatosControllerSyncHumanoTest extends TestCase
 
     public function test_edicao_no_painel_marca_campo_editado_humano_e_atualiza_linha_de_base(): void
     {
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         Http::fake(['*updateContact*' => Http::response(['etag' => 'etag-novo'], 200)]);
 
         $tenant = Tenant::factory()->create();
@@ -49,6 +50,7 @@ class ContatosControllerSyncHumanoTest extends TestCase
         // painel marca campos_editados_humano, independente de perfil. A distinção
         // dono/admin vs vendedor é sobre auditoria de conflito de NOME (ver bloco
         // acima), não sobre "isso conta como edição humana pro sync do Google".
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         Http::fake(['*updateContact*' => Http::response(['etag' => 'etag-novo'], 200)]);
 
         $tenant = Tenant::factory()->create();
@@ -83,6 +85,7 @@ class ContatosControllerSyncHumanoTest extends TestCase
         // valor que o humano acabou de digitar. 'nome' não foi aplicado ao
         // master (foi pra campos_pendentes_auditoria), então não deve ser
         // marcado como editado-humano.
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         Http::fake(['*updateContact*' => Http::response(['etag' => 'etag-novo'], 200)]);
 
         $tenant = Tenant::factory()->create();
@@ -127,6 +130,7 @@ class ContatosControllerSyncHumanoTest extends TestCase
      */
     public function test_salvar_campo_sincronizado_com_o_mesmo_valor_nao_marca_editado_humano(): void
     {
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         Http::fake(['*updateContact*' => Http::response(['etag' => 'etag-novo'], 200)]);
 
         $tenant = Tenant::factory()->create();
@@ -176,6 +180,7 @@ class ContatosControllerSyncHumanoTest extends TestCase
 
     public function test_apenas_o_campo_sincronizado_que_mudou_e_marcado_editado_humano(): void
     {
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         Http::fake(['*updateContact*' => Http::response(['etag' => 'etag-novo'], 200)]);
 
         $tenant = Tenant::factory()->create();
@@ -213,6 +218,7 @@ class ContatosControllerSyncHumanoTest extends TestCase
      */
     public function test_linha_de_base_do_painel_guarda_o_valor_transformado(): void
     {
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         Http::fake(['*updateContact*' => Http::response(['etag' => 'etag-novo'], 200)]);
 
         $tenant = Tenant::factory()->create();

@@ -9,6 +9,7 @@ use App\Models\GoogleToken;
 use App\Models\Tenant;
 use App\Models\VinculoContatoTenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -18,6 +19,8 @@ class ValidarCadastrosContatosTest extends TestCase
 
     private function setupTenantComEtiquetas(): Tenant
     {
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
+
         $tenant = Tenant::factory()->create();
         GoogleToken::create([
             'tenant_id' => $tenant->id, 'google_email' => 'a@b.com',

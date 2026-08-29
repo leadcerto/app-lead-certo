@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Models\VinculoContatoTenant;
 use App\Services\GoogleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -20,6 +21,8 @@ class MarcarNovoLeadEtiquetaJobTest extends TestCase
 
     public function test_marca_novos_leads_quando_grupo_ja_provisionado(): void
     {
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
+
         $tenant = Tenant::factory()->create();
         GoogleToken::create([
             'tenant_id' => $tenant->id, 'google_email' => 'a@b.com',
@@ -58,6 +61,8 @@ class MarcarNovoLeadEtiquetaJobTest extends TestCase
 
     public function test_nao_marca_se_grupo_ainda_nao_provisionado(): void
     {
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
+
         $tenant  = Tenant::factory()->create();
         $contato = Contato::factory()->create();
         $vinculo = VinculoContatoTenant::create([

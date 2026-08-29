@@ -35,6 +35,7 @@ class ContatoAtualizarSincronizaGoogleTest extends TestCase
 
     public function test_editar_nome_empurra_atualizacao_pro_google_quando_ja_vinculado(): void
     {
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         Http::fake(['*updateContact*' => Http::response(['etag' => 'novo-etag-123'], 200)]);
 
         $tenant  = $this->criarTenantComGoogle();
@@ -82,7 +83,7 @@ class ContatoAtualizarSincronizaGoogleTest extends TestCase
 
     public function test_nao_chama_google_quando_contato_nao_esta_vinculado_ao_google(): void
     {
-        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class, \App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         Http::fake();
 
         $tenant  = $this->criarTenantComGoogle();
@@ -106,6 +107,7 @@ class ContatoAtualizarSincronizaGoogleTest extends TestCase
      */
     public function test_editar_sobrenome_persiste_e_empurra_pro_google_quando_ja_vinculado(): void
     {
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         Http::fake(['*updateContact*' => Http::response(['etag' => 'novo-etag-789'], 200)]);
 
         $tenant  = $this->criarTenantComGoogle();
@@ -129,7 +131,7 @@ class ContatoAtualizarSincronizaGoogleTest extends TestCase
 
     public function test_editar_apenas_profissao_nao_chama_google(): void
     {
-        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class, \App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         Http::fake();
 
         $tenant  = $this->criarTenantComGoogle();
