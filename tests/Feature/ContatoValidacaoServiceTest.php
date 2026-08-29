@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\Contato;
 use App\Services\ContatoValidacaoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ContatoValidacaoServiceTest extends TestCase
@@ -91,39 +90,42 @@ class ContatoValidacaoServiceTest extends TestCase
         $this->assertDatabaseHas('contatos', ['id' => $ambiguo->id, 'telefone' => '09988887777', 'deleted_at' => null]);
     }
 
-    public function test_telefone_canonico_com_duplicata_exata_mescla_pelo_menor_id(): void
+    /**
+     * contatos.telefone tem constraint UNIQUE de verdade no banco
+     * (herdada sem quebra desde a tabela original `consumidores`,
+     * database/migrations/0003_create_consumidores_table.php:13) -- não
+     * dá pra gravar dois registros com o mesmo telefone via
+     * Contato::create()/update() pra simular o cenário de "duplicata
+     * exata" fim a fim. classificar() só lê $contato->telefone (não
+     * exige que esse valor tenha sido persistido) pra buscar outro
+     * registro com o mesmo telefone -- então dá pra simular o cenário
+     * fazendo um Contato JÁ SALVO "fingir" ter o telefone de outro só na
+     * memória (sem tocar o banco), e testar a decisão sem violar a
+     * constraint.
+     */
+    public function test_duplicata_exata_contato_validado_com_id_maior_vira_antigo(): void
     {
-        // Testa que se houver duplicata exata (mesmo telefone canônico em dois
-        // registros), o merge é determinístico pelo menor ID. Desabilita PRAGMA
-        // de constraint checking do SQLite pra criar o cenário (normalmente
-        // impossível devido à constraint UNIQUE).
+        $menor = Contato::factory()->create(['telefone' => '5521994359537']);
+        $maior = Contato::factory()->create(['telefone' => '5521994359999']);
+        $maior->telefone = '5521994359537'; // simula em memoria, nao grava
 
-        // Criar dois contatos
-        $antigo = Contato::factory()->create(['telefone' => '5521994359537']);
-        $novo = Contato::factory()->create(['telefone' => '5521994359538']);
+        $classificacao = $this->service->classificar($maior);
 
-        // Desabilitar constraint checking, atualizar telefone do novo para
-        // duplicar o do antigo
-        try {
-            DB::statement('PRAGMA ignore_check_constraints = ON');
-            DB::table('contatos')
-                ->where('id', $novo->id)
-                ->update(['telefone' => '5521994359537']);
-            DB::statement('PRAGMA ignore_check_constraints = OFF');
-        } catch (\Exception $e) {
-            // Se PRAGMA falhar, skip este teste (não há forma de testar)
-            $this->markTestSkipped('SQLite PRAGMA ignore_check_constraints não suportado neste ambiente');
-            return;
-        }
+        $this->assertSame('mesclar', $classificacao['acao']);
+        $this->assertSame($menor->id, $classificacao['alvo']->id);
+        $this->assertSame('antigo', $classificacao['papel'], 'contato validado tem id maior -- ele deve ser o apagado');
+    }
 
-        // Refresh $novo do banco
-        $novo->refresh();
+    public function test_duplicata_exata_contato_validado_com_id_menor_vira_canonico(): void
+    {
+        $menor = Contato::factory()->create(['telefone' => '5521994350001']);
+        $maior = Contato::factory()->create(['telefone' => '5521994359537']);
+        $menor->telefone = '5521994359537'; // simula em memoria, nao grava
 
-        // Validar: deve mesclar $novo (maior ID) ao $antigo (menor ID)
-        $resultado = $this->service->validar($novo);
+        $classificacao = $this->service->classificar($menor);
 
-        $this->assertSame('lead_certo', $resultado);
-        $this->assertSoftDeleted('contatos', ['id' => $novo->id]);
-        $this->assertDatabaseHas('contatos', ['id' => $antigo->id, 'deleted_at' => null]);
+        $this->assertSame('mesclar', $classificacao['acao']);
+        $this->assertSame($maior->id, $classificacao['alvo']->id);
+        $this->assertSame('canonico', $classificacao['papel'], 'contato validado tem id menor -- ele deve sobreviver');
     }
 }

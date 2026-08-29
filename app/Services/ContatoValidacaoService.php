@@ -44,9 +44,12 @@ class ContatoValidacaoService
                 // representam o mesmo número real. O de menor id vira o
                 // canônico, o outro é mesclado nele.
                 if ($duplicata->id < $contato->id) {
-                    return ['estado' => 'lead_certo', 'acao' => 'mesclar', 'alvo' => $duplicata, 'papel' => 'canonico'];
-                } else {
+                    // Duplicata tem id menor -> ela vira a canônica, e
+                    // $contato (id maior) é quem tem o papel de "antigo"
+                    // (é ele quem vai ser apagado na mesclagem).
                     return ['estado' => 'lead_certo', 'acao' => 'mesclar', 'alvo' => $duplicata, 'papel' => 'antigo'];
+                } else {
+                    return ['estado' => 'lead_certo', 'acao' => 'mesclar', 'alvo' => $duplicata, 'papel' => 'canonico'];
                 }
             }
 
