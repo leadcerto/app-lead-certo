@@ -210,7 +210,7 @@ class TelefoneService
         ];
     }
 
-    private function dddValido(int $ddd): bool
+    public function dddValido(int $ddd): bool
     {
         return in_array($ddd, self::DDDS_VALIDOS);
     }

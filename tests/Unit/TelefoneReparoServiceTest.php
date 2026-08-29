@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Services\TelefoneReparoService;
+use App\Services\TelefoneService;
 use Tests\TestCase;
 
 class TelefoneReparoServiceTest extends TestCase
@@ -12,7 +13,7 @@ class TelefoneReparoServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new TelefoneReparoService();
+        $this->service = new TelefoneReparoService(new TelefoneService());
     }
 
     public function test_telefone_ja_canonico_e_reconhecido_como_tal(): void

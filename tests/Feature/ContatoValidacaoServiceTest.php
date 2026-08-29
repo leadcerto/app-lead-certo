@@ -75,19 +75,36 @@ class ContatoValidacaoServiceTest extends TestCase
 
     public function test_dois_candidatos_batendo_com_registros_diferentes_vira_lead_invalido(): void
     {
-        // '09988887777' (11 digitos, comeca com 0) gera dois candidatos
-        // canonicos distintos: '5509988887777' (regra direta de 11
-        // digitos) e '5599988887777' (via recursao do 0 espurio -> regra
-        // de 10 digitos). Se os dois batem com registros DIFERENTES, é
-        // ambiguidade real -- nao pode mesclar no primeiro que aparecer.
-        Contato::factory()->create(['telefone' => '5509988887777']);
-        Contato::factory()->create(['telefone' => '5599988887777']);
-        $ambiguo = Contato::factory()->create(['telefone' => '09988887777']);
+        // Achado da revisão final (I3): com a validação de DDD real
+        // adicionada, TelefoneReparoService::candidatos() não consegue mais
+        // gerar 2 candidatos distintos e válidos a partir de UM único
+        // telefone malformado -- a ambiguidade antiga ('09988887777') só
+        // existia porque a regra direta de 11 dígitos lia "09" como DDD e
+        // isso passava sem checagem; nenhum DDD brasileiro de verdade
+        // começa com 0, então essa interpretação é sempre inválida agora, e
+        // sobra só 1 candidato real por telefone. Esse teste passa a
+        // verificar o ramo de ambiguidade de classificar() isoladamente,
+        // mockando TelefoneReparoService pra simular 2 candidatos válidos
+        // batendo com registros diferentes -- o comportamento que
+        // ContatoValidacaoService precisa continuar tratando corretamente
+        // mesmo que a geração de candidatos hoje nunca produza esse caso
+        // sozinha.
+        $registroA = Contato::factory()->create(['telefone' => '5511988887777']);
+        $registroB = Contato::factory()->create(['telefone' => '5521988887777']);
+        $ambiguo   = Contato::factory()->create(['telefone' => '5599988887777']);
 
-        $resultado = $this->service->validar($ambiguo);
+        $this->mock(\App\Services\TelefoneReparoService::class, function ($mock) use ($ambiguo) {
+            $mock->shouldReceive('ehCanonico')->with($ambiguo->telefone)->andReturn(false);
+            $mock->shouldReceive('candidatos')->with($ambiguo->telefone)->andReturn(['5511988887777', '5521988887777']);
+        });
+        $service = app(ContatoValidacaoService::class);
+
+        $resultado = $service->validar($ambiguo);
 
         $this->assertSame('lead_invalido', $resultado);
-        $this->assertDatabaseHas('contatos', ['id' => $ambiguo->id, 'telefone' => '09988887777', 'deleted_at' => null]);
+        $this->assertDatabaseHas('contatos', ['id' => $ambiguo->id, 'telefone' => '5599988887777', 'deleted_at' => null]);
+        $this->assertDatabaseHas('contatos', ['id' => $registroA->id, 'deleted_at' => null]);
+        $this->assertDatabaseHas('contatos', ['id' => $registroB->id, 'deleted_at' => null]);
     }
 
     /**

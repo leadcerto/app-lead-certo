@@ -27,9 +27,11 @@ class TelefoneReparoService
         '54'  => [12, 13],   // Argentina
     ];
 
+    public function __construct(private TelefoneService $telefoneService) {}
+
     public function ehCanonico(string $telefone): bool
     {
-        if (preg_match('/^55\d{2}9\d{8}$/', $telefone)) {
+        if (preg_match('/^55\d{2}9\d{8}$/', $telefone) && $this->dddValidoNoCandidato($telefone)) {
             return true;
         }
 
@@ -40,6 +42,20 @@ class TelefoneReparoService
         }
 
         return false;
+    }
+
+    /**
+     * Extrai o DDD (posições 2-3) de um candidato no formato canônico
+     * 55DDXXXXXXXXX e valida contra a lista real de DDDs brasileiros
+     * (TelefoneService::DDDS_VALIDOS) — sem isso, um número com DDD
+     * inexistente (ex: '20') passava como candidato válido só por bater
+     * no formato regex.
+     */
+    private function dddValidoNoCandidato(string $candidato13): bool
+    {
+        $ddd = (int) substr($candidato13, 2, 2);
+
+        return $this->telefoneService->dddValido($ddd);
     }
 
     /**
@@ -56,18 +72,27 @@ class TelefoneReparoService
 
         // 12 dígitos, 55 + DD + 8 dígitos começando 6/7/8/9 (celular sem o 9)
         if (strlen($telefone) === 12 && preg_match('/^55\d{2}[6789]/', $telefone)) {
-            $candidatos[] = substr($telefone, 0, 4) . '9' . substr($telefone, 4);
+            $candidato = substr($telefone, 0, 4) . '9' . substr($telefone, 4);
+            if ($this->dddValidoNoCandidato($candidato)) {
+                $candidatos[] = $candidato;
+            }
         }
 
         // 11 dígitos, DD + 9 dígitos começando 9 (celular sem o 55)
         if (strlen($telefone) === 11 && preg_match('/^\d{2}9/', $telefone)) {
-            $candidatos[] = '55' . $telefone;
+            $candidato = '55' . $telefone;
+            if ($this->dddValidoNoCandidato($candidato)) {
+                $candidatos[] = $candidato;
+            }
         }
 
         // 10 dígitos, DD + 8 dígitos começando 6/7/8/9 (sem 55 E sem o 9)
         if (strlen($telefone) === 10 && preg_match('/^\d{2}[6789]/', $telefone)) {
             $comNove = substr($telefone, 0, 2) . '9' . substr($telefone, 2);
-            $candidatos[] = '55' . $comNove;
+            $candidato = '55' . $comNove;
+            if ($this->dddValidoNoCandidato($candidato)) {
+                $candidatos[] = $candidato;
+            }
         }
 
         // Prefixo "0" espúrio — remove e tenta os padrões de novo no resultado
