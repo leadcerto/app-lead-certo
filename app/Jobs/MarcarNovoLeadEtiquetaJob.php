@@ -12,10 +12,12 @@ use Illuminate\Foundation\Queue\Queueable;
 /**
  * Marca um VinculoContatoTenant recém-criado como "novos_leads" (spec
  * seção 5) — só se o tenant já tiver o grupo leads_em_analise provisionado
- * (Task 3 do plano), senão pula: evita marcar um contato do próprio lote
- * inicial de conexão como se fosse um lead novo chegando depois. Quem
- * ainda não foi marcado por nenhuma das duas etiquetas fica pra a próxima
- * varredura do comando em lote (Task 5) pegar.
+ * (Task 3 do plano), senão pula. ATENÇÃO: um vínculo pulado aqui NÃO é
+ * automaticamente pego depois — o comando em lote (ValidarCadastrosContatos)
+ * só processa vínculos que já carregam uma etiqueta de origem
+ * (novos_leads/leads_em_analise). Se este job pular (token expirado,
+ * grupo ainda não provisionado, etc.), o vínculo fica sem etiqueta de
+ * validação até alguém rodar manualmente algo que o rotule.
  */
 class MarcarNovoLeadEtiquetaJob implements ShouldQueue
 {
