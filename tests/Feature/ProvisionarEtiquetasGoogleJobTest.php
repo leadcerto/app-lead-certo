@@ -172,7 +172,11 @@ class ProvisionarEtiquetasGoogleJobTest extends TestCase
         $vinculo->etiquetas()->attach($leadCerto->id);
 
         // Segunda execução (simula reconexão/backfill repetido): não pode
-        // voltar o vinculo pra leads_em_analise
+        // voltar o vinculo pra leads_em_analise -- o mecanismo agora é
+        // por-vinculo (whereDoesntHave nas 4 etiquetas de validação), não
+        // mais por-primeira-execução: como o vínculo já tem 'lead_certo'
+        // (uma das 4), ele é excluído da marcação em massa mesmo que o
+        // job rode de novo depois de já ter sido executado antes.
         (new ProvisionarEtiquetasGoogleJob($token->id))->handle(app(GoogleService::class));
 
         $this->assertFalse($vinculo->etiquetas()->where('slug', 'leads_em_analise')->exists());

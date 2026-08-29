@@ -54,24 +54,11 @@ class ProvisionarEtiquetasGoogleJob implements ShouldQueue
             return;
         }
 
-        $etiquetaEmAnalise = Etiqueta::whereNull('tenant_id')->where('slug', 'leads_em_analise')->first();
-        $primeiraProvisao  = $etiquetaEmAnalise
-            && ! EtiquetaGoogleGrupo::where('etiqueta_id', $etiquetaEmAnalise->id)
-                ->where('tenant_id', $token->tenant_id)
-                ->exists();
-
         foreach ([...self::SLUGS_FUNIL, ...self::SLUGS_VALIDACAO] as $slug) {
             $this->provisionarGrupo($google, $token, $slug);
         }
 
-        // Só marca a base existente na PRIMEIRA vez que o tenant provisiona
-        // as etiquetas de validação -- se o job rodar de novo (reconexão,
-        // backfill repetido), a base já foi marcada da primeira vez, e
-        // vínculos que já avançaram na validação (lead_certo/invalido/
-        // novos_leads) não podem voltar pra leads_em_analise.
-        if ($primeiraProvisao) {
-            $this->marcarBaseExistenteComoEmAnalise($google, $token);
-        }
+        $this->marcarBaseExistenteComoEmAnalise($google, $token);
     }
 
     private function provisionarGrupo(GoogleService $google, GoogleToken $token, string $slug): void
@@ -110,8 +97,14 @@ class ProvisionarEtiquetasGoogleJob implements ShouldQueue
             return;
         }
 
+        // So processa vinculos que ainda nao tem NENHUMA das 4 etiquetas
+        // de validacao -- torna a marcacao retomavel: se uma execucao
+        // anterior falhou no meio, rodar de novo so pega quem ficou pra
+        // tras, em vez de nao fazer nada (idempotencia por-vinculo, nao
+        // por-existencia-do-grupo).
         $vinculos = VinculoContatoTenant::where('tenant_id', $token->tenant_id)
             ->whereNotNull('google_resource_name')
+            ->whereDoesntHave('etiquetas', fn ($q) => $q->whereIn('slug', self::SLUGS_VALIDACAO))
             ->get();
 
         if ($vinculos->isEmpty()) {
