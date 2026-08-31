@@ -58,6 +58,27 @@
 
         <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
 
+            {{-- Seção Super Admin Master --}}
+            @if($perfil === 'admin')
+            <div class="mb-2 p-2 bg-purple-950/60 border border-purple-800/50 rounded-xl space-y-1">
+                <span class="px-2 text-[10px] font-bold uppercase tracking-wider text-purple-300 block">Super Admin Master</span>
+                <a href="{{ route('admin.dashboard') }}"
+                   class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('admin.dashboard') ? 'bg-purple-600 text-white font-bold' : 'text-purple-200 hover:bg-purple-900/80' }}">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    Centro de Comando
+                </a>
+                <a href="{{ route('admin.empresas.index') }}"
+                   class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('admin.empresas.*') ? 'bg-purple-600 text-white font-bold' : 'text-purple-200 hover:bg-purple-900/80' }}">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                    </svg>
+                    Empresas & Cofre
+                </a>
+            </div>
+            @endif
+
             {{-- Dashboard --}}
             @if($verDashboard)
             <a href="{{ route('dashboard') }}"
@@ -242,41 +263,71 @@
             </a>
             @endif
 
-            {{-- Google Meu Negócio (avaliações + futuramente conexão via API) --}}
+            {{-- GMB (Google Meu Negócio) --}}
             @if($verGmb)
             @php
                 $gmbAtivo = request()->routeIs('admin.agendamentos-avaliacao.*')
                     || request()->routeIs('admin.templates-avaliacao.*')
-                    || request()->routeIs('admin.perfis-gmb.*')
+                    || request()->routeIs('admin.avaliadores.*')
+                    || request()->routeIs('admin.gmb-posts.*')
+                    || request()->routeIs('admin.perfis-gmb.*');
+
+                $avaliacoesAtivo = request()->routeIs('admin.agendamentos-avaliacao.*')
+                    || request()->routeIs('admin.templates-avaliacao.*')
                     || request()->routeIs('admin.avaliadores.*');
             @endphp
-            <div x-data="{ aberto: {{ $gmbAtivo ? 'true' : 'false' }} }">
+            <div x-data="{ aberto: {{ $gmbAtivo ? 'true' : 'false' }}, avaliacoesAberta: {{ $avaliacoesAtivo ? 'true' : 'false' }} }">
                 <button @click="aberto = !aberto"
-                        class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm w-full {{ $gmbAtivo ? 'bg-green-600 text-white' : 'text-gray-300 hover:bg-gray-700' }}">
+                        class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm w-full {{ $gmbAtivo ? 'bg-green-600 text-white font-semibold' : 'text-gray-300 hover:bg-gray-700' }}">
                     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z"/>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
                     </svg>
-                    <span class="flex-1 text-left">Google Meu Negócio</span>
+                    <span class="flex-1 text-left">GMB</span>
                     <svg class="w-3 h-3 transition-transform duration-200 flex-shrink-0" :class="aberto ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                     </svg>
                 </button>
                 <div x-show="aberto" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="ml-6 mt-1 space-y-0.5">
-                    <a href="{{ route('admin.agendamentos-avaliacao.index') }}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('admin.agendamentos-avaliacao.*') ? 'bg-green-700 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' }}">
+                    
+                    {{-- 1. Avaliações (com submenu de Agendamentos, Templates e Avaliadores) --}}
+                    <div>
+                        <button @click="avaliacoesAberta = !avaliacoesAberta"
+                                class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs w-full {{ $avaliacoesAtivo ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' }}">
+                            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+                            </svg>
+                            <span class="flex-1 text-left">Avaliações</span>
+                            <svg class="w-3 h-3 transition-transform duration-200" :class="avaliacoesAberta ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div x-show="avaliacoesAberta" class="ml-4 mt-0.5 space-y-0.5 border-l border-gray-700 pl-2">
+                            <a href="{{ route('admin.agendamentos-avaliacao.index') }}"
+                               class="flex items-center gap-2 px-2.5 py-1 rounded text-[11px] {{ request()->routeIs('admin.agendamentos-avaliacao.*') ? 'text-green-400 font-bold' : 'text-gray-400 hover:text-gray-200' }}">
+                                • Agendamentos
+                            </a>
+                            <a href="{{ route('admin.templates-avaliacao.index') }}"
+                               class="flex items-center gap-2 px-2.5 py-1 rounded text-[11px] {{ request()->routeIs('admin.templates-avaliacao.*') ? 'text-green-400 font-bold' : 'text-gray-400 hover:text-gray-200' }}">
+                                • Templates
+                            </a>
+                            <a href="{{ route('admin.avaliadores.index') }}"
+                               class="flex items-center gap-2 px-2.5 py-1 rounded text-[11px] {{ request()->routeIs('admin.avaliadores.*') ? 'text-green-400 font-bold' : 'text-gray-400 hover:text-gray-200' }}">
+                                • Avaliadores
+                            </a>
+                        </div>
+                    </div>
+
+                    {{-- 2. Postagens --}}
+                    <a href="{{ route('admin.gmb-posts.index') }}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('admin.gmb-posts.*') ? 'bg-green-700 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' }}">
                         <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>
                         </svg>
-                        Agendamentos
+                        Postagens
                     </a>
-                    <a href="{{ route('admin.templates-avaliacao.index') }}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('admin.templates-avaliacao.*') ? 'bg-green-700 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' }}">
-                        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
-                        Templates
-                    </a>
+
+                    {{-- 3. Perfis GMB --}}
                     <a href="{{ route('admin.perfis-gmb.index') }}"
                        class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('admin.perfis-gmb.*') ? 'bg-green-700 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' }}">
                         <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -284,13 +335,6 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
                         </svg>
                         Perfis GMB
-                    </a>
-                    <a href="{{ route('admin.avaliadores.index') }}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('admin.avaliadores.*') ? 'bg-green-700 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' }}">
-                        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                        </svg>
-                        Avaliadores
                     </a>
                 </div>
             </div>

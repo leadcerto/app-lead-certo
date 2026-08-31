@@ -18,6 +18,11 @@ class GoogleServiceBuscarPorTelefoneTest extends TestCase
     {
         $tenant = Tenant::factory()->create();
 
+        // GoogleToken::booted() dispara ProvisionarEtiquetasGoogleJob de
+        // verdade (QUEUE_CONNECTION=sync) -- sem isso, os testes deste
+        // arquivo fazem chamada HTTP real pra API do Google.
+        \Illuminate\Support\Facades\Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
+
         return GoogleToken::create([
             'tenant_id' => $tenant->id, 'google_email' => 'a@b.com',
             'access_token' => 'tok', 'refresh_token' => 'ref', 'token_type' => 'Bearer',

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\EnriquecerContatoNovoViaGoogleJob;
+use App\Jobs\ProvisionarEtiquetasGoogleJob;
 use App\Models\Contato;
 use App\Models\ContatoPendente;
 use App\Models\GoogleToken;
@@ -31,6 +32,14 @@ class ContatoSyncServiceConflitoTest extends TestCase
 
     private function criarToken(Tenant $tenant): GoogleToken
     {
+        // GoogleToken::booted() dispara ProvisionarEtiquetasGoogleJob de
+        // verdade (QUEUE_CONNECTION=sync) -- sem isso, os testes deste
+        // arquivo fazem chamada HTTP real pra API do Google. Chamadas
+        // posteriores a Bus::fake() no corpo dos testes (pra
+        // EnriquecerContatoNovoViaGoogleJob) não afetam este dispatch, que
+        // já aconteceu aqui antes.
+        Bus::fake([ProvisionarEtiquetasGoogleJob::class]);
+
         return GoogleToken::create([
             'tenant_id'     => $tenant->id,
             'google_email'  => 'franqueado@empresa.com',

@@ -28,6 +28,11 @@ class EnriquecerContatoNovoViaGoogleJobTest extends TestCase
         ], 200)]);
 
         $tenant = Tenant::factory()->create();
+        // GoogleToken::booted() dispara ProvisionarEtiquetasGoogleJob de
+        // verdade (QUEUE_CONNECTION=sync) -- sem isso, este teste faz
+        // chamada HTTP real pra API do Google (o Http::fake() deste
+        // arquivo cobre só a URL de searchContacts, não contactGroups).
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         GoogleToken::create([
             'tenant_id' => $tenant->id, 'google_email' => 'a@b.com',
             'access_token' => 'tok', 'refresh_token' => 'ref', 'token_type' => 'Bearer',
@@ -57,6 +62,11 @@ class EnriquecerContatoNovoViaGoogleJobTest extends TestCase
         ], 200)]);
 
         $tenant = Tenant::factory()->create();
+        // GoogleToken::booted() dispara ProvisionarEtiquetasGoogleJob de
+        // verdade (QUEUE_CONNECTION=sync) -- sem isso, este teste faz
+        // chamada HTTP real pra API do Google (o Http::fake() deste
+        // arquivo cobre só a URL de searchContacts, não contactGroups).
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         GoogleToken::create([
             'tenant_id' => $tenant->id, 'google_email' => 'a@b.com',
             'access_token' => 'tok', 'refresh_token' => 'ref', 'token_type' => 'Bearer',
@@ -90,6 +100,11 @@ class EnriquecerContatoNovoViaGoogleJobTest extends TestCase
         ], 200)]);
 
         $tenant = Tenant::factory()->create();
+        // GoogleToken::booted() dispara ProvisionarEtiquetasGoogleJob de
+        // verdade (QUEUE_CONNECTION=sync) -- sem isso, este teste faz
+        // chamada HTTP real pra API do Google (o Http::fake() deste
+        // arquivo cobre só a URL de searchContacts, não contactGroups).
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         GoogleToken::create([
             'tenant_id' => $tenant->id, 'google_email' => 'a@b.com',
             'access_token' => 'tok', 'refresh_token' => 'ref', 'token_type' => 'Bearer',
@@ -123,6 +138,11 @@ class EnriquecerContatoNovoViaGoogleJobTest extends TestCase
         ], 200)]);
 
         $tenant = Tenant::factory()->create();
+        // GoogleToken::booted() dispara ProvisionarEtiquetasGoogleJob de
+        // verdade (QUEUE_CONNECTION=sync) -- sem isso, este teste faz
+        // chamada HTTP real pra API do Google (o Http::fake() deste
+        // arquivo cobre só a URL de searchContacts, não contactGroups).
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         GoogleToken::create([
             'tenant_id' => $tenant->id, 'google_email' => 'a@b.com',
             'access_token' => 'tok', 'refresh_token' => 'ref', 'token_type' => 'Bearer',
@@ -166,6 +186,11 @@ class EnriquecerContatoNovoViaGoogleJobTest extends TestCase
         ], 200)]);
 
         $tenant = Tenant::factory()->create();
+        // GoogleToken::booted() dispara ProvisionarEtiquetasGoogleJob de
+        // verdade (QUEUE_CONNECTION=sync) -- sem isso, este teste faz
+        // chamada HTTP real pra API do Google (o Http::fake() deste
+        // arquivo cobre só a URL de searchContacts, não contactGroups).
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         GoogleToken::create([
             'tenant_id' => $tenant->id, 'google_email' => 'a@b.com',
             'access_token' => 'tok', 'refresh_token' => 'ref', 'token_type' => 'Bearer',
@@ -196,6 +221,11 @@ class EnriquecerContatoNovoViaGoogleJobTest extends TestCase
         ], 200)]);
 
         $tenant = Tenant::factory()->create();
+        // GoogleToken::booted() dispara ProvisionarEtiquetasGoogleJob de
+        // verdade (QUEUE_CONNECTION=sync) -- sem isso, este teste faz
+        // chamada HTTP real pra API do Google (o Http::fake() deste
+        // arquivo cobre só a URL de searchContacts, não contactGroups).
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         GoogleToken::create([
             'tenant_id' => $tenant->id, 'google_email' => 'a@b.com',
             'access_token' => 'tok', 'refresh_token' => 'ref', 'token_type' => 'Bearer',
@@ -230,6 +260,11 @@ class EnriquecerContatoNovoViaGoogleJobTest extends TestCase
         Http::fake(['people.googleapis.com/v1/people:searchContacts*' => Http::response(['results' => []], 200)]);
 
         $tenant = Tenant::factory()->create();
+        // GoogleToken::booted() dispara ProvisionarEtiquetasGoogleJob de
+        // verdade (QUEUE_CONNECTION=sync) -- sem isso, este teste faz
+        // chamada HTTP real pra API do Google (o Http::fake() deste
+        // arquivo cobre só a URL de searchContacts, não contactGroups).
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
         GoogleToken::create([
             'tenant_id' => $tenant->id, 'google_email' => 'a@b.com',
             'access_token' => 'tok', 'refresh_token' => 'ref', 'token_type' => 'Bearer',

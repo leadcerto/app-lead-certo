@@ -42,6 +42,11 @@ class GoogleContatosRoundTripTest extends TestCase
 
     private function criarToken(Tenant $tenant): GoogleToken
     {
+        // GoogleToken::booted() dispara ProvisionarEtiquetasGoogleJob de
+        // verdade (QUEUE_CONNECTION=sync) -- sem isso, os testes deste
+        // arquivo fazem chamada HTTP real pra API do Google.
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
+
         return GoogleToken::create([
             'tenant_id'     => $tenant->id,
             'google_email'  => 'franqueado@empresa.com',

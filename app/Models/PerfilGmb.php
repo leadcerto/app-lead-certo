@@ -45,6 +45,11 @@ class PerfilGmb extends Model
         return $this->hasMany(ContatoAvaliacao::class, 'perfil_id');
     }
 
+    public function posts(): HasMany
+    {
+        return $this->hasMany(GmbPost::class, 'perfil_gmb_id');
+    }
+
     // ── Métodos Auxiliares ─────────────────────────────────────────────────────
 
     /**
