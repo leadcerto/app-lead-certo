@@ -42,7 +42,10 @@ class AdminDashboardController extends Controller
         $postsAgendadosGmb = GmbPost::withoutGlobalScopes()->where('status', 'agendado')->count();
         $postsPublicadosGmb = GmbPost::withoutGlobalScopes()->where('status', 'publicado')->count();
 
-        $tokensUsadosMes = IaUsage::withoutGlobalScopes()->where('created_at', '>=', $inicioMes)->sum('total_tokens');
+        $tokensUsadosMes = IaUsage::withoutGlobalScopes()
+            ->where('created_at', '>=', $inicioMes)
+            ->selectRaw('COALESCE(SUM(tokens_input + tokens_output), 0) as total')
+            ->value('total') ?? 0;
 
         $kpis = [
             'total_empresas'        => $totalEmpresas,
