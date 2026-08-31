@@ -7,6 +7,7 @@ use App\Models\Tenant;
 use App\Services\GoogleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -16,6 +17,8 @@ class GoogleServiceRenovacaoTest extends TestCase
 
     private function criarToken(Tenant $tenant, array $extra = []): GoogleToken
     {
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
+
         return GoogleToken::create(array_merge([
             'tenant_id'     => $tenant->id,
             'google_email'  => 'teste@gmail.com',

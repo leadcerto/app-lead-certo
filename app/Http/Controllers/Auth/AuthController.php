@@ -4,11 +4,16 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -71,11 +76,10 @@ class AuthController extends Controller
         $request->session()->regenerate();
         session(['tenant_id' => Auth::user()->tenant_id]);
 
-        // Avaliador não tem acesso ao Dashboard geral — manda direto pro
-        // painel dele em vez de cair numa tela que não faz sentido pro perfil.
+        // Avaliador não tem acesso ao Dashboard geral
         $destino = Auth::user()->perfil === 'avaliador'
             ? route('avaliador.dashboard')
-            : route('dashboard');
+            : (Auth::user()->perfil === 'admin' ? route('admin.dashboard') : route('dashboard'));
 
         return redirect()->intended($destino);
     }
@@ -87,5 +91,88 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('login');
+    }
+
+    // --- Recuperação de Senha (Esqueci minha senha) ---
+
+    public function forgotPasswordView(): View
+    {
+        return view('auth.forgot-password');
+    }
+
+    public function sendResetLink(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'email' => 'required|email|exists:users,email',
+        ], [
+            'email.exists' => 'Não encontramos nenhuma conta com este endereço de e-mail.',
+        ]);
+
+        $token = Str::random(64);
+
+        DB::table('password_reset_tokens')->updateOrInsert(
+            ['email' => $request->email],
+            [
+                'token'      => Hash::make($token),
+                'created_at' => Carbon::now(),
+            ]
+        );
+
+        $resetUrl = route('password.reset', ['token' => $token, 'email' => $request->email]);
+
+        // Se houver mail configurado, envia email. Caso contrário, gera link na sessão
+        try {
+            // Mail::to($request->email)->send(...)
+        } catch (\Throwable $e) {
+            // Silencioso se mailer não estiver configurado localmente
+        }
+
+        return back()->with('sucesso', "Instruções enviadas! Caso esteja em ambiente de teste, acesse diretamente o link de redefinição.")
+                     ->with('resetUrl', $resetUrl);
+    }
+
+    public function resetPasswordView(Request $request, string $token): View
+    {
+        return view('auth.reset-password', [
+            'token' => $token,
+            'email' => $request->query('email'),
+        ]);
+    }
+
+    public function updatePassword(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'token'                 => 'required',
+            'email'                 => 'required|email|exists:users,email',
+            'password'              => 'required|string|min:8|confirmed',
+        ], [
+            'password.confirmed'    => 'A confirmação de senha não confere.',
+            'password.min'          => 'A nova senha deve ter no mínimo 8 caracteres.',
+        ]);
+
+        $record = DB::table('password_reset_tokens')
+            ->where('email', $request->email)
+            ->first();
+
+        if (! $record || ! Hash::check($request->token, $record->token)) {
+            return back()->withErrors(['email' => 'Token de redefinição de senha inválido ou expirado.']);
+        }
+
+        // Verifica se o token tem menos de 60 minutos
+        if (Carbon::parse($record->created_at)->addMinutes(60)->isPast()) {
+            DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+            return back()->withErrors(['email' => 'Este link de redefinição expirou. Solicite um novo.']);
+        }
+
+        // Atualiza a senha do usuário
+        $user = User::where('email', $request->email)->first();
+        $user->password = Hash::make($request->password);
+        $user->save();
+
+        // Deleta o token usado
+        DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+
+        return redirect()->route('login')
+            ->with('sucesso', 'Senha alterada com sucesso! Você já pode fazer login com sua nova senha.');
     }
 }

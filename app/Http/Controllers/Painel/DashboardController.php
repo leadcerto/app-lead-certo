@@ -13,8 +13,12 @@ use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    public function index(): View
+    public function index(): View|\Illuminate\Http\RedirectResponse
     {
+        if (auth()->user()?->perfil === 'admin') {
+            return redirect()->route('admin.dashboard');
+        }
+
         return view('dashboard.index');
     }
 

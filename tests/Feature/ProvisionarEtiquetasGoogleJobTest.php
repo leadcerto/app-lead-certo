@@ -19,6 +19,10 @@ class ProvisionarEtiquetasGoogleJobTest extends TestCase
 
     private function criarEtiquetasGlobais(): void
     {
+        // As 4 etiquetas de validação (novos_leads, leads_em_analise, lead_certo,
+        // lead_invalido) são semeadas automaticamente pela migration
+        // 2026_08_28_000001_add_etiquetas_validacao_contato.php via RefreshDatabase.
+        // Criar aqui só as que precisam ser criadas manualmente no teste.
         foreach (['lead', 'cliente', 'fornecedor', 'parceiro', 'pessoal', 'colaborador', 'sem_nome', 'inativo', 'bloqueado'] as $slug) {
             Etiqueta::create(['tenant_id' => null, 'slug' => $slug, 'nome' => ucfirst($slug), 'ativo' => true]);
         }
@@ -95,6 +99,11 @@ class ProvisionarEtiquetasGoogleJobTest extends TestCase
 
     public function test_sem_etiquetas_globais_cadastradas_nao_faz_nada(): void
     {
+        // Deletar as 4 etiquetas de validação criadas automaticamente pela migration
+        Etiqueta::whereNull('tenant_id')
+            ->whereIn('slug', ['novos_leads', 'leads_em_analise', 'lead_certo', 'lead_invalido'])
+            ->delete();
+
         Http::fake();
         Bus::fake([ProvisionarEtiquetasGoogleJob::class]);
         $tenant = Tenant::factory()->create();
@@ -103,5 +112,74 @@ class ProvisionarEtiquetasGoogleJobTest extends TestCase
         (new ProvisionarEtiquetasGoogleJob($token->id))->handle(app(GoogleService::class));
 
         Http::assertNothingSent();
+    }
+
+    public function test_cria_os_4_grupos_de_validacao_e_marca_base_existente_como_leads_em_analise(): void
+    {
+        $this->criarEtiquetasGlobais();
+        Http::fake([
+            'people.googleapis.com/v1/contactGroups' => Http::sequence()
+                ->push(['resourceName' => 'contactGroups/lead-1'], 200)
+                ->push(['resourceName' => 'contactGroups/pessoal-1'], 200)
+                ->push(['resourceName' => 'contactGroups/novos-1'], 200)
+                ->push(['resourceName' => 'contactGroups/analise-1'], 200)
+                ->push(['resourceName' => 'contactGroups/certo-1'], 200)
+                ->push(['resourceName' => 'contactGroups/invalido-1'], 200),
+            'people.googleapis.com/v1/contactGroups/analise-1/members:modify' => Http::response(['status' => 'OK'], 200),
+        ]);
+
+        Bus::fake([ProvisionarEtiquetasGoogleJob::class]);
+        $tenant = Tenant::factory()->create();
+
+        $contato = \App\Models\Contato::factory()->create();
+        $vinculo = \App\Models\VinculoContatoTenant::create([
+            'contato_id' => $contato->id, 'tenant_id' => $tenant->id,
+            'google_resource_name' => 'people/c123',
+        ]);
+
+        $token = $this->criarToken($tenant);
+        (new ProvisionarEtiquetasGoogleJob($token->id))->handle(app(GoogleService::class));
+
+        $leadsEmAnalise = Etiqueta::whereNull('tenant_id')->where('slug', 'leads_em_analise')->first();
+        $this->assertSame('contactGroups/analise-1', $leadsEmAnalise->googleGrupoParaTenant($tenant->id)?->google_group_resource_name);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'contactGroups/analise-1/members:modify')
+            && in_array('people/c123', $request['resourceNamesToAdd'] ?? []));
+    }
+
+    public function test_nao_marca_base_de_novo_se_ja_foi_provisionado_antes(): void
+    {
+        $this->criarEtiquetasGlobais();
+        Http::fake(['people.googleapis.com/v1/contactGroups*' => Http::response(['resourceName' => 'contactGroups/x'], 200)]);
+
+        Bus::fake([ProvisionarEtiquetasGoogleJob::class]);
+        $tenant = Tenant::factory()->create();
+        $token  = $this->criarToken($tenant);
+
+        $contato = \App\Models\Contato::factory()->create();
+        $vinculo = \App\Models\VinculoContatoTenant::create([
+            'contato_id' => $contato->id, 'tenant_id' => $tenant->id,
+            'google_resource_name' => 'people/c123',
+        ]);
+
+        // Primeira execução: provisiona tudo e marca a base
+        (new ProvisionarEtiquetasGoogleJob($token->id))->handle(app(GoogleService::class));
+
+        // Avança o vinculo pra lead_certo, como a validação faria de verdade
+        $leadCerto = Etiqueta::whereNull('tenant_id')->where('slug', 'lead_certo')->first();
+        $emAnalise = Etiqueta::whereNull('tenant_id')->where('slug', 'leads_em_analise')->first();
+        $vinculo->etiquetas()->detach($emAnalise->id);
+        $vinculo->etiquetas()->attach($leadCerto->id);
+
+        // Segunda execução (simula reconexão/backfill repetido): não pode
+        // voltar o vinculo pra leads_em_analise -- o mecanismo agora é
+        // por-vinculo (whereDoesntHave nas 4 etiquetas de validação), não
+        // mais por-primeira-execução: como o vínculo já tem 'lead_certo'
+        // (uma das 4), ele é excluído da marcação em massa mesmo que o
+        // job rode de novo depois de já ter sido executado antes.
+        (new ProvisionarEtiquetasGoogleJob($token->id))->handle(app(GoogleService::class));
+
+        $this->assertFalse($vinculo->etiquetas()->where('slug', 'leads_em_analise')->exists());
+        $this->assertTrue($vinculo->etiquetas()->where('slug', 'lead_certo')->exists());
     }
 }

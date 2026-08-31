@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ProvisionarEtiquetasGoogleJob;
 use App\Models\Contato;
 use App\Models\GoogleToken;
 use App\Models\Tenant;
 use App\Services\ContatoSyncService;
 use App\Services\TelefoneService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -18,6 +20,11 @@ class ContatoSyncServiceNormalizaTelefoneTest extends TestCase
     private function criarToken(): GoogleToken
     {
         $tenant = Tenant::factory()->create();
+
+        // GoogleToken::booted() dispara ProvisionarEtiquetasGoogleJob de
+        // verdade (QUEUE_CONNECTION=sync) -- sem isso, os testes deste
+        // arquivo fazem chamada HTTP real pra API do Google.
+        Bus::fake([ProvisionarEtiquetasGoogleJob::class]);
 
         return GoogleToken::create([
             'tenant_id'     => $tenant->id,

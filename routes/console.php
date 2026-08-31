@@ -90,3 +90,10 @@ Schedule::command('avaliadores:checar-atraso')
     ->dailyAt('08:00')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/avaliadores-atraso.log'));
+
+// A cada 1 minuto - Publica posts agendados do Google Meu Negócio cujo horário já chegou
+Schedule::command('gmb:publicar-posts')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/gmb-publicar-posts.log'));

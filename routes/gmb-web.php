@@ -85,6 +85,14 @@ Route::middleware(['auth', 'tenant', 'role:admin,dono,diretor,diretor_marketing'
     Route::get('avaliadores/{avaliador}/editar', [AvaliadorController::class, 'edit'])->name('avaliadores.edit');
     Route::put('avaliadores/{avaliador}', [AvaliadorController::class, 'update'])->name('avaliadores.update');
     Route::delete('avaliadores/{avaliador}', [AvaliadorController::class, 'destroy'])->name('avaliadores.destroy');
+
+    // ── Publicações & Agenda Automática de Posts (Google Posts) ───────────
+    Route::get('posts', [\App\Http\Controllers\GmbPostController::class, 'index'])->name('gmb-posts.index');
+    Route::get('posts/novo', [\App\Http\Controllers\GmbPostController::class, 'create'])->name('gmb-posts.create');
+    Route::post('posts', [\App\Http\Controllers\GmbPostController::class, 'store'])->name('gmb-posts.store');
+    Route::post('posts/{post}/publicar-agora', [\App\Http\Controllers\GmbPostController::class, 'publicarAgora'])->name('gmb-posts.publicar-agora');
+    Route::delete('posts/{post}', [\App\Http\Controllers\GmbPostController::class, 'destroy'])->name('gmb-posts.destroy');
+    Route::post('posts/gerar-ia', [\App\Http\Controllers\GmbPostController::class, 'gerarIa'])->name('gmb-posts.gerar-ia');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

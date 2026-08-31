@@ -43,10 +43,15 @@ Route::get('/f/{uuid}', function (string $uuid) {
 Route::get('/convite/{token}', [AgenteController::class, 'aceitarForm'])->name('convite.aceitar');
 Route::post('/convite/{token}', [AgenteController::class, 'aceitarStore'])->name('convite.aceitar.store');
 
-// ── Auth ──────────────────────────────────────────────────────────────────
+// ── Auth & Recuperação de Senha ──────────────────────────────────────────
 Route::get('/login', fn () => view('auth.login'))->name('login')->middleware('guest');
 Route::post('/login', [AuthController::class, 'loginWeb'])->middleware('guest');
 Route::post('/logout', [AuthController::class, 'logoutWeb'])->name('logout')->middleware('auth');
+
+Route::get('/esqueci-senha', [AuthController::class, 'forgotPasswordView'])->name('password.request')->middleware('guest');
+Route::post('/esqueci-senha', [AuthController::class, 'sendResetLink'])->name('password.email')->middleware('guest');
+Route::get('/redefinir-senha/{token}', [AuthController::class, 'resetPasswordView'])->name('password.reset')->middleware('guest');
+Route::post('/redefinir-senha', [AuthController::class, 'updatePassword'])->name('password.update')->middleware('guest');
 
 // ── Painel base (todos os usuários autenticados com tenant) ───────────────
 Route::middleware(['auth', 'tenant'])->group(function () {
@@ -165,11 +170,21 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('admin.gestor-kanban')
         ->middleware('role:admin');
 
+    // Dashboard Master do Super Admin Lead Certo
+    Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
+        Route::get('/dashboard', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'index'])->name('dashboard');
+        Route::post('/agentes-humanos', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'storeAgenteHumano'])->name('agentes-humanos.store');
+        Route::post('/agentes-ia', [\App\Http\Controllers\Admin\AdminDashboardController::class, 'storeAgenteIa'])->name('agentes-ia.store');
+    });
+
     // Cadastro de empresa (franqueado) — só admin, não é autosserviço
     Route::middleware('role:admin')->prefix('admin/empresas')->name('admin.empresas.')->group(function () {
         Route::get('/', [EmpresaController::class, 'index'])->name('index');
         Route::get('/nova', [EmpresaController::class, 'create'])->name('create');
         Route::post('/', [EmpresaController::class, 'store'])->name('store');
+        Route::get('/{empresa}', [EmpresaController::class, 'show'])->name('show');
+        Route::get('/{empresa}/editar', [EmpresaController::class, 'edit'])->name('edit');
+        Route::put('/{empresa}', [EmpresaController::class, 'update'])->name('update');
     });
 
     // Perfil dos agentes da equipe Lead Certo (Adriana, Nathanel...) — pedido

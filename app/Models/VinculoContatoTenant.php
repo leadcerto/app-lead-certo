@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Jobs\EnriquecerContatoNovoViaGoogleJob;
+use App\Jobs\MarcarNovoLeadEtiquetaJob;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -41,6 +42,7 @@ class VinculoContatoTenant extends Model
     {
         static::created(function (VinculoContatoTenant $vinculo) {
             EnriquecerContatoNovoViaGoogleJob::dispatch($vinculo->id);
+            MarcarNovoLeadEtiquetaJob::dispatch($vinculo->id)->delay(now()->addMinutes(2));
         });
     }
 
