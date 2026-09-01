@@ -17,7 +17,7 @@
         </div>
 
         <div class="flex items-center gap-3">
-            @if(auth()->user()?->isDono())
+            @if(auth()->user()?->isSuperAdmin())
             <button @click="abrirNova()"
                     class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-sm hover:shadow transition-all flex items-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -102,7 +102,7 @@
                         </div>
                     </div>
 
-                    @if(auth()->user()?->isDono())
+                    @if(auth()->user()?->isSuperAdmin())
                     <button @click="editar({{ json_encode($cargo) }})"
                             class="text-gray-400 hover:text-indigo-600 p-1.5 rounded-xl hover:bg-gray-50 transition"
                             title="Editar Função">
@@ -226,7 +226,7 @@
     </div>
 
     {{-- Modal de Criar / Editar Função (Apenas Super Admin / Dono) --}}
-    @if(auth()->user()?->isDono())
+    @if(auth()->user()?->isSuperAdmin())
     <div x-show="modalForm" x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
         <div @click.outside="modalForm = false" class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div class="p-6 border-b border-gray-100 flex items-center justify-between">

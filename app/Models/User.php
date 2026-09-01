@@ -120,6 +120,11 @@ class User extends Authenticatable
         return in_array($this->perfil, ['admin', 'dono'], true);
     }
 
+    public function isSuperAdmin(): bool
+    {
+        return in_array($this->perfil, ['admin', 'dono'], true);
+    }
+
     public function isGerente(): bool
     {
         return in_array($this->perfil, ['admin', 'dono', 'diretor', 'gerente', 'gestor'], true);
