@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\GmbPost;
+use App\Models\GmbPostTemplate;
 use App\Models\PerfilGmb;
 use App\Services\GmbPostIaService;
 use App\Services\GmbPostPublishService;
@@ -62,8 +63,9 @@ class GmbPostController extends Controller
     {
         $tenantId = auth()->user()->tenant_id;
         $perfis = PerfilGmb::where('tenant_id', $tenantId)->where('ativo', true)->get();
+        $templates = GmbPostTemplate::where('tenant_id', $tenantId)->where('ativo', true)->get();
 
-        return view('gmb-posts.create', compact('perfis'));
+        return view('gmb-posts.create', compact('perfis', 'templates'));
     }
 
     public function store(Request $request, GmbPostPublishService $publishService): RedirectResponse
@@ -120,6 +122,191 @@ class GmbPostController extends Controller
 
         return redirect()->route('admin.gmb-posts.index', ['semana' => $dataAgendada->toDateString()])
             ->with('sucesso', "Post agendado para {$post->data_agendada->format('d/m/Y H:i')}!");
+    }
+
+    // ── Gerador em Lote (Matriz Semanal) ──────────────────────────────────
+
+    public function lote(Request $request): View
+    {
+        $tenantId = auth()->user()->tenant_id;
+
+        $semana = $request->filled('semana')
+            ? Carbon::parse($request->semana)
+            : now();
+
+        $perfis = PerfilGmb::where('tenant_id', $tenantId)
+            ->where('ativo', true)
+            ->orderBy('nome')
+            ->get();
+
+        $templates = GmbPostTemplate::where('tenant_id', $tenantId)
+            ->where('ativo', true)
+            ->get();
+
+        // Se não houver templates, gera os templates padrão na hora
+        if ($templates->isEmpty()) {
+            (new \Database\Seeders\GmbPostTemplateSeeder())->run();
+            $templates = GmbPostTemplate::where('tenant_id', $tenantId)->where('ativo', true)->get();
+        }
+
+        return view('gmb-posts.lote', compact('perfis', 'templates', 'semana'));
+    }
+
+    public function storeLote(Request $request, GmbPostIaService $iaService): RedirectResponse
+    {
+        $tenantId = auth()->user()->tenant_id;
+        $tenant = auth()->user()->tenant;
+
+        $validated = $request->validate([
+            'matriz'            => 'required|array',
+            'semana_referencia' => 'required|date',
+            'modo_conteudo'     => 'required|in:template_rotativo,template_especifico,ia',
+            'template_id'       => 'nullable|exists:gmb_post_templates,id',
+            'horario_padrao'    => 'required|string',
+        ]);
+
+        $semana = Carbon::parse($validated['semana_referencia']);
+        $inicioSemana = $semana->copy()->startOfWeek(Carbon::MONDAY);
+        $diasMap = ['segunda' => 0, 'terca' => 1, 'quarta' => 2, 'quinta' => 3, 'sexta' => 4, 'sabado' => 5, 'domingo' => 6];
+
+        $templates = GmbPostTemplate::where('tenant_id', $tenantId)->where('ativo', true)->get();
+        $templateIndex = 0;
+        $criados = 0;
+
+        foreach ($validated['matriz'] as $perfilId => $dias) {
+            $perfil = PerfilGmb::where('tenant_id', $tenantId)->find($perfilId);
+            if (!$perfil) continue;
+
+            foreach ($dias as $dia => $valor) {
+                if (empty($valor) || $valor != '1') continue;
+                if (!isset($diasMap[$dia])) continue;
+
+                $dataPost = $inicioSemana->copy()
+                    ->addDays($diasMap[$dia])
+                    ->setTimeFromTimeString($validated['horario_padrao'] ?? '10:00');
+
+                // Não reagendar no passado se a semana for a atual e o dia já passou
+                if ($dataPost->isPast() && $dataPost->diffInDays(now()) > 0) {
+                    continue;
+                }
+
+                $titulo = null;
+                $texto = '';
+                $ctaTipo = 'CALL';
+                $geradoPorIa = false;
+
+                if ($validated['modo_conteudo'] === 'ia') {
+                    $resIa = $iaService->gerarCopy(
+                        perfil: $perfil,
+                        tipo: 'novidade',
+                        objetivo: 'Atrair clientes e ligações locais em ' . $perfil->nome,
+                        tema: "Destaque dos serviços e atendimento premium em {$perfil->nome} ({$perfil->city})"
+                    );
+                    $titulo = $resIa['titulo'] ?? null;
+                    $texto = $resIa['texto'] ?? "Atendimento completo e qualificado em {$perfil->nome}. Entre em contato conosco!";
+                    $ctaTipo = $resIa['cta_tipo'] ?? 'CALL';
+                    $geradoPorIa = true;
+                } else {
+                    $template = null;
+                    if ($validated['modo_conteudo'] === 'template_especifico' && !empty($validated['template_id'])) {
+                        $template = $templates->firstWhere('id', $validated['template_id']);
+                    }
+                    if (!$template && $templates->isNotEmpty()) {
+                        $template = $templates[$templateIndex % $templates->count()];
+                        $templateIndex++;
+                    }
+
+                    if ($template) {
+                        $empresaNome = $tenant->nome ?? 'Nossa Empresa';
+                        $bairroNome = $perfil->nome ?? 'sua região';
+                        $cidadeNome = $perfil->city ?? 'sua cidade';
+
+                        $titulo = str_replace(
+                            ['{empresa}', '{bairro}', '{cidade}'],
+                            [$empresaNome, $bairroNome, $cidadeNome],
+                            $template->titulo_template
+                        );
+                        $texto = str_replace(
+                            ['{empresa}', '{bairro}', '{cidade}'],
+                            [$empresaNome, $bairroNome, $cidadeNome],
+                            $template->texto_template
+                        );
+                        $ctaTipo = $template->cta_tipo_padrao ?? 'CALL';
+                    } else {
+                        $texto = "Conheça as soluções da " . ($tenant->nome ?? 'Lead Certo') . " em {$perfil->nome}. Ligue agora!";
+                    }
+                }
+
+                GmbPost::create([
+                    'tenant_id'     => $tenantId,
+                    'perfil_gmb_id' => $perfil->id,
+                    'autor_user_id' => auth()->id(),
+                    'tipo'          => 'novidade',
+                    'titulo'        => $titulo,
+                    'texto'         => $texto,
+                    'cta_tipo'      => $ctaTipo,
+                    'data_agendada' => $dataPost,
+                    'status'        => 'agendado',
+                    'gerado_por_ia' => $geradoPorIa,
+                ]);
+
+                $criados++;
+            }
+        }
+
+        return redirect()->route('admin.gmb-posts.index', ['semana' => $inicioSemana->toDateString()])
+            ->with('sucesso', "{$criados} postagens agendadas com sucesso para a semana!");
+    }
+
+    // ── Gestão de Templates de Postagens ──────────────────────────────────
+
+    public function templates(Request $request): View
+    {
+        $tenantId = auth()->user()->tenant_id;
+
+        $templates = GmbPostTemplate::where('tenant_id', $tenantId)
+            ->orderBy('categoria')
+            ->orderBy('titulo_template')
+            ->get();
+
+        if ($templates->isEmpty()) {
+            (new \Database\Seeders\GmbPostTemplateSeeder())->run();
+            $templates = GmbPostTemplate::where('tenant_id', $tenantId)->get();
+        }
+
+        $templatesPorCategoria = $templates->groupBy('categoria');
+
+        return view('gmb-posts.templates', compact('templates', 'templatesPorCategoria'));
+    }
+
+    public function storeTemplate(Request $request): RedirectResponse
+    {
+        $tenantId = auth()->user()->tenant_id;
+
+        $validated = $request->validate([
+            'categoria'       => 'required|string|max:50',
+            'titulo_template' => 'required|string|max:150',
+            'texto_template'  => 'required|string|max:1500',
+            'cta_tipo_padrao' => 'required|in:CALL,LEARN_MORE,ORDER,BOOK,SIGN_UP,SHOP,NENHUM',
+        ]);
+
+        GmbPostTemplate::create([
+            'tenant_id'       => $tenantId,
+            'categoria'       => $validated['categoria'],
+            'titulo_template' => $validated['titulo_template'],
+            'texto_template'  => $validated['texto_template'],
+            'cta_tipo_padrao' => $validated['cta_tipo_padrao'],
+            'ativo'           => true,
+        ]);
+
+        return back()->with('sucesso', 'Template de postagem criado com sucesso!');
+    }
+
+    public function destroyTemplate(GmbPostTemplate $template): RedirectResponse
+    {
+        $template->delete();
+
+        return back()->with('sucesso', 'Template de postagem removido.');
     }
 
     public function publicarAgora(GmbPost $post, GmbPostPublishService $publishService): RedirectResponse

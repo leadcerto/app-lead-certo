@@ -90,6 +90,11 @@ Route::middleware(['auth', 'tenant', 'role:admin,dono,diretor,diretor_marketing'
     Route::get('posts', [\App\Http\Controllers\GmbPostController::class, 'index'])->name('gmb-posts.index');
     Route::get('posts/novo', [\App\Http\Controllers\GmbPostController::class, 'create'])->name('gmb-posts.create');
     Route::post('posts', [\App\Http\Controllers\GmbPostController::class, 'store'])->name('gmb-posts.store');
+    Route::get('posts/lote', [\App\Http\Controllers\GmbPostController::class, 'lote'])->name('gmb-posts.lote');
+    Route::post('posts/lote', [\App\Http\Controllers\GmbPostController::class, 'storeLote'])->name('gmb-posts.lote.store');
+    Route::get('posts/templates', [\App\Http\Controllers\GmbPostController::class, 'templates'])->name('gmb-posts.templates');
+    Route::post('posts/templates', [\App\Http\Controllers\GmbPostController::class, 'storeTemplate'])->name('gmb-posts.templates.store');
+    Route::delete('posts/templates/{template}', [\App\Http\Controllers\GmbPostController::class, 'destroyTemplate'])->name('gmb-posts.templates.destroy');
     Route::post('posts/{post}/publicar-agora', [\App\Http\Controllers\GmbPostController::class, 'publicarAgora'])->name('gmb-posts.publicar-agora');
     Route::delete('posts/{post}', [\App\Http\Controllers\GmbPostController::class, 'destroy'])->name('gmb-posts.destroy');
     Route::post('posts/gerar-ia', [\App\Http\Controllers\GmbPostController::class, 'gerarIa'])->name('gmb-posts.gerar-ia');
