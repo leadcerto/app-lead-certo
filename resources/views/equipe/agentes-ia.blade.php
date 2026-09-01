@@ -180,72 +180,82 @@
 
     {{-- Modal de Criar / Editar Agente IA (Apenas Super Admin) --}}
     @if(auth()->user()->isAdmin())
-    <div x-show="modalForm" x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-        <div @click.outside="modalForm = false" class="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden max-h-[90vh] flex flex-col">
-            <div class="p-6 border-b border-gray-100 flex items-center justify-between">
-                <h2 class="text-lg font-bold text-gray-900" x-text="editandoId ? 'Editar Agente IA' : 'Novo Agente IA'"></h2>
-                <button @click="modalForm = false" class="text-gray-400 hover:text-gray-600 text-xl font-medium">✕</button>
+    <div x-show="modalForm" x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 sm:p-6">
+        <div @click.outside="modalForm = false" class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden max-h-[92vh] flex flex-col">
+            <div class="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-purple-50/60 via-white to-indigo-50/60">
+                <div class="flex items-center gap-2.5">
+                    <span class="p-2 bg-purple-100 text-purple-700 rounded-xl text-lg">🤖</span>
+                    <h2 class="text-xl font-bold text-gray-900" x-text="editandoId ? 'Editar Agente de IA' : 'Novo Agente de IA'"></h2>
+                </div>
+                <button @click="modalForm = false" class="text-gray-400 hover:text-gray-600 text-xl font-medium p-1">✕</button>
             </div>
 
-            <form :action="editandoId ? '/equipe/agentes-ia/' + editandoId : '{{ route('equipe.agentes-ia.store') }}'" method="POST" class="p-6 space-y-4 overflow-y-auto flex-1">
+            <form :action="editandoId ? '/equipe/agentes-ia/' + editandoId : '{{ route('equipe.agentes-ia.store') }}'" method="POST" class="p-6 sm:p-8 space-y-5 overflow-y-auto flex-1">
                 @csrf
                 <template x-if="editandoId">
                     <input type="hidden" name="_method" value="PUT">
                 </template>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div class="space-y-1">
-                        <label class="text-xs font-bold text-gray-700">Nome do Agente IA</label>
-                        <input type="text" name="nome" x-model="form.nome" required placeholder="Ex: Adriana Aviag" class="w-full text-xs border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-bold text-gray-800">Nome do Agente *</label>
+                        <input type="text" name="nome" x-model="form.nome" required placeholder="Ex: Adriana Aviag" class="w-full text-xs border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500">
                     </div>
-                    <div class="space-y-1">
-                        <label class="text-xs font-bold text-gray-700">E-mail do Sistema</label>
-                        <input type="email" name="email" x-model="form.email" required placeholder="Ex: adriana@leadcerto.app.br" class="w-full text-xs border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500">
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-bold text-gray-800">E-mail Principal *</label>
+                        <input type="email" name="email" x-model="form.email" required placeholder="Ex: adriana@leadcerto.app.br" class="w-full text-xs border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500">
                     </div>
                 </div>
 
-                <div class="space-y-1">
-                    <label class="text-xs font-bold text-gray-700">URL do Avatar / Foto</label>
-                    <input type="url" name="avatar_url" x-model="form.avatar_url" placeholder="https://..." class="w-full text-xs border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-bold text-gray-800">Conta do Gmail (Gemini Pro)</label>
+                        <input type="email" name="gemini_email" x-model="form.gemini_email" placeholder="email@gmail.com" class="w-full text-xs border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500">
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-bold text-gray-800">Senha / Chave de Acesso</label>
+                        <input type="password" name="gemini_senha" x-model="form.gemini_senha" placeholder="••••••••" class="w-full text-xs border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500">
+                    </div>
                 </div>
 
-                <div class="space-y-1">
-                    <label class="text-xs font-bold text-gray-700">Funções Sob Responsabilidade (Selecione uma ou mais)</label>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 bg-gray-50 border border-gray-200 rounded-2xl">
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-gray-800">Avatar / Foto URL</label>
+                    <input type="url" name="avatar_url" x-model="form.avatar_url" placeholder="https://..." class="w-full text-xs border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500">
+                </div>
+
+                {{-- Seleção de Funções em Grade Completa (Sem barra de rolagem) --}}
+                <div class="space-y-2 pt-2 border-t border-gray-100">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                            <span>🎯</span> Selecione as Funções sob Responsabilidade deste Agente:
+                        </label>
+                        <span class="text-[11px] font-semibold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-md border border-purple-100"
+                              x-text="form.cargos.length + ' função(ões) selecionada(s)'"></span>
+                    </div>
+                    <p class="text-[11px] text-gray-500">O agente pode acumular múltiplos papéis e funções na estrutura da Lead Certo.</p>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 p-3.5 bg-gray-50/90 border border-gray-200/80 rounded-2xl">
                         @foreach($cargos as $cargo)
-                        <label class="flex items-center gap-2 p-2 rounded-xl hover:bg-white transition cursor-pointer text-xs">
+                        <label class="flex items-center gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer text-xs select-none"
+                               :class="form.cargos.includes({{ $cargo->id }}) ? 'bg-purple-50 border-purple-300 text-purple-900 font-semibold shadow-2xs' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50/50'">
                             <input type="checkbox" name="cargos[]" value="{{ $cargo->id }}"
                                    :checked="form.cargos.includes({{ $cargo->id }})"
                                    @change="toggleCargo({{ $cargo->id }})"
-                                   class="rounded text-purple-600 focus:ring-purple-500">
-                            <span class="font-medium text-gray-800">{{ $cargo->icone ?: '💼' }} {{ $cargo->nome }}</span>
+                                   class="rounded text-purple-600 focus:ring-purple-500 w-4 h-4 flex-shrink-0">
+                            <span class="truncate">{{ $cargo->icone ?: '💼' }} {{ $cargo->nome }}</span>
                         </label>
                         @endforeach
                     </div>
                 </div>
 
-                <div class="p-4 bg-purple-50/60 border border-purple-200 rounded-2xl space-y-3">
-                    <div class="flex items-center gap-1.5 text-xs font-bold text-purple-900">
-                        <span>✨</span> Configuração Google Gemini Pro
-                    </div>
-                    <div class="space-y-1">
-                        <label class="text-xs font-medium text-purple-800">E-mail da Conta Google (Gemini Pro)</label>
-                        <input type="email" name="gemini_email" x-model="form.gemini_email" placeholder="email@gmail.com" class="w-full text-xs border border-purple-300 bg-white rounded-xl p-2 focus:ring-2 focus:ring-purple-500">
-                    </div>
-                    <div class="space-y-1">
-                        <label class="text-xs font-medium text-purple-800">Senha / Token de Acesso</label>
-                        <input type="password" name="gemini_senha" x-model="form.gemini_senha" placeholder="••••••••" class="w-full text-xs border border-purple-300 bg-white rounded-xl p-2 focus:ring-2 focus:ring-purple-500">
-                    </div>
+                <div class="space-y-1.5 pt-2">
+                    <label class="text-xs font-bold text-gray-800">Instruções / Diretriz Geral da IA</label>
+                    <textarea name="gemini_instrucoes" x-model="form.gemini_instrucoes" rows="3" placeholder="Instruções para o comportamento e tom de voz da IA..." class="w-full text-xs border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500 leading-relaxed"></textarea>
                 </div>
 
-                <div class="space-y-1">
-                    <label class="text-xs font-bold text-gray-700">Diretrizes & Instruções Operacionais</label>
-                    <textarea name="gemini_instrucoes" x-model="form.gemini_instrucoes" rows="3" placeholder="Instruções para o comportamento da IA..." class="w-full text-xs border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500"></textarea>
-                </div>
-
-                <div class="pt-3 border-t border-gray-100 flex justify-end gap-2">
-                    <button type="button" @click="modalForm = false" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs font-semibold hover:bg-gray-200">Cancelar</button>
-                    <button type="submit" class="px-5 py-2 bg-purple-600 text-white rounded-xl text-xs font-semibold hover:bg-purple-700 shadow-sm">Salvar Agente IA</button>
+                <div class="pt-4 border-t border-gray-100 flex items-center justify-between">
+                    <button type="button" @click="modalForm = false" class="px-5 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-xs font-semibold hover:bg-gray-200 transition">Cancelar</button>
+                    <button type="submit" class="px-6 py-2.5 bg-purple-600 text-white rounded-xl text-xs font-semibold hover:bg-purple-700 shadow-sm transition">Salvar Agente IA</button>
                 </div>
             </form>
         </div>
