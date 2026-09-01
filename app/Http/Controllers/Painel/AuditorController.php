@@ -403,6 +403,91 @@ class AuditorController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    public function salvarContatoCompleto(Request $request, $id): JsonResponse
+    {
+        $vinculo = VinculoContatoTenant::with('contato')->find($id);
+        $contato = null;
+
+        if ($vinculo) {
+            $contato = $vinculo->contato;
+        } else {
+            $contato = Contato::find($id);
+            if ($contato) {
+                $user = $request->user();
+                $tenantId = $user?->tenant_id;
+                $vinculo = VinculoContatoTenant::where('contato_id', $contato->id)
+                    ->when($tenantId && !($user?->isAdmin()), fn($q) => $q->where('tenant_id', $tenantId))
+                    ->first();
+            }
+        }
+
+        if (!$contato) {
+            return response()->json(['erro' => 'Contato não encontrado.'], 404);
+        }
+
+        $nome = trim((string)$request->input('nome', ''));
+        $sobrenome = trim((string)$request->input('sobrenome', ''));
+        $email = trim((string)$request->input('email', ''));
+        $ddi = preg_replace('/\D/', '', (string)$request->input('ddi', '55'));
+        $numeroLocal = preg_replace('/\D/', '', (string)$request->input('numero_local', ''));
+
+        if (empty($nome)) {
+            $nome = 'Sem Nome';
+        }
+
+        $dadosAtualizar = [
+            'nome'      => $nome,
+            'sobrenome' => $sobrenome ?: null,
+            'email'     => $email ?: null,
+        ];
+
+        if (!empty($numeroLocal)) {
+            if (str_starts_with($numeroLocal, $ddi) && strlen($numeroLocal) > 10) {
+                $dadosAtualizar['telefone'] = $numeroLocal;
+            } else {
+                $dadosAtualizar['telefone'] = $ddi . $numeroLocal;
+            }
+        }
+
+        $contato->update($dadosAtualizar);
+
+        if ($vinculo) {
+            $pendentes = $vinculo->campos_pendentes_auditoria ?? [];
+            unset($pendentes['nome']);
+            unset($pendentes['sobrenome']);
+            unset($pendentes['telefone']);
+
+            $humano = $vinculo->campos_editados_humano ?? [];
+            $humano['nome'] = now()->toIso8601String();
+            $humano['completo'] = now()->toIso8601String();
+
+            $vinculo->update([
+                'campos_pendentes_auditoria' => $pendentes ?: null,
+                'campos_editados_humano'     => $humano,
+            ]);
+        }
+
+        ContatoPendente::where('contato_existente_id', $contato->id)
+            ->where('status', 'aguardando')
+            ->update([
+                'status'        => 'fundido',
+                'resolvido_por' => auth()->id(),
+                'resolvido_em'  => now(),
+            ]);
+
+        AuditLog::registrar(
+            tabela:      'contatos',
+            registroId:  $contato->id,
+            acao:        'edicao_completa_auditor',
+            contexto:    ['dados' => $dadosAtualizar, 'vinculo_id' => $vinculo?->id]
+        );
+
+        return response()->json([
+            'ok'      => true,
+            'contato' => $contato->fresh(),
+        ]);
+    }
+
     public function aprovarLote(Request $request): JsonResponse
     {
         $itens = $request->input('itens', []);
