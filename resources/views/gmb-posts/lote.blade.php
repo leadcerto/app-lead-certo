@@ -34,7 +34,7 @@
         </div>
     </div>
 
-    @if($errors->any())
+    @if(isset($errors) && $errors->any())
         <div class="p-4 bg-red-100 border border-red-200 text-red-800 rounded-2xl text-sm space-y-1 shadow-sm">
             @foreach($errors->all() as $error)
                 <p class="font-medium">• {{ $error }}</p>
