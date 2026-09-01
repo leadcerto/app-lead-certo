@@ -69,10 +69,11 @@
                     <p class="text-xs font-medium text-gray-500 mb-2">Acessos concedidos:</p>
                     <div class="flex flex-wrap gap-2">
                         @foreach([
-                            'contacts'    => 'Contacts',
-                            'drive'       => 'Drive',
-                            'calendar'    => 'Calendar',
-                            'mail.google' => 'Gmail',
+                            'contacts'        => 'Contacts',
+                            'drive'           => 'Drive',
+                            'calendar'        => 'Calendar',
+                            'mail.google'     => 'Gmail',
+                            'business.manage' => 'Google Meu Negócio (GMB)',
                         ] as $key => $label)
                             @php $ativo = collect($google_scopes)->contains(fn($s) => str_contains($s, $key)); @endphp
                             @if($ativo)
