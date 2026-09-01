@@ -110,8 +110,20 @@
                 @if($agente->gemini_instrucoes)
                 <div class="bg-gray-50/80 rounded-2xl p-3.5 border border-gray-100">
                     <p class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Diretriz Operacional:</p>
-                    <p class="text-xs text-gray-600 line-clamp-3 leading-relaxed">
+                    <p class="text-xs text-gray-600 line-clamp-2 leading-relaxed">
                         {{ $agente->gemini_instrucoes }}
+                    </p>
+                </div>
+                @endif
+
+                {{-- Base de Conhecimento (Preview) --}}
+                @if($agente->base_conhecimento)
+                <div class="bg-amber-50/60 rounded-2xl p-3.5 border border-amber-200/60">
+                    <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-800 mb-1">
+                        <span>📚</span> Base de Conhecimento & Aprendizado:
+                    </div>
+                    <p class="text-xs text-amber-950 font-mono text-[11px] line-clamp-2 leading-relaxed">
+                        {{ $agente->base_conhecimento }}
                     </p>
                 </div>
                 @endif
@@ -147,7 +159,7 @@
 
     {{-- Modal de Visualização de Detalhes do Agente IA --}}
     <div x-show="modalDetalhes" x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
-        <div @click.outside="modalDetalhes = false" class="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden max-h-[88vh] flex flex-col my-auto">
+        <div @click.outside="modalDetalhes = false" class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[88vh] flex flex-col my-auto">
             <div class="p-6 border-b border-gray-100 flex items-start justify-between bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/70 flex-shrink-0">
                 <div class="flex items-center gap-3.5">
                     <template x-if="agenteSelecionado.avatar_url">
@@ -198,6 +210,17 @@
                           x-text="(agenteSelecionado.total_tokens ? Number(agenteSelecionado.total_tokens).toLocaleString('pt-BR') : '0') + ' tokens'"></span>
                 </div>
 
+                {{-- Base de Conhecimento & Aprendizado --}}
+                <template x-if="agenteSelecionado.base_conhecimento">
+                    <div class="bg-amber-50/70 border border-amber-200 p-4 rounded-2xl space-y-2">
+                        <h3 class="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                            <span>📚</span> Base de Conhecimento & Aprendizado Contínuo da Empresa:
+                        </h3>
+                        <div class="text-amber-950 bg-white/90 p-4 rounded-xl border border-amber-200/80 text-xs leading-relaxed whitespace-pre-line font-mono text-[11px]"
+                             x-text="agenteSelecionado.base_conhecimento"></div>
+                    </div>
+                </template>
+
                 {{-- Instruções do Modelo --}}
                 <template x-if="agenteSelecionado.gemini_instrucoes">
                     <div>
@@ -227,7 +250,7 @@
                     <span class="p-2 bg-purple-100 text-purple-700 rounded-xl text-lg">🤖</span>
                     <div>
                         <h2 class="text-xl font-bold text-gray-900" x-text="editandoId ? 'Editar Agente de IA' : 'Novo Agente de IA'"></h2>
-                        <p class="text-xs text-gray-500">Configure o motor de inteligência, papéis operacionais e parâmetros.</p>
+                        <p class="text-xs text-gray-500">Configure o motor de inteligência, base de conhecimento e parâmetros operacionais.</p>
                     </div>
                 </div>
                 <button @click="modalForm = false" class="text-gray-400 hover:text-gray-600 text-xl font-medium p-1">✕</button>
@@ -309,6 +332,29 @@
                         </div>
                     </div>
 
+                    {{-- BASE DE CONHECIMENTO & APRENDIZADO CONTÍNUO DA EMPRESA --}}
+                    <div class="space-y-2 p-4 bg-amber-50/70 border border-amber-200/80 rounded-2xl">
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                                <span>📚</span> Base de Conhecimento & Aprendizado Contínuo da Empresa
+                            </label>
+                            <span class="text-[10px] font-semibold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-md">
+                                Injetado no Atendimento
+                            </span>
+                        </div>
+                        <p class="text-[11px] text-amber-800 leading-relaxed">
+                            Insira todas as informações, produtos, regras do negócio, formas de pagamento, restrições e FAQs que a empresa quiser fornecer para instruir este agente. É neste campo que a IA atualiza e refina seu conhecimento à medida que tira dúvidas e acompanha os atendimentos no Kanban.
+                        </p>
+                        <textarea name="base_conhecimento" x-model="form.base_conhecimento" rows="6"
+                                  placeholder="Ex:
+- Horário de atendimento: Segunda a Sábado das 08h às 19h.
+- Região atendida: Rio de Janeiro e Grande Rio.
+- Formas de pagamento: PIX, Cartão em até 12x, Boleto para empresas.
+- Serviços principais: Fretes rápidos, mudanças residenciais e comerciais com montagem.
+- Instruções aprendidas: Se o cliente perguntar sobre seguro, informar que temos apólice inclusa..."
+                                  class="w-full text-xs font-mono border border-amber-300 bg-white rounded-xl p-3 focus:ring-2 focus:ring-amber-500 leading-relaxed"></textarea>
+                    </div>
+
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         <div class="space-y-1">
                             <label class="text-xs font-bold text-gray-800">WhatsApp de Notificação / Recuperação</label>
@@ -381,7 +427,8 @@ function agentesIaModule() {
             gemini_email: '',
             gemini_api_key: '',
             gemini_modelo: 'gemini-1.5-pro',
-            gemini_instrucoes: ''
+            gemini_instrucoes: '',
+            base_conhecimento: ''
         },
         toggleCargo(id) {
             if (this.form.cargos.includes(id)) {
@@ -406,7 +453,8 @@ function agentesIaModule() {
                 gemini_email: '',
                 gemini_api_key: '',
                 gemini_modelo: 'gemini-1.5-pro',
-                gemini_instrucoes: ''
+                gemini_instrucoes: '',
+                base_conhecimento: ''
             };
             this.modalForm = true;
         },
@@ -422,7 +470,8 @@ function agentesIaModule() {
                 gemini_email: agente.gemini_email || '',
                 gemini_api_key: agente.gemini_api_key || '',
                 gemini_modelo: agente.gemini_modelo || 'gemini-1.5-pro',
-                gemini_instrucoes: agente.gemini_instrucoes || ''
+                gemini_instrucoes: agente.gemini_instrucoes || '',
+                base_conhecimento: agente.base_conhecimento || ''
             };
             this.modalForm = true;
         }

@@ -174,6 +174,7 @@ class EquipePainelController extends Controller
             'gemini_api_key'    => 'nullable|string|max:500',
             'gemini_modelo'     => 'nullable|string|max:100',
             'gemini_instrucoes' => 'nullable|string|max:5000',
+            'base_conhecimento' => 'nullable|string|max:50000',
             'cargos'            => 'nullable|array',
             'cargos.*'          => 'integer|exists:cargos,id',
         ]);
@@ -192,6 +193,7 @@ class EquipePainelController extends Controller
             'gemini_api_key'    => $validated['gemini_api_key'] ?? null,
             'gemini_modelo'     => $validated['gemini_modelo'] ?? 'gemini-1.5-pro',
             'gemini_instrucoes' => $validated['gemini_instrucoes'] ?? null,
+            'base_conhecimento' => $validated['base_conhecimento'] ?? null,
             'ativo'             => true,
         ]);
 
@@ -220,6 +222,7 @@ class EquipePainelController extends Controller
             'gemini_api_key'    => 'nullable|string|max:500',
             'gemini_modelo'     => 'nullable|string|max:100',
             'gemini_instrucoes' => 'nullable|string|max:5000',
+            'base_conhecimento' => 'nullable|string|max:50000',
             'ativo'             => 'nullable|boolean',
             'cargos'            => 'nullable|array',
             'cargos.*'          => 'integer|exists:cargos,id',
@@ -235,6 +238,7 @@ class EquipePainelController extends Controller
             'gemini_api_key'    => $validated['gemini_api_key'] ?? $agente->gemini_api_key,
             'gemini_modelo'     => $validated['gemini_modelo'] ?? $agente->gemini_modelo ?? 'gemini-1.5-pro',
             'gemini_instrucoes' => $validated['gemini_instrucoes'] ?? null,
+            'base_conhecimento' => $validated['base_conhecimento'] ?? null,
             'ativo'             => $request->boolean('ativo', true),
             'is_ia'             => true,
         ]);

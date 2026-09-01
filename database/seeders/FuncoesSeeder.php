@@ -207,21 +207,6 @@ class FuncoesSeeder extends Seeder
                 'ordem'                 => 13,
                 'visivel_para_clientes' => false,
             ],
-            // 14. Atendimento WhatsApp
-            [
-                'nome'                  => 'SDR Atendimento WhatsApp (L1)',
-                'tipo'                  => 'atendimento',
-                'icone'                 => '💬',
-                'descricao'             => 'Triagem automatizada no WhatsApp, captura de dados básicos, delay anti-robô e handoff para vendedor humano.',
-                'descricao_cliente'     => 'Atendimento inicial ágil e qualificação de leads via WhatsApp.',
-                'detalhes_escopo'       => "1. Recepção imediata de novas mensagens de entrada no canal de WhatsApp.\n2. Extração inteligente de nome, necessidade principal e dados preliminares do lead.\n3. Aplicação de delay humanizado anti-robô e quebra de mensagens em blocos naturais.\n4. Classificação e movimentação automática para a coluna correta do Kanban com handoff limpo.",
-                'ferramentas'           => 'Uazapi WhatsApp Gateway, SdrPersona Engine, Kanban Router, Delay Jitter',
-                'kpis'                  => 'Tempo de resposta inicial (< 30s), Taxa de conclusão de qualificação, Taxa de retenção anti-bloqueio',
-                'diretriz_ia'           => 'Comunicação humana, ágil e acolhedora. Nunca soar robótico ou burocrático; adaptar vocabulário ao DDD e estilo do cliente.',
-                'cargo_pai_id'          => null,
-                'ordem'                 => 14,
-                'visivel_para_clientes' => false,
-            ],
         ];
 
         // 1. Cadastrar / Atualizar Cargos

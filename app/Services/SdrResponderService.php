@@ -495,6 +495,16 @@ class SdrResponderService
             $iaContexto .= ($iaContexto ? "\n\n" : '') . "=== CONHECIMENTO GERAL DESTE KANBAN ===\n" . $kanban->conhecimento_geral . "\n===";
         }
 
+        // Base de conhecimento & aprendizado contínuo configurado no Agente IA
+        $agenteIa = \App\Models\User::where('tenant_id', $ticket->tenant_id)
+            ->where('is_ia', true)
+            ->where('ativo', true)
+            ->first();
+
+        if ($agenteIa?->base_conhecimento) {
+            $iaContexto .= ($iaContexto ? "\n\n" : '') . "=== BASE DE CONHECIMENTO & DIRETRIZES DO AGENTE ({$agenteIa->nome}) ===\n" . $agenteIa->base_conhecimento . "\n===";
+        }
+
         // Contexto específico da coluna atual (ex: em_atendimento)
         $colunaConfig = KanbanColunaConfig::withoutGlobalScopes()
             ->where('tenant_id', $ticket->tenant_id)
