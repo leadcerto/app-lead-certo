@@ -405,13 +405,13 @@ class AuditorController extends Controller
 
     public function salvarContatoCompleto(Request $request, $id): JsonResponse
     {
-        $vinculo = VinculoContatoTenant::with('contato')->find($id);
+        $vinculo = VinculoContatoTenant::with(['contato' => fn($q) => $q->withTrashed()])->find($id);
         $contato = null;
 
         if ($vinculo) {
             $contato = $vinculo->contato;
         } else {
-            $contato = Contato::find($id);
+            $contato = Contato::withTrashed()->find($id);
             if ($contato) {
                 $user = $request->user();
                 $tenantId = $user?->tenant_id;
@@ -423,6 +423,11 @@ class AuditorController extends Controller
 
         if (!$contato) {
             return response()->json(['erro' => 'Contato não encontrado.'], 404);
+        }
+
+        // Se o contato estava inativo (soft deleted) e foi editado/salvo, restaura-o automaticamente
+        if ($contato->trashed()) {
+            $contato->restore();
         }
 
         $nome = trim((string)$request->input('nome', ''));
@@ -846,6 +851,73 @@ class AuditorController extends Controller
             registroId:  $contato->id,
             acao:        'inativar',
             contexto:    ['motivo' => $request->motivo]
+        );
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function excluirContato(Request $request, $id): JsonResponse
+    {
+        $contato = Contato::withTrashed()->find($id);
+        if (!$contato) {
+            $vinculo = VinculoContatoTenant::find($id);
+            $contato = $vinculo?->contato()->withTrashed()->first();
+        }
+
+        if (!$contato) {
+            return response()->json(['erro' => 'Contato não encontrado.'], 404);
+        }
+
+        $definitivo = $request->boolean('definitivo', false);
+
+        if ($definitivo) {
+            VinculoContatoTenant::where('contato_id', $contato->id)->delete();
+            ContatoPendente::where('contato_existente_id', $contato->id)->delete();
+            \App\Models\AuditoriaContato::where('contato_id', $contato->id)->delete();
+            
+            $contatoId = $contato->id;
+            $contato->forceDelete();
+
+            AuditLog::registrar(
+                tabela:     'contatos',
+                registroId: $contatoId,
+                acao:       'excluir_definitivo',
+                contexto:   ['motivo' => $request->input('motivo', 'Exclusão definitiva pelo auditor')]
+            );
+        } else {
+            $contato->delete();
+
+            AuditLog::registrar(
+                tabela:     'contatos',
+                registroId: $contato->id,
+                acao:       'inativar',
+                contexto:   ['motivo' => $request->input('motivo', 'Inativação pelo auditor')]
+            );
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function reativarContato(Request $request, $id): JsonResponse
+    {
+        $contato = Contato::withTrashed()->find($id);
+        if (!$contato) {
+            $vinculo = VinculoContatoTenant::find($id);
+            $contato = $vinculo?->contato()->withTrashed()->first();
+        }
+
+        if (!$contato) {
+            return response()->json(['erro' => 'Contato não encontrado.'], 404);
+        }
+
+        $contato->restore();
+        $contato->update(['status_validacao' => 'aprovado']);
+
+        AuditLog::registrar(
+            tabela:     'contatos',
+            registroId: $contato->id,
+            acao:       'reativar',
+            contexto:   ['motivo' => 'Reativado pelo auditor']
         );
 
         return response()->json(['ok' => true]);

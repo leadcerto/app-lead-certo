@@ -146,6 +146,8 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::get('/logs',                                          [AuditorController::class, 'logs']);
         Route::get('/conflitos',                                     [AuditorController::class, 'conflitos']);
         Route::post('/contato/{id}/salvar-completo',                [AuditorController::class, 'salvarContatoCompleto']);
+        Route::post('/contato/{id}/excluir',                        [AuditorController::class, 'excluirContato']);
+        Route::post('/contato/{id}/reativar',                       [AuditorController::class, 'reativarContato']);
         Route::post('/conflitos/auto-resolver',                      [AuditorController::class, 'autoResolverConflitos']);
         Route::post('/conflito/{pendente}/fundir',                   [AuditorController::class, 'fundirConflito']);
         Route::post('/conflito/{pendente}/criar-novo',               [AuditorController::class, 'criarNovoConflito']);

@@ -418,11 +418,30 @@
                                           :class="c.status_validacao === 'aprovado' ? 'bg-green-100 text-green-700' : (c.status_validacao === 'inconsistente' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600')"
                                           x-text="c.status_validacao"></span>
                                 </td>
-                                <td class="px-4 py-3 text-right">
-                                    <button @click="abrirEditarModal(c)"
-                                            class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
-                                        <span>✏️ Editar</span>
-                                    </button>
+                                <td class="px-4 py-3 text-right whitespace-nowrap">
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <button @click="abrirEditarModal(c)"
+                                                class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
+                                            <span>✏️ Editar</span>
+                                        </button>
+                                        <button x-show="c.status_validacao !== 'inativo'"
+                                                @click="inativarContato(c)"
+                                                class="px-2 py-1 text-gray-500 hover:text-amber-700 hover:bg-amber-50 rounded-lg text-xs font-medium transition"
+                                                title="Inativar contato (Soft Delete)">
+                                            <span>🚫 Inativar</span>
+                                        </button>
+                                        <button x-show="c.status_validacao === 'inativo'"
+                                                @click="reativarContato(c)"
+                                                class="px-2.5 py-1 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1"
+                                                title="Reativar contato">
+                                            <span>♻️ Reativar</span>
+                                        </button>
+                                        <button @click="excluirDefinitivo(c)"
+                                                class="px-2 py-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg text-xs font-bold transition"
+                                                title="Excluir contato definitivamente do banco">
+                                            <span>🗑️ Excluir</span>
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         </template>
@@ -464,59 +483,46 @@
     <div x-show="modalTelefone" style="display: none;"
          class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
         <div @click.outside="modalTelefone = false"
-             class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 animate-fadeIn">
+             class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100">
             
-            <div class="px-6 py-4 bg-gradient-to-r from-gray-900 to-gray-800 text-white flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                    <span class="text-xl">🌐</span>
-                    <div>
-                        <h3 class="font-bold text-sm">Editar Telefone & Código do País</h3>
-                        <p class="text-[11px] text-gray-300">Padrão Google Contatos (DDI + Número Local)</p>
-                    </div>
+            <div class="px-6 py-4 bg-gray-900 text-white flex items-center justify-between">
+                <div>
+                    <h3 class="font-bold text-sm">Identificar País / DDI do Número</h3>
+                    <p class="text-xs text-gray-400">Selecione a bandeira e país correspondente</p>
                 </div>
-                <button @click="modalTelefone = false" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+                <button @click="modalTelefone = false" class="text-gray-400 hover:text-white">&times;</button>
             </div>
 
             <div class="p-6 space-y-4">
                 <div>
                     <label class="text-xs font-bold text-gray-700 block mb-1">Contato</label>
-                    <p class="text-sm font-semibold text-gray-900 bg-gray-50 p-2.5 rounded-xl border border-gray-200" x-text="itemEdicaoTelefone?.nome"></p>
+                    <div class="text-sm font-semibold text-gray-800" x-text="itemEdicaoTelefone.nome"></div>
                 </div>
 
-                {{-- Seletor de País estilo Google Contatos --}}
-                <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                    <div class="md:col-span-5">
-                        <label class="text-xs font-bold text-gray-700 block mb-1">País / DDI</label>
-                        <select x-model="itemEdicaoTelefone.ddi"
-                                @change="atualizarPrefixoPais()"
-                                class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-xs font-semibold focus:ring-2 focus:ring-blue-500 bg-white shadow-sm">
-                            <template x-for="p in paises" :key="p.iso">
-                                <option :value="p.ddi" x-text="p.bandeira + ' ' + p.nome + ' (+' + p.ddi + ')'" :selected="p.ddi === itemEdicaoTelefone.ddi"></option>
-                            </template>
-                        </select>
-                    </div>
+                <div>
+                    <label class="text-xs font-bold text-gray-700 block mb-1">País & DDI</label>
+                    <select x-model="itemEdicaoTelefone.ddi"
+                            @change="atualizarPrefixoPais()"
+                            class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500">
+                        <template x-for="p in paises" :key="p.iso">
+                            <option :value="p.ddi" x-text="p.bandeira + ' ' + p.nome + ' (+' + p.ddi + ')'" :selected="p.ddi === itemEdicaoTelefone.ddi"></option>
+                        </template>
+                    </select>
+                </div>
 
-                    <div class="md:col-span-7">
-                        <label class="text-xs font-bold text-gray-700 block mb-1">Número Local / Completo</label>
-                        <div class="relative">
-                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-xs font-mono font-bold text-gray-400" x-text="'+' + itemEdicaoTelefone.ddi"></span>
-                            <input type="text" 
-                                   x-model="itemEdicaoTelefone.numero_local"
-                                   placeholder="21999999999"
-                                   class="w-full border border-gray-300 rounded-xl pl-12 pr-3 py-2.5 text-sm font-mono font-bold focus:ring-2 focus:ring-blue-500 bg-white shadow-sm">
-                        </div>
+                <div>
+                    <label class="text-xs font-bold text-gray-700 block mb-1">Número Local (sem DDI)</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-xs font-mono font-bold text-gray-400" x-text="'+' + itemEdicaoTelefone.ddi"></span>
+                        <input type="text" 
+                               x-model="itemEdicaoTelefone.numero_local"
+                               class="w-full border border-gray-300 rounded-xl pl-12 pr-3 py-2 text-xs font-mono font-bold focus:ring-2 focus:ring-blue-500">
                     </div>
                 </div>
 
-                <div class="p-3 bg-blue-50 rounded-xl border border-blue-200 text-xs text-blue-800">
-                    <p class="font-bold flex items-center gap-1">
-                        <span>💡 Visualização Final Formatada:</span>
-                    </p>
-                    <p class="font-mono text-sm font-bold text-blue-900 mt-1">
-                        <span x-text="itemEdicaoTelefone.bandeira || '🌐'"></span>
-                        +<span x-text="itemEdicaoTelefone.ddi"></span>
-                        <span x-text="itemEdicaoTelefone.numero_local"></span>
-                    </p>
+                <div class="text-xs font-mono text-gray-600 bg-gray-50 p-2.5 rounded-xl border border-gray-200">
+                    <span>Salvará como:</span>
+                    <span class="font-bold text-gray-900" x-text="'+' + itemEdicaoTelefone.ddi + ' ' + itemEdicaoTelefone.numero_local"></span>
                 </div>
             </div>
 
@@ -552,11 +558,6 @@
                 <div>
                     <div class="flex items-center justify-between mb-1">
                         <label class="text-xs font-bold text-gray-700">Nome Completo / Primeiro Nome</label>
-                        <button type="button" 
-                                @click="itemEdicao.nome = 'Sem Nome'; itemEdicao.sobrenome = ''"
-                                class="text-[11px] font-bold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 px-2.5 py-0.5 rounded-lg border border-purple-200 transition">
-                            ⚡ Definir "Sem Nome"
-                        </button>
                     </div>
                     <input type="text" 
                            x-model="itemEdicao.nome"
@@ -619,12 +620,19 @@
 
             </div>
 
-            <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between gap-3">
-                <button type="button"
-                        @click="itemEdicao.nome = 'Sem Nome'; itemEdicao.sobrenome = ''; salvarEdicaoCompleta()"
-                        class="px-3.5 py-2 text-xs font-bold text-purple-700 hover:text-purple-900 bg-purple-100 hover:bg-purple-200 rounded-xl transition">
-                    ⚡ Salvar como "Sem Nome"
-                </button>
+            <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between gap-3 flex-wrap">
+                <div class="flex items-center gap-2">
+                    <button type="button"
+                            @click="itemEdicao.nome = 'Sem Nome'; itemEdicao.sobrenome = ''; salvarEdicaoCompleta()"
+                            class="px-3.5 py-2 text-xs font-bold text-purple-700 hover:text-purple-900 bg-purple-100 hover:bg-purple-200 rounded-xl transition">
+                        ⚡ "Sem Nome"
+                    </button>
+                    <button type="button"
+                            @click="excluirContatoDoModal(itemEdicao)"
+                            class="px-3.5 py-2 text-xs font-bold text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 rounded-xl transition border border-red-200 flex items-center gap-1">
+                        <span>🗑️ Excluir Contato</span>
+                    </button>
+                </div>
 
                 <div class="flex items-center gap-2">
                     <button @click="modalEditar = false" class="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-800 rounded-xl">
@@ -884,12 +892,56 @@ function auditor() {
             });
             if (res.ok) {
                 this.modalEditar = false;
+                await this.buscarContatos();
                 await this.carregarPendentes();
                 await this.carregarTelefones();
                 await this.carregarConflitos();
                 await this.carregarStats();
             } else {
                 alert('Erro ao salvar dados do contato.');
+            }
+        },
+
+        async inativarContato(item) {
+            if (!confirm(`Deseja inativar o contato "${item.nome}"?`)) return;
+            const targetId = item.contato_id || item.id;
+            const res = await this.api(`/auditor/contato/${targetId}/excluir`, 'POST', { definitivo: false });
+            if (res.ok) {
+                await this.buscarContatos();
+                await this.carregarStats();
+            }
+        },
+
+        async reativarContato(item) {
+            const targetId = item.contato_id || item.id;
+            const res = await this.api(`/auditor/contato/${targetId}/reativar`, 'POST');
+            if (res.ok) {
+                await this.buscarContatos();
+                await this.carregarStats();
+            }
+        },
+
+        async excluirDefinitivo(item) {
+            if (!confirm(`ATENÇÃO: Deseja EXCLUIR DEFINITIVAMENTE o contato "${item.nome}" do banco de dados? Esta ação não pode ser desfeita.`)) return;
+            const targetId = item.contato_id || item.id;
+            const res = await this.api(`/auditor/contato/${targetId}/excluir`, 'POST', { definitivo: true });
+            if (res.ok) {
+                await this.buscarContatos();
+                await this.carregarStats();
+            }
+        },
+
+        async excluirContatoDoModal(item) {
+            if (!confirm(`Deseja excluir este contato do banco de dados?`)) return;
+            const targetId = item.vinculo_id || item.contato_id;
+            const res = await this.api(`/auditor/contato/${targetId}/excluir`, 'POST', { definitivo: true });
+            if (res.ok) {
+                this.modalEditar = false;
+                await this.buscarContatos();
+                await this.carregarPendentes();
+                await this.carregarTelefones();
+                await this.carregarConflitos();
+                await this.carregarStats();
             }
         },
 
@@ -902,6 +954,7 @@ function auditor() {
                 numero_local: item.numero_local || '',
             });
             if (res.ok) {
+                await this.buscarContatos();
                 await this.carregarPendentes();
                 await this.carregarTelefones();
                 await this.carregarConflitos();
