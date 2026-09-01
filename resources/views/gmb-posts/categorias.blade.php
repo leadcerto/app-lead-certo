@@ -32,21 +32,21 @@
 
     {{-- Formulário de nova categoria --}}
     <form action="{{ route('admin.gmb-posts.categorias.store') }}" method="POST"
-          class="bg-white rounded-xl shadow p-4 mb-6 space-y-3">
+          class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6 space-y-4">
         @csrf
         <div>
-            <label for="nome" class="block text-sm font-medium text-gray-700 mb-1">Nova Categoria de Postagem</label>
+            <label for="nome" class="block text-sm font-bold text-gray-700 mb-1">Nova Categoria de Postagem</label>
             <input type="text" name="nome" id="nome" required maxlength="100"
-                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                   class="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-500 focus:border-green-500 transition shadow-sm"
                    placeholder="Ex: ⚡ Atendimento Emergencial ou 🏷️ Promoção Relâmpago">
         </div>
         <div>
-            <label for="palavras_chave" class="block text-sm font-medium text-gray-700 mb-1">Palavras-chave (separadas por vírgula para SEO e IA)</label>
+            <label for="palavras_chave" class="block text-sm font-bold text-gray-700 mb-1">Palavras-chave (separadas por vírgula para SEO e IA)</label>
             <input type="text" name="palavras_chave" id="palavras_chave" maxlength="500"
-                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                   class="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-500 focus:border-green-500 transition shadow-sm"
                    placeholder="mudança rápida, orçamento no whatsapp, caminhão de frete, melhor preço">
         </div>
-        <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-semibold transition">
+        <button type="submit" class="px-5 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-bold transition shadow-sm">
             + Criar Categoria
         </button>
     </form>
@@ -54,7 +54,7 @@
     {{-- Lista de categorias --}}
     <div class="space-y-4">
         @forelse($categorias as $cat)
-        <div class="bg-white rounded-xl shadow p-4 space-y-3">
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
             <div class="flex items-start justify-between gap-4">
                 <div>
                     <p class="font-bold text-gray-800 text-base">{{ $cat->nome }}</p>
@@ -75,20 +75,20 @@
 
             {{-- Palavras-chave (edição inline) --}}
             <form action="{{ route('admin.gmb-posts.categorias.update', $cat) }}" method="POST"
-                  class="flex gap-2 items-end flex-wrap">
+                  class="flex gap-3 items-end flex-wrap">
                 @csrf @method('PUT')
-                <div class="w-full sm:w-48">
-                    <label class="block text-xs font-medium text-gray-500 mb-1">Nome da Categoria</label>
-                    <input type="text" name="nome" value="{{ $cat->nome }}" required class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-green-500">
+                <div class="w-full sm:w-56">
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Nome da Categoria</label>
+                    <input type="text" name="nome" value="{{ $cat->nome }}" required class="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-500">
                 </div>
-                <div class="flex-1 min-w-[200px]">
-                    <label class="block text-xs font-medium text-gray-500 mb-1">Palavras-chave</label>
+                <div class="flex-1 min-w-[240px]">
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Palavras-chave SEO</label>
                     <input type="text" name="palavras_chave" maxlength="500"
                            value="{{ implode(', ', $cat->palavras_chave ?? []) }}"
-                           class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-green-500"
+                           class="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-500"
                            placeholder="palavras-chave separadas por vírgula">
                 </div>
-                <button type="submit" class="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-xs font-semibold transition whitespace-nowrap">
+                <button type="submit" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 text-xs font-bold transition whitespace-nowrap">
                     Salvar
                 </button>
             </form>

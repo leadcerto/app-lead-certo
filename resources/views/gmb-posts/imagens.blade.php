@@ -40,38 +40,38 @@
         @csrf
 
         <div class="flex items-center justify-between border-b border-gray-100 pb-3 flex-wrap gap-2">
-            <h2 class="text-sm font-bold text-gray-800 flex items-center gap-2">
+            <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
                 <span>📤</span>
                 <span>Adicionar Novas Imagens (1200 × 900 px Recomendado)</span>
             </h2>
-            <span class="text-xs text-green-700 font-semibold bg-green-50 px-2.5 py-1 rounded-md border border-green-200">
+            <span class="text-xs text-green-700 font-semibold bg-green-50 px-3 py-1.5 rounded-lg border border-green-200">
                 ✨ Renomeação Automática SEO
             </span>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
-                <label class="block text-xs font-semibold text-gray-700 mb-1">Selecionar Imagens (Permite Múltiplas) *</label>
+                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Selecionar Imagens (Múltiplas) *</label>
                 <input type="file" name="imagens[]" multiple required accept="image/*"
-                       class="w-full text-xs text-gray-700 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-green-600 file:text-white hover:file:bg-green-700 cursor-pointer">
-                <p class="text-[11px] text-gray-400 mt-1">PNG, JPG ou WEBP até 10MB.</p>
+                       class="w-full text-sm text-gray-700 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-green-600 file:text-white hover:file:bg-green-700 cursor-pointer bg-gray-50 border border-gray-200 rounded-xl p-1">
+                <p class="text-xs text-gray-400 mt-1.5">Formato ideal: 1200x900 px (PNG, JPG ou WEBP até 10MB).</p>
             </div>
 
             <div>
-                <label class="block text-xs font-semibold text-gray-700 mb-1">Título / Identificação (Opcional)</label>
+                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Título / Identificação (Opcional)</label>
                 <input type="text" name="titulo" placeholder="Ex: Cartão Corporativo, Caminhão em trânsito"
-                       class="w-full text-xs border-gray-300 rounded-lg bg-gray-50 focus:bg-white focus:ring-green-500">
+                       class="w-full text-sm px-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-500 focus:border-green-500 transition shadow-sm">
             </div>
 
             <div>
-                <label class="block text-xs font-semibold text-gray-700 mb-1">Palavras-chave SEO Extras (Opcional)</label>
+                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Palavras-chave SEO Extras (Opcional)</label>
                 <input type="text" name="palavras" placeholder="Ex: mudancas-residenciais-rj, frete-urgente"
-                       class="w-full text-xs border-gray-300 rounded-lg bg-gray-50 focus:bg-white focus:ring-green-500">
+                       class="w-full text-sm px-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-500 focus:border-green-500 transition shadow-sm">
             </div>
         </div>
 
         <div class="flex justify-end pt-2">
-            <button type="submit" class="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
+            <button type="submit" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-xl shadow-md hover:shadow-lg transition flex items-center gap-2">
                 <span>Enviar e Aplicar SEO →</span>
             </button>
         </div>
