@@ -256,7 +256,7 @@ class KanbanController extends Controller
         }
 
         $telefone = $model->contato->telefone;
-        $canal    = $model->canal;
+        $canal    = $this->resolverCanal($model);
 
         if (! $canal) {
             return response()->json(['message' => 'Nenhum canal de WhatsApp vinculado a este atendimento.'], 502);
@@ -467,7 +467,7 @@ class KanbanController extends Controller
     {
         $tipo  = $request->input('tipo');
         $model = TicketAtendimento::with(['contato', 'tenant', 'canal'])->findOrFail($ticket);
-        $canal = $model->canal;
+        $canal = $this->resolverCanal($model);
 
         $ehCovercut  = $canal?->provider === 'covercut';
         $extensao    = strtolower((string) $request->file('arquivo')?->getClientOriginalExtension());
@@ -633,5 +633,32 @@ class KanbanController extends Controller
         ]);
 
         return response()->json(['ticket_id' => $ticket, 'coluna_kanban' => $colunaOutros]);
+    }
+
+    private function resolverCanal(TicketAtendimento $model): ?WhatsappCanal
+    {
+        if ($model->canal && $model->canal->status === 'connected') {
+            return $model->canal;
+        }
+
+        $kanban = \App\Models\Kanban::where('tenant_id', $model->tenant_id)->where('tipo', 'vendas')->first();
+        $canal  = null;
+
+        if ($kanban) {
+            $canal = app(\App\Services\SelecaoCanalWhatsappService::class)->naoOficialAleatorioParaKanban($kanban);
+        }
+
+        if (! $canal) {
+            $canal = \App\Models\WhatsappCanal::where('tenant_id', $model->tenant_id)
+                ->where('status', 'connected')
+                ->first();
+        }
+
+        if ($canal && $model->whatsapp_canal_id !== $canal->id) {
+            $model->updateQuietly(['whatsapp_canal_id' => $canal->id]);
+            $model->setRelation('canal', $canal);
+        }
+
+        return $canal ?: $model->canal;
     }
 }

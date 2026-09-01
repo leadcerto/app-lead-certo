@@ -626,12 +626,12 @@
                                     {{-- Botão Enviar --}}
                                     <button type="button"
                                             @click="midiaArquivo || audioPreviewUrl ? enviarMidia() : enviarMensagem()"
-                                            :disabled="enviandoMidia || gravandoAudio || (!novaMensagem.trim() && !midiaArquivo && !audioPreviewUrl)"
+                                            :disabled="enviandoMensagem || enviandoMidia || gravandoAudio || (!novaMensagem.trim() && !midiaArquivo && !audioPreviewUrl)"
                                             class="bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white px-4 py-2 rounded-xl text-sm transition-colors flex-shrink-0">
-                                        <template x-if="enviandoMidia">
+                                        <template x-if="enviandoMensagem || enviandoMidia">
                                             <span>Enviando…</span>
                                         </template>
-                                        <template x-if="!enviandoMidia">
+                                        <template x-if="!enviandoMensagem && !enviandoMidia">
                                             <span>Enviar</span>
                                         </template>
                                     </button>
@@ -723,6 +723,7 @@ function kanban() {
         audioBlob:         null,
         audioPreviewUrl:   null,
         enviandoMidia:     false,
+        enviandoMensagem:  false,
 
         async carregar() {
             const res = await this.api('/api/painel/kanban/tickets');
@@ -1104,11 +1105,24 @@ function kanban() {
 
         async enviarMensagem() {
             const conteudo = this.novaMensagem.trim();
-            if (!conteudo || !this.ticketAtivo) return;
-            this.novaMensagem = '';
-            this.sugestoes   = [];
-            const res = await this.api(`/api/painel/kanban/ticket/${this.ticketAtivo.id}/mensagem`, 'POST', { conteudo });
-            if (res.ok) await this.carregarMensagens(this.ticketAtivo.id);
+            if (!conteudo || !this.ticketAtivo || this.enviandoMensagem) return;
+            this.enviandoMensagem = true;
+            this.sugestoes = [];
+            try {
+                const res = await this.api(`/api/painel/kanban/ticket/${this.ticketAtivo.id}/mensagem`, 'POST', { conteudo });
+                if (res.ok) {
+                    this.novaMensagem = '';
+                    await this.carregarMensagens(this.ticketAtivo.id);
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    alert(data.message || 'Falha ao enviar mensagem pelo WhatsApp.');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Erro de conexão ao enviar mensagem.');
+            } finally {
+                this.enviandoMensagem = false;
+            }
         },
 
         selecionarArquivo(event) {
