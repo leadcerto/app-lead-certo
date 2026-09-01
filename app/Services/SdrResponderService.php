@@ -54,12 +54,41 @@ class SdrResponderService
         // ── 2. Montar histórico para o OpenRouter ────────────────────────────
         $messages = $this->montarHistorico($persona, $ticket, $origemLigacao, $gatilho, $orientacaoHumana);
 
-        // ── 3. Chamar o OpenRouter ───────────────────────────────────────────
-        $tier    = $ticket->etapa_ia === 'etapa_2' ? 'complexo' : 'simples';
-        $resposta = $this->openRouter->chat($messages, $tier);
+        // ── 3. Chamar o Motor de IA (OpenRouter ou Google Gemini Direto) ─────
+        $agenteIa = \App\Models\User::where('tenant_id', $ticket->tenant_id)
+            ->where('is_ia', true)
+            ->where('ativo', true)
+            ->first();
+
+        $tier     = $ticket->etapa_ia === 'etapa_2' ? 'complexo' : 'simples';
+        $resposta = null;
+
+        if ($agenteIa && $agenteIa->provedor_ia === 'gemini_direto') {
+            $resposta = app(\App\Services\GeminiDirectService::class)->chat(
+                messages:  $messages,
+                apiKey:    $agenteIa->gemini_api_key,
+                modelo:    $agenteIa->gemini_modelo ?: 'gemini-1.5-pro',
+                maxTokens: 400,
+                origem:    'sdr',
+                tenantId:  $ticket->tenant_id,
+                agenteId:  $agenteIa->id
+            );
+        }
+
+        // Se o provedor for OpenRouter ou se o Gemini direto falhar/estiver sem chave
+        if ($resposta === null) {
+            $resposta = $this->openRouter->chat(
+                messages:  $messages,
+                tier:      $tier,
+                maxTokens: 400,
+                origem:    'sdr',
+                tenantId:  $ticket->tenant_id,
+                agenteId:  $agenteIa?->id
+            );
+        }
 
         if (! $resposta) {
-            Log::error('SdrResponder: OpenRouter sem resposta', ['ticket_id' => $ticket->id]);
+            Log::error('SdrResponder: Motor de IA sem resposta', ['ticket_id' => $ticket->id]);
             return null;
         }
 

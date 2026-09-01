@@ -143,8 +143,8 @@ class EquipePainelController extends Controller
 
     public function agentesIaStore(Request $request): RedirectResponse
     {
-        if (! $request->user()->isAdmin()) {
-            abort(403, 'Apenas o Super Administrador pode cadastrar Agentes de IA.');
+        if (! $request->user()->isDono()) {
+            abort(403, 'Apenas o Super Administrador / Dono pode cadastrar Agentes de IA.');
         }
 
         $validated = $request->validate([
@@ -152,7 +152,10 @@ class EquipePainelController extends Controller
             'email'             => 'required|email|max:200|unique:users,email',
             'whatsapp'          => 'nullable|string|max:25',
             'avatar_url'        => 'nullable|string|max:500',
+            'provedor_ia'       => 'nullable|string|in:openrouter,gemini_direto',
             'gemini_email'      => 'nullable|string|max:255',
+            'gemini_api_key'    => 'nullable|string|max:500',
+            'gemini_modelo'     => 'nullable|string|max:100',
             'gemini_instrucoes' => 'nullable|string|max:5000',
             'cargos'            => 'nullable|array',
             'cargos.*'          => 'integer|exists:cargos,id',
@@ -167,7 +170,10 @@ class EquipePainelController extends Controller
             'whatsapp'          => $validated['whatsapp'] ?? null,
             'avatar_url'        => $validated['avatar_url'] ?? null,
             'is_ia'             => true,
+            'provedor_ia'       => $validated['provedor_ia'] ?? 'openrouter',
             'gemini_email'      => $validated['gemini_email'] ?? null,
+            'gemini_api_key'    => $validated['gemini_api_key'] ?? null,
+            'gemini_modelo'     => $validated['gemini_modelo'] ?? 'gemini-1.5-pro',
             'gemini_instrucoes' => $validated['gemini_instrucoes'] ?? null,
             'ativo'             => true,
         ]);
@@ -181,8 +187,8 @@ class EquipePainelController extends Controller
 
     public function agentesIaUpdate(Request $request, int $id): RedirectResponse
     {
-        if (! $request->user()->isAdmin()) {
-            abort(403, 'Apenas o Super Administrador pode editar Agentes de IA.');
+        if (! $request->user()->isDono()) {
+            abort(403, 'Apenas o Super Administrador / Dono pode editar Agentes de IA.');
         }
 
         $agente = User::findOrFail($id);
@@ -192,7 +198,10 @@ class EquipePainelController extends Controller
             'email'             => ['required', 'email', 'max:200', Rule::unique('users', 'email')->ignore($agente->id)],
             'whatsapp'          => 'nullable|string|max:25',
             'avatar_url'        => 'nullable|string|max:500',
+            'provedor_ia'       => 'nullable|string|in:openrouter,gemini_direto',
             'gemini_email'      => 'nullable|string|max:255',
+            'gemini_api_key'    => 'nullable|string|max:500',
+            'gemini_modelo'     => 'nullable|string|max:100',
             'gemini_instrucoes' => 'nullable|string|max:5000',
             'ativo'             => 'nullable|boolean',
             'cargos'            => 'nullable|array',
@@ -204,7 +213,10 @@ class EquipePainelController extends Controller
             'email'             => $validated['email'],
             'whatsapp'          => $validated['whatsapp'] ?? null,
             'avatar_url'        => $validated['avatar_url'] ?? null,
+            'provedor_ia'       => $validated['provedor_ia'] ?? $agente->provedor_ia ?? 'openrouter',
             'gemini_email'      => $validated['gemini_email'] ?? null,
+            'gemini_api_key'    => $validated['gemini_api_key'] ?? $agente->gemini_api_key,
+            'gemini_modelo'     => $validated['gemini_modelo'] ?? $agente->gemini_modelo ?? 'gemini-1.5-pro',
             'gemini_instrucoes' => $validated['gemini_instrucoes'] ?? null,
             'ativo'             => $request->boolean('ativo', true),
             'is_ia'             => true,
@@ -225,13 +237,10 @@ class EquipePainelController extends Controller
         $query = User::where('is_ia', false);
 
         // Se não for admin global, restringe ao tenant atual
-        if (! $request->user()->isAdmin()) {
+        if (! $request->user()->isDono()) {
             $query->where('tenant_id', $tenantId);
         } else {
-            // No caso do admin, mostra do tenant atual se houver ou todos
-            if ($tenantId && $tenantId != 2) {
-                $query->where('tenant_id', $tenantId);
-            }
+            $query->where('tenant_id', '!=', 2);
         }
 
         $usuarios = $query->with('cargos')->orderBy('nome')->get();
@@ -273,5 +282,66 @@ class EquipePainelController extends Controller
         $totalMembros = $usuarios->count();
 
         return view('equipe.humanos', compact('grupos', 'totalMembros'));
+    }
+
+    // ── 4. Relatório de Uso de IA ───────────────────────────────────────────────
+
+    public function relatorioIa(Request $request): View
+    {
+        $tenantId = $request->user()->tenantAtual();
+
+        $baseQuery = DB::table('ia_usages')
+            ->leftJoin('users', 'ia_usages.agente_id', '=', 'users.id');
+
+        if (! $request->user()->isDono()) {
+            $baseQuery->where('ia_usages.tenant_id', $tenantId);
+        }
+
+        // Totais gerais
+        $totalRequisicoes  = (clone $baseQuery)->count();
+        $totalTokensInput  = (clone $baseQuery)->sum('tokens_input');
+        $totalTokensOutput = (clone $baseQuery)->sum('tokens_output');
+        $mediaLatenciaMs   = round((clone $baseQuery)->avg('latencia_ms') ?: 0);
+
+        // Agrupado por Provedor (OpenRouter vs Gemini Direto)
+        $porProvedor = (clone $baseQuery)
+            ->select('ia_usages.provedor', DB::raw('count(*) as total'), DB::raw('sum(tokens_input + tokens_output) as tokens'))
+            ->groupBy('ia_usages.provedor')
+            ->get();
+
+        // Agrupado por Agente / Usuário
+        $porAgente = (clone $baseQuery)
+            ->select(
+                DB::raw('COALESCE(users.nome, "Sistema Lead Certo") as agente_nome'),
+                DB::raw('COALESCE(ia_usages.provedor, "openrouter") as provedor'),
+                DB::raw('count(*) as total_chamadas'),
+                DB::raw('sum(tokens_input) as input_tokens'),
+                DB::raw('sum(tokens_output) as output_tokens'),
+                DB::raw('avg(latencia_ms) as avg_latencia')
+            )
+            ->groupBy('users.nome', 'ia_usages.provedor')
+            ->orderByDesc('total_chamadas')
+            ->get();
+
+        // Últimas 50 requisições
+        $ultimosUsos = (clone $baseQuery)
+            ->select(
+                'ia_usages.*',
+                'users.nome as agente_nome',
+                'users.avatar_url as agente_avatar'
+            )
+            ->orderByDesc('ia_usages.id')
+            ->limit(50)
+            ->get();
+
+        return view('equipe.relatorio-ia', compact(
+            'totalRequisicoes',
+            'totalTokensInput',
+            'totalTokensOutput',
+            'mediaLatenciaMs',
+            'porProvedor',
+            'porAgente',
+            'ultimosUsos'
+        ));
     }
 }

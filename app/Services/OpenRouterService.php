@@ -30,7 +30,14 @@ class OpenRouterService
      * @param  string|null $origem    Identificador da funcionalidade chamadora (para ia_usages)
      * @param  int|null    $tenantId  Tenant para vincular o log
      */
-    public function chat(array $messages, string $tier = 'simples', int $maxTokens = 400, ?string $origem = null, ?int $tenantId = null): ?string
+    public function chat(
+        array $messages,
+        string $tier = 'simples',
+        int $maxTokens = 400,
+        ?string $origem = null,
+        ?int $tenantId = null,
+        ?int $agenteId = null
+    ): ?string
     {
         $modelo = $tier === 'complexo' ? $this->modeloComplexo : $this->modeloSimples;
 
@@ -56,7 +63,7 @@ class OpenRouterService
             }
 
             $usage = $response->json('usage', []);
-            $this->logUsage($modelo, $tier, $usage, $latencia, $origem, $tenantId);
+            $this->logUsage($modelo, $tier, $usage, $latencia, $origem, $tenantId, $agenteId);
 
             return $response->json('choices.0.message.content');
         } catch (\Exception $e) {
@@ -65,12 +72,14 @@ class OpenRouterService
         }
     }
 
-    private function logUsage(string $modelo, string $tier, array $usage, int $latencia, ?string $origem, ?int $tenantId): void
+    private function logUsage(string $modelo, string $tier, array $usage, int $latencia, ?string $origem, ?int $tenantId, ?int $agenteId): void
     {
         try {
             DB::table('ia_usages')->insert([
                 'tenant_id'     => $tenantId,
+                'agente_id'     => $agenteId,
                 'modelo'        => $modelo,
+                'provedor'      => 'openrouter',
                 'tier'          => $tier,
                 'tokens_input'  => $usage['prompt_tokens'] ?? 0,
                 'tokens_output' => $usage['completion_tokens'] ?? 0,

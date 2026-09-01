@@ -16,15 +16,22 @@
             </p>
         </div>
 
-        @if(auth()->user()?->isDono())
-        <button @click="abrirNovo()"
-                class="bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-sm hover:shadow transition-all flex items-center gap-2 self-start sm:self-auto">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-            </svg>
-            Novo Agente IA
-        </button>
-        @endif
+        <div class="flex items-center gap-2.5 self-start sm:self-auto">
+            <a href="{{ route('equipe.relatorio-ia') }}"
+               class="bg-white hover:bg-gray-50 text-purple-700 border border-purple-200 text-xs font-semibold px-4 py-2.5 rounded-xl shadow-2xs transition-all flex items-center gap-1.5">
+                <span>⚡</span> Relatório de Uso & IA
+            </a>
+
+            @if(auth()->user()?->isDono())
+            <button @click="abrirNovo()"
+                    class="bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-sm hover:shadow transition-all flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Novo Agente IA
+            </button>
+            @endif
+        </div>
     </div>
 
     @if(session('sucesso'))
@@ -51,11 +58,24 @@
                         <div class="min-w-0">
                             <h3 class="font-bold text-gray-900 text-base truncate group-hover:text-purple-600 transition-colors">{{ $agente->nome }}</h3>
                             <p class="text-xs text-gray-400 truncate">{{ $agente->email }}</p>
-                            @if($agente->gemini_email)
-                                <span class="inline-flex items-center gap-1 text-[11px] font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md mt-1 border border-purple-100/80">
-                                    <span>✨</span> Gemini: {{ $agente->gemini_email }}
-                                </span>
-                            @endif
+
+                            <div class="flex flex-wrap gap-1 mt-1.5">
+                                @if($agente->provedor_ia === 'gemini_direto')
+                                    <span class="inline-flex items-center gap-1 text-[10px] font-bold text-purple-800 bg-purple-100/70 px-2 py-0.5 rounded-md border border-purple-200/60">
+                                        <span>✨</span> Gemini Pro Direto
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center gap-1 text-[10px] font-bold text-blue-800 bg-blue-100/70 px-2 py-0.5 rounded-md border border-blue-200/60">
+                                        <span>🟣</span> OpenRouter
+                                    </span>
+                                @endif
+
+                                @if($agente->gemini_email)
+                                    <span class="inline-flex items-center gap-1 text-[10px] text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+                                        {{ $agente->gemini_email }}
+                                    </span>
+                                @endif
+                            </div>
                         </div>
                     </div>
 
@@ -152,12 +172,14 @@
                     </div>
                 </div>
 
-                {{-- Conexão Gemini Pro --}}
-                <div class="bg-purple-50/70 border border-purple-100 p-4 rounded-2xl space-y-1">
+                {{-- Conexão / Motor de IA --}}
+                <div class="bg-purple-50/70 border border-purple-100 p-4 rounded-2xl space-y-1.5">
                     <h3 class="text-xs font-bold text-purple-900 flex items-center gap-1.5">
-                        <span>✨</span> Motor de Inteligência Artificial:
+                        <span>✨</span> Motor de Inteligência Artificial Ativo:
                     </h3>
-                    <p class="text-xs text-purple-700" x-text="agenteSelecionado.gemini_email ? 'Conta Google Gemini Pro: ' + agenteSelecionado.gemini_email : 'Motor: Gemini Pro / OpenRouter Padrão'"></p>
+                    <p class="text-xs font-semibold text-purple-800"
+                       x-text="agenteSelecionado.provedor_ia === 'gemini_direto' ? 'Google Gemini Pro (Conexão Direta Nativa)' : 'OpenRouter (Multi-model Gateway)'"></p>
+                    <p class="text-[11px] text-purple-700" x-text="agenteSelecionado.gemini_email ? 'Conta Google: ' + agenteSelecionado.gemini_email : 'Conta vinculada ao sistema'"></p>
                 </div>
 
                 {{-- Instruções do Modelo --}}
@@ -178,7 +200,7 @@
         </div>
     </div>
 
-    {{-- Modal de Criar / Editar Agente IA (Apenas Super Admin) --}}
+    {{-- Modal de Criar / Editar Agente IA (Apenas Super Admin / Dono) --}}
     @if(auth()->user()?->isDono())
     <div x-show="modalForm" x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 sm:p-6">
         <div @click.outside="modalForm = false" class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden max-h-[92vh] flex flex-col">
@@ -199,28 +221,78 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="space-y-1.5">
                         <label class="text-xs font-bold text-gray-800">Nome do Agente *</label>
-                        <input type="text" name="nome" x-model="form.nome" required placeholder="Ex: Adriana Aviag" class="w-full text-xs border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500">
+                        <input type="text" name="nome" x-model="form.nome" required placeholder="Ex: Adriana Aviag ou Nathanel Fernandes" class="w-full text-xs border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500">
                     </div>
                     <div class="space-y-1.5">
                         <label class="text-xs font-bold text-gray-800">E-mail Principal *</label>
-                        <input type="email" name="email" x-model="form.email" required placeholder="Ex: adriana@leadcerto.app.br" class="w-full text-xs border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500">
+                        <input type="email" name="email" x-model="form.email" required placeholder="Ex: nathanelllfernandees@gmail.com" class="w-full text-xs border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500">
+                    </div>
+                </div>
+
+                {{-- SELETOR DE MOTOR / PROVEDOR DE IA --}}
+                <div class="space-y-2 pt-2 border-t border-gray-100">
+                    <label class="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                        <span>⚡</span> Escolha o Motor / Provedor de IA deste Agente:
+                    </label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label class="flex items-start gap-3 p-3.5 rounded-2xl border transition-all cursor-pointer select-none"
+                               :class="form.provedor_ia === 'openrouter' ? 'bg-blue-50/80 border-blue-400 ring-2 ring-blue-200' : 'bg-white border-gray-200 hover:border-gray-300'">
+                            <input type="radio" name="provedor_ia" value="openrouter" x-model="form.provedor_ia" class="mt-0.5 text-blue-600 focus:ring-blue-500">
+                            <div>
+                                <h4 class="text-xs font-bold text-gray-900">🟣 OpenRouter (Multi-model)</h4>
+                                <p class="text-[11px] text-gray-500 mt-0.5 leading-relaxed">
+                                    Utiliza o hub multi-modelos (GPT-4o, Claude 3.5 Sonnet/Haiku, Llama) com fallback automático.
+                                </p>
+                            </div>
+                        </label>
+
+                        <label class="flex items-start gap-3 p-3.5 rounded-2xl border transition-all cursor-pointer select-none"
+                               :class="form.provedor_ia === 'gemini_direto' ? 'bg-purple-50/80 border-purple-400 ring-2 ring-purple-200' : 'bg-white border-gray-200 hover:border-gray-300'">
+                            <input type="radio" name="provedor_ia" value="gemini_direto" x-model="form.provedor_ia" class="mt-0.5 text-purple-600 focus:ring-purple-500">
+                            <div>
+                                <h4 class="text-xs font-bold text-gray-900">✨ Google Gemini Pro (Direto)</h4>
+                                <p class="text-[11px] text-gray-500 mt-0.5 leading-relaxed">
+                                    Conexão direta na conta Google / API do Gemini Pro sem passar pelo OpenRouter.
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                {{-- CONFIGURAÇÕES DA CONTA / API GOOGLE GEMINI PRO --}}
+                <div class="p-4 bg-purple-50/60 border border-purple-200 rounded-2xl space-y-3">
+                    <div class="flex items-center gap-1.5 text-xs font-bold text-purple-900">
+                        <span>✨</span> Credenciais Google Gemini Pro
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="space-y-1">
+                            <label class="text-xs font-medium text-purple-800">E-mail da Conta Google</label>
+                            <input type="email" name="gemini_email" x-model="form.gemini_email" placeholder="nathanelllfernandees@gmail.com" class="w-full text-xs border border-purple-300 bg-white rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-medium text-purple-800">Modelo Nativo do Gemini</label>
+                            <select name="gemini_modelo" x-model="form.gemini_modelo" class="w-full text-xs border border-purple-300 bg-white rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500">
+                                <option value="gemini-1.5-pro">Gemini 1.5 Pro (Raciocínio & Precisão Máxima)</option>
+                                <option value="gemini-2.0-flash">Gemini 2.0 Flash (Velocidade & Resposta Instantânea)</option>
+                                <option value="gemini-1.5-flash">Gemini 1.5 Flash (Leve & Econômico)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-medium text-purple-800">Chave de API do Google AI Studio / Gemini Key (Opcional se usar chave global)</label>
+                        <input type="password" name="gemini_api_key" x-model="form.gemini_api_key" placeholder="AIzaSy..." class="w-full text-xs border border-purple-300 bg-white rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500">
                     </div>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="space-y-1.5">
-                        <label class="text-xs font-bold text-gray-800">Conta do Gmail (Gemini Pro)</label>
-                        <input type="email" name="gemini_email" x-model="form.gemini_email" placeholder="email@gmail.com" class="w-full text-xs border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500">
+                        <label class="text-xs font-bold text-gray-800">WhatsApp de Notificação / Recuperação</label>
+                        <input type="text" name="whatsapp" x-model="form.whatsapp" placeholder="Ex: 21984503924" class="w-full text-xs border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500">
                     </div>
                     <div class="space-y-1.5">
-                        <label class="text-xs font-bold text-gray-800">Senha / Chave de Acesso</label>
-                        <input type="password" name="gemini_senha" x-model="form.gemini_senha" placeholder="••••••••" class="w-full text-xs border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500">
+                        <label class="text-xs font-bold text-gray-800">Avatar / Foto URL</label>
+                        <input type="url" name="avatar_url" x-model="form.avatar_url" placeholder="https://..." class="w-full text-xs border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500">
                     </div>
-                </div>
-
-                <div class="space-y-1.5">
-                    <label class="text-xs font-bold text-gray-800">Avatar / Foto URL</label>
-                    <input type="url" name="avatar_url" x-model="form.avatar_url" placeholder="https://..." class="w-full text-xs border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500">
                 </div>
 
                 {{-- Seleção de Funções em Grade Completa (Sem barra de rolagem) --}}
@@ -274,10 +346,13 @@ function agentesIaModule() {
         form: {
             nome: '',
             email: '',
+            whatsapp: '',
             avatar_url: '',
             cargos: [],
+            provedor_ia: 'openrouter',
             gemini_email: '',
-            gemini_senha: '',
+            gemini_api_key: '',
+            gemini_modelo: 'gemini-1.5-pro',
             gemini_instrucoes: ''
         },
         toggleCargo(id) {
@@ -296,10 +371,13 @@ function agentesIaModule() {
             this.form = {
                 nome: '',
                 email: '',
+                whatsapp: '',
                 avatar_url: '',
                 cargos: [],
+                provedor_ia: 'openrouter',
                 gemini_email: '',
-                gemini_senha: '',
+                gemini_api_key: '',
+                gemini_modelo: 'gemini-1.5-pro',
                 gemini_instrucoes: ''
             };
             this.modalForm = true;
@@ -309,10 +387,13 @@ function agentesIaModule() {
             this.form = {
                 nome: agente.nome,
                 email: agente.email,
+                whatsapp: agente.whatsapp || '',
                 avatar_url: agente.avatar_url || '',
                 cargos: cargosIds || [],
+                provedor_ia: agente.provedor_ia || 'openrouter',
                 gemini_email: agente.gemini_email || '',
-                gemini_senha: '',
+                gemini_api_key: agente.gemini_api_key || '',
+                gemini_modelo: agente.gemini_modelo || 'gemini-1.5-pro',
                 gemini_instrucoes: agente.gemini_instrucoes || ''
             };
             this.modalForm = true;

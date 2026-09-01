@@ -235,21 +235,24 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::post('/{user}/acessos/{acesso}/toggle', [\App\Http\Controllers\Admin\AgenteEquipeController::class, 'acessosToggle'])->name('acessos.toggle');
     });
 
-    // Equipe — Funções, Agentes IA, Agentes Humanos e Suporte
+    // Equipe — Funções, Agentes IA, Agentes Humanos, Relatório de IA e Suporte
     Route::prefix('equipe')->name('equipe.')->group(function () {
         Route::get('/funcoes', [\App\Http\Controllers\Painel\EquipePainelController::class, 'funcoes'])->name('funcoes');
-        Route::post('/funcoes', [\App\Http\Controllers\Painel\EquipePainelController::class, 'funcoesStore'])->name('funcoes.store')->middleware('role:admin');
-        Route::post('/funcoes/{cargo}', [\App\Http\Controllers\Painel\EquipePainelController::class, 'funcoesUpdate'])->name('funcoes.update')->middleware('role:admin');
+        Route::post('/funcoes', [\App\Http\Controllers\Painel\EquipePainelController::class, 'funcoesStore'])->name('funcoes.store')->middleware('role:admin,dono');
+        Route::post('/funcoes/{cargo}', [\App\Http\Controllers\Painel\EquipePainelController::class, 'funcoesUpdate'])->name('funcoes.update')->middleware('role:admin,dono');
 
         Route::get('/agentes-ia', [\App\Http\Controllers\Painel\EquipePainelController::class, 'agentesIa'])->name('agentes-ia');
-        Route::post('/agentes-ia', [\App\Http\Controllers\Painel\EquipePainelController::class, 'agentesIaStore'])->name('agentes-ia.store')->middleware('role:admin');
-        Route::post('/agentes-ia/{user}', [\App\Http\Controllers\Painel\EquipePainelController::class, 'agentesIaUpdate'])->name('agentes-ia.update')->middleware('role:admin');
+        Route::post('/agentes-ia', [\App\Http\Controllers\Painel\EquipePainelController::class, 'agentesIaStore'])->name('agentes-ia.store')->middleware('role:admin,dono');
+        Route::post('/agentes-ia/{user}', [\App\Http\Controllers\Painel\EquipePainelController::class, 'agentesIaUpdate'])->name('agentes-ia.update')->middleware('role:admin,dono');
 
         Route::get('/humanos', [\App\Http\Controllers\Painel\EquipePainelController::class, 'humanos'])->name('humanos');
+        Route::get('/relatorio-ia', [\App\Http\Controllers\Painel\EquipePainelController::class, 'relatorioIa'])->name('relatorio-ia');
 
         Route::get('/suporte', [\App\Http\Controllers\Painel\FeedbackAgenteController::class, 'setores'])->name('setores');
         Route::post('/setor/{cargo}/conversar', [\App\Http\Controllers\Painel\FeedbackAgenteController::class, 'store'])->name('conversar.store');
     });
+
+    Route::get('/uso-ia', [\App\Http\Controllers\Painel\EquipePainelController::class, 'relatorioIa'])->name('uso-ia');
 
     // Secretária Eletrônica — dono e admin
     Route::get('/secretaria-eletronica', fn () => view('secretaria-eletronica.index'))

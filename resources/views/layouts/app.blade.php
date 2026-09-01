@@ -304,6 +304,10 @@
                        class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('equipe.humanos') ? 'bg-purple-700 text-white font-bold' : 'text-gray-400 hover:text-white hover:bg-gray-700' }}">
                         <span>👥</span> Agentes Humanos
                     </a>
+                    <a href="{{ route('equipe.relatorio-ia') }}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('equipe.relatorio-ia') || request()->routeIs('uso-ia') ? 'bg-purple-700 text-white font-bold' : 'text-gray-400 hover:text-white hover:bg-gray-700' }}">
+                        <span>⚡</span> Relatório de IA
+                    </a>
                 </div>
             </div>
             @endif
