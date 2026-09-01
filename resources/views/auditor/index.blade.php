@@ -223,12 +223,12 @@
                                            @change="toggleSelecionarTodos($event)"
                                            class="rounded border-gray-300 text-green-600 focus:ring-green-500 w-4 h-4 cursor-pointer">
                                 </th>
-                                <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">ID Contato</th>
-                                <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">Telefone</th>
-                                <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">Campo</th>
-                                <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">Valor Atual</th>
-                                <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">Valor Sugerido</th>
-                                <th class="text-right px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">Ações</th>
+                                <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">ID</th>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap min-w-[210px]">Telefone</th>
+                                <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">Campo</th>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider min-w-[160px]">Valor Atual</th>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider min-w-[180px]">Valor Sugerido</th>
+                                <th class="text-right px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap min-w-[220px]">Ações</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
@@ -241,33 +241,33 @@
                                                @change="toggleSelecionarItem(itemChave(item))"
                                                class="rounded border-gray-300 text-green-600 focus:ring-green-500 w-4 h-4 cursor-pointer">
                                     </td>
-                                    <td class="px-3 py-3 font-mono text-xs text-gray-500">
+                                    <td class="px-3 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
                                         #<span x-text="item.contato_id"></span>
                                     </td>
-                                    <td class="px-3 py-3">
-                                        <div class="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-gray-800">
-                                            <span class="text-base leading-none" x-text="item.bandeira || '🇧🇷'"></span>
-                                            <span x-text="item.telefone"></span>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <div class="inline-flex items-center gap-2 font-mono text-xs font-bold text-gray-900 bg-gray-50 px-2.5 py-1 rounded-xl border border-gray-200 shadow-sm">
+                                            <span class="text-base leading-none flex-shrink-0" x-text="item.bandeira || '🇧🇷'"></span>
+                                            <span class="whitespace-nowrap" x-text="item.telefone"></span>
                                         </div>
                                     </td>
-                                    <td class="px-3 py-3">
+                                    <td class="px-3 py-3 whitespace-nowrap">
                                         <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-blue-100 text-blue-800 uppercase tracking-wide" x-text="item.campo"></span>
                                     </td>
-                                    <td class="px-3 py-3 text-gray-500">
+                                    <td class="px-4 py-3 text-gray-500">
                                         <span class="line-through text-xs" x-text="item.valor_atual || '(vazio)'"></span>
                                     </td>
-                                    <td class="px-3 py-3">
-                                        <span class="font-bold text-gray-900 bg-yellow-100 px-2 py-0.5 rounded text-xs" x-text="item.valor_sugerido"></span>
+                                    <td class="px-4 py-3">
+                                        <span class="font-bold text-gray-900 bg-yellow-100 px-2.5 py-1 rounded-lg text-xs" x-text="item.valor_sugerido"></span>
                                     </td>
-                                    <td class="px-4 py-3 text-right">
+                                    <td class="px-4 py-3 text-right whitespace-nowrap">
                                         <div class="flex items-center justify-end gap-1.5">
                                             <button @click="abrirEditarModal(item)"
                                                     class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition flex items-center gap-1">
-                                                <span>✏️ Editar</span>
+                                                 ✏️ Editar
                                             </button>
                                             <button @click="definirSemNome(item)"
                                                     class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-bold transition flex items-center gap-1">
-                                                <span>Sem Nome</span>
+                                                 Sem Nome
                                             </button>
                                             <button @click="aprovarCampo(item)"
                                                     class="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition shadow-sm">
