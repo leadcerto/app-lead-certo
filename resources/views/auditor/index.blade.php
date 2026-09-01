@@ -490,34 +490,112 @@
         </div>
     </div>
 
-    {{-- MODAL: Edição de Nomes Sugeridos --}}
+    {{-- MODAL: Edição Completa de Contato (Todos os Campos) --}}
     <div x-show="modalEditar" style="display: none;"
-         class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+         class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
         <div @click.outside="modalEditar = false"
-             class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 animate-fadeIn">
+             class="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden border border-gray-100 animate-fadeIn">
             
             <div class="px-6 py-4 bg-gradient-to-r from-gray-900 to-gray-800 text-white flex items-center justify-between">
-                <h3 class="font-bold text-sm">Editar Valor Sugerido</h3>
-                <button @click="modalEditar = false" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+                <div class="flex items-center gap-2.5">
+                    <span class="text-2xl">👤</span>
+                    <div>
+                        <h3 class="font-bold text-sm">Editar Contato Completo</h3>
+                        <p class="text-[11px] text-gray-300">Atualize nome, sobrenome, telefone (com país) e dados cadastrais</p>
+                    </div>
+                </div>
+                <button @click="modalEditar = false" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
             </div>
 
-            <div class="p-6 space-y-4">
+            <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+                
+                {{-- Linha: Nome e Botão Sem Nome --}}
                 <div>
-                    <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Campo</label>
-                    <p class="text-xs font-bold text-blue-600 uppercase" x-text="itemEdicao?.campo"></p>
-                </div>
-                <div>
-                    <label class="text-xs font-bold text-gray-700 block mb-1">Novo Valor</label>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="text-xs font-bold text-gray-700">Nome Completo / Primeiro Nome</label>
+                        <button type="button" 
+                                @click="itemEdicao.nome = 'Sem Nome'; itemEdicao.sobrenome = ''"
+                                class="text-[11px] font-bold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 px-2.5 py-0.5 rounded-lg border border-purple-200 transition">
+                            ⚡ Definir "Sem Nome"
+                        </button>
+                    </div>
                     <input type="text" 
-                           x-model="valorEditado"
-                           @keyup.enter="salvarEdicaoModal()"
+                           x-model="itemEdicao.nome"
+                           placeholder="Ex: Carlos Eduardo ou Sem Nome"
+                           class="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm">
+                </div>
+
+                {{-- Linha: Sobrenome --}}
+                <div>
+                    <label class="text-xs font-bold text-gray-700 block mb-1">Sobrenome (opcional)</label>
+                    <input type="text" 
+                           x-model="itemEdicao.sobrenome"
+                           placeholder="Ex: Silva"
+                           class="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm">
+                </div>
+
+                {{-- Linha: Telefone Internacional com Seletor de País / DDI --}}
+                <div class="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-2">
+                    <label class="text-xs font-bold text-gray-700 block">Telefone (País & Número Local)</label>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                        <div class="md:col-span-5">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">País / DDI</label>
+                            <select x-model="itemEdicao.ddi"
+                                    @change="atualizarPrefixoModal()"
+                                    class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-xs font-semibold focus:ring-2 focus:ring-blue-500 bg-white shadow-sm">
+                                <template x-for="p in paises" :key="p.iso">
+                                    <option :value="p.ddi" x-text="p.bandeira + ' ' + p.nome + ' (+' + p.ddi + ')'" :selected="p.ddi === itemEdicao.ddi"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <div class="md:col-span-7">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">Número Local</label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-xs font-mono font-bold text-gray-400" x-text="'+' + itemEdicao.ddi"></span>
+                                <input type="text" 
+                                       x-model="itemEdicao.numero_local"
+                                       placeholder="21999999999"
+                                       class="w-full border border-gray-300 rounded-xl pl-12 pr-3 py-2.5 text-sm font-mono font-bold focus:ring-2 focus:ring-blue-500 bg-white shadow-sm">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-[11px] font-mono font-bold text-blue-900 bg-blue-100/70 p-2 rounded-xl border border-blue-200 flex items-center gap-1.5">
+                        <span class="text-sm" x-text="itemEdicao.bandeira || '🌐'"></span>
+                        <span>Formato Salvo:</span>
+                        <span>+<span x-text="itemEdicao.ddi"></span> <span x-text="itemEdicao.numero_local"></span></span>
+                    </div>
+                </div>
+
+                {{-- Linha: E-mail --}}
+                <div>
+                    <label class="text-xs font-bold text-gray-700 block mb-1">E-mail (opcional)</label>
+                    <input type="email" 
+                           x-model="itemEdicao.email"
+                           placeholder="cliente@exemplo.com"
                            class="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm">
                 </div>
+
             </div>
 
-            <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2">
-                <button @click="modalEditar = false" class="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-800 rounded-xl">Cancelar</button>
-                <button @click="salvarEdicaoModal()" class="px-5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md transition">Salvar e Aprovar</button>
+            <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between gap-3">
+                <button type="button"
+                        @click="itemEdicao.nome = 'Sem Nome'; itemEdicao.sobrenome = ''; salvarEdicaoCompleta()"
+                        class="px-3.5 py-2 text-xs font-bold text-purple-700 hover:text-purple-900 bg-purple-100 hover:bg-purple-200 rounded-xl transition">
+                    ⚡ Salvar como "Sem Nome"
+                </button>
+
+                <div class="flex items-center gap-2">
+                    <button @click="modalEditar = false" class="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-800 rounded-xl">
+                        Cancelar
+                    </button>
+                    <button @click="salvarEdicaoCompleta()" 
+                            class="px-5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md transition flex items-center gap-1.5">
+                        <span>💾 Salvar e Aprovar</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -660,31 +738,72 @@ function auditor() {
             }
         },
 
-        // Edição de Sugestões Pendentes
+        // Edição Completa de Contato (Todos os Campos)
         abrirEditarModal(item) {
-            this.itemEdicao = item;
-            this.valorEditado = item.valor_sugerido || item.valor_atual || '';
+            const ddi = item.ddi || '55';
+            const p = this.paises.find(x => x.ddi === ddi) || { ddi: '55', bandeira: '🇧🇷' };
+            
+            let nomeInicial = item.nome || item.valor_atual || '';
+            let sobrenomeInicial = item.sobrenome || '';
+            if (item.campo === 'nome' && item.valor_sugerido) {
+                nomeInicial = item.valor_sugerido;
+            }
+            if (item.campo === 'sobrenome' && item.valor_sugerido) {
+                sobrenomeInicial = item.valor_sugerido;
+            }
+
+            this.itemEdicao = {
+                vinculo_id: item.vinculo_id,
+                contato_id: item.contato_id,
+                nome: nomeInicial,
+                sobrenome: sobrenomeInicial,
+                email: item.email || '',
+                ddi: ddi,
+                numero_local: item.numero_local || (item.telefone_original ? item.telefone_original.replace(/\D/g, '').replace(new RegExp('^' + ddi), '') : ''),
+                bandeira: item.bandeira || p.bandeira,
+                campo_origem: item.campo,
+            };
             this.modalEditar = true;
         },
 
-        async salvarEdicaoModal() {
+        atualizarPrefixoModal() {
+            const p = this.paises.find(x => x.ddi === this.itemEdicao.ddi);
+            if (p) {
+                this.itemEdicao.bandeira = p.bandeira;
+            }
+        },
+
+        async salvarEdicaoCompleta() {
             if (!this.itemEdicao) return;
-            const res = await this.api(`/auditor/pendente/${this.itemEdicao.vinculo_id}/campo/${this.itemEdicao.campo}/salvar`, 'POST', {
-                valor: this.valorEditado,
+            const targetId = this.itemEdicao.vinculo_id || this.itemEdicao.contato_id;
+            const res = await this.api(`/auditor/contato/${targetId}/salvar-completo`, 'POST', {
+                nome: this.itemEdicao.nome,
+                sobrenome: this.itemEdicao.sobrenome,
+                email: this.itemEdicao.email,
+                ddi: this.itemEdicao.ddi,
+                numero_local: this.itemEdicao.numero_local,
             });
             if (res.ok) {
                 this.modalEditar = false;
                 await this.carregarPendentes();
+                await this.carregarTelefones();
                 await this.carregarStats();
+            } else {
+                alert('Erro ao salvar dados do contato.');
             }
         },
 
         async definirSemNome(item) {
-            const res = await this.api(`/auditor/pendente/${item.vinculo_id}/campo/${item.campo}/salvar`, 'POST', {
-                valor: 'Sem Nome',
+            const targetId = item.vinculo_id || item.contato_id;
+            const res = await this.api(`/auditor/contato/${targetId}/salvar-completo`, 'POST', {
+                nome: 'Sem Nome',
+                sobrenome: '',
+                ddi: item.ddi || '55',
+                numero_local: item.numero_local || '',
             });
             if (res.ok) {
                 await this.carregarPendentes();
+                await this.carregarTelefones();
                 await this.carregarStats();
             }
         },

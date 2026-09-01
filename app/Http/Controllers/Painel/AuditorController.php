@@ -506,27 +506,86 @@ class AuditorController extends Controller
         return response()->json(['ok' => true, 'total' => $total]);
     }
 
-    public function autoLimparNaoPessoas(Request $request): JsonResponse
+    public static function isNaoPessoa(?string $str): bool
     {
-        $vinculos = VinculoContatoTenant::with('contato')
-            ->whereNotNull('campos_pendentes_auditoria')
-            ->get();
+        if (empty($str)) return true;
+        $str = trim($str);
 
-        $total = 0;
-        $padroesNaoPessoa = [
+        // Se for "Sem Nome"
+        if (strcasecmp($str, 'Sem Nome') === 0) return true;
+
+        // Se for apenas dígitos ou formato de telefone (ex: 552199999999, +55 21..., 5521...)
+        if (preg_match('/^\+?\d[\d\s\(\)\-\.]{5,}$/', $str) || preg_match('/^\d+$/', $str)) {
+            return true;
+        }
+
+        // Se tem menos de 2 letras
+        if (strlen(preg_replace('/[^a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêîôûÂÊÎÔÛçÇ]/', '', $str)) < 2) {
+            return true;
+        }
+
+        $padroes = [
             '/^frete/i',
             '/^mudan/i',
             '/^transp/i',
             '/^caminh/i',
             '/^bongo/i',
+            '/^carreto/i',
             '/^carga/i',
             '/^lead/i',
             '/^cliente/i',
             '/^contato/i',
             '/^or[cç]amento/i',
-            '/^\d+$/', // apenas números
-            '/^[\W_]+$/', // apenas símbolos ou emojis
+            '/^disk/i',
+            '/^motorista/i',
+            '/^ajudante/i',
+            '/^entregador/i',
+            '/^entrega/i',
+            '/^zap/i',
+            '/^whatsapp/i',
+            '/^teste/i',
+            '/^pedreiro/i',
+            '/^pintor/i',
+            '/^marceneiro/i',
+            '/^eletricista/i',
+            '/^diarista/i',
+            '/^faxineira/i',
+            '/^loja/i',
+            '/^oficina/i',
+            '/^vendas?/i',
+            '/^atendimento/i',
+            '/^sac/i',
+            '/^suporte/i',
+            '/^comercial/i',
+            '/^adm/i',
+            '/^estofador/i',
+            '/^sofa/i',
+            '/^camorim/i',
         ];
+
+        foreach ($padroes as $padrao) {
+            if (preg_match($padrao, $str)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function autoLimparNaoPessoas(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $tenantId = $user?->tenant_id;
+
+        $vinculosQuery = VinculoContatoTenant::with('contato')
+            ->whereNotNull('campos_pendentes_auditoria');
+
+        if ($tenantId && !($user?->isAdmin())) {
+            $vinculosQuery->where('tenant_id', $tenantId);
+        }
+
+        $vinculos = $vinculosQuery->get();
+        $total = 0;
 
         foreach ($vinculos as $v) {
             $pendentes = $v->campos_pendentes_auditoria ?? [];
@@ -536,21 +595,9 @@ class AuditorController extends Controller
                 if (!in_array($campo, ['nome', 'sobrenome'])) continue;
 
                 $sugerido = trim((string)($pendencia['sugerido'] ?? ''));
-                $isNaoPessoa = false;
+                $valorAtual = trim((string)($v->contato?->$campo ?? ''));
 
-                foreach ($padroesNaoPessoa as $padrao) {
-                    if (preg_match($padrao, $sugerido)) {
-                        $isNaoPessoa = true;
-                        break;
-                    }
-                }
-
-                // Se tem menos de 2 letras ou parece código/número
-                if (strlen(preg_replace('/[^a-zA-Z]/', '', $sugerido)) < 2) {
-                    $isNaoPessoa = true;
-                }
-
-                if ($isNaoPessoa) {
+                if (self::isNaoPessoa($sugerido) || self::isNaoPessoa($valorAtual)) {
                     $v->contato?->update(['nome' => 'Sem Nome', 'sobrenome' => null]);
                     unset($pendentes['nome']);
                     unset($pendentes['sobrenome']);
@@ -568,6 +615,22 @@ class AuditorController extends Controller
                     'campos_pendentes_auditoria' => $pendentes ?: null,
                     'campos_editados_humano'     => $v->campos_editados_humano,
                 ]);
+            }
+        }
+
+        // Também varre a base de contatos vinculados para limpar nomes que sejam telefone ou termos não-pessoa
+        $contatoIds = ($tenantId && !($user?->isAdmin()))
+            ? VinculoContatoTenant::where('tenant_id', $tenantId)->pluck('contato_id')
+            : Contato::pluck('id');
+
+        $contatosParaLimpar = Contato::whereIn('id', $contatoIds)
+            ->where('nome', '!=', 'Sem Nome')
+            ->get();
+
+        foreach ($contatosParaLimpar as $c) {
+            if (self::isNaoPessoa($c->nome)) {
+                $c->update(['nome' => 'Sem Nome', 'sobrenome' => null]);
+                $total++;
             }
         }
 
