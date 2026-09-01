@@ -25,7 +25,7 @@
     {{-- Cards de Saúde dos Dados (Todos Clicáveis com Ações Rápidas) --}}
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <div class="bg-white rounded-2xl p-4 shadow-sm border-2 border-gray-200 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-all"
-             @click="aba = 'contatos'; busca = ''; buscarContatos()"
+             @click="aba = 'contatos'; buscarContatos('', '')"
              title="Clique para ver a Base Geral de Contatos">
             <p class="text-xs font-bold text-gray-500">Total Contatos</p>
             <p class="text-2xl font-black text-gray-900 mt-1" x-text="stats.total ?? '—'"></p>
@@ -55,14 +55,14 @@
         </div>
 
         <div class="bg-orange-50 rounded-2xl p-4 shadow-sm border-2 border-orange-200 cursor-pointer hover:bg-orange-100 transition-all"
-             @click="aba = 'contatos'; busca = 'Sem Nome'; buscarContatos()"
+             @click="aba = 'contatos'; buscarContatos('', 'Sem Nome')"
              title="Clique para filtrar contatos 'Sem Nome'">
             <p class="text-xs text-orange-800 font-bold">Sem Nome</p>
             <p class="text-2xl font-black text-orange-600 mt-1" x-text="stats.sem_nome ?? '—'"></p>
         </div>
 
         <div class="bg-blue-50 rounded-2xl p-4 shadow-sm border-2 border-blue-200 cursor-pointer hover:bg-blue-100 transition-all"
-             @click="aba = 'contatos'; filtroStatus = 'inativo'; buscarContatos()"
+             @click="aba = 'contatos'; buscarContatos('inativo', '')"
              title="Clique para filtrar contatos Inativos">
             <p class="text-xs text-blue-800 font-bold">Inativos</p>
             <p class="text-2xl font-black text-blue-600 mt-1" x-text="stats.inativos ?? '—'"></p>
@@ -390,6 +390,7 @@
                 <option value="aprovado">Aprovados</option>
                 <option value="inconsistente">Inconsistentes</option>
                 <option value="pendente">Pendentes</option>
+                <option value="inativo">Inativos</option>
             </select>
             <button @click="buscarContatos()" class="px-4 py-2 bg-green-600 text-white rounded-xl text-xs font-bold hover:bg-green-700">Buscar</button>
         </div>
@@ -652,6 +653,7 @@ function auditor() {
         logs: [],
         paises: [],
         selecionados: [],
+        filtros: { busca: '', status: '' },
 
         // Modais
         modalEditar: false,
@@ -988,12 +990,19 @@ function auditor() {
             }
         },
 
-        async buscarContatos() {
-            const params = new URLSearchParams({
-                busca:  this.filtros.busca,
-                status: this.filtros.status,
-            });
-            const res = await this.api('/auditor/contatos?' + params);
+        async buscarContatos(statusOverride = null, buscaOverride = null) {
+            if (statusOverride !== null) {
+                this.filtros.status = statusOverride;
+            }
+            if (buscaOverride !== null) {
+                this.filtros.busca = buscaOverride;
+            }
+
+            const params = new URLSearchParams();
+            if (this.filtros.busca) params.append('busca', this.filtros.busca);
+            if (this.filtros.status) params.append('status', this.filtros.status);
+
+            const res = await this.api('/auditor/contatos?' + params.toString());
             if (res.ok) {
                 const d = await res.json();
                 this.listaContatos = d.data || [];

@@ -851,55 +851,89 @@ class AuditorController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    // ── Lista de contatos com filtros ─────────────────────────────────────────
-
     public function contatos(Request $request): JsonResponse
     {
+        $user = $request->user();
+        $tenantId = $user?->tenant_id;
+
+        $vinculoQuery = VinculoContatoTenant::query();
+        if ($tenantId && !($user?->isAdmin())) {
+            $vinculoQuery->where('tenant_id', $tenantId);
+        }
+        $contatoIds = $vinculoQuery->pluck('contato_id');
+
+        $status = $request->input('status');
+        $busca = $request->input('busca');
+
         $query = Contato::query();
 
-        if ($request->status) {
-            $query->where('status_validacao', $request->status);
+        if ($status === 'inativo' || $status === 'inativos') {
+            $query->onlyTrashed();
+        } else {
+            $query->withoutTrashed();
+            if ($status && in_array($status, ['aprovado', 'inconsistente', 'pendente'])) {
+                $query->where('status_validacao', $status);
+            }
         }
+
+        if ($contatoIds->isNotEmpty() && !($user?->isAdmin())) {
+            $query->whereIn('id', $contatoIds);
+        }
+
         if ($request->tipo_pessoa) {
             $query->where('tipo_pessoa', $request->tipo_pessoa);
         }
         if ($request->origem) {
             $query->where('origem', $request->origem);
         }
-        if ($request->busca) {
-            $query->where(function ($q) use ($request) {
-                $q->where('nome', 'like', '%' . $request->busca . '%')
-                  ->orWhere('telefone', 'like', '%' . $request->busca . '%')
-                  ->orWhere('email', 'like', '%' . $request->busca . '%');
-            });
+
+        if ($busca) {
+            if (strcasecmp($busca, 'Sem Nome') === 0) {
+                $query->where(function ($q) {
+                    $q->whereNull('nome')->orWhere('nome', '')->orWhere('nome', 'Sem Nome');
+                });
+            } else {
+                $query->where(function ($q) use ($busca) {
+                    $q->where('nome', 'like', '%' . $busca . '%')
+                      ->orWhere('sobrenome', 'like', '%' . $busca . '%')
+                      ->orWhere('telefone', 'like', '%' . $busca . '%')
+                      ->orWhere('email', 'like', '%' . $busca . '%');
+                });
+            }
         }
 
         $contatos = $query->select([
             'id', 'nome', 'sobrenome', 'telefone', 'email', 'cpf', 'cnpj',
-            'tipo_pessoa', 'status_validacao', 'origem', 'empresa', 'created_at',
+            'tipo_pessoa', 'status_validacao', 'origem', 'empresa', 'created_at', 'deleted_at',
         ])
         ->orderBy('created_at', 'desc')
-        ->paginate(100); // máximo 100 por página — sem exportação massiva
+        ->paginate(100);
 
-        $itens = $contatos->map(fn ($c) => [
-            'id'               => $c->id,
-            'nome'             => $c->nome,
-            'sobrenome'        => $c->sobrenome,
-            'telefone'         => $this->formatarTelefoneCompleto($c->telefone ?? ''),
-            'email'            => $c->email,
-            'cpf'              => $this->mascarar($c->cpf ?? '', 'cpf'),
-            'cnpj'             => $this->mascarar($c->cnpj ?? '', 'cnpj'),
-            'tipo_pessoa'      => $c->tipo_pessoa,
-            'status_validacao' => $c->status_validacao,
-            'origem'           => $c->origem,
-            'empresa'          => $c->empresa,
-            'criado_em'        => $c->created_at?->format('d/m/Y'),
-        ]);
+        $itens = $contatos->map(function ($c) {
+            $infoPais = \App\Services\PaisTelefoneService::identificarPais($c->telefone ?? '');
+            return [
+                'id'                => $c->id,
+                'nome'              => $c->nome ?: 'Sem Nome',
+                'sobrenome'         => $c->sobrenome,
+                'telefone'          => $infoPais['formatado'],
+                'telefone_original' => $c->telefone,
+                'bandeira'          => $infoPais['bandeira'],
+                'ddi'               => $infoPais['ddi'],
+                'numero_local'      => $infoPais['numero_local'],
+                'telefone_exibicao' => $infoPais['exibicao'],
+                'email'             => $c->email,
+                'tipo_pessoa'       => $c->tipo_pessoa,
+                'status_validacao'  => $c->trashed() ? 'inativo' : ($c->status_validacao ?: 'pendente'),
+                'origem'            => $c->origem,
+                'empresa'           => $c->empresa,
+                'criado_em'         => $c->created_at?->format('d/m/Y'),
+            ];
+        });
 
         return response()->json([
-            'data'         => $itens,
-            'total'        => $contatos->total(),
-            'pagina_atual' => $contatos->currentPage(),
+            'data'          => $itens,
+            'total'         => $contatos->total(),
+            'pagina_atual'  => $contatos->currentPage(),
             'ultima_pagina' => $contatos->lastPage(),
         ]);
     }
