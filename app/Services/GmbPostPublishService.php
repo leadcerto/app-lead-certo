@@ -28,6 +28,9 @@ class GmbPostPublishService
         ]);
 
         try {
+            // Garante renomeação SEO da imagem com palavras-chave e data/hora antes do envio
+            app(GmbImageSeoService::class)->prepararImagemParaPost($post);
+
             $perfil = $post->perfil;
             $locationId = $perfil?->google_location_id;
 

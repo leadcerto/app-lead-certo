@@ -92,7 +92,7 @@
 
         {{-- Lado Esquerdo: Formulário (7 Colunas) --}}
         <div class="lg:col-span-7 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-5">
-            <form method="POST" action="{{ route('admin.gmb-posts.store') }}">
+            <form method="POST" action="{{ route('admin.gmb-posts.store') }}" enctype="multipart/form-data">
                 @csrf
                 <input type="hidden" name="gerado_por_ia" :value="geradoPorIa ? 1 : 0">
 
@@ -144,11 +144,26 @@
                         <textarea name="texto" x-model="texto" rows="5" required placeholder="Escreva a mensagem que seus clientes verão no Google..." class="w-full text-sm border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500"></textarea>
                     </div>
 
-                    {{-- Imagem URL --}}
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-800 mb-1">URL da Imagem / Foto</label>
-                        <input type="url" name="imagem_url" x-model="imagemUrl" placeholder="https://seusite.com/imagens/foto-post.jpg" class="w-full text-sm border-gray-300 rounded-lg">
-                        <p class="text-xs text-gray-400 mt-1">Recomendado: Imagem retangular de alta qualidade (1200x900px).</p>
+                    {{-- Upload de Imagem e SEO --}}
+                    <div class="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-xs font-bold text-gray-800 uppercase tracking-wide">📷 Imagem do Post (SEO Automático)</label>
+                            <span class="text-[11px] text-green-700 font-semibold">✨ Renomeação Inteligente</span>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">Enviar do Computador</label>
+                                <input type="file" name="imagem" accept="image/*" @change="if ($event.target.files.length) { imagemUrl = URL.createObjectURL($event.target.files[0]); }" class="w-full text-xs text-gray-700 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-green-100 file:text-green-800 hover:file:bg-green-200">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">Ou colar URL da Imagem</label>
+                                <input type="url" name="imagem_url" x-model="imagemUrl" placeholder="https://..." class="w-full text-xs border-gray-300 rounded-lg bg-white">
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-gray-500">
+                            A imagem será automaticamente renomeada com palavras-chave do seu negócio, bairro e data/hora do post para potencializar o ranqueamento no Google Maps.
+                        </p>
                     </div>
 
                     {{-- Botão CTA (Ação) --}}

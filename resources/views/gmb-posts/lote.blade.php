@@ -42,53 +42,60 @@
         </div>
     @endif
 
-    <form action="{{ route('admin.gmb-posts.lote.store') }}" method="POST" class="space-y-6" id="formLote">
+    <form action="{{ route('admin.gmb-posts.lote.store') }}" method="POST" enctype="multipart/form-data" class="space-y-6" id="formLote">
         @csrf
         <input type="hidden" name="semana_referencia" value="{{ $semana->toDateString() }}">
 
         {{-- Painel de Configurações do Lote --}}
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 grid grid-cols-1 md:grid-cols-4 gap-4">
             
             {{-- 1. Estratégia de Conteúdo --}}
             <div>
-                <label class="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">1. Estratégia de Conteúdo</label>
-                <select name="modo_conteudo" id="modoConteudo" onchange="alternarModo()" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 focus:ring-2 focus:ring-green-500 focus:bg-white transition">
-                    <option value="template_rotativo" selected>🔄 Revezar Templates Prontos (Recomendado)</option>
-                    <option value="ia">🤖 Gerar Copy Única com IA (Personalizada por Bairro)</option>
-                    <option value="template_especifico">📋 Usar um Template Específico</option>
+                <label class="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">1. Conteúdo</label>
+                <select name="modo_conteudo" id="modoConteudo" onchange="alternarModo()" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-800 focus:ring-2 focus:ring-green-500 focus:bg-white transition">
+                    <option value="template_rotativo" selected>🔄 Revezar Templates Prontos</option>
+                    <option value="ia">🤖 Gerar com IA (Por Bairro)</option>
+                    <option value="template_especifico">📋 Usar Template Específico</option>
                 </select>
-                <p class="text-[11px] text-gray-400 mt-1">Revezamento alterna automaticamente as ofertas, dicas e serviços da semana.</p>
+                <p class="text-[10px] text-gray-400 mt-1">Revezamento alterna ofertas, dicas e serviços.</p>
             </div>
 
             {{-- 2. Seleção de Template Específico (condicional) --}}
             <div id="boxTemplateEspecifico" class="hidden">
-                <label class="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">2. Template Escolhido</label>
-                <select name="template_id" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 focus:ring-2 focus:ring-green-500 focus:bg-white transition">
+                <label class="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">2. Template</label>
+                <select name="template_id" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-800 focus:ring-2 focus:ring-green-500 focus:bg-white transition">
                     @foreach($templates as $tpl)
-                        <option value="{{ $tpl->id }}">[{{ strtoupper($tpl->categoria) }}] {{ $tpl->titulo_template }}</option>
+                        <option value="{{ $tpl->id }}">[{{ strtoupper(substr($tpl->categoria, 0, 3)) }}] {{ $tpl->titulo_template }}</option>
                     @endforeach
                 </select>
             </div>
 
-            {{-- 3. Horário Padrão de Publicação --}}
+            {{-- 3. Imagem Opcional com SEO Automático --}}
             <div>
-                <label class="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">Horário Padrão de Disparo</label>
-                <input type="time" name="horario_padrao" value="10:00" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-green-500 focus:bg-white transition">
-                <p class="text-[11px] text-gray-400 mt-1">Horário em que o robô do Google fará a publicação automática.</p>
+                <label class="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">2. Imagem (SEO Automático)</label>
+                <input type="file" name="imagem_padrao" accept="image/*" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs text-gray-700 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 transition">
+                <p class="text-[10px] text-green-700 font-medium mt-1">✨ Será renomeada com palavras-chave e data/hora.</p>
             </div>
 
-            {{-- 4. Botões de Ação Rápida --}}
+            {{-- 4. Horário Padrão de Publicação --}}
             <div>
-                <label class="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">Preenchimento Rápido</label>
-                <div class="flex gap-2 flex-wrap">
-                    <button type="button" onclick="marcarPadrao('seg-qua-sex')" class="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition">
+                <label class="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">3. Horário do Post</label>
+                <input type="time" name="horario_padrao" value="10:00" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-800 focus:ring-2 focus:ring-green-500 focus:bg-white transition">
+                <p class="text-[10px] text-gray-400 mt-1">Horário de publicação no Google Maps.</p>
+            </div>
+
+            {{-- 5. Botões de Ação Rápida --}}
+            <div class="md:col-span-4 pt-2 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
+                <span class="text-xs font-bold text-gray-600">Preenchimento Rápido da Matriz:</span>
+                <div class="flex gap-2">
+                    <button type="button" onclick="marcarPadrao('seg-qua-sex')" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition">
                         Seg / Qua / Sex
                     </button>
-                    <button type="button" onclick="marcarPadrao('todos')" class="px-2.5 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-bold rounded-lg transition">
+                    <button type="button" onclick="marcarPadrao('todos')" class="px-3 py-1 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-bold rounded-lg transition">
                         Todos os Dias
                     </button>
-                    <button type="button" onclick="marcarPadrao('limpar')" class="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded-lg transition">
-                        Limpar
+                    <button type="button" onclick="marcarPadrao('limpar')" class="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded-lg transition">
+                        Limpar Seleção
                     </button>
                 </div>
             </div>

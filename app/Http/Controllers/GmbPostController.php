@@ -68,15 +68,17 @@ class GmbPostController extends Controller
         return view('gmb-posts.create', compact('perfis', 'templates'));
     }
 
-    public function store(Request $request, GmbPostPublishService $publishService): RedirectResponse
+    public function store(Request $request, GmbPostPublishService $publishService, \App\Services\GmbImageSeoService $seoService): RedirectResponse
     {
         $tenantId = auth()->user()->tenant_id;
+        $tenant = auth()->user()->tenant;
 
         $validated = $request->validate([
             'perfil_gmb_id'     => 'required|exists:perfis_gmb,id',
             'tipo'              => 'required|in:novidade,oferta,evento',
             'titulo'            => 'nullable|string|max:100',
             'texto'             => 'required|string|max:1500',
+            'imagem'            => 'nullable|image|max:10240',
             'imagem_url'        => 'nullable|url',
             'cta_tipo'          => 'required|in:LEARN_MORE,CALL,ORDER,BOOK,SIGN_UP,SHOP,NENHUM',
             'cta_url'           => 'nullable|url',
@@ -87,9 +89,22 @@ class GmbPostController extends Controller
             'gerado_por_ia'     => 'nullable|boolean',
         ]);
 
+        $perfil = PerfilGmb::where('tenant_id', $tenantId)->find($validated['perfil_gmb_id']);
+
         $dataAgendada = !empty($validated['publicar_imediato'])
             ? now()
             : ($validated['data_agendada'] ? Carbon::parse($validated['data_agendada']) : now());
+
+        $imagemUrl = $validated['imagem_url'] ?? null;
+        if ($request->hasFile('imagem')) {
+            $imagemUrl = $seoService->salvarImagemSeo(
+                $request->file('imagem'),
+                $tenant,
+                $perfil,
+                $dataAgendada,
+                $validated['titulo'] ?? null
+            );
+        }
 
         $post = GmbPost::create([
             'tenant_id'     => $tenantId,
@@ -98,7 +113,7 @@ class GmbPostController extends Controller
             'tipo'          => $validated['tipo'],
             'titulo'        => $validated['titulo'] ?? null,
             'texto'         => $validated['texto'],
-            'imagem_url'    => $validated['imagem_url'] ?? null,
+            'imagem_url'    => $imagemUrl,
             'cta_tipo'      => $validated['cta_tipo'],
             'cta_url'       => $validated['cta_url'] ?? null,
             'codigo_cupom'  => $validated['codigo_cupom'] ?? null,
@@ -152,7 +167,7 @@ class GmbPostController extends Controller
         return view('gmb-posts.lote', compact('perfis', 'templates', 'semana'));
     }
 
-    public function storeLote(Request $request, GmbPostIaService $iaService): RedirectResponse
+    public function storeLote(Request $request, GmbPostIaService $iaService, \App\Services\GmbImageSeoService $seoService): RedirectResponse
     {
         $tenantId = auth()->user()->tenant_id;
         $tenant = auth()->user()->tenant;
@@ -163,6 +178,8 @@ class GmbPostController extends Controller
             'modo_conteudo'     => 'required|in:template_rotativo,template_especifico,ia',
             'template_id'       => 'nullable|exists:gmb_post_templates,id',
             'horario_padrao'    => 'required|string',
+            'imagem_padrao'     => 'nullable|image|max:10240',
+            'imagem_url'        => 'nullable|url',
         ]);
 
         $semana = Carbon::parse($validated['semana_referencia']);
@@ -237,6 +254,18 @@ class GmbPostController extends Controller
                     }
                 }
 
+                // Processa imagem com SEO exclusivo para esta postagem
+                $imagemUrl = $validated['imagem_url'] ?? null;
+                if ($request->hasFile('imagem_padrao')) {
+                    $imagemUrl = $seoService->salvarImagemSeo(
+                        $request->file('imagem_padrao'),
+                        $tenant,
+                        $perfil,
+                        $dataPost,
+                        $titulo
+                    );
+                }
+
                 GmbPost::create([
                     'tenant_id'     => $tenantId,
                     'perfil_gmb_id' => $perfil->id,
@@ -244,6 +273,7 @@ class GmbPostController extends Controller
                     'tipo'          => 'novidade',
                     'titulo'        => $titulo,
                     'texto'         => $texto,
+                    'imagem_url'    => $imagemUrl,
                     'cta_tipo'      => $ctaTipo,
                     'data_agendada' => $dataPost,
                     'status'        => 'agendado',
