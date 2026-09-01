@@ -127,6 +127,30 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('auditor')
         ->middleware('role:admin,dono,diretor,auditor');
 
+    Route::middleware('role:admin,dono,diretor,auditor')->prefix('auditor')->group(function () {
+        Route::get('/stats',                                         [AuditorController::class, 'stats']);
+        Route::get('/pendentes',                                     [AuditorController::class, 'pendentesCampos']);
+        Route::get('/telefones-invalidos',                           [AuditorController::class, 'telefonesInvalidos']);
+        Route::post('/telefones-invalidos/{id}/resolver',            [AuditorController::class, 'resolverTelefoneInvalido']);
+        Route::post('/telefones-invalidos/{id}/ignorar',             [AuditorController::class, 'ignorarTelefoneInvalido']);
+        Route::post('/pendente/{vinculo}/campo/{campo}/aprovar',     [AuditorController::class, 'aprovarCampo']);
+        Route::post('/pendente/{vinculo}/campo/{campo}/rejeitar',    [AuditorController::class, 'rejeitarCampo']);
+        Route::post('/pendente/{vinculo}/campo/{campo}/salvar',      [AuditorController::class, 'salvarValorCampo']);
+        Route::post('/pendentes/aprovar-lote',                       [AuditorController::class, 'aprovarLote']);
+        Route::post('/pendentes/rejeitar-lote',                      [AuditorController::class, 'rejeitarLote']);
+        Route::post('/pendentes/marcar-sem-nome-lote',               [AuditorController::class, 'marcarSemNomeLote']);
+        Route::post('/pendentes/auto-limpar-nao-pessoas',            [AuditorController::class, 'autoLimparNaoPessoas']);
+        Route::post('/contato/{contato}/sinalizar',                  [AuditorController::class, 'sinalizar']);
+        Route::post('/contato/{contato}/aprovar-cadastro',           [AuditorController::class, 'aprovarCadastro']);
+        Route::post('/contato/{contato}/inativar',                   [AuditorController::class, 'inativar']);
+        Route::get('/contatos',                                      [AuditorController::class, 'contatos']);
+        Route::get('/logs',                                          [AuditorController::class, 'logs']);
+        Route::get('/conflitos',                                     [AuditorController::class, 'conflitos']);
+        Route::post('/conflito/{pendente}/fundir',                   [AuditorController::class, 'fundirConflito']);
+        Route::post('/conflito/{pendente}/criar-novo',               [AuditorController::class, 'criarNovoConflito']);
+        Route::post('/conflito/{pendente}/descartar',                [AuditorController::class, 'descartarConflito']);
+    });
+
     // Personas SDR — growth_manager, diretor, dono, admin
     Route::get('/personas', [PersonasController::class, 'view'])
         ->name('personas')
@@ -329,32 +353,28 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         ->middleware('role:admin,dono,gerente,gestor');
 
     // Auditor — apenas auditor, diretor, dono, admin
-    Route::middleware('role:admin,dono,diretor,auditor')->group(function () {
-        foreach (['auditor', 'api/painel/auditor'] as $prefix) {
-            Route::prefix($prefix)->group(function () {
-                Route::get('/stats',                                         [AuditorController::class, 'stats']);
-                Route::get('/pendentes',                                     [AuditorController::class, 'pendentesCampos']);
-                Route::get('/telefones-invalidos',                           [AuditorController::class, 'telefonesInvalidos']);
-                Route::post('/telefones-invalidos/{id}/resolver',            [AuditorController::class, 'resolverTelefoneInvalido']);
-                Route::post('/telefones-invalidos/{id}/ignorar',             [AuditorController::class, 'ignorarTelefoneInvalido']);
-                Route::post('/pendente/{vinculo}/campo/{campo}/aprovar',     [AuditorController::class, 'aprovarCampo']);
-                Route::post('/pendente/{vinculo}/campo/{campo}/rejeitar',    [AuditorController::class, 'rejeitarCampo']);
-                Route::post('/pendente/{vinculo}/campo/{campo}/salvar',      [AuditorController::class, 'salvarValorCampo']);
-                Route::post('/pendentes/aprovar-lote',                       [AuditorController::class, 'aprovarLote']);
-                Route::post('/pendentes/rejeitar-lote',                      [AuditorController::class, 'rejeitarLote']);
-                Route::post('/pendentes/marcar-sem-nome-lote',               [AuditorController::class, 'marcarSemNomeLote']);
-                Route::post('/pendentes/auto-limpar-nao-pessoas',            [AuditorController::class, 'autoLimparNaoPessoas']);
-                Route::post('/contato/{contato}/sinalizar',                  [AuditorController::class, 'sinalizar']);
-                Route::post('/contato/{contato}/aprovar-cadastro',           [AuditorController::class, 'aprovarCadastro']);
-                Route::post('/contato/{contato}/inativar',                   [AuditorController::class, 'inativar']);
-                Route::get('/contatos',                                      [AuditorController::class, 'contatos']);
-                Route::get('/logs',                                          [AuditorController::class, 'logs']);
-                Route::get('/conflitos',                                     [AuditorController::class, 'conflitos']);
-                Route::post('/conflito/{pendente}/fundir',                   [AuditorController::class, 'fundirConflito']);
-                Route::post('/conflito/{pendente}/criar-novo',               [AuditorController::class, 'criarNovoConflito']);
-                Route::post('/conflito/{pendente}/descartar',                [AuditorController::class, 'descartarConflito']);
-            });
-        }
+    Route::middleware('role:admin,dono,diretor,auditor')->prefix('auditor')->group(function () {
+        Route::get('/stats',                                         [AuditorController::class, 'stats']);
+        Route::get('/pendentes',                                     [AuditorController::class, 'pendentesCampos']);
+        Route::get('/telefones-invalidos',                           [AuditorController::class, 'telefonesInvalidos']);
+        Route::post('/telefones-invalidos/{id}/resolver',            [AuditorController::class, 'resolverTelefoneInvalido']);
+        Route::post('/telefones-invalidos/{id}/ignorar',             [AuditorController::class, 'ignorarTelefoneInvalido']);
+        Route::post('/pendente/{vinculo}/campo/{campo}/aprovar',     [AuditorController::class, 'aprovarCampo']);
+        Route::post('/pendente/{vinculo}/campo/{campo}/rejeitar',    [AuditorController::class, 'rejeitarCampo']);
+        Route::post('/pendente/{vinculo}/campo/{campo}/salvar',      [AuditorController::class, 'salvarValorCampo']);
+        Route::post('/pendentes/aprovar-lote',                       [AuditorController::class, 'aprovarLote']);
+        Route::post('/pendentes/rejeitar-lote',                      [AuditorController::class, 'rejeitarLote']);
+        Route::post('/pendentes/marcar-sem-nome-lote',               [AuditorController::class, 'marcarSemNomeLote']);
+        Route::post('/pendentes/auto-limpar-nao-pessoas',            [AuditorController::class, 'autoLimparNaoPessoas']);
+        Route::post('/contato/{contato}/sinalizar',                  [AuditorController::class, 'sinalizar']);
+        Route::post('/contato/{contato}/aprovar-cadastro',           [AuditorController::class, 'aprovarCadastro']);
+        Route::post('/contato/{contato}/inativar',                   [AuditorController::class, 'inativar']);
+        Route::get('/contatos',                                      [AuditorController::class, 'contatos']);
+        Route::get('/logs',                                          [AuditorController::class, 'logs']);
+        Route::get('/conflitos',                                     [AuditorController::class, 'conflitos']);
+        Route::post('/conflito/{pendente}/fundir',                   [AuditorController::class, 'fundirConflito']);
+        Route::post('/conflito/{pendente}/criar-novo',               [AuditorController::class, 'criarNovoConflito']);
+        Route::post('/conflito/{pendente}/descartar',                [AuditorController::class, 'descartarConflito']);
     });
 
     // Campanhas de Mineração — growth_manager, diretor, dono, admin
