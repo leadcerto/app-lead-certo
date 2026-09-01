@@ -73,8 +73,29 @@
             {{-- 3. Imagem Opcional com SEO Automático --}}
             <div>
                 <label class="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">2. Imagem (SEO Automático)</label>
-                <input type="file" name="imagem_padrao" accept="image/*" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs text-gray-700 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 transition">
-                <p class="text-[10px] text-green-700 font-medium mt-1">✨ Será renomeada com palavras-chave e data/hora.</p>
+                <select name="modo_imagem" id="modoImagem" onchange="alternarModoImagem()" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-800 focus:ring-2 focus:ring-green-500 focus:bg-white transition">
+                    @if(isset($imagensSalvas) && $imagensSalvas->isNotEmpty())
+                        <option value="galeria_rotativa" selected>🔄 Revezar Imagens Salvas ({{ $imagensSalvas->count() }} na Galeria)</option>
+                        <option value="galeria_especifica">📋 Escolher Imagem da Galeria</option>
+                    @endif
+                    <option value="upload" {{ (!isset($imagensSalvas) || $imagensSalvas->isEmpty()) ? 'selected' : '' }}>📤 Enviar Nova Imagem</option>
+                    <option value="nenhuma">🚫 Sem Imagem</option>
+                </select>
+
+                <div id="boxUploadImagem" class="{{ (isset($imagensSalvas) && $imagensSalvas->isNotEmpty()) ? 'hidden' : '' }} mt-2">
+                    <input type="file" name="imagem_padrao" accept="image/*" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs text-gray-700 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 transition">
+                </div>
+
+                @if(isset($imagensSalvas) && $imagensSalvas->isNotEmpty())
+                <div id="boxGaleriaEspecifica" class="hidden mt-2">
+                    <select name="imagem_galeria_id" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-xs text-gray-800 focus:ring-2 focus:ring-green-500">
+                        @foreach($imagensSalvas as $img)
+                            <option value="{{ $img->id }}">{{ $img->titulo ?: $img->nome_arquivo_seo }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                @endif
+                <p class="text-[10px] text-green-700 font-medium mt-1">✨ Nome SEO com palavras-chave e data/hora.</p>
             </div>
 
             {{-- 4. Horário Padrão de Publicação --}}
@@ -188,6 +209,28 @@ function alternarModo() {
         box.classList.remove('hidden');
     } else {
         box.classList.add('hidden');
+    }
+}
+
+function alternarModoImagem() {
+    const modo = document.getElementById('modoImagem').value;
+    const boxUpload = document.getElementById('boxUploadImagem');
+    const boxGaleria = document.getElementById('boxGaleriaEspecifica');
+
+    if (boxUpload) {
+        if (modo === 'upload') {
+            boxUpload.classList.remove('hidden');
+        } else {
+            boxUpload.classList.add('hidden');
+        }
+    }
+
+    if (boxGaleria) {
+        if (modo === 'galeria_especifica') {
+            boxGaleria.classList.remove('hidden');
+        } else {
+            boxGaleria.classList.add('hidden');
+        }
     }
 }
 

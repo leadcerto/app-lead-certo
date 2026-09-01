@@ -164,7 +164,9 @@ class GmbPostController extends Controller
             $templates = GmbPostTemplate::where('tenant_id', $tenantId)->where('ativo', true)->get();
         }
 
-        return view('gmb-posts.lote', compact('perfis', 'templates', 'semana'));
+        $imagensSalvas = \App\Models\GmbPostImagem::where('tenant_id', $tenantId)->latest()->get();
+
+        return view('gmb-posts.lote', compact('perfis', 'templates', 'semana', 'imagensSalvas'));
     }
 
     public function storeLote(Request $request, GmbPostIaService $iaService, \App\Services\GmbImageSeoService $seoService): RedirectResponse
@@ -178,6 +180,8 @@ class GmbPostController extends Controller
             'modo_conteudo'     => 'required|in:template_rotativo,template_especifico,ia',
             'template_id'       => 'nullable|exists:gmb_post_templates,id',
             'horario_padrao'    => 'required|string',
+            'modo_imagem'       => 'nullable|in:galeria_rotativa,galeria_especifica,upload,nenhuma',
+            'imagem_galeria_id' => 'nullable|exists:gmb_post_imagens,id',
             'imagem_padrao'     => 'nullable|image|max:10240',
             'imagem_url'        => 'nullable|url',
         ]);
@@ -187,7 +191,12 @@ class GmbPostController extends Controller
         $diasMap = ['segunda' => 0, 'terca' => 1, 'quarta' => 2, 'quinta' => 3, 'sexta' => 4, 'sabado' => 5, 'domingo' => 6];
 
         $templates = GmbPostTemplate::where('tenant_id', $tenantId)->where('ativo', true)->get();
+        $imagensSalvas = \App\Models\GmbPostImagem::where('tenant_id', $tenantId)->get();
+
+        $modoImagem = $validated['modo_imagem'] ?? ($imagensSalvas->isNotEmpty() ? 'galeria_rotativa' : ($request->hasFile('imagem_padrao') ? 'upload' : 'nenhuma'));
+
         $templateIndex = 0;
+        $imagemIndex = 0;
         $criados = 0;
 
         foreach ($validated['matriz'] as $perfilId => $dias) {
@@ -255,8 +264,15 @@ class GmbPostController extends Controller
                 }
 
                 // Processa imagem com SEO exclusivo para esta postagem
-                $imagemUrl = $validated['imagem_url'] ?? null;
-                if ($request->hasFile('imagem_padrao')) {
+                $imagemUrl = null;
+                if ($modoImagem === 'galeria_rotativa' && $imagensSalvas->isNotEmpty()) {
+                    $imgEscolhida = $imagensSalvas[$imagemIndex % $imagensSalvas->count()];
+                    $imagemIndex++;
+                    $imagemUrl = $imgEscolhida->imagem_url;
+                } elseif ($modoImagem === 'galeria_especifica' && !empty($validated['imagem_galeria_id'])) {
+                    $imgEscolhida = $imagensSalvas->firstWhere('id', $validated['imagem_galeria_id']);
+                    $imagemUrl = $imgEscolhida?->imagem_url;
+                } elseif ($modoImagem === 'upload' && $request->hasFile('imagem_padrao')) {
                     $imagemUrl = $seoService->salvarImagemSeo(
                         $request->file('imagem_padrao'),
                         $tenant,
@@ -264,9 +280,11 @@ class GmbPostController extends Controller
                         $dataPost,
                         $titulo
                     );
+                } elseif (!empty($validated['imagem_url'])) {
+                    $imagemUrl = $validated['imagem_url'];
                 }
 
-                GmbPost::create([
+                $post = GmbPost::create([
                     'tenant_id'     => $tenantId,
                     'perfil_gmb_id' => $perfil->id,
                     'autor_user_id' => auth()->id(),
@@ -279,6 +297,11 @@ class GmbPostController extends Controller
                     'status'        => 'agendado',
                     'gerado_por_ia' => $geradoPorIa,
                 ]);
+
+                // Aplica renomeação SEO individualizada para a postagem se a imagem for da galeria
+                if ($imagemUrl) {
+                    $seoService->prepararImagemParaPost($post);
+                }
 
                 $criados++;
             }
