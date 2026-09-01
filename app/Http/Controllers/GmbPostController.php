@@ -408,45 +408,6 @@ class GmbPostController extends Controller
         return back()->with('sucesso', "{$salvos} novos templates focados em WhatsApp/Ligações foram gerados automaticamente com IA e adicionados!");
     }
 
-    public function publicarAgora(GmbPost $post, GmbPostPublishService $publishService): RedirectResponse
-    {
-        $sucesso = $publishService->publicar($post);
-
-        if ($sucesso) {
-            return back()->with('sucesso', 'Post publicado com sucesso no Google Meu Negócio!');
-        }
-
-        return back()->with('aviso', 'Não foi possível publicar agora: ' . ($post->log_erro ?? 'Erro desconhecido.'));
-    }
-
-    public function gerarIa(Request $request, GmbPostIaService $iaService): JsonResponse
-    {
-        $request->validate([
-            'perfil_gmb_id' => 'required|exists:perfis_gmb,id',
-            'tipo'          => 'nullable|string',
-            'objetivo'      => 'nullable|string',
-            'tema'          => 'nullable|string',
-        ]);
-
-        $perfil = PerfilGmb::findOrFail($request->perfil_gmb_id);
-
-        $resultado = $iaService->gerarCopy(
-            perfil: $perfil,
-            tipo: $request->input('tipo', 'novidade'),
-            objetivo: $request->input('objetivo', 'Atrair clientes e ligações locais'),
-            tema: $request->input('tema')
-        );
-
-        return response()->json($resultado);
-    }
-
-    public function destroy(GmbPost $post): RedirectResponse
-    {
-        $post->delete();
-
-        return back()->with('sucesso', 'Postagem removida da agenda.');
-    }
-
     // ── Gestão de Categorias de Postagens ─────────────────────────────────
 
     public function categorias(Request $request): View
