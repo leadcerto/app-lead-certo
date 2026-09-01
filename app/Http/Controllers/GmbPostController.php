@@ -588,4 +588,46 @@ class GmbPostController extends Controller
 
         return back()->with('sucesso', 'Imagem removida da galeria.');
     }
+
+    // ── Publicação Imediata e Ações de Post ──────────────────────────────
+
+    public function publicarAgora(GmbPost $post, GmbPostPublishService $publishService): RedirectResponse
+    {
+        $sucesso = $publishService->publicar($post);
+
+        if ($sucesso) {
+            return back()->with('sucesso', 'Post publicado no Google com sucesso!');
+        }
+
+        $erro = $post->fresh()->log_erro ?: 'Erro desconhecido ao comunicar com o Google.';
+        return back()->with('erro', 'Falha ao publicar: ' . $erro);
+    }
+
+    public function destroy(GmbPost $post): RedirectResponse
+    {
+        $post->delete();
+
+        return back()->with('sucesso', 'Postagem removida.');
+    }
+
+    public function gerarIa(Request $request, GmbPostIaService $iaService): JsonResponse
+    {
+        $request->validate([
+            'perfil_id' => 'required|exists:perfis_gmb,id',
+            'tipo'      => 'required|in:novidade,oferta,evento',
+            'objetivo'  => 'nullable|string|max:200',
+            'tema'      => 'nullable|string|max:200',
+        ]);
+
+        $perfil = PerfilGmb::where('tenant_id', auth()->user()->tenant_id)->findOrFail($request->perfil_id);
+
+        $resultado = $iaService->gerarCopy(
+            perfil: $perfil,
+            tipo: $request->tipo,
+            objetivo: $request->objetivo,
+            tema: $request->tema
+        );
+
+        return response()->json($resultado);
+    }
 }

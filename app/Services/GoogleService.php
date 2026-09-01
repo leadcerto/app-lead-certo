@@ -15,7 +15,7 @@ class GoogleService
     private const REVOKE_URL   = 'https://oauth2.googleapis.com/revoke';
     private const USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo';
 
-    // Escopos máximos — cobre Contacts, Drive, Sheets, Docs, Calendar, Gmail
+    // Escopos máximos — cobre Contacts, Drive, Sheets, Docs, Calendar, Gmail, Google Meu Negócio
     private const SCOPES = [
         'openid',
         'email',
@@ -24,6 +24,7 @@ class GoogleService
         'https://www.googleapis.com/auth/drive',
         'https://www.googleapis.com/auth/calendar',
         'https://mail.google.com/',
+        'https://www.googleapis.com/auth/business.manage',
     ];
 
     private string $clientId;

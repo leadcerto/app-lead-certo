@@ -192,8 +192,39 @@ class GmbPostPublishService
      */
     private function enviarParaGoogleApi(GoogleToken $token, string $locationId, array $payload, GmbPost $post): bool
     {
+        // 1. Garante que o access_token está válido / renova se expirado
+        if ($token->expires_at && $token->expires_at->isPast()) {
+            app(GoogleService::class)->renovarToken($token);
+            $token->refresh();
+        }
+
         $accessToken = $token->access_token;
-        $url = "https://mybusiness.googleapis.com/v4/accounts/{$token->account_id}/locations/{$locationId}/localPosts";
+
+        // 2. Busca lista de contas do Google Meu Negócio
+        $accountRes = Http::withToken($accessToken)
+            ->timeout(15)
+            ->get('https://mybusinessaccountmanagement.googleapis.com/v1/accounts');
+
+        if ($accountRes->status() === 403) {
+            $post->update([
+                'status'   => 'falha',
+                'log_erro' => 'Permissão do Google Meu Negócio pendente. Reconecte a conta Google em "Integrações" para conceder acesso às postagens do perfil.',
+            ]);
+            return false;
+        }
+
+        $accountsData = $accountRes->json();
+        $accountName = $accountsData['accounts'][0]['name'] ?? null;
+
+        if (!$accountName) {
+            $post->update([
+                'status'   => 'falha',
+                'log_erro' => 'Nenhuma conta do Google Meu Negócio encontrada vinculada a este e-mail Google.',
+            ]);
+            return false;
+        }
+
+        $url = "https://mybusiness.googleapis.com/v4/{$accountName}/locations/{$locationId}/localPosts";
 
         $res = Http::withToken($accessToken)
             ->timeout(20)
@@ -211,9 +242,15 @@ class GmbPostPublishService
             return true;
         }
 
+        $erroGoogle = $res->json('error.message') ?? $res->body();
         Log::warning('Google LocalPost API falhou', [
             'status'   => $res->status(),
             'response' => $res->body(),
+        ]);
+
+        $post->update([
+            'status'   => 'falha',
+            'log_erro' => 'Erro Google (' . $res->status() . '): ' . $erroGoogle,
         ]);
 
         return false;
