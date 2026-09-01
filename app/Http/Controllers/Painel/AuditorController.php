@@ -459,10 +459,22 @@ class AuditorController extends Controller
                 ]);
 
                 if ($vinculo) {
-                    $vinculo->update([
-                        'contato_id'                 => $outroContato->id,
-                        'campos_pendentes_auditoria' => null,
-                    ]);
+                    $vinculoExistente = VinculoContatoTenant::where('tenant_id', $vinculo->tenant_id)
+                        ->where('contato_id', $outroContato->id)
+                        ->where('id', '!=', $vinculo->id)
+                        ->first();
+
+                    if ($vinculoExistente) {
+                        $vinculoExistente->update([
+                            'campos_pendentes_auditoria' => null,
+                        ]);
+                        $vinculo->delete();
+                    } else {
+                        $vinculo->update([
+                            'contato_id'                 => $outroContato->id,
+                            'campos_pendentes_auditoria' => null,
+                        ]);
+                    }
                 }
 
                 $contato = $outroContato;
