@@ -281,18 +281,22 @@ class ContatoSyncService
                         $resultado['atualizados']++;
                     } else {
                         // Similaridade baixa → possível chip reciclado → auditoria
-                        ContatoPendente::create([
-                            'tenant_id'           => $tenantId,
-                            'telefone'            => $telefone,
-                            'nome'                => $nome,
-                            'dados_brutos'        => $dados,
-                            'tipo_conflito'       => 'numero_possivelmente_reciclado',
-                            'contato_existente_id' => $existente->id,
-                            'nome_existente'      => $existente->nome,
-                            'similaridade_nome'   => $similaridade,
-                            'status'              => 'aguardando',
-                            'criado_em'           => now(),
-                        ]);
+                        ContatoPendente::firstOrCreate(
+                            [
+                                'tenant_id'            => $tenantId,
+                                'telefone'             => $telefone,
+                                'contato_existente_id' => $existente->id,
+                                'status'               => 'aguardando',
+                            ],
+                            [
+                                'nome'              => $nome,
+                                'dados_brutos'      => $dados,
+                                'tipo_conflito'     => 'numero_possivelmente_reciclado',
+                                'nome_existente'    => $existente->nome,
+                                'similaridade_nome' => $similaridade,
+                                'criado_em'         => now(),
+                            ]
+                        );
 
                         $resultado['conflitos']++;
                     }

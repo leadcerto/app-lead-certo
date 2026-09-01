@@ -90,6 +90,11 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('contatos.marcadores')
         ->middleware('role:admin,dono,gerente,gestor,growth_manager');
 
+    // Relatório de Novos Leads por Período
+    Route::get('/contatos/relatorios', [ContatosController::class, 'relatorios'])
+        ->name('contatos.relatorios')
+        ->middleware('role:admin,dono,diretor,gerente,gestor,growth_manager');
+
     // Integrações — apenas dono, admin, growth_manager
     Route::get('/integracoes', [IntegracoesController::class, 'view'])
         ->name('integracoes')

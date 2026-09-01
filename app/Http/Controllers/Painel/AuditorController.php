@@ -22,17 +22,24 @@ class AuditorController extends Controller
 
     // ── Dashboard de Saúde dos Dados ─────────────────────────────────────────
 
-    public function stats(): JsonResponse
+    public function stats(Request $request): JsonResponse
     {
-        $total          = Contato::count();
-        $pendentes      = VinculoContatoTenant::whereNotNull('campos_pendentes_auditoria')->get()
-            ->sum(fn ($v) => count($v->campos_pendentes_auditoria ?? []));
-        $telefonesErros = \App\Models\AuditoriaContato::where('status', 'pendente')->count();
-        $conflitos      = ContatoPendente::where('status', 'aguardando')->count();
-        $inconsistentes = Contato::where('status_validacao', 'inconsistente')->count();
-        $semNome        = Contato::whereNull('nome')->orWhere('nome', '')->orWhere('nome', 'Sem Nome')->count();
-        $semTelefone    = Contato::whereNull('telefone')->orWhere('telefone', '')->count();
-        $inativos       = Contato::onlyTrashed()->count();
+        $tenantId = $request->user()?->tenant_id;
+        $contatoIds = $tenantId ? VinculoContatoTenant::where('tenant_id', $tenantId)->pluck('contato_id') : collect();
+
+        $total          = $contatoIds->count();
+        $pendentes      = $tenantId
+            ? VinculoContatoTenant::where('tenant_id', $tenantId)->whereNotNull('campos_pendentes_auditoria')->get()
+                ->sum(fn ($v) => count($v->campos_pendentes_auditoria ?? []))
+            : 0;
+        $telefonesErros = $contatoIds->isNotEmpty()
+            ? \App\Models\AuditoriaContato::whereIn('contato_id', $contatoIds)->where('status', 'pendente')->count()
+            : 0;
+        $conflitos      = $tenantId ? ContatoPendente::where('tenant_id', $tenantId)->where('status', 'aguardando')->count() : 0;
+        $inconsistentes = $contatoIds->isNotEmpty() ? Contato::whereIn('id', $contatoIds)->where('status_validacao', 'inconsistente')->count() : 0;
+        $semNome        = $contatoIds->isNotEmpty() ? Contato::whereIn('id', $contatoIds)->where(fn($q) => $q->whereNull('nome')->orWhere('nome', '')->orWhere('nome', 'Sem Nome'))->count() : 0;
+        $semTelefone    = $contatoIds->isNotEmpty() ? Contato::whereIn('id', $contatoIds)->where(fn($q) => $q->whereNull('telefone')->orWhere('telefone', ''))->count() : 0;
+        $inativos       = $contatoIds->isNotEmpty() ? Contato::onlyTrashed()->whereIn('id', $contatoIds)->count() : 0;
 
         return response()->json([
             'total'           => $total,
@@ -50,7 +57,11 @@ class AuditorController extends Controller
 
     public function telefonesInvalidos(Request $request): JsonResponse
     {
+        $tenantId = $request->user()?->tenant_id;
+        $contatoIds = $tenantId ? VinculoContatoTenant::where('tenant_id', $tenantId)->pluck('contato_id') : collect();
+
         $registros = \App\Models\AuditoriaContato::with('contato')
+            ->when($contatoIds->isNotEmpty(), fn($q) => $q->whereIn('contato_id', $contatoIds))
             ->where('status', 'pendente')
             ->orderBy('id', 'desc')
             ->get();

@@ -28,10 +28,25 @@
     $verGmb          = $user?->podeAcessar('avaliacoes_gmb');
     $verGmbAvaliador = $user?->podeAcessar('avaliador_dash');
 
-    $pendentesCampos = \App\Models\VinculoContatoTenant::whereNotNull('campos_pendentes_auditoria')->get()
-        ->sum(fn ($v) => count($v->campos_pendentes_auditoria ?? []));
-    $pendentesTelefones = \App\Models\AuditoriaContato::where('status', 'pendente')->count();
-    $pendentesConflitos = \App\Models\ContatoPendente::where('status', 'aguardando')->count();
+    $tenantId = $user?->tenant_id;
+
+    $pendentesCampos = $tenantId
+        ? \App\Models\VinculoContatoTenant::where('tenant_id', $tenantId)->whereNotNull('campos_pendentes_auditoria')->get()
+            ->sum(fn ($v) => count($v->campos_pendentes_auditoria ?? []))
+        : 0;
+
+    $contatoIdsTenant = $tenantId
+        ? \App\Models\VinculoContatoTenant::where('tenant_id', $tenantId)->pluck('contato_id')
+        : collect();
+
+    $pendentesTelefones = $contatoIdsTenant->isNotEmpty()
+        ? \App\Models\AuditoriaContato::whereIn('contato_id', $contatoIdsTenant)->where('status', 'pendente')->count()
+        : 0;
+
+    $pendentesConflitos = $tenantId
+        ? \App\Models\ContatoPendente::where('tenant_id', $tenantId)->where('status', 'aguardando')->count()
+        : 0;
+
     $totalAuditoriaGeral = $pendentesCampos + $pendentesTelefones + $pendentesConflitos;
 
     $googleFalhou = $verIntegra
@@ -232,6 +247,15 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
                         </svg>
                         Marcadores
+                    </a>
+
+                    {{-- Relatórios de Leads --}}
+                    <a href="{{ route('contatos.relatorios') }}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('contatos.relatorios') ? 'bg-green-700 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' }}">
+                        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        Relatórios
                     </a>
 
                 </div>

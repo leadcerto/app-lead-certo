@@ -66,6 +66,104 @@ class ContatosController extends Controller
         ]);
     }
 
+    // ── Relatório de Novos Leads por Período ────────────────────────────────────
+
+    public function relatorios(Request $request): View
+    {
+        $tenantId = $request->user()->tenant_id;
+        $periodo = $request->input('periodo', 'ultimos_30');
+        $dataInicio = $request->input('data_inicio');
+        $dataFim = $request->input('data_fim');
+
+        switch ($periodo) {
+            case 'hoje':
+                $dtIni = now()->startOfDay();
+                $dtFim = now()->endOfDay();
+                break;
+            case 'ontem':
+                $dtIni = now()->subDay()->startOfDay();
+                $dtFim = now()->subDay()->endOfDay();
+                break;
+            case 'ultimos_7':
+                $dtIni = now()->subDays(6)->startOfDay();
+                $dtFim = now()->endOfDay();
+                break;
+            case 'ultimos_15':
+                $dtIni = now()->subDays(14)->startOfDay();
+                $dtFim = now()->endOfDay();
+                break;
+            case 'mes_atual':
+                $dtIni = now()->startOfMonth();
+                $dtFim = now()->endOfDay();
+                break;
+            case 'mes_anterior':
+                $dtIni = now()->subMonth()->startOfMonth();
+                $dtFim = now()->subMonth()->endOfMonth();
+                break;
+            case 'personalizado':
+                $dtIni = $dataInicio ? \Carbon\Carbon::parse($dataInicio)->startOfDay() : now()->subDays(29)->startOfDay();
+                $dtFim = $dataFim ? \Carbon\Carbon::parse($dataFim)->endOfDay() : now()->endOfDay();
+                break;
+            case 'ultimos_30':
+            default:
+                $dtIni = now()->subDays(29)->startOfDay();
+                $dtFim = now()->endOfDay();
+                $periodo = 'ultimos_30';
+                break;
+        }
+
+        // IDs de contatos vinculados ao tenant no período
+        $vinculosNoPeriodo = VinculoContatoTenant::where('tenant_id', $tenantId)
+            ->whereBetween('created_at', [$dtIni, $dtFim])
+            ->pluck('contato_id');
+
+        $totalPeriodo = $vinculosNoPeriodo->count();
+
+        // Agrupamento diário para gráfico
+        $evolucaoDiaria = VinculoContatoTenant::where('tenant_id', $tenantId)
+            ->whereBetween('created_at', [$dtIni, $dtFim])
+            ->selectRaw("DATE(created_at) as data, count(*) as total")
+            ->groupBy('data')
+            ->orderBy('data', 'asc')
+            ->pluck('total', 'data');
+
+        // Agrupamento por canal / origem
+        $origens = Contato::whereIn('id', $vinculosNoPeriodo)
+            ->selectRaw("COALESCE(origem, 'whatsapp') as canal, count(*) as total")
+            ->groupBy('canal')
+            ->orderByDesc('total')
+            ->get();
+
+        // Leads paginados do período
+        $leads = Contato::whereIn('id', $vinculosNoPeriodo)
+            ->orderByDesc('id')
+            ->paginate(50)
+            ->withQueryString();
+
+        $leads->getCollection()->transform(function ($lead) {
+            $info = \App\Services\PaisTelefoneService::identificarPais($lead->telefone);
+            $lead->telefone_formatado = $info['formatado'];
+            $lead->bandeira = $info['bandeira'];
+            $lead->pais_nome = $info['nome'];
+            return $lead;
+        });
+
+        $diasCount = max(1, (int)$dtIni->diffInDays($dtFim) + 1);
+        $mediaDia = round($totalPeriodo / $diasCount, 1);
+
+        return view('contatos.relatorios', [
+            'periodo'        => $periodo,
+            'data_inicio'    => $dtIni->format('Y-m-d'),
+            'data_fim'       => $dtFim->format('Y-m-d'),
+            'totalPeriodo'   => $totalPeriodo,
+            'mediaDia'       => $mediaDia,
+            'evolucaoDiaria' => $evolucaoDiaria,
+            'origens'        => $origens,
+            'leads'          => $leads,
+            'diasCount'      => $diasCount,
+        ]);
+    }
+
     // ── Auditoria de Contatos ──────────────────────────────────────────────────
 
     public function auditoriaContatos(Request $request): View
