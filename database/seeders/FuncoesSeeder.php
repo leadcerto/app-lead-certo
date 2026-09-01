@@ -119,7 +119,7 @@ class FuncoesSeeder extends Seeder
             ],
             // 8. Inteligência / Supervisor Geral
             [
-                'nome'                  => 'Gabriel — Orquestrador Geral IA',
+                'nome'                  => 'Orquestrador Geral IA',
                 'tipo'                  => 'inteligencia',
                 'icone'                 => '🧠',
                 'descricao'             => 'Supervisor central com Gemini Pro que monitora o SaaS, conformidade de regras, qualidade de textos e relatórios executivos.',
@@ -325,7 +325,7 @@ class FuncoesSeeder extends Seeder
         if (!$gabriel) {
             $gabriel = User::create([
                 'tenant_id'        => 2,
-                'nome'             => 'Gabriel (Orquestrador IA)',
+                'nome'             => 'Gabriel',
                 'email'            => 'gabriel.orquestrador@leadcerto.com',
                 'password'         => Hash::make('LeadCerto@2026'),
                 'perfil'           => 'admin',
@@ -336,13 +336,14 @@ class FuncoesSeeder extends Seeder
             ]);
         } else {
             $gabriel->update([
-                'is_ia' => true,
-                'gemini_email' => 'gabriel.orquestrador@leadcerto.com',
+                'nome'             => 'Gabriel',
+                'is_ia'            => true,
+                'gemini_email'     => 'gabriel.orquestrador@leadcerto.com',
                 'gemini_instrucoes' => 'Atue como Orquestrador Geral e Auditor do sistema SaaS Lead Certo.',
             ]);
         }
-        if (isset($cargosCriados['Gabriel — Orquestrador Geral IA'])) {
-            $gabriel->cargos()->syncWithoutDetaching([$cargosCriados['Gabriel — Orquestrador Geral IA']->id]);
+        if (isset($cargosCriados['Orquestrador Geral IA'])) {
+            $gabriel->cargos()->syncWithoutDetaching([$cargosCriados['Orquestrador Geral IA']->id]);
         }
     }
 }
