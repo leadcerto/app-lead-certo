@@ -43,7 +43,8 @@ class PaisTelefoneService
         ['iso' => 'IL', 'nome' => 'Israel', 'ddi' => '972', 'bandeira' => '🇮🇱', 'mascara' => '5X XXX XXXX'],
         ['iso' => 'AE', 'nome' => 'Emirados Árabes', 'ddi' => '971', 'bandeira' => '🇦🇪', 'mascara' => '5X XXX XXXX'],
         ['iso' => 'SA', 'nome' => 'Arábia Saudita', 'ddi' => '966', 'bandeira' => '🇸🇦', 'mascara' => '5X XXX XXXX'],
-        ['iso' => 'RU', 'nome' => 'Rússia', 'ddi' => '7', 'bandeira' => '🇷🇺', 'mascara' => 'XXX XXX-XX-XX'],
+        ['iso' => 'TN', 'nome' => 'Tunísia', 'ddi' => '216', 'bandeira' => '🇹🇳', 'mascara' => 'XX XXX XXX'],
+        ['iso' => 'GM', 'nome' => 'Gâmbia', 'ddi' => '220', 'bandeira' => '🇬🇲', 'mascara' => 'XXX XXXX'],
     ];
 
     /**
@@ -114,8 +115,8 @@ class PaisTelefoneService
 
             if (str_starts_with($semZeros, $p['ddi'])) {
                 $local = substr($semZeros, strlen($p['ddi']));
-                // Se sobrou uma quantidade razoável de dígitos (4 a 12 dígitos)
-                if (strlen($local) >= 4 && strlen($local) <= 12) {
+                // Se sobrou uma quantidade razoável de dígitos (4 a 16 dígitos)
+                if (strlen($local) >= 4 && strlen($local) <= 16) {
                     $formatado = "+{$p['ddi']} " . self::formatarGenerico($local);
                     return [
                         'iso'          => $p['iso'],
