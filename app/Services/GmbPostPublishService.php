@@ -83,11 +83,14 @@ class GmbPostPublishService
                 return true;
             }
 
-            // Caso falhe em todos os canais
-            $post->update([
-                'status'   => 'falha',
-                'log_erro' => 'Não foi possível comunicar com a API do Google nem com o Webhook. Verifique a conexão do perfil e credenciais.',
-            ]);
+            // Caso falhe em todos os canais e não tenha erro específico gravado
+            $postAtual = $post->fresh();
+            if ($postAtual->status !== 'falha' || empty($postAtual->log_erro)) {
+                $post->update([
+                    'status'   => 'falha',
+                    'log_erro' => 'Não foi possível comunicar com a API do Google nem com o Webhook. Verifique a conexão do perfil e credenciais.',
+                ]);
+            }
             return false;
 
         } catch (\Exception $e) {
