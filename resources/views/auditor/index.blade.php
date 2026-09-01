@@ -750,6 +750,24 @@ function auditor() {
             }
         },
 
+        extrairNomeJS(str) {
+            if (!str) return '';
+            const tags = ['frete', 'frt', 'mudan[cç]a', 'transp', 'caminh', 'bongo', 'carreto', 'carga', 'lead', 'cliente', 'contato', 'or[cç]amento', 'disk', 'motorista', 'ajudante', 'entregador', 'entrega', 'zap', 'whatsapp', 'teste', 'pedreiro', 'pintor', 'marceneiro', 'eletricista', 'diarista', 'faxineira', 'loja', 'oficina', 'vendas', 'atendimento', 'sac', 'suporte', 'comercial', 'adm', 'estofador', 'sofa', 'camorim', 'urologia', 'advocacia', 'vidra[cç]aria', 'engemedic', 'box', 'pizza', 'mdm', 'ajd', 'dr', 'dra', 'adv', 'moveis', 'marcenaria', 'fiorino', 'sprinter', 'iveco', 'vuc', 'van', 'refritec'];
+            const regexTags = new RegExp('\\b(' + tags.join('|') + ')\\w*\\b', 'gi');
+            
+            let limpo = str.replace(/[\d\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E0}-\u{1F1FF}⚡★☆✓✔*#@+\-_.,:;\/\\|()]/gu, ' ');
+            limpo = limpo.replace(regexTags, ' ');
+            limpo = limpo.replace(/\s+/g, ' ').trim();
+            
+            if (limpo.replace(/[^a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêîôûÂÊÎÔÛçÇ]/g, '').length >= 2 && !limpo.toLowerCase().includes('sem nome')) {
+                return limpo.split(' ').map(w => {
+                    if (['de', 'da', 'do', 'dos', 'das', 'e'].includes(w.toLowerCase())) return w.toLowerCase();
+                    return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+                }).join(' ');
+            }
+            return 'Sem Nome';
+        },
+
         // Edição Completa de Contato (Todos os Campos)
         abrirEditarModal(item) {
             const ddi = item.ddi || '55';
@@ -762,6 +780,12 @@ function auditor() {
             }
             if (item.campo === 'sobrenome' && item.valor_sugerido) {
                 sobrenomeInicial = item.valor_sugerido;
+            }
+
+            // Auto-limpeza inteligente no modal (ex: remove "Frt", "9406" e deixa só "Tai")
+            const nomeLimpo = this.extrairNomeJS(nomeInicial);
+            if (nomeLimpo && nomeLimpo !== 'Sem Nome') {
+                nomeInicial = nomeLimpo;
             }
 
             let numLocal = item.numero_local || '';

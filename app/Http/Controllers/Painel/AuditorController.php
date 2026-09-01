@@ -441,15 +441,38 @@ class AuditorController extends Controller
             'email'     => $email ?: null,
         ];
 
+        $novoTelefone = null;
         if (!empty($numeroLocal)) {
-            if (str_starts_with($numeroLocal, $ddi) && strlen($numeroLocal) > 10) {
-                $dadosAtualizar['telefone'] = $numeroLocal;
-            } else {
-                $dadosAtualizar['telefone'] = $ddi . $numeroLocal;
-            }
+            $novoTelefone = (str_starts_with($numeroLocal, $ddi) && strlen($numeroLocal) > 10)
+                ? $numeroLocal
+                : ($ddi . $numeroLocal);
         }
 
-        $contato->update($dadosAtualizar);
+        if ($novoTelefone && $novoTelefone !== $contato->telefone) {
+            $outroContato = Contato::where('telefone', $novoTelefone)->where('id', '!=', $contato->id)->first();
+            if ($outroContato) {
+                // Se já existe outro registro com este mesmo telefone, atualiza o outro e funde o vínculo
+                $outroContato->update([
+                    'nome'      => $nome,
+                    'sobrenome' => $sobrenome ?: null,
+                    'email'     => $email ?: $outroContato->email,
+                ]);
+
+                if ($vinculo) {
+                    $vinculo->update([
+                        'contato_id'                 => $outroContato->id,
+                        'campos_pendentes_auditoria' => null,
+                    ]);
+                }
+
+                $contato = $outroContato;
+            } else {
+                $dadosAtualizar['telefone'] = $novoTelefone;
+                $contato->update($dadosAtualizar);
+            }
+        } else {
+            $contato->update($dadosAtualizar);
+        }
 
         if ($vinculo) {
             $pendentes = $vinculo->campos_pendentes_auditoria ?? [];
@@ -603,13 +626,14 @@ class AuditorController extends Controller
     public static function extrairNomeProprio(?string $nome, ?string $sobrenome = null): array
     {
         $tagsLixo = [
-            'frete', 'mudan[cç]a', 'transp\w*', 'caminh\w*', 'bongo', 'carreto', 'carga',
-            'lead', 'cliente', 'contato', 'or[cç]amento', 'disk', 'motorista', 'ajudante',
-            'entregador', 'entrega', 'zap', 'whatsapp', 'teste', 'pedreiro', 'pintor',
-            'marceneiro', 'eletricista', 'diarista', 'faxineira', 'loja', 'oficina',
-            'vendas?', 'atendimento', 'sac', 'suporte', 'comercial', 'adm', 'estofador',
-            'sofa', 'camorim', 'urologia', 'advocacia', 'vidra[cç]aria', 'engemedic',
-            'box', 'pizza', 'mdm', 'ajd', 'frt', 'dr\w*', 'dra\w*', 'adv\w*', 'moveis', 'marcenaria'
+            'frete\w*', 'frt\w*', 'mudan\w*', 'transp\w*', 'caminh\w*', 'bongo', 'carreto\w*', 'carga\w*',
+            'lead\w*', 'cliente\w*', 'contato\w*', 'or[cç]amento\w*', 'disk\w*', 'motorista\w*', 'ajudante\w*',
+            'entregador\w*', 'entrega\w*', 'zap\w*', 'whatsapp\w*', 'teste\w*', 'pedreiro\w*', 'pintor\w*',
+            'marceneiro\w*', 'eletricista\w*', 'diarista\w*', 'faxineira\w*', 'loja\w*', 'oficina\w*',
+            'vendas?', 'atendimento\w*', 'sac', 'suporte\w*', 'comercial\w*', 'adm\w*', 'estofador\w*',
+            'sofa\w*', 'camorim\w*', 'urologia\w*', 'advocacia\w*', 'vidra[cç]aria\w*', 'engemedic\w*',
+            'box', 'pizza\w*', 'mdm\w*', 'ajd\w*', 'dr\w*', 'dra\w*', 'adv\w*', 'moveis\w*', 'marcenaria\w*',
+            'fiorino\w*', 'sprinter\w*', 'iveco\w*', 'vuc\w*', 'van\w*', 'refritec\w*'
         ];
         $patternLixo = '/\b(' . implode('|', $tagsLixo) . ')\b/iu';
 
@@ -620,12 +644,12 @@ class AuditorController extends Controller
         if (!empty($junto) && !in_array($junto, $candidatos)) $candidatos[] = $junto;
 
         foreach ($candidatos as $cand) {
-            // Limpar emojis, símbolos especiais e dígitos
-            $limpo = preg_replace('/[\d\x{1F600}-\x{1F64F}\x{1F300}-\x{1F5FF}\x{1F680}-\x{1F6FF}\x{2600}-\x{26FF}\x{2700}-\x{27BF}\x{1F900}-\x{1F9FF}\x{1F1E0}-\x{1F1FF}⚡★☆✓✔*#@]/u', '', $cand);
-            // Remover tags comerciais/lixo
-            $limpo = preg_replace($patternLixo, '', $limpo);
+            // 1. Limpar emojis, símbolos especiais, pontuações e dígitos
+            $limpo = preg_replace('/[\d\x{1F600}-\x{1F64F}\x{1F300}-\x{1F5FF}\x{1F680}-\x{1F6FF}\x{2600}-\x{26FF}\x{2700}-\x{27BF}\x{1F900}-\x{1F9FF}\x{1F1E0}-\x{1F1FF}⚡★☆✓✔*#@+\-_.,:;\/\\|()]/u', ' ', $cand);
+            // 2. Remover tags comerciais/lixo
+            $limpo = preg_replace($patternLixo, ' ', $limpo);
+            // 3. Normalizar espaços
             $limpo = trim(preg_replace('/\s+/', ' ', $limpo));
-            $limpo = trim($limpo, " -_./,");
 
             // Se sobrou um nome válido com pelo menos 2 letras
             if (strlen(preg_replace('/[^a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêîôûÂÊÎÔÛçÇ]/', '', $limpo)) >= 2 && !preg_match('/^sem nome$/i', $limpo)) {
