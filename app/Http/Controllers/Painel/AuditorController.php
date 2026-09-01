@@ -56,7 +56,7 @@ class AuditorController extends Controller
         $itens = $conflitos->map(fn($c) => [
             'id'                  => $c->id,
             'tipo_conflito'       => $c->tipo_conflito,
-            'telefone'            => $this->mascarar($c->telefone ?? '', 'telefone'),
+            'telefone'            => $this->formatarTelefoneCompleto($c->telefone ?? ''),
             'nome_google'         => $c->nome,
             'nome_existente'      => $c->nome_existente,
             'contato_existente_id' => $c->contato_existente_id,
@@ -162,12 +162,6 @@ class AuditorController extends Controller
                 $valorAtual    = $v->contato?->$campo;
                 $valorSugerido = $pendencia['sugerido'] ?? null;
 
-                // Mascarar email quando for o campo em questão (LGPD)
-                if ($campo === 'email') {
-                    $valorAtual    = $this->mascarar($valorAtual ?? '', 'email');
-                    $valorSugerido = $this->mascarar($valorSugerido ?? '', 'email');
-                }
-
                 $itens[] = [
                     'vinculo_id'     => $v->id,
                     'contato_id'     => $v->contato_id,
@@ -176,7 +170,7 @@ class AuditorController extends Controller
                     'valor_atual'    => $valorAtual,
                     'valor_sugerido' => $valorSugerido,
                     'origem'         => $pendencia['origem'] ?? null,
-                    'telefone'       => $this->mascarar($v->contato?->telefone ?? '', 'telefone'),
+                    'telefone'       => $this->formatarTelefoneCompleto($v->contato?->telefone ?? ''),
                 ];
             }
         }
@@ -220,6 +214,37 @@ class AuditorController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    public function salvarValorCampo(Request $request, VinculoContatoTenant $vinculo, string $campo): JsonResponse
+    {
+        $novoValor = trim((string)$request->input('valor', ''));
+        $valorAntigo = $vinculo->contato?->$campo;
+
+        $vinculo->contato?->update([$campo => $novoValor]);
+
+        $pendentes = $vinculo->campos_pendentes_auditoria ?? [];
+        unset($pendentes[$campo]);
+
+        $humano = $vinculo->campos_editados_humano ?? [];
+        $humano[$campo] = now()->toIso8601String();
+
+        $vinculo->update([
+            'campos_pendentes_auditoria' => $pendentes ?: null,
+            'campos_editados_humano'     => $humano,
+        ]);
+
+        AuditLog::registrar(
+            tabela:      'contatos',
+            registroId:  $vinculo->contato_id,
+            acao:        'editar_salvar_campo',
+            campo:       $campo,
+            valorAntigo: $valorAntigo,
+            valorNovo:   $novoValor,
+            contexto:    ['vinculo_id' => $vinculo->id, 'tenant_id' => $vinculo->tenant_id]
+        );
+
+        return response()->json(['ok' => true]);
+    }
+
     public function rejeitarCampo(VinculoContatoTenant $vinculo, string $campo): JsonResponse
     {
         $pendencia = $vinculo->campos_pendentes_auditoria[$campo] ?? null;
@@ -242,6 +267,186 @@ class AuditorController extends Controller
         );
 
         return response()->json(['ok' => true]);
+    }
+
+    public function aprovarLote(Request $request): JsonResponse
+    {
+        $itens = $request->input('itens', []);
+        $total = 0;
+
+        foreach ($itens as $item) {
+            $vinculoId = $item['vinculo_id'] ?? null;
+            $campo     = $item['campo'] ?? null;
+            if (!$vinculoId || !$campo) continue;
+
+            $vinculo = VinculoContatoTenant::with('contato')->find($vinculoId);
+            if (!$vinculo) continue;
+
+            $pendencia = $vinculo->campos_pendentes_auditoria[$campo] ?? null;
+            if (!$pendencia) continue;
+
+            $valorAntigo = $vinculo->contato?->$campo;
+            $valorNovo   = $pendencia['sugerido'];
+
+            $vinculo->contato?->update([$campo => $valorNovo]);
+
+            $pendentes = $vinculo->campos_pendentes_auditoria ?? [];
+            unset($pendentes[$campo]);
+
+            $humano = $vinculo->campos_editados_humano ?? [];
+            $humano[$campo] = now()->toIso8601String();
+
+            $vinculo->update([
+                'campos_pendentes_auditoria' => $pendentes ?: null,
+                'campos_editados_humano'     => $humano,
+            ]);
+
+            AuditLog::registrar(
+                tabela:      'contatos',
+                registroId:  $vinculo->contato_id,
+                acao:        'aprovar_campo_lote',
+                campo:       $campo,
+                valorAntigo: $valorAntigo,
+                valorNovo:   $valorNovo,
+                contexto:    ['vinculo_id' => $vinculo->id]
+            );
+            $total++;
+        }
+
+        return response()->json(['ok' => true, 'total' => $total]);
+    }
+
+    public function rejeitarLote(Request $request): JsonResponse
+    {
+        $itens = $request->input('itens', []);
+        $total = 0;
+
+        foreach ($itens as $item) {
+            $vinculoId = $item['vinculo_id'] ?? null;
+            $campo     = $item['campo'] ?? null;
+            if (!$vinculoId || !$campo) continue;
+
+            $vinculo = VinculoContatoTenant::find($vinculoId);
+            if (!$vinculo) continue;
+
+            $pendentes = $vinculo->campos_pendentes_auditoria ?? [];
+            if (!isset($pendentes[$campo])) continue;
+
+            unset($pendentes[$campo]);
+            $vinculo->update(['campos_pendentes_auditoria' => $pendentes ?: null]);
+            $total++;
+        }
+
+        return response()->json(['ok' => true, 'total' => $total]);
+    }
+
+    public function marcarSemNomeLote(Request $request): JsonResponse
+    {
+        $itens = $request->input('itens', []);
+        $total = 0;
+
+        foreach ($itens as $item) {
+            $vinculoId = $item['vinculo_id'] ?? null;
+            if (!$vinculoId) continue;
+
+            $vinculo = VinculoContatoTenant::with('contato')->find($vinculoId);
+            if (!$vinculo) continue;
+
+            $vinculo->contato?->update(['nome' => 'Sem Nome', 'sobrenome' => null]);
+
+            $pendentes = $vinculo->campos_pendentes_auditoria ?? [];
+            unset($pendentes['nome']);
+            unset($pendentes['sobrenome']);
+
+            $humano = $vinculo->campos_editados_humano ?? [];
+            $humano['nome'] = now()->toIso8601String();
+
+            $vinculo->update([
+                'campos_pendentes_auditoria' => $pendentes ?: null,
+                'campos_editados_humano'     => $humano,
+            ]);
+
+            AuditLog::registrar(
+                tabela:      'contatos',
+                registroId:  $vinculo->contato_id,
+                acao:        'marcar_sem_nome',
+                campo:       'nome',
+                valorAntigo: $vinculo->contato?->nome,
+                valorNovo:   'Sem Nome',
+                contexto:    ['vinculo_id' => $vinculo->id]
+            );
+            $total++;
+        }
+
+        return response()->json(['ok' => true, 'total' => $total]);
+    }
+
+    public function autoLimparNaoPessoas(Request $request): JsonResponse
+    {
+        $vinculos = VinculoContatoTenant::with('contato')
+            ->whereNotNull('campos_pendentes_auditoria')
+            ->get();
+
+        $total = 0;
+        $padroesNaoPessoa = [
+            '/^frete/i',
+            '/^mudan/i',
+            '/^transp/i',
+            '/^caminh/i',
+            '/^bongo/i',
+            '/^carga/i',
+            '/^lead/i',
+            '/^cliente/i',
+            '/^contato/i',
+            '/^or[cç]amento/i',
+            '/^\d+$/', // apenas números
+            '/^[\W_]+$/', // apenas símbolos ou emojis
+        ];
+
+        foreach ($vinculos as $v) {
+            $pendentes = $v->campos_pendentes_auditoria ?? [];
+            $alterou = false;
+
+            foreach ($pendentes as $campo => $pendencia) {
+                if (!in_array($campo, ['nome', 'sobrenome'])) continue;
+
+                $sugerido = trim((string)($pendencia['sugerido'] ?? ''));
+                $isNaoPessoa = false;
+
+                foreach ($padroesNaoPessoa as $padrao) {
+                    if (preg_match($padrao, $sugerido)) {
+                        $isNaoPessoa = true;
+                        break;
+                    }
+                }
+
+                // Se tem menos de 2 letras ou parece código/número
+                if (strlen(preg_replace('/[^a-zA-Z]/', '', $sugerido)) < 2) {
+                    $isNaoPessoa = true;
+                }
+
+                if ($isNaoPessoa) {
+                    $v->contato?->update(['nome' => 'Sem Nome', 'sobrenome' => null]);
+                    unset($pendentes['nome']);
+                    unset($pendentes['sobrenome']);
+                    $humano = $v->campos_editados_humano ?? [];
+                    $humano['nome'] = now()->toIso8601String();
+                    $v->campos_editados_humano = $humano;
+                    $alterou = true;
+                    $total++;
+                    break;
+                }
+            }
+
+            if ($alterou) {
+                $v->update([
+                    'campos_pendentes_auditoria' => $pendentes ?: null,
+                    'campos_editados_humano'     => $v->campos_editados_humano,
+                ]);
+            }
+        }
+
+        return response()->json(['ok' => true, 'total' => $total]);
     }
 
     // ── Sinalizar contato como inconsistente ──────────────────────────────────
@@ -337,8 +542,8 @@ class AuditorController extends Controller
             'id'               => $c->id,
             'nome'             => $c->nome,
             'sobrenome'        => $c->sobrenome,
-            'telefone'         => $this->mascarar($c->telefone ?? '', 'telefone'),
-            'email'            => $this->mascarar($c->email ?? '', 'email'),
+            'telefone'         => $this->formatarTelefoneCompleto($c->telefone ?? ''),
+            'email'            => $c->email,
             'cpf'              => $this->mascarar($c->cpf ?? '', 'cpf'),
             'cnpj'             => $this->mascarar($c->cnpj ?? '', 'cnpj'),
             'tipo_pessoa'      => $c->tipo_pessoa,
@@ -382,6 +587,24 @@ class AuditorController extends Controller
         ]);
     }
 
+    // ── Formatação de Telefone Completo ───────────────────────────────────────
+
+    private function formatarTelefoneCompleto(?string $telefone): string
+    {
+        if (!$telefone) return '—';
+        $nums = preg_replace('/\D/', '', $telefone);
+        if (str_starts_with($nums, '55') && strlen($nums) >= 12) {
+            $nums = substr($nums, 2);
+        }
+        if (strlen($nums) === 11) {
+            return '(' . substr($nums, 0, 2) . ') ' . substr($nums, 2, 5) . '-' . substr($nums, 7);
+        }
+        if (strlen($nums) === 10) {
+            return '(' . substr($nums, 0, 2) . ') ' . substr($nums, 2, 4) . '-' . substr($nums, 6);
+        }
+        return $telefone;
+    }
+
     // ── Mascaramento de dados (LGPD) ──────────────────────────────────────────
 
     private function mascarar(string $valor, string $tipo): ?string
@@ -400,9 +623,7 @@ class AuditorController extends Controller
                 preg_replace('/\D/', '', $valor)
             ),
             'email' => preg_replace('/(?<=.).(?=.*@)/', '*', $valor),
-            'telefone' => strlen($valor) >= 8
-                ? str_repeat('*', strlen($valor) - 4) . substr($valor, -4)
-                : $valor,
+            'telefone' => $this->formatarTelefoneCompleto($valor),
             default => $valor,
         };
     }

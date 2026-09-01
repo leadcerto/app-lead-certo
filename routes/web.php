@@ -325,19 +325,28 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
 
     // Auditor — apenas auditor, diretor, dono, admin
     Route::middleware('role:admin,dono,diretor,auditor')->group(function () {
-        Route::get('/auditor/stats',                                 [AuditorController::class, 'stats']);
-        Route::get('/auditor/pendentes',                                     [AuditorController::class, 'pendentesCampos']);
-        Route::post('/auditor/pendente/{vinculo}/campo/{campo}/aprovar',     [AuditorController::class, 'aprovarCampo']);
-        Route::post('/auditor/pendente/{vinculo}/campo/{campo}/rejeitar',    [AuditorController::class, 'rejeitarCampo']);
-        Route::post('/auditor/contato/{contato}/sinalizar',          [AuditorController::class, 'sinalizar']);
-        Route::post('/auditor/contato/{contato}/aprovar-cadastro',   [AuditorController::class, 'aprovarCadastro']);
-        Route::post('/auditor/contato/{contato}/inativar',           [AuditorController::class, 'inativar']);
-        Route::get('/auditor/contatos',                              [AuditorController::class, 'contatos']);
-        Route::get('/auditor/logs',                                  [AuditorController::class, 'logs']);
-        Route::get('/auditor/conflitos',                             [AuditorController::class, 'conflitos']);
-        Route::post('/auditor/conflito/{pendente}/fundir',           [AuditorController::class, 'fundirConflito']);
-        Route::post('/auditor/conflito/{pendente}/criar-novo',       [AuditorController::class, 'criarNovoConflito']);
-        Route::post('/auditor/conflito/{pendente}/descartar',        [AuditorController::class, 'descartarConflito']);
+        foreach (['auditor', 'api/painel/auditor'] as $prefix) {
+            Route::prefix($prefix)->group(function () {
+                Route::get('/stats',                                         [AuditorController::class, 'stats']);
+                Route::get('/pendentes',                                     [AuditorController::class, 'pendentesCampos']);
+                Route::post('/pendente/{vinculo}/campo/{campo}/aprovar',     [AuditorController::class, 'aprovarCampo']);
+                Route::post('/pendente/{vinculo}/campo/{campo}/rejeitar',    [AuditorController::class, 'rejeitarCampo']);
+                Route::post('/pendente/{vinculo}/campo/{campo}/salvar',      [AuditorController::class, 'salvarValorCampo']);
+                Route::post('/pendentes/aprovar-lote',                       [AuditorController::class, 'aprovarLote']);
+                Route::post('/pendentes/rejeitar-lote',                      [AuditorController::class, 'rejeitarLote']);
+                Route::post('/pendentes/marcar-sem-nome-lote',               [AuditorController::class, 'marcarSemNomeLote']);
+                Route::post('/pendentes/auto-limpar-nao-pessoas',            [AuditorController::class, 'autoLimparNaoPessoas']);
+                Route::post('/contato/{contato}/sinalizar',                  [AuditorController::class, 'sinalizar']);
+                Route::post('/contato/{contato}/aprovar-cadastro',           [AuditorController::class, 'aprovarCadastro']);
+                Route::post('/contato/{contato}/inativar',                   [AuditorController::class, 'inativar']);
+                Route::get('/contatos',                                      [AuditorController::class, 'contatos']);
+                Route::get('/logs',                                          [AuditorController::class, 'logs']);
+                Route::get('/conflitos',                                     [AuditorController::class, 'conflitos']);
+                Route::post('/conflito/{pendente}/fundir',                   [AuditorController::class, 'fundirConflito']);
+                Route::post('/conflito/{pendente}/criar-novo',               [AuditorController::class, 'criarNovoConflito']);
+                Route::post('/conflito/{pendente}/descartar',                [AuditorController::class, 'descartarConflito']);
+            });
+        }
     });
 
     // Campanhas de Mineração — growth_manager, diretor, dono, admin
