@@ -515,70 +515,51 @@ class AuditorController extends Controller
         return response()->json(['ok' => true, 'total' => $total]);
     }
 
-    public static function isNaoPessoa(?string $str): bool
+    public static function extrairNomeProprio(?string $nome, ?string $sobrenome = null): array
     {
-        if (empty($str)) return true;
-        $str = trim($str);
-
-        // Se for "Sem Nome"
-        if (strcasecmp($str, 'Sem Nome') === 0) return true;
-
-        // Se for apenas dígitos ou formato de telefone (ex: 552199999999, +55 21..., 5521...)
-        if (preg_match('/^\+?\d[\d\s\(\)\-\.]{5,}$/', $str) || preg_match('/^\d+$/', $str)) {
-            return true;
-        }
-
-        // Se tem menos de 2 letras
-        if (strlen(preg_replace('/[^a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêîôûÂÊÎÔÛçÇ]/', '', $str)) < 2) {
-            return true;
-        }
-
-        $padroes = [
-            '/^frete/i',
-            '/^mudan/i',
-            '/^transp/i',
-            '/^caminh/i',
-            '/^bongo/i',
-            '/^carreto/i',
-            '/^carga/i',
-            '/^lead/i',
-            '/^cliente/i',
-            '/^contato/i',
-            '/^or[cç]amento/i',
-            '/^disk/i',
-            '/^motorista/i',
-            '/^ajudante/i',
-            '/^entregador/i',
-            '/^entrega/i',
-            '/^zap/i',
-            '/^whatsapp/i',
-            '/^teste/i',
-            '/^pedreiro/i',
-            '/^pintor/i',
-            '/^marceneiro/i',
-            '/^eletricista/i',
-            '/^diarista/i',
-            '/^faxineira/i',
-            '/^loja/i',
-            '/^oficina/i',
-            '/^vendas?/i',
-            '/^atendimento/i',
-            '/^sac/i',
-            '/^suporte/i',
-            '/^comercial/i',
-            '/^adm/i',
-            '/^estofador/i',
-            '/^sofa/i',
-            '/^camorim/i',
+        $tagsLixo = [
+            'frete', 'mudan[cç]a', 'transp\w*', 'caminh\w*', 'bongo', 'carreto', 'carga',
+            'lead', 'cliente', 'contato', 'or[cç]amento', 'disk', 'motorista', 'ajudante',
+            'entregador', 'entrega', 'zap', 'whatsapp', 'teste', 'pedreiro', 'pintor',
+            'marceneiro', 'eletricista', 'diarista', 'faxineira', 'loja', 'oficina',
+            'vendas?', 'atendimento', 'sac', 'suporte', 'comercial', 'adm', 'estofador',
+            'sofa', 'camorim', 'urologia', 'advocacia', 'vidra[cç]aria', 'engemedic',
+            'box', 'pizza', 'mdm', 'ajd', 'frt', 'dr\w*', 'dra\w*', 'adv\w*', 'moveis', 'marcenaria'
         ];
+        $patternLixo = '/\b(' . implode('|', $tagsLixo) . ')\b/iu';
 
-        foreach ($padroes as $padrao) {
-            if (preg_match($padrao, $str)) {
-                return true;
+        $candidatos = [];
+        if (!empty($nome)) $candidatos[] = $nome;
+        if (!empty($sobrenome)) $candidatos[] = $sobrenome;
+        $junto = trim($nome . ' ' . $sobrenome);
+        if (!empty($junto) && !in_array($junto, $candidatos)) $candidatos[] = $junto;
+
+        foreach ($candidatos as $cand) {
+            // Limpar emojis, símbolos especiais e dígitos
+            $limpo = preg_replace('/[\d\x{1F600}-\x{1F64F}\x{1F300}-\x{1F5FF}\x{1F680}-\x{1F6FF}\x{2600}-\x{26FF}\x{2700}-\x{27BF}\x{1F900}-\x{1F9FF}\x{1F1E0}-\x{1F1FF}⚡★☆✓✔*#@]/u', '', $cand);
+            // Remover tags comerciais/lixo
+            $limpo = preg_replace($patternLixo, '', $limpo);
+            $limpo = trim(preg_replace('/\s+/', ' ', $limpo));
+            $limpo = trim($limpo, " -_./,");
+
+            // Se sobrou um nome válido com pelo menos 2 letras
+            if (strlen(preg_replace('/[^a-zA-ZáéíóúÁÉÍÓÚãõÃÕâêîôûÂÊÎÔÛçÇ]/', '', $limpo)) >= 2 && !preg_match('/^sem nome$/i', $limpo)) {
+                $palavras = explode(' ', mb_strtolower($limpo, 'UTF-8'));
+                $nomeFinal = implode(' ', array_map(function($w) {
+                    if (in_array($w, ['de', 'da', 'do', 'dos', 'das', 'e'])) return $w;
+                    return mb_convert_case($w, MB_CASE_TITLE, 'UTF-8');
+                }, $palavras));
+                return ['nome' => $nomeFinal, 'is_pessoa' => true];
             }
         }
 
-        return false;
+        return ['nome' => 'Sem Nome', 'is_pessoa' => false];
+    }
+
+    public static function isNaoPessoa(?string $str): bool
+    {
+        $info = self::extrairNomeProprio($str);
+        return !$info['is_pessoa'];
     }
 
     public function autoLimparNaoPessoas(Request $request): JsonResponse
@@ -598,33 +579,32 @@ class AuditorController extends Controller
 
         foreach ($vinculos as $v) {
             $pendentes = $v->campos_pendentes_auditoria ?? [];
-            $alterou = false;
+            $nomeAtual = $v->contato?->nome;
+            $sobrenomeAtual = $v->contato?->sobrenome;
+            $nomeSugerido = $pendencia['nome']['sugerido'] ?? null;
+            $sobrenomeSugerido = $pendencia['sobrenome']['sugerido'] ?? null;
 
-            foreach ($pendentes as $campo => $pendencia) {
-                if (!in_array($campo, ['nome', 'sobrenome'])) continue;
+            $candNome = $nomeSugerido ?: $nomeAtual;
+            $candSobrenome = $sobrenomeSugerido ?: $sobrenomeAtual;
 
-                $sugerido = trim((string)($pendencia['sugerido'] ?? ''));
-                $valorAtual = trim((string)($v->contato?->$campo ?? ''));
+            $resultado = self::extrairNomeProprio($candNome, $candSobrenome);
 
-                if (self::isNaoPessoa($sugerido) || self::isNaoPessoa($valorAtual)) {
-                    $v->contato?->update(['nome' => 'Sem Nome', 'sobrenome' => null]);
-                    unset($pendentes['nome']);
-                    unset($pendentes['sobrenome']);
-                    $humano = $v->campos_editados_humano ?? [];
-                    $humano['nome'] = now()->toIso8601String();
-                    $v->campos_editados_humano = $humano;
-                    $alterou = true;
-                    $total++;
-                    break;
-                }
+            if ($resultado['is_pessoa']) {
+                $v->contato?->update(['nome' => $resultado['nome'], 'sobrenome' => null]);
+            } else {
+                $v->contato?->update(['nome' => 'Sem Nome', 'sobrenome' => null]);
             }
 
-            if ($alterou) {
-                $v->update([
-                    'campos_pendentes_auditoria' => $pendentes ?: null,
-                    'campos_editados_humano'     => $v->campos_editados_humano,
-                ]);
-            }
+            unset($pendentes['nome']);
+            unset($pendentes['sobrenome']);
+            $humano = $v->campos_editados_humano ?? [];
+            $humano['nome'] = now()->toIso8601String();
+
+            $v->update([
+                'campos_pendentes_auditoria' => $pendentes ?: null,
+                'campos_editados_humano'     => $humano,
+            ]);
+            $total++;
         }
 
         // Também varre a base de contatos vinculados para limpar nomes que sejam telefone ou termos não-pessoa
@@ -637,13 +617,58 @@ class AuditorController extends Controller
             ->get();
 
         foreach ($contatosParaLimpar as $c) {
-            if (self::isNaoPessoa($c->nome)) {
+            $res = self::extrairNomeProprio($c->nome, $c->sobrenome);
+            if ($res['is_pessoa']) {
+                if ($c->nome !== $res['nome']) {
+                    $c->update(['nome' => $res['nome'], 'sobrenome' => null]);
+                    $total++;
+                }
+            } else {
                 $c->update(['nome' => 'Sem Nome', 'sobrenome' => null]);
                 $total++;
             }
         }
 
         return response()->json(['ok' => true, 'total' => $total]);
+    }
+
+    public function autoResolverConflitos(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $tenantId = $user?->tenant_id;
+
+        $conflitosQuery = ContatoPendente::where('status', 'aguardando');
+        if ($tenantId && !($user?->isAdmin())) {
+            $conflitosQuery->where('tenant_id', $tenantId);
+        }
+
+        $conflitos = $conflitosQuery->get();
+        $totalResolvidos = 0;
+
+        foreach ($conflitos as $c) {
+            $res = self::extrairNomeProprio($c->nome, $c->nome_existente);
+            $nomeFinal = $res['is_pessoa'] ? $res['nome'] : 'Sem Nome';
+
+            if ($c->contato_existente_id) {
+                $contato = Contato::find($c->contato_existente_id);
+                if ($contato) {
+                    $contato->update(['nome' => $nomeFinal, 'sobrenome' => null]);
+                }
+            }
+
+            $c->update([
+                'status'        => 'fundido',
+                'resolvido_por' => auth()->id(),
+                'resolvido_em'  => now(),
+            ]);
+
+            AuditLog::registrar('contatos_pendentes', $c->id, 'auto_resolver_conflito',
+                contexto: ['nome_atribuido' => $nomeFinal, 'contato_existente_id' => $c->contato_existente_id]);
+
+            $totalResolvidos++;
+        }
+
+        return response()->json(['ok' => true, 'total' => $totalResolvidos]);
     }
 
     // ── Sinalizar contato como inconsistente ──────────────────────────────────

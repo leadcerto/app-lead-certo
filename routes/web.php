@@ -141,12 +141,12 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::post('/pendentes/marcar-sem-nome-lote',               [AuditorController::class, 'marcarSemNomeLote']);
         Route::post('/pendentes/auto-limpar-nao-pessoas',            [AuditorController::class, 'autoLimparNaoPessoas']);
         Route::post('/contato/{contato}/sinalizar',                  [AuditorController::class, 'sinalizar']);
-        Route::post('/contato/{contato}/aprovar-cadastro',           [AuditorController::class, 'aprovarCadastro']);
         Route::post('/contato/{contato}/inativar',                   [AuditorController::class, 'inativar']);
         Route::get('/contatos',                                      [AuditorController::class, 'contatos']);
         Route::get('/logs',                                          [AuditorController::class, 'logs']);
         Route::get('/conflitos',                                     [AuditorController::class, 'conflitos']);
         Route::post('/contato/{id}/salvar-completo',                [AuditorController::class, 'salvarContatoCompleto']);
+        Route::post('/conflitos/auto-resolver',                      [AuditorController::class, 'autoResolverConflitos']);
         Route::post('/conflito/{pendente}/fundir',                   [AuditorController::class, 'fundirConflito']);
         Route::post('/conflito/{pendente}/criar-novo',               [AuditorController::class, 'criarNovoConflito']);
         Route::post('/conflito/{pendente}/descartar',                [AuditorController::class, 'descartarConflito']);

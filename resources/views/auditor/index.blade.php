@@ -301,16 +301,25 @@
         </template>
 
         <div x-show="conflitos.length > 0" class="space-y-3">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+                <p class="text-xs text-gray-500 font-medium">Contatos com divergência entre o nome do Google e o cadastro atual</p>
+                <button @click="autoResolverConflitos()" 
+                        class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5"
+                        title="Analisa todos os conflitos, mantém o nome próprio real da pessoa e define termos genéricos como 'Sem Nome'">
+                    <span>⚡ Auto-Resolver Conflitos (Preservar Nomes Próprios)</span>
+                </button>
+            </div>
+
             <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead class="bg-gray-50 border-b border-gray-200">
                             <tr>
-                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Telefone</th>
-                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Nome no Google</th>
-                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Nome Existente</th>
-                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Similaridade</th>
-                                <th class="text-right px-4 py-3 text-xs text-gray-500 font-bold uppercase">Decisão</th>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase whitespace-nowrap min-w-[180px]">Telefone</th>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase whitespace-nowrap min-w-[180px]">Nome no Google</th>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase whitespace-nowrap min-w-[180px]">Nome Existente</th>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase whitespace-nowrap">Similaridade</th>
+                                <th class="text-right px-4 py-3 text-xs text-gray-500 font-bold uppercase whitespace-nowrap min-w-[240px]">Decisão</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
@@ -840,13 +849,25 @@ function auditor() {
         },
 
         async autoLimparNaoPessoas() {
-            if (!confirm('Deseja converter automaticamente todas as sugestões que não forem nomes de pessoas (ex: "Frete 35", "Bongo", números) para "Sem Nome"?')) return;
+            if (!confirm('Deseja executar a auto-limpeza inteligente? O sistema analisará todas as sugestões e contatos, PRESERVANDO todos os nomes próprios de pessoas reais e convertendo termos não-humanos (frotas, fretes, números) em "Sem Nome".')) return;
 
             const res = await this.api('/auditor/pendentes/auto-limpar-nao-pessoas', 'POST');
             if (res.ok) {
                 const data = await res.json();
-                alert(`${data.total} registro(s) convertidos para "Sem Nome" com sucesso!`);
+                alert(`${data.total} registro(s) foram higienizados e os nomes próprios reais foram preservados!`);
                 await this.carregarPendentes();
+                await this.carregarStats();
+            }
+        },
+
+        async autoResolverConflitos() {
+            if (!confirm('Deseja auto-resolver todos os conflitos de identidade? O sistema manterá o nome próprio real de cada pessoa (ex: Bruno, Jamal, Lidia, Saulo Pinhal) e fundirá os registros automaticamente.')) return;
+
+            const res = await this.api('/auditor/conflitos/auto-resolver', 'POST');
+            if (res.ok) {
+                const data = await res.json();
+                alert(`${data.total} conflito(s) foram analisados e resolvidos preservando os nomes próprios!`);
+                await this.carregarConflitos();
                 await this.carregarStats();
             }
         },
