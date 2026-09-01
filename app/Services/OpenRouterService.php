@@ -36,10 +36,21 @@ class OpenRouterService
         int $maxTokens = 400,
         ?string $origem = null,
         ?int $tenantId = null,
-        ?int $agenteId = null
+        ?int $agenteId = null,
+        ?string $modeloCustomizado = null
     ): ?string
     {
-        $modelo = $tier === 'complexo' ? $this->modeloComplexo : $this->modeloSimples;
+        $modelo = $modeloCustomizado;
+        if (! $modelo && $agenteId) {
+            $ag = \App\Models\User::find($agenteId);
+            if ($ag?->openrouter_modelo) {
+                $modelo = $ag->openrouter_modelo;
+            }
+        }
+
+        if (! $modelo) {
+            $modelo = $tier === 'complexo' ? $this->modeloComplexo : $this->modeloSimples;
+        }
 
         $inicio = now();
 

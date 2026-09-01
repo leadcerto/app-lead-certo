@@ -62,11 +62,11 @@
                             <div class="flex flex-wrap gap-1 mt-1.5">
                                 @if($agente->provedor_ia === 'gemini_direto')
                                     <span class="inline-flex items-center gap-1 text-[10px] font-bold text-purple-800 bg-purple-100/70 px-2 py-0.5 rounded-md border border-purple-200/60">
-                                        <span>✨</span> Gemini Pro Direto
+                                        <span>✨</span> Gemini ({{ str_replace('gemini-', '', $agente->gemini_modelo ?: '1.5-pro') }})
                                     </span>
                                 @else
-                                    <span class="inline-flex items-center gap-1 text-[10px] font-bold text-blue-800 bg-blue-100/70 px-2 py-0.5 rounded-md border border-blue-200/60">
-                                        <span>🟣</span> OpenRouter
+                                    <span class="inline-flex items-center gap-1 text-[10px] font-bold text-blue-800 bg-blue-100/70 px-2 py-0.5 rounded-md border border-blue-200/60" title="Modelo OpenRouter ativo">
+                                        <span>🟣</span> {{ explode('/', $agente->openrouter_modelo ?: 'gpt-4o-mini')[1] ?? $agente->openrouter_modelo }}
                                     </span>
                                 @endif
 
@@ -196,7 +196,7 @@
                         <span>✨</span> Motor de Inteligência Artificial Ativo:
                     </h3>
                     <p class="text-xs font-semibold text-purple-800"
-                       x-text="agenteSelecionado.provedor_ia === 'gemini_direto' ? 'Google Gemini Pro (Conexão Direta Nativa)' : 'OpenRouter (Multi-model Gateway)'"></p>
+                       x-text="agenteSelecionado.provedor_ia === 'gemini_direto' ? ('Google Gemini Pro (Direto) — ' + (agenteSelecionado.gemini_modelo || 'gemini-1.5-pro')) : ('OpenRouter — ' + (agenteSelecionado.openrouter_modelo || 'openai/gpt-4o-mini'))"></p>
                     <p class="text-[11px] text-purple-700" x-text="agenteSelecionado.gemini_email ? 'Conta Google: ' + agenteSelecionado.gemini_email : 'Conta vinculada ao sistema'"></p>
                 </div>
 
@@ -289,7 +289,7 @@
                                 <div>
                                     <h4 class="text-xs font-bold text-gray-900">🟣 OpenRouter (Multi-model)</h4>
                                     <p class="text-[11px] text-gray-500 mt-0.5 leading-relaxed">
-                                        Utiliza o hub multi-modelos (GPT-4o, Claude 3.5 Sonnet/Haiku, Llama) com fallback automático.
+                                        Hub com GPT-4o, Claude 3.5, Llama 3.3, DeepSeek com seleção por dificuldade & custo.
                                     </p>
                                 </div>
                             </label>
@@ -307,8 +307,149 @@
                         </div>
                     </div>
 
+                    {{-- SELETOR DE MODELOS OPENROUTER COM ETIQUETAS DE DIFICULDADE E SUGESTÕES DE CUSTO --}}
+                    <div x-show="form.provedor_ia === 'openrouter'" class="p-4 bg-blue-50/70 border border-blue-200 rounded-2xl space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                                <span>🟣</span> Selecione o Modelo Principal OpenRouter deste Agente:
+                            </label>
+                            <span class="text-[10px] font-semibold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md">
+                                Multi-Model Hub
+                            </span>
+                        </div>
+                        <p class="text-[11px] text-blue-800 leading-relaxed">
+                            Escolha a IA adequada para a complexidade desta função. Modelos gratuitos ou de baixo custo são ideais para triagem e mensagens rápidas, enquanto modelos avançados são recomendados para orquestração geral e copywriting estratégico.
+                        </p>
+
+                        {{-- 1. Baixa Dificuldade (Gratuitas e Ultra Econômicas) --}}
+                        <div class="space-y-1.5 pt-1">
+                            <div class="flex items-center justify-between text-[10px] font-bold text-emerald-800 uppercase tracking-wider">
+                                <span>🟢 Baixa Dificuldade (Triagem, Confirmações e Mensagens Rápidas)</span>
+                                <span class="text-emerald-700 font-semibold lowercase">menor custo ($0 a $0,08/1M)</span>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <!-- Llama 3.3 Free -->
+                                <label class="p-2.5 rounded-xl border transition-all cursor-pointer text-xs select-none relative"
+                                       :class="form.openrouter_modelo === 'meta-llama/llama-3.3-70b-instruct:free' ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-200' : 'bg-white border-gray-200 hover:border-gray-300'">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <input type="radio" name="openrouter_modelo" value="meta-llama/llama-3.3-70b-instruct:free" x-model="form.openrouter_modelo" class="text-emerald-600 focus:ring-emerald-500">
+                                        <span class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">Grátis</span>
+                                    </div>
+                                    <div class="font-bold text-gray-900 text-xs truncate">Llama 3.3 70B</div>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 line-clamp-2">Triagem rápida e respostas preliminares a custo zero.</p>
+                                </label>
+
+                                <!-- Gemini 2.0 Flash Free -->
+                                <label class="p-2.5 rounded-xl border transition-all cursor-pointer text-xs select-none relative"
+                                       :class="form.openrouter_modelo === 'google/gemini-2.0-flash-exp:free' ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-200' : 'bg-white border-gray-200 hover:border-gray-300'">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <input type="radio" name="openrouter_modelo" value="google/gemini-2.0-flash-exp:free" x-model="form.openrouter_modelo" class="text-emerald-600 focus:ring-emerald-500">
+                                        <span class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">Grátis</span>
+                                    </div>
+                                    <div class="font-bold text-gray-900 text-xs truncate">Gemini 2.0 Flash</div>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 line-clamp-2">Velocidade instantânea para saudações e triagem.</p>
+                                </label>
+
+                                <!-- Gemini 1.5 Flash -->
+                                <label class="p-2.5 rounded-xl border transition-all cursor-pointer text-xs select-none relative"
+                                       :class="form.openrouter_modelo === 'google/gemini-flash-1.5' ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-200' : 'bg-white border-gray-200 hover:border-gray-300'">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <input type="radio" name="openrouter_modelo" value="google/gemini-flash-1.5" x-model="form.openrouter_modelo" class="text-emerald-600 focus:ring-emerald-500">
+                                        <span class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">~$0.075/1M</span>
+                                    </div>
+                                    <div class="font-bold text-gray-900 text-xs truncate">Gemini 1.5 Flash</div>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 line-clamp-2">Ultra econômico e estável para alto volume.</p>
+                                </label>
+                            </div>
+                        </div>
+
+                        {{-- 2. Média Dificuldade (Melhor ROI para Suporte e Vendas) --}}
+                        <div class="space-y-1.5 pt-2 border-t border-blue-200/60">
+                            <div class="flex items-center justify-between text-[10px] font-bold text-amber-800 uppercase tracking-wider">
+                                <span>🟡 Média Dificuldade (Suporte, Atendimento Comercial e Qualificação)</span>
+                                <span class="text-amber-700 font-semibold lowercase">ótimo ROI (~$0,14 a $0,25/1M)</span>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <!-- GPT-4o Mini -->
+                                <label class="p-2.5 rounded-xl border transition-all cursor-pointer text-xs select-none relative"
+                                       :class="form.openrouter_modelo === 'openai/gpt-4o-mini' ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-200' : 'bg-white border-gray-200 hover:border-gray-300'">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <input type="radio" name="openrouter_modelo" value="openai/gpt-4o-mini" x-model="form.openrouter_modelo" class="text-amber-600 focus:ring-amber-500">
+                                        <span class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-900">⭐ Recomendado</span>
+                                    </div>
+                                    <div class="font-bold text-gray-900 text-xs truncate">GPT-4o Mini</div>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 line-clamp-2">Melhor equilíbrio de inteligência e negociação para Suporte e Vendas.</p>
+                                </label>
+
+                                <!-- DeepSeek V3 Chat -->
+                                <label class="p-2.5 rounded-xl border transition-all cursor-pointer text-xs select-none relative"
+                                       :class="form.openrouter_modelo === 'deepseek/deepseek-chat' ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-200' : 'bg-white border-gray-200 hover:border-gray-300'">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <input type="radio" name="openrouter_modelo" value="deepseek/deepseek-chat" x-model="form.openrouter_modelo" class="text-amber-600 focus:ring-amber-500">
+                                        <span class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-900">~$0.14/1M</span>
+                                    </div>
+                                    <div class="font-bold text-gray-900 text-xs truncate">DeepSeek V3 Chat</div>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 line-clamp-2">Fluidez conversacional e persuasão a custo 90% menor.</p>
+                                </label>
+
+                                <!-- Claude 3 Haiku -->
+                                <label class="p-2.5 rounded-xl border transition-all cursor-pointer text-xs select-none relative"
+                                       :class="form.openrouter_modelo === 'anthropic/claude-3-haiku' ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-200' : 'bg-white border-gray-200 hover:border-gray-300'">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <input type="radio" name="openrouter_modelo" value="anthropic/claude-3-haiku" x-model="form.openrouter_modelo" class="text-amber-600 focus:ring-amber-500">
+                                        <span class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-900">~$0.25/1M</span>
+                                    </div>
+                                    <div class="font-bold text-gray-900 text-xs truncate">Claude 3 Haiku</div>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 line-clamp-2">Tom empático e altamente humanizado para retenção.</p>
+                                </label>
+                            </div>
+                        </div>
+
+                        {{-- 3. Alta Dificuldade (Orquestrador e Análise Estratégica) --}}
+                        <div class="space-y-1.5 pt-2 border-t border-blue-200/60">
+                            <div class="flex items-center justify-between text-[10px] font-bold text-purple-800 uppercase tracking-wider">
+                                <span>🔴 Alta Dificuldade (Orquestrador Geral, Decisões Críticas e Raciocínio)</span>
+                                <span class="text-purple-700 font-semibold lowercase">alta inteligência (~$0,55 a $3,00/1M)</span>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <!-- Claude 3.5 Sonnet -->
+                                <label class="p-2.5 rounded-xl border transition-all cursor-pointer text-xs select-none relative"
+                                       :class="form.openrouter_modelo === 'anthropic/claude-3.5-sonnet' ? 'bg-purple-50 border-purple-400 ring-2 ring-purple-200' : 'bg-white border-gray-200 hover:border-gray-300'">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <input type="radio" name="openrouter_modelo" value="anthropic/claude-3.5-sonnet" x-model="form.openrouter_modelo" class="text-purple-600 focus:ring-purple-500">
+                                        <span class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">Top Tier</span>
+                                    </div>
+                                    <div class="font-bold text-gray-900 text-xs truncate">Claude 3.5 Sonnet</div>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 line-clamp-2">Líder em precisão e análise crítica para o Orquestrador Geral.</p>
+                                </label>
+
+                                <!-- DeepSeek R1 -->
+                                <label class="p-2.5 rounded-xl border transition-all cursor-pointer text-xs select-none relative"
+                                       :class="form.openrouter_modelo === 'deepseek/deepseek-r1' ? 'bg-purple-50 border-purple-400 ring-2 ring-purple-200' : 'bg-white border-gray-200 hover:border-gray-300'">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <input type="radio" name="openrouter_modelo" value="deepseek/deepseek-r1" x-model="form.openrouter_modelo" class="text-purple-600 focus:ring-purple-500">
+                                        <span class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">~$0.55/1M</span>
+                                    </div>
+                                    <div class="font-bold text-gray-900 text-xs truncate">DeepSeek R1</div>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 line-clamp-2">Raciocínio analítico avançado com 80% de economia.</p>
+                                </label>
+
+                                <!-- GPT-4o -->
+                                <label class="p-2.5 rounded-xl border transition-all cursor-pointer text-xs select-none relative"
+                                       :class="form.openrouter_modelo === 'openai/gpt-4o' ? 'bg-purple-50 border-purple-400 ring-2 ring-purple-200' : 'bg-white border-gray-200 hover:border-gray-300'">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <input type="radio" name="openrouter_modelo" value="openai/gpt-4o" x-model="form.openrouter_modelo" class="text-purple-600 focus:ring-purple-500">
+                                        <span class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">~$2.50/1M</span>
+                                    </div>
+                                    <div class="font-bold text-gray-900 text-xs truncate">OpenAI GPT-4o</div>
+                                    <p class="text-[10px] text-gray-500 mt-0.5 line-clamp-2">Visão multimodal e resolução de problemas executivos complexos.</p>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
                     {{-- CONFIGURAÇÕES DA CONTA / API GOOGLE GEMINI PRO --}}
-                    <div class="p-4 bg-purple-50/60 border border-purple-200 rounded-2xl space-y-3">
+                    <div x-show="form.provedor_ia === 'gemini_direto'" class="p-4 bg-purple-50/60 border border-purple-200 rounded-2xl space-y-3">
                         <div class="flex items-center gap-1.5 text-xs font-bold text-purple-900">
                             <span>✨</span> Credenciais Google Gemini Pro
                         </div>
@@ -424,6 +565,7 @@ function agentesIaModule() {
             avatar_url: '',
             cargos: [],
             provedor_ia: 'openrouter',
+            openrouter_modelo: 'openai/gpt-4o-mini',
             gemini_email: '',
             gemini_api_key: '',
             gemini_modelo: 'gemini-1.5-pro',
@@ -450,6 +592,7 @@ function agentesIaModule() {
                 avatar_url: '',
                 cargos: [],
                 provedor_ia: 'openrouter',
+                openrouter_modelo: 'openai/gpt-4o-mini',
                 gemini_email: '',
                 gemini_api_key: '',
                 gemini_modelo: 'gemini-1.5-pro',
@@ -467,6 +610,7 @@ function agentesIaModule() {
                 avatar_url: agente.avatar_url || '',
                 cargos: cargosIds || [],
                 provedor_ia: agente.provedor_ia || 'openrouter',
+                openrouter_modelo: agente.openrouter_modelo || 'openai/gpt-4o-mini',
                 gemini_email: agente.gemini_email || '',
                 gemini_api_key: agente.gemini_api_key || '',
                 gemini_modelo: agente.gemini_modelo || 'gemini-1.5-pro',

@@ -17,7 +17,8 @@ class User extends Authenticatable
     protected $fillable = [
         'tenant_id', 'nome', 'email', 'password', 'perfil', 'ativo',
         'city', 'state', 'whatsapp', 'avatar_url',
-        'is_ia', 'provedor_ia', 'gemini_email', 'gemini_api_key', 'gemini_modelo', 'gemini_instrucoes', 'base_conhecimento',
+        'is_ia', 'provedor_ia', 'openrouter_modelo', 'openrouter_modelos_permitidos',
+        'gemini_email', 'gemini_api_key', 'gemini_modelo', 'gemini_instrucoes', 'base_conhecimento',
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -25,9 +26,10 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'password' => 'hashed',
-            'ativo'    => 'boolean',
-            'is_ia'    => 'boolean',
+            'password'                      => 'hashed',
+            'ativo'                         => 'boolean',
+            'is_ia'                         => 'boolean',
+            'openrouter_modelos_permitidos' => 'array',
         ];
     }
 
