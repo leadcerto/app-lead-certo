@@ -24,7 +24,7 @@
             <span>{{ session('sucesso') }}</span>
         </div>
     @endif
-    @if($errors->any())
+    @if(isset($errors) && $errors->any())
         <div class="mb-4 p-3 bg-red-100 text-red-800 rounded-lg text-sm">
             @foreach($errors->all() as $error) <p>• {{ $error }}</p> @endforeach
         </div>
