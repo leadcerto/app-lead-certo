@@ -68,7 +68,15 @@ class TicketReaberturaService
     private function deveReabrir(?string $mensagem): bool
     {
         if (! $mensagem || trim($mensagem) === '') {
-            return true;
+            return false;
+        }
+
+        $textoLimpo = mb_strtolower(trim($mensagem));
+
+        // Padrões claros de despedida, agradecimento ou recusa que NUNCA devem reabrir
+        if (preg_match('/\b(j[aá]\s+(consegui|conseguimos|fechei|fechamos|resolvi|resolvemos|contratei|contratamos)|n[aã]o\s+(preciso|precisamos|quero|queremos|tenho\s+interesse)|obrigad[oa]|valeu|tchau|obg|falou|deixa\s+pra\s+l[aá]|j[aá]\s+era)\b/iu', $textoLimpo)) {
+            Log::info("TicketReaberturaService: mensagem identificada como encerramento/recusa/despedida ('{$mensagem}'). Mantendo encerrado.");
+            return false;
         }
 
         $resposta = app(OpenRouterService::class)->chat([
@@ -82,7 +90,7 @@ class TicketReaberturaService
         ], 'simples', 10, 'reabertura_ticket_encerrado');
 
         if (! $resposta) {
-            return true;
+            return false;
         }
 
         return ! str_contains(mb_strtoupper($resposta), 'MANTER');

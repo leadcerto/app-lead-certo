@@ -38,7 +38,7 @@ class SequenciaMensagemJob implements ShouldQueue
     {
         $ticket = TicketAtendimento::with(['contato', 'tenant', 'canal'])->find($this->ticketId);
 
-        if (! $ticket || \App\Models\KanbanColuna::papelDe($ticket->tenant_id, $ticket->coluna_kanban) === \App\Enums\PapelColunaKanban::Encerramento) {
+        if (! $ticket || $ticket->status === 'encerrado' || $ticket->coluna_kanban === 'encerrado' || \App\Models\KanbanColuna::papelDe($ticket->tenant_id, $ticket->coluna_kanban) === \App\Enums\PapelColunaKanban::Encerramento) {
             $this->registrarResultadoChamadaPerdida(false);
             return;
         }

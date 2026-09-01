@@ -367,38 +367,74 @@
                     </div>
                 </template>
 
-                {{-- Painel de orientação — Regra 2, agente pausado com dúvida --}}
-                <template x-if="ticketAtivo.aguardando_orientacao_em">
-                    <div class="border-b bg-amber-50 px-5 py-3">
-                        <div class="flex items-center gap-1.5 mb-2">
-                            <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                {{-- Painel de Co-Piloto & Orientações da IA — Disponível em todos os atendimentos --}}
+                <div class="border-b transition-colors" :class="ticketAtivo.aguardando_orientacao_em ? 'bg-amber-50' : 'bg-purple-50/50'">
+                    <button @click="orientacaoAberto = !orientacaoAberto"
+                            class="w-full flex items-center justify-between px-5 py-2.5 text-xs transition-colors"
+                            :class="ticketAtivo.aguardando_orientacao_em ? 'text-amber-900 hover:bg-amber-100/50' : 'text-purple-900 hover:bg-purple-100/40'">
+                        <span class="flex items-center gap-2 font-medium">
+                            <span class="p-1 rounded-md" :class="ticketAtivo.aguardando_orientacao_em ? 'bg-amber-200 text-amber-800' : 'bg-purple-200 text-purple-800'">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                </svg>
+                            </span>
+                            <span x-text="ticketAtivo.aguardando_orientacao_em ? '⚠️ IA Aguardando Orientação' : '🧠 Co-Piloto & Orientação da IA'"></span>
+                            <template x-if="ticketAtivo.aguardando_orientacao_em">
+                                <span class="bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold animate-pulse">Dúvida Pendente</span>
+                            </template>
+                            <template x-if="!ticketAtivo.aguardando_orientacao_em && ticketAtivo.agente_responsavel === 'bot'">
+                                <span class="text-green-700 bg-green-100 text-[10px] px-1.5 py-0.5 rounded font-medium">IA Pronta</span>
+                            </template>
+                        </span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] text-gray-500 font-normal" x-show="!orientacaoAberto" x-text="ticketAtivo.aguardando_orientacao_em ? 'Clique para resolver dúvida' : 'Orientar IA ou ver instruções'"></span>
+                            <svg class="w-3.5 h-3.5 transition-transform duration-200" :class="orientacaoAberto ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                             </svg>
-                            <span class="text-xs font-semibold text-amber-800">Agente aguardando orientação</span>
                         </div>
+                    </button>
+
+                    <div x-show="orientacaoAberto" class="px-5 pb-3 pt-1">
+                        {{-- Se a IA pausou com uma dúvida específica --}}
                         <template x-if="ticketAtivo.alerta_pendente">
-                            <div class="bg-white border border-amber-200 rounded-lg p-2 mb-2">
-                                <p class="text-xs font-semibold text-amber-800" x-text="ticketAtivo.alerta_pendente.titulo"></p>
-                                <p class="text-xs text-gray-700 mt-0.5 whitespace-pre-wrap" x-text="ticketAtivo.alerta_pendente.conteudo"></p>
+                            <div class="bg-white border border-amber-300 rounded-lg p-2.5 mb-2 shadow-sm">
+                                <div class="flex items-center gap-1.5 text-xs font-semibold text-amber-800">
+                                    <span>❓ Dúvida / Alerta da IA:</span>
+                                    <span x-text="ticketAtivo.alerta_pendente.titulo"></span>
+                                </div>
+                                <p class="text-xs text-gray-700 mt-1 whitespace-pre-wrap leading-relaxed" x-text="ticketAtivo.alerta_pendente.conteudo"></p>
                             </div>
                         </template>
-                        <p class="text-xs text-amber-700 mb-2">
-                            Escreva a orientação abaixo — o agente usa isso pra montar a resposta e mandar pro lead sozinho.
+
+                        <p class="text-xs text-gray-600 mb-2">
+                            <span x-show="ticketAtivo.aguardando_orientacao_em">Escreva a orientação abaixo — o agente usa isso pra montar a resposta e mandar pro lead sozinho.</span>
+                            <span x-show="!ticketAtivo.aguardando_orientacao_em">Instrua a IA para conduzir este atendimento e aprender com você (ex: <i>"Dê R$ 50 de desconto", "Ofereça embalagem para TV", "Pergunte a data exata"</i>).</span>
                         </p>
+
                         <textarea x-model="orientacaoTexto"
-                                  rows="3"
-                                  placeholder="Ex: O preço desse serviço é R$ 250."
-                                  class="w-full text-xs border border-amber-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none bg-white"></textarea>
-                        <div class="flex justify-end mt-2">
+                                  rows="2"
+                                  placeholder="Digite sua orientação para a IA aqui..."
+                                  class="w-full text-xs border rounded-lg p-2.5 focus:outline-none focus:ring-2 resize-none bg-white shadow-inner transition-colors"
+                                  :class="ticketAtivo.aguardando_orientacao_em ? 'border-amber-300 focus:ring-amber-400' : 'border-purple-200 focus:ring-purple-400'"></textarea>
+
+                        <div class="flex items-center justify-between mt-2">
+                            <span class="text-[11px] text-gray-500 italic">
+                                <span x-show="ticketAtivo.agente_responsavel === 'bot'">A IA aplicará a instrução imediatamente.</span>
+                                <span x-show="ticketAtivo.agente_responsavel !== 'bot'">A IA assumirá este atendimento com a sua orientação.</span>
+                            </span>
                             <button @click="enviarOrientacao()"
                                     :disabled="!orientacaoTexto.trim() || orientacaoEnviando"
-                                    class="text-xs bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors">
-                                <span x-show="!orientacaoEnviando">Enviar orientação</span>
+                                    class="text-xs font-medium px-4 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm text-white disabled:opacity-40"
+                                    :class="ticketAtivo.aguardando_orientacao_em ? 'bg-amber-600 hover:bg-amber-700' : 'bg-purple-600 hover:bg-purple-700'">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                                </svg>
+                                <span x-show="!orientacaoEnviando">Enviar Orientação</span>
                                 <span x-show="orientacaoEnviando">Enviando...</span>
                             </button>
                         </div>
                     </div>
-                </template>
+                </div>
 
                 {{-- Progresso do checklist de objetivos da coluna --}}
                 <template x-if="objetivosAtivos().length">
@@ -708,6 +744,7 @@ function kanban() {
         objetivosAberto:   false,
         orientacaoTexto:    '',
         orientacaoEnviando: false,
+        orientacaoAberto:   false,
         novaNota:          '',
         salvandoNota:      false,
         dragCard:          null,
@@ -916,6 +953,7 @@ function kanban() {
             this.objetivosColuna = [];
             this.orientacaoTexto    = '';
             this.orientacaoEnviando = false;
+            this.orientacaoAberto   = Boolean(ticket.aguardando_orientacao_em);
             this.objetivosAberto = false;
             this.mensagens = [];
             await this.sincronizarTicketAtivo();
@@ -1338,6 +1376,9 @@ function kanban() {
             // ainda, pra não perder uma escolha em curso.
             if (this.moverColunaAlvo === colunaAntes) {
                 this.moverColunaAlvo = atualizado.coluna_kanban;
+            }
+            if (atualizado.aguardando_orientacao_em) {
+                this.orientacaoAberto = true;
             }
             this.ticketAtivo = atualizado;
         },

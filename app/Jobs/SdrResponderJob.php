@@ -53,6 +53,11 @@ class SdrResponderJob implements ShouldQueue
             }
         }
 
+        if ($ticket->status === 'encerrado' || $ticket->coluna_kanban === 'encerrado' || \App\Models\KanbanColuna::papelDe($ticket->tenant_id, $ticket->coluna_kanban) === \App\Enums\PapelColunaKanban::Encerramento) {
+            Log::info("SdrResponderJob: ticket #{$this->ticketId} está encerrado, resposta cancelada");
+            return;
+        }
+
         // Só responde se o bot ainda é responsável
         if ($ticket->agente_responsavel !== 'bot') {
             Log::info("SdrResponderJob: ticket #{$this->ticketId} já foi assumido por humano, ignorando");

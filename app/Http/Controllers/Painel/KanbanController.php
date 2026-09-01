@@ -343,35 +343,37 @@ class KanbanController extends Controller
 
         $model = TicketAtendimento::findOrFail($ticket);
 
-        if (! $model->aguardando_orientacao_em) {
-            return response()->json(['message' => 'Este ticket não está aguardando orientação.'], 422);
-        }
+        // Ao orientar a IA, passa o controle para o bot e remove qualquer pausa
+        $model->update([
+            'agente_responsavel'       => 'bot',
+            'aguardando_orientacao_em' => null,
+            'mensagem_espera_enviada'  => false,
+        ]);
 
-        if ($model->agente_responsavel !== 'bot') {
-            return response()->json(['message' => 'Este ticket está com um atendente humano — libere pra IA antes de orientar.'], 422);
-        }
-
-        // Achado real 2026-08-20: só fechava alerta tipo 'duvida_ia' — pra
-        // um ticket pausado por 'rejeicao_area_alucinada' ou
-        // 'handoff_prematuro', o ticket despausava normalmente mas o alerta
-        // ficava com resposta/respondido_em nulos pra sempre, aparecendo
-        // como "ainda pendente" indefinidamente na lista de alertas.
+        // Fecha alerta pendente ou registra nova orientação no histórico de alertas
         $alerta = \App\Models\AlertaInterno::where('tenant_id', $model->tenant_id)
             ->where('ticket_id', $ticket)
-            ->whereIn('tipo', ['duvida_ia', 'rejeicao_area_alucinada', 'handoff_prematuro'])
+            ->whereIn('tipo', ['duvida_ia', 'rejeicao_area_alucinada', 'handoff_prematuro', 'orientacao_humana'])
             ->whereNull('resposta')
             ->latest('id')
             ->first();
 
-        $alerta?->update([
-            'resposta'      => $request->orientacao,
-            'respondido_em' => now(),
-        ]);
-
-        $model->update([
-            'aguardando_orientacao_em' => null,
-            'mensagem_espera_enviada'  => false,
-        ]);
+        if ($alerta) {
+            $alerta->update([
+                'resposta'      => $request->orientacao,
+                'respondido_em' => now(),
+            ]);
+        } else {
+            \App\Models\AlertaInterno::create([
+                'tenant_id'     => $model->tenant_id,
+                'tipo'          => 'orientacao_humana',
+                'titulo'        => 'Orientação do Atendente',
+                'conteudo'      => 'Instrução para condução e aprendizado da IA',
+                'ticket_id'     => $ticket,
+                'resposta'      => $request->orientacao,
+                'respondido_em' => now(),
+            ]);
+        }
 
         dispatch(new \App\Jobs\SdrResponderJob($ticket, '', false, true, 0, $request->orientacao));
 
