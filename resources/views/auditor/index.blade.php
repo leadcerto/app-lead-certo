@@ -13,10 +13,11 @@
         </div>
         <div class="flex gap-2">
             <button @click="executarIAGeral()" 
-                    class="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-black transition shadow-md flex items-center gap-2 active:scale-95"
+                    class="px-6 py-3 rounded-2xl text-xs font-black transition-all flex items-center gap-2.5 active:scale-95 cursor-pointer shadow-lg hover:opacity-95"
+                    style="background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%) !important; color: #ffffff !important; box-shadow: 0 4px 18px 0 rgba(124, 58, 237, 0.45) !important;"
                     title="Executa a IA em toda a base: resolve conflitos, preserva nomes próprios e higieniza dados">
-                <span class="text-sm">⚡</span>
-                <span>Auto-Limpar & Resolver Conflitos com IA</span>
+                <span class="text-base leading-none">⚡</span>
+                <span style="color: #ffffff !important; font-weight: 900 !important; font-size: 0.85rem !important; letter-spacing: -0.01em;">Auto-Limpar & Resolver Conflitos com IA</span>
             </button>
         </div>
     </div>
@@ -319,9 +320,11 @@
             <div class="flex items-center justify-between flex-wrap gap-2">
                 <p class="text-xs text-gray-500 font-medium">Contatos com divergência entre o nome do Google e o cadastro atual</p>
                 <button @click="autoResolverConflitos()" 
-                        class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5"
+                        class="px-4 py-2 text-white rounded-xl text-xs font-black transition-all shadow-md flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                        style="background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%) !important; color: #ffffff !important;"
                         title="Analisa todos os conflitos, mantém o nome próprio real da pessoa e define termos genéricos como 'Sem Nome'">
-                    <span>⚡ Auto-Resolver Conflitos (Preservar Nomes Próprios)</span>
+                    <span class="text-sm">⚡</span>
+                    <span style="color: #ffffff !important; font-weight: 800 !important;">Auto-Resolver Conflitos (Preservar Nomes Próprios)</span>
                 </button>
             </div>
 
