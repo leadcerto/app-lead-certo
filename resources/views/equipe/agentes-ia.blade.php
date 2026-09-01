@@ -486,14 +486,14 @@
                         <p class="text-[11px] text-amber-800 leading-relaxed">
                             Insira todas as informações, produtos, regras do negócio, formas de pagamento, restrições e FAQs que a empresa quiser fornecer para instruir este agente. É neste campo que a IA atualiza e refina seu conhecimento à medida que tira dúvidas e acompanha os atendimentos no Kanban.
                         </p>
-                        <textarea name="base_conhecimento" x-model="form.base_conhecimento" rows="6"
+                        <textarea name="base_conhecimento" x-model="form.base_conhecimento" rows="8"
                                   placeholder="Ex:
 - Horário de atendimento: Segunda a Sábado das 08h às 19h.
 - Região atendida: Rio de Janeiro e Grande Rio.
 - Formas de pagamento: PIX, Cartão em até 12x, Boleto para empresas.
 - Serviços principais: Fretes rápidos, mudanças residenciais e comerciais com montagem.
 - Instruções aprendidas: Se o cliente perguntar sobre seguro, informar que temos apólice inclusa..."
-                                  class="w-full text-xs font-mono border border-amber-300 bg-white rounded-xl p-3 focus:ring-2 focus:ring-amber-500 leading-relaxed"></textarea>
+                                  class="w-full text-xs font-mono border border-amber-300 bg-white rounded-xl p-3 focus:ring-2 focus:ring-amber-500 leading-relaxed min-h-[180px] resize-y"></textarea>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -532,9 +532,22 @@
                         </div>
                     </div>
 
-                    <div class="space-y-1 pt-1">
-                        <label class="text-xs font-bold text-gray-800">Instruções / Diretriz Geral da IA</label>
-                        <textarea name="gemini_instrucoes" x-model="form.gemini_instrucoes" rows="3" placeholder="Instruções para o comportamento e tom de voz da IA..." class="w-full text-xs border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500 leading-relaxed"></textarea>
+                    {{-- INSTRUÇÕES / DIRETRIZ GERAL DA IA (AMPLIADO) --}}
+                    <div class="space-y-1.5 pt-2 border-t border-gray-100">
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                                <span>🧠</span> Instruções / Diretriz Geral da IA & Regras de Comportamento:
+                            </label>
+                            <span class="text-[10px] text-gray-400">
+                                Redimensionável ↕
+                            </span>
+                        </div>
+                        <p class="text-[11px] text-gray-500">
+                            Defina a identidade, tom de voz, etapas de atendimento e as regras de restrição obrigatórias da IA.
+                        </p>
+                        <textarea name="gemini_instrucoes" x-model="form.gemini_instrucoes" rows="12"
+                                  placeholder="Cole aqui a diretriz completa, missão e o que a IA NUNCA deve fazer..."
+                                  class="w-full text-xs font-mono border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500 leading-relaxed min-h-[260px] resize-y bg-white shadow-2xs"></textarea>
                     </div>
 
                 </div>
