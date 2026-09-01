@@ -5,108 +5,118 @@
 @section('content')
 <div class="p-6 max-w-7xl mx-auto space-y-6">
 
-    {{-- Header --}}
-    <div class="flex items-center justify-between flex-wrap gap-4 bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
-        <div>
-            <div class="flex items-center gap-2">
-                <span class="text-2xl">📊</span>
-                <h1 class="text-2xl font-black text-gray-900 tracking-tight">Relatório de Novos Leads</h1>
+    {{-- Toolbar Unificada: Header + Filtros de Período e Intervalo de Datas --}}
+    <div class="bg-white rounded-3xl border-2 border-gray-200 shadow-md p-6 space-y-5">
+        <div class="flex items-center justify-between flex-wrap gap-4 border-b border-gray-100 pb-4">
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">📊</span>
+                    <h1 class="text-2xl font-black text-gray-900 tracking-tight">Relatório de Novos Leads</h1>
+                </div>
+                <p class="text-xs font-medium text-gray-500 mt-1">Acompanhamento e evolução diária de novos contatos recebidos por período</p>
             </div>
-            <p class="text-xs font-medium text-gray-500 mt-1">Acompanhamento e evolução diária de contatos recebidos por período</p>
+
+            {{-- Badge do Período Ativo --}}
+            <div class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold shadow-sm">
+                <span>🗓️ Período:</span>
+                <span class="font-black text-emerald-700">{{ \Carbon\Carbon::parse($data_inicio)->format('d/m/Y') }}</span>
+                <span class="text-gray-400">até</span>
+                <span class="font-black text-emerald-700">{{ \Carbon\Carbon::parse($data_fim)->format('d/m/Y') }}</span>
+                <span class="bg-emerald-200/80 text-emerald-950 px-2 py-0.5 rounded-lg text-[11px] font-black">
+                    {{ $diasCount }} {{ $diasCount == 1 ? 'dia' : 'dias' }}
+                </span>
+            </div>
         </div>
 
-        {{-- Filtros de Período Rápido com Alto Contraste --}}
-        <div class="flex items-center gap-1.5 bg-gray-100 p-1.5 rounded-2xl border border-gray-300 shadow-inner flex-wrap text-xs font-bold">
-            <a href="?periodo=hoje"
-               class="px-3.5 py-2 rounded-xl transition-all {{ $periodo === 'hoje' ? 'bg-emerald-600 text-white shadow-md font-black scale-105' : 'text-gray-700 hover:bg-white hover:text-gray-900' }}">
-                Hoje
-            </a>
-            <a href="?periodo=ontem"
-               class="px-3.5 py-2 rounded-xl transition-all {{ $periodo === 'ontem' ? 'bg-emerald-600 text-white shadow-md font-black scale-105' : 'text-gray-700 hover:bg-white hover:text-gray-900' }}">
-                Ontem
-            </a>
-            <a href="?periodo=ultimos_7"
-               class="px-3.5 py-2 rounded-xl transition-all {{ $periodo === 'ultimos_7' ? 'bg-emerald-600 text-white shadow-md font-black scale-105' : 'text-gray-700 hover:bg-white hover:text-gray-900' }}">
-                7 Dias
-            </a>
-            <a href="?periodo=ultimos_15"
-               class="px-3.5 py-2 rounded-xl transition-all {{ $periodo === 'ultimos_15' ? 'bg-emerald-600 text-white shadow-md font-black scale-105' : 'text-gray-700 hover:bg-white hover:text-gray-900' }}">
-                15 Dias
-            </a>
-            <a href="?periodo=ultimos_30"
-               class="px-3.5 py-2 rounded-xl transition-all {{ $periodo === 'ultimos_30' ? 'bg-emerald-600 text-white shadow-md font-black scale-105' : 'text-gray-700 hover:bg-white hover:text-gray-900' }}">
-                30 Dias
-            </a>
-            <a href="?periodo=mes_atual"
-               class="px-3.5 py-2 rounded-xl transition-all {{ $periodo === 'mes_atual' ? 'bg-emerald-600 text-white shadow-md font-black scale-105' : 'text-gray-700 hover:bg-white hover:text-gray-900' }}">
-                Este Mês
-            </a>
-            <a href="?periodo=mes_anterior"
-               class="px-3.5 py-2 rounded-xl transition-all {{ $periodo === 'mes_anterior' ? 'bg-emerald-600 text-white shadow-md font-black scale-105' : 'text-gray-700 hover:bg-white hover:text-gray-900' }}">
-                Mês Anterior
-            </a>
+        {{-- Filtros Rápidos + Seletor de Data Customizada --}}
+        <div class="flex items-center justify-between flex-wrap gap-4 pt-1">
+            {{-- Botões de Período Rápido --}}
+            <div class="flex items-center gap-1.5 bg-gray-100 p-1.5 rounded-2xl border border-gray-200 flex-wrap text-xs font-bold shadow-inner">
+                @php
+                    $botoes = [
+                        'hoje'          => 'Hoje',
+                        'ontem'         => 'Ontem',
+                        'ultimos_7'     => '7 Dias',
+                        'ultimos_15'    => '15 Dias',
+                        'ultimos_30'    => '30 Dias',
+                        'mes_atual'     => 'Este Mês',
+                        'mes_anterior'  => 'Mês Anterior',
+                    ];
+                @endphp
+                @foreach($botoes as $chave => $label)
+                    <a href="?periodo={{ $chave }}"
+                       class="px-3.5 py-2 rounded-xl transition-all font-bold {{ $periodo === $chave ? 'bg-emerald-600 text-white shadow-md font-black scale-105' : 'text-gray-700 hover:bg-white hover:text-gray-900' }}"
+                       style="{{ $periodo === $chave ? 'background-color: #059669 !important; color: #ffffff !important;' : '' }}">
+                        {{ $label }}
+                    </a>
+                @endforeach
+            </div>
+
+            {{-- Formulário de Data Customizada (Visual Clean e Elegante) --}}
+            <form method="GET" action="{{ route('contatos.relatorios') }}" class="flex items-center gap-2 flex-wrap text-xs">
+                <input type="hidden" name="periodo" value="personalizado">
+
+                <div class="flex items-center gap-2 bg-gray-50 border-2 border-gray-200 px-3 py-1.5 rounded-2xl shadow-sm focus-within:border-emerald-500 focus-within:bg-white transition">
+                    <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">De</span>
+                    <input type="date" name="data_inicio" value="{{ $data_inicio }}"
+                           class="bg-transparent border-0 font-bold text-gray-900 focus:ring-0 focus:outline-none text-xs cursor-pointer">
+                </div>
+
+                <div class="flex items-center gap-2 bg-gray-50 border-2 border-gray-200 px-3 py-1.5 rounded-2xl shadow-sm focus-within:border-emerald-500 focus-within:bg-white transition">
+                    <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Até</span>
+                    <input type="date" name="data_fim" value="{{ $data_fim }}"
+                           class="bg-transparent border-0 font-bold text-gray-900 focus:ring-0 focus:outline-none text-xs cursor-pointer">
+                </div>
+
+                <button type="submit" 
+                        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition shadow-md flex items-center gap-1.5 text-xs active:scale-95"
+                        style="background-color: #059669; color: #ffffff;">
+                    <span>⚡ Filtrar</span>
+                </button>
+            </form>
         </div>
     </div>
 
-    {{-- Filtro Personalizado com Datas e Destaque --}}
-    <form method="GET" action="{{ route('contatos.relatorios') }}" 
-          class="bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-2xl p-4 shadow-md flex items-center gap-4 flex-wrap text-xs">
-        <input type="hidden" name="periodo" value="personalizado">
-        
-        <span class="font-bold text-gray-200 flex items-center gap-2 text-sm">
-            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-            </svg>
-            <span>Intervalo de Datas:</span>
-        </span>
-
-        <div class="flex items-center gap-2 bg-gray-800/80 px-3 py-1.5 rounded-xl border border-gray-700">
-            <label class="text-gray-400 font-semibold uppercase text-[10px]">De</label>
-            <input type="date" name="data_inicio" value="{{ $data_inicio }}"
-                   class="bg-transparent border-0 font-bold text-white focus:ring-0 focus:outline-none text-xs">
-        </div>
-
-        <div class="flex items-center gap-2 bg-gray-800/80 px-3 py-1.5 rounded-xl border border-gray-700">
-            <label class="text-gray-400 font-semibold uppercase text-[10px]">Até</label>
-            <input type="date" name="data_fim" value="{{ $data_fim }}"
-                   class="bg-transparent border-0 font-bold text-white focus:ring-0 focus:outline-none text-xs">
-        </div>
-
-        <button type="submit" class="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-gray-950 font-black rounded-xl transition shadow-md flex items-center gap-1.5">
-            <span>⚡ Filtrar Período</span>
-        </button>
-
-        <div class="ml-auto text-xs text-gray-300 font-medium bg-black/40 px-3 py-1.5 rounded-xl border border-gray-700">
-            Período: <strong class="text-emerald-400 font-bold">{{ \Carbon\Carbon::parse($data_inicio)->format('d/m/Y') }}</strong> até <strong class="text-emerald-400 font-bold">{{ \Carbon\Carbon::parse($data_fim)->format('d/m/Y') }}</strong> <span class="text-gray-400">({{ $diasCount }} dias)</span>
-        </div>
-    </form>
-
-    {{-- Cards de Resumo com Alto Contraste e Cores Vivas --}}
+    {{-- Cards de Resumo com Cores Vivas, Alto Contraste e Estilos Inline Imunes a Purge --}}
     <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
         
-        {{-- Card 1: Total de Leads --}}
-        <div class="bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 text-white rounded-3xl p-6 shadow-lg border border-emerald-500/30 relative overflow-hidden">
-            <div class="absolute -right-4 -bottom-4 w-28 h-28 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
-            <div class="flex items-center justify-between">
-                <span class="text-xs font-black uppercase tracking-wider text-emerald-200">Novos Leads no Período</span>
-                <span class="text-3xl bg-white/20 p-2 rounded-2xl backdrop-blur-sm">📥</span>
+        {{-- Card 1: Total de Leads (Gradiente Verde Escuro Vibrante e Texto Branco Puro) --}}
+        <div class="rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between"
+             style="background: linear-gradient(135deg, #047857 0%, #065f46 50%, #064e3b 100%); color: #ffffff; border: 2px solid #059669;">
+            <div class="absolute -right-4 -bottom-4 w-32 h-32 rounded-full pointer-events-none"
+                 style="background: rgba(255, 255, 255, 0.12); filter: blur(24px);"></div>
+            
+            <div class="flex items-center justify-between relative z-10">
+                <span style="color: #a7f3d0; font-size: 0.75rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em;">
+                    Novos Leads no Período
+                </span>
+                <span class="text-2xl p-2.5 rounded-2xl" style="background: rgba(255, 255, 255, 0.2);">📥</span>
             </div>
-            <div class="text-4xl font-black mt-3 tracking-tight">{{ number_format($totalPeriodo, 0, ',', '.') }}</div>
-            <p class="text-xs text-emerald-100 font-medium mt-1">Total de novos contatos cadastrados</p>
+
+            <div class="relative z-10 mt-3">
+                <div style="font-size: 3rem; font-weight: 900; color: #ffffff; line-height: 1; letter-spacing: -0.03em;">
+                    {{ number_format($totalPeriodo, 0, ',', '.') }}
+                </div>
+                <p style="color: #ecfdf5; font-size: 0.8rem; font-weight: 600; margin-top: 0.5rem;">
+                    Total de novos contatos cadastrados
+                </p>
+            </div>
         </div>
 
         {{-- Card 2: Média Diária --}}
         <div class="bg-white rounded-3xl p-6 border-2 border-gray-200 shadow-md flex flex-col justify-between">
             <div class="flex items-center justify-between">
                 <span class="text-xs font-black uppercase tracking-wider text-gray-500">Média Diária de Entrada</span>
-                <span class="text-3xl bg-blue-50 text-blue-600 p-2 rounded-2xl border border-blue-100">📈</span>
+                <span class="text-2xl bg-blue-50 text-blue-600 p-2.5 rounded-2xl border border-blue-100">📈</span>
             </div>
             <div class="mt-3">
-                <div class="text-4xl font-black text-gray-900 tracking-tight">
-                    {{ $mediaDia }} 
-                    <span class="text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">leads/dia</span>
+                <div class="flex items-baseline gap-2">
+                    <span class="text-4xl font-black text-gray-900 tracking-tight">{{ $mediaDia }}</span>
+                    <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                        leads/dia
+                    </span>
                 </div>
-                <p class="text-xs text-gray-500 font-medium mt-1">Ritmo médio de novos contatos por dia</p>
+                <p class="text-xs text-gray-500 font-medium mt-2">Ritmo médio de novos contatos por dia</p>
             </div>
         </div>
 
@@ -114,30 +124,30 @@
         <div class="bg-white rounded-3xl p-6 border-2 border-gray-200 shadow-md flex flex-col justify-between">
             <div class="flex items-center justify-between">
                 <span class="text-xs font-black uppercase tracking-wider text-gray-500">Canais de Entrada</span>
-                <span class="text-3xl bg-purple-50 text-purple-600 p-2 rounded-2xl border border-purple-100">🌐</span>
+                <span class="text-2xl bg-purple-50 text-purple-600 p-2.5 rounded-2xl border border-purple-100">🌐</span>
             </div>
             <div class="mt-3">
                 <div class="flex items-center gap-2 flex-wrap">
                     @forelse($origens as $origem)
                         @php
                             $canalNome = strtolower($origem->canal);
-                            $badgeClass = 'bg-gray-100 text-gray-800 border-gray-300';
+                            $badgeStyle = 'background: #f3f4f6; color: #1f2937; border: 1px solid #d1d5db;';
                             $icone = '📌';
                             if (str_contains($canalNome, 'whats')) {
-                                $badgeClass = 'bg-emerald-100 text-emerald-900 border-emerald-300';
+                                $badgeStyle = 'background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0;';
                                 $icone = '💬 WhatsApp:';
                             } elseif (str_contains($canalNome, 'google')) {
-                                $badgeClass = 'bg-blue-100 text-blue-900 border-blue-300';
+                                $badgeStyle = 'background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe;';
                                 $icone = '🔍 Google:';
                             } elseif (str_contains($canalNome, 'liga') || str_contains($canalNome, 'chamada')) {
-                                $badgeClass = 'bg-purple-100 text-purple-900 border-purple-300';
+                                $badgeStyle = 'background: #faf5ff; color: #6b21a8; border: 1px solid #e9d5ff;';
                                 $icone = '📞 Ligação:';
                             } elseif (str_contains($canalNome, 'form') || str_contains($canalNome, 'site')) {
-                                $badgeClass = 'bg-amber-100 text-amber-900 border-amber-300';
+                                $badgeStyle = 'background: #fffbeb; color: #92400e; border: 1px solid #fde68a;';
                                 $icone = '📝 Site:';
                             }
                         @endphp
-                        <span class="px-3 py-1.5 rounded-xl text-xs font-black border shadow-sm flex items-center gap-1.5 {{ $badgeClass }}">
+                        <span class="px-3 py-1.5 rounded-xl text-xs font-black shadow-sm flex items-center gap-1.5" style="{{ $badgeStyle }}">
                             <span>{{ $icone }}</span>
                             <span class="text-sm font-black">{{ $origem->total }}</span>
                         </span>
@@ -145,7 +155,7 @@
                         <span class="text-xs text-gray-400 font-medium">Nenhum canal registrado</span>
                     @endforelse
                 </div>
-                <p class="text-xs text-gray-500 font-medium mt-2">Distribuição por origem dos leads</p>
+                <p class="text-xs text-gray-500 font-medium mt-2">Distribuição por canal de captação</p>
             </div>
         </div>
 
@@ -188,18 +198,18 @@
                             </div>
 
                             {{-- Valor numérico acima da barra com alto contraste --}}
-                            <div class="text-[11px] font-black text-gray-800 mb-1.5 transition-colors group-hover:text-emerald-600">
+                            <div class="text-xs font-black mb-1.5 transition-colors group-hover:text-emerald-600" style="color: #111827;">
                                 {{ $qtd }}
                             </div>
 
                             {{-- Trilho de fundo cinza com a barra preenchida em gradiente verde vivo --}}
-                            <div class="w-full bg-gray-100 group-hover:bg-gray-200 rounded-2xl flex items-end overflow-hidden p-1 transition-colors h-44">
-                                <div class="w-full bg-gradient-to-t from-emerald-600 to-teal-400 group-hover:from-emerald-500 group-hover:to-teal-300 rounded-xl transition-all shadow-sm"
-                                     style="height: {{ $alturaPct }}%;"></div>
+                            <div class="w-full rounded-2xl flex items-end overflow-hidden p-1 transition-colors h-44 shadow-inner" style="background-color: #f3f4f6;">
+                                <div class="w-full rounded-xl transition-all shadow-sm"
+                                     style="height: {{ $alturaPct }}%; background: linear-gradient(180deg, #10b981 0%, #047857 100%);"></div>
                             </div>
 
                             {{-- Data abaixo da barra --}}
-                            <div class="text-[11px] font-bold text-gray-600 group-hover:text-gray-900 mt-2 whitespace-nowrap">
+                            <div class="text-[11px] font-black mt-2 whitespace-nowrap" style="color: #4b5563;">
                                 {{ $dataFormatada }}
                             </div>
                         </div>
