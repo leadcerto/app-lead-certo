@@ -97,6 +97,13 @@ Route::middleware(['auth', 'tenant', 'role:admin,dono,diretor,diretor_marketing'
     Route::put('posts/templates/{template}', [\App\Http\Controllers\GmbPostController::class, 'updateTemplate'])->name('gmb-posts.templates.update');
     Route::delete('posts/templates/{template}', [\App\Http\Controllers\GmbPostController::class, 'destroyTemplate'])->name('gmb-posts.templates.destroy');
     Route::post('posts/templates/gerar-ia', [\App\Http\Controllers\GmbPostController::class, 'gerarTemplatesIa'])->name('gmb-posts.templates.gerar-ia');
+    Route::get('posts/categorias', [\App\Http\Controllers\GmbPostController::class, 'categorias'])->name('gmb-posts.categorias');
+    Route::post('posts/categorias', [\App\Http\Controllers\GmbPostController::class, 'storeCategoria'])->name('gmb-posts.categorias.store');
+    Route::put('posts/categorias/{categoria}', [\App\Http\Controllers\GmbPostController::class, 'updateCategoria'])->name('gmb-posts.categorias.update');
+    Route::delete('posts/categorias/{categoria}', [\App\Http\Controllers\GmbPostController::class, 'destroyCategoria'])->name('gmb-posts.categorias.destroy');
+    Route::get('posts/imagens', [\App\Http\Controllers\GmbPostController::class, 'imagens'])->name('gmb-posts.imagens');
+    Route::post('posts/imagens', [\App\Http\Controllers\GmbPostController::class, 'storeImagem'])->name('gmb-posts.imagens.store');
+    Route::delete('posts/imagens/{imagem}', [\App\Http\Controllers\GmbPostController::class, 'destroyImagem'])->name('gmb-posts.imagens.destroy');
     Route::post('posts/{post}/publicar-agora', [\App\Http\Controllers\GmbPostController::class, 'publicarAgora'])->name('gmb-posts.publicar-agora');
     Route::delete('posts/{post}', [\App\Http\Controllers\GmbPostController::class, 'destroy'])->name('gmb-posts.destroy');
     Route::post('posts/gerar-ia', [\App\Http\Controllers\GmbPostController::class, 'gerarIa'])->name('gmb-posts.gerar-ia');

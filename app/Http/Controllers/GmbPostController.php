@@ -423,4 +423,146 @@ class GmbPostController extends Controller
 
         return back()->with('sucesso', 'Postagem removida da agenda.');
     }
+
+    // ── Gestão de Categorias de Postagens ─────────────────────────────────
+
+    public function categorias(Request $request): View
+    {
+        $tenantId = auth()->user()->tenant_id;
+
+        $categorias = \App\Models\GmbPostCategoria::where(function ($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId)->orWhereNull('tenant_id');
+            })
+            ->withCount('templates')
+            ->orderBy('nome')
+            ->get();
+
+        if ($categorias->isEmpty()) {
+            $padroes = [
+                ['nome' => '🔥 Promoções & Ofertas', 'slug' => 'promocoes', 'palavras_chave' => ['desconto', 'promoção', 'economia', 'oferta da semana']],
+                ['nome' => '💼 Serviços & Soluções', 'slug' => 'servicos', 'palavras_chave' => ['mudanças', 'fretes', 'transporte', 'residencial', 'comercial']],
+                ['nome' => '💡 Dicas & Utilidade Pública', 'slug' => 'dicas', 'palavras_chave' => ['planejamento', 'embalagem', 'dicas de economia']],
+                ['nome' => '⭐ Depoimentos & Prova Social', 'slug' => 'depoimentos', 'palavras_chave' => ['avaliação 5 estrelas', 'confiança', 'pontualidade', 'satisfação']],
+                ['nome' => '🏢 Institucional & Autoridade', 'slug' => 'institucional', 'palavras_chave' => ['tradição', 'equipe especializada', 'segurança']],
+            ];
+            foreach ($padroes as $p) {
+                \App\Models\GmbPostCategoria::create([
+                    'tenant_id'      => $tenantId,
+                    'nome'           => $p['nome'],
+                    'slug'           => $p['slug'],
+                    'palavras_chave' => $p['palavras_chave'],
+                    'ativo'          => true,
+                ]);
+            }
+            $categorias = \App\Models\GmbPostCategoria::where('tenant_id', $tenantId)->withCount('templates')->get();
+        }
+
+        return view('gmb-posts.categorias', compact('categorias'));
+    }
+
+    public function storeCategoria(Request $request): RedirectResponse
+    {
+        $tenantId = auth()->user()->tenant_id;
+
+        $validated = $request->validate([
+            'nome'           => 'required|string|max:100',
+            'palavras_chave' => 'nullable|string|max:500',
+        ]);
+
+        $palavras = !empty($validated['palavras_chave'])
+            ? array_map('trim', explode(',', $validated['palavras_chave']))
+            : [];
+
+        \App\Models\GmbPostCategoria::create([
+            'tenant_id'      => $tenantId,
+            'nome'           => $validated['nome'],
+            'slug'           => \Illuminate\Support\Str::slug($validated['nome']),
+            'palavras_chave' => $palavras,
+            'ativo'          => true,
+        ]);
+
+        return back()->with('sucesso', 'Categoria de postagem criada com sucesso!');
+    }
+
+    public function updateCategoria(Request $request, \App\Models\GmbPostCategoria $categoria): RedirectResponse
+    {
+        $validated = $request->validate([
+            'nome'           => 'required|string|max:100',
+            'palavras_chave' => 'nullable|string|max:500',
+        ]);
+
+        $palavras = !empty($validated['palavras_chave'])
+            ? array_map('trim', explode(',', $validated['palavras_chave']))
+            : [];
+
+        $categoria->update([
+            'nome'           => $validated['nome'],
+            'palavras_chave' => $palavras,
+        ]);
+
+        return back()->with('sucesso', "Categoria '{$categoria->nome}' atualizada com sucesso!");
+    }
+
+    public function destroyCategoria(\App\Models\GmbPostCategoria $categoria): RedirectResponse
+    {
+        $categoria->delete();
+
+        return back()->with('sucesso', 'Categoria de postagem removida.');
+    }
+
+    // ── Banco / Galeria de Imagens do Tenant ──────────────────────────────
+
+    public function imagens(Request $request): View
+    {
+        $tenantId = auth()->user()->tenant_id;
+
+        $imagens = \App\Models\GmbPostImagem::where('tenant_id', $tenantId)
+            ->latest()
+            ->paginate(18);
+
+        return view('gmb-posts.imagens', compact('imagens'));
+    }
+
+    public function storeImagem(Request $request, \App\Services\GmbImageSeoService $seoService): RedirectResponse
+    {
+        $tenant = auth()->user()->tenant;
+
+        $request->validate([
+            'imagens'   => 'required|array',
+            'imagens.*' => 'image|max:10240',
+            'titulo'    => 'nullable|string|max:150',
+            'palavras'  => 'nullable|string|max:255',
+        ]);
+
+        $total = 0;
+        foreach ($request->file('imagens') as $arquivo) {
+            $extensao = strtolower($arquivo->getClientOriginalExtension()) ?: 'jpg';
+            $dataHora = now();
+            $nomeSeo = $seoService->gerarNomeSeo($tenant, null, $dataHora, $extensao, $request->input('palavras') ?: $request->input('titulo'));
+            
+            $pasta = 'gmb-posts/galeria/' . $tenant->id;
+            $caminho = $arquivo->storeAs($pasta, $nomeSeo, 'public');
+            $url = \Illuminate\Support\Facades\Storage::disk('public')->url($caminho);
+
+            \App\Models\GmbPostImagem::create([
+                'tenant_id'              => $tenant->id,
+                'titulo'                 => $request->input('titulo') ?: pathinfo($arquivo->getClientOriginalName(), PATHINFO_FILENAME),
+                'palavras_chave'         => $request->input('palavras'),
+                'imagem_url'             => $url,
+                'nome_arquivo_original'  => $arquivo->getClientOriginalName(),
+                'nome_arquivo_seo'       => $nomeSeo,
+                'tamanho_bytes'          => $arquivo->getSize(),
+            ]);
+            $total++;
+        }
+
+        return back()->with('sucesso', "{$total} imagem(ns) enviada(s) e renomeada(s) com SEO com sucesso!");
+    }
+
+    public function destroyImagem(\App\Models\GmbPostImagem $imagem): RedirectResponse
+    {
+        $imagem->delete();
+
+        return back()->with('sucesso', 'Imagem removida da galeria.');
+    }
 }
