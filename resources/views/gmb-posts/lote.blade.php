@@ -86,16 +86,19 @@
 
             {{-- 5. Botões de Ação Rápida --}}
             <div class="md:col-span-4 pt-2 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
-                <span class="text-xs font-bold text-gray-600">Preenchimento Rápido da Matriz:</span>
-                <div class="flex gap-2">
+                <span class="text-xs font-bold text-gray-600">Preenchimento Rápido:</span>
+                <div class="flex gap-2 flex-wrap">
                     <button type="button" onclick="marcarPadrao('seg-qua-sex')" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition">
                         Seg / Qua / Sex
+                    </button>
+                    <button type="button" onclick="marcarPadrao('ter-qui-sab')" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition">
+                        Ter / Qui / Sáb
                     </button>
                     <button type="button" onclick="marcarPadrao('todos')" class="px-3 py-1 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-bold rounded-lg transition">
                         Todos os Dias
                     </button>
                     <button type="button" onclick="marcarPadrao('limpar')" class="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded-lg transition">
-                        Limpar Seleção
+                        Limpar
                     </button>
                 </div>
             </div>
@@ -198,6 +201,8 @@ function marcarPadrao(tipo) {
             cb.checked = false;
         } else if (tipo === 'seg-qua-sex') {
             cb.checked = ['segunda', 'quarta', 'sexta'].includes(dia);
+        } else if (tipo === 'ter-qui-sab') {
+            cb.checked = ['terca', 'quinta', 'sabado'].includes(dia);
         }
     });
     calcularTotais();
