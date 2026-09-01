@@ -137,6 +137,22 @@ class EquipePainelController extends Controller
             ->orderBy('nome')
             ->get();
 
+        $consumos = DB::table('ia_usages')
+            ->select(
+                'agente_id',
+                DB::raw('count(*) as total_chamadas'),
+                DB::raw('sum(tokens_input + tokens_output) as total_tokens')
+            )
+            ->whereNotNull('agente_id')
+            ->groupBy('agente_id')
+            ->get()
+            ->keyBy('agente_id');
+
+        foreach ($agentes as $ag) {
+            $ag->total_chamadas = (int) ($consumos[$ag->id]->total_chamadas ?? 0);
+            $ag->total_tokens   = (int) ($consumos[$ag->id]->total_tokens ?? 0);
+        }
+
         $cargos = Cargo::where('ativo', true)->orderBy('ordem')->get();
 
         return view('equipe.agentes-ia', compact('agentes', 'cargos'));
