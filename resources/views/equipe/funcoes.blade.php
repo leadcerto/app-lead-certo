@@ -215,17 +215,6 @@
                         </div>
                     </div>
                 </template>
-
-                {{-- Diretrizes para Agentes de IA --}}
-                <template x-if="funcaoSelecionada.diretrizes_ia">
-                    <div>
-                        <h3 class="text-xs font-bold text-purple-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                            <span>🤖</span> Diretrizes para os Agentes de IA:
-                        </h3>
-                        <div class="text-purple-900 bg-purple-50/70 border border-purple-200/80 p-4 rounded-2xl text-xs leading-relaxed whitespace-pre-line"
-                             x-text="funcaoSelecionada.diretrizes_ia"></div>
-                    </div>
-                </template>
             </div>
 
             <div class="p-4 border-t border-gray-100 bg-gray-50 flex justify-end">
@@ -286,17 +275,12 @@
 
                 <div class="space-y-1">
                     <label class="text-xs font-bold text-gray-700">Resumo da Função</label>
-                    <textarea name="descricao" x-model="form.descricao" rows="2" class="w-full text-xs border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-indigo-500"></textarea>
+                    <textarea name="descricao" x-model="form.descricao" rows="2" class="w-full text-xs border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-indigo-500" placeholder="Breve resumo da finalidade deste cargo..."></textarea>
                 </div>
 
                 <div class="space-y-1">
                     <label class="text-xs font-bold text-gray-700">Escopo Detalhado & Responsabilidades</label>
-                    <textarea name="escopo_detalhado" x-model="form.escopo_detalhado" rows="3" class="w-full text-xs border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-indigo-500"></textarea>
-                </div>
-
-                <div class="space-y-1">
-                    <label class="text-xs font-bold text-purple-700">Diretrizes para IA (Instruções e prompts)</label>
-                    <textarea name="diretrizes_ia" x-model="form.diretrizes_ia" rows="3" class="w-full text-xs border border-purple-200 bg-purple-50/50 rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500"></textarea>
+                    <textarea name="escopo_detalhado" x-model="form.escopo_detalhado" rows="4" class="w-full text-xs border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-indigo-500" placeholder="Detalhamento das atribuições e rotinas deste cargo..."></textarea>
                 </div>
 
                 <div class="pt-3 border-t border-gray-100 flex justify-end gap-2">
