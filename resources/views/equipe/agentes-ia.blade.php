@@ -106,25 +106,25 @@
                     </div>
                 </div>
 
-                {{-- Instruções / System Prompt (Preview) --}}
+                {{-- Instruções / System Prompt --}}
                 @if($agente->gemini_instrucoes)
-                <div class="bg-gray-50/80 rounded-2xl p-3.5 border border-gray-100">
-                    <p class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Diretriz Operacional:</p>
-                    <p class="text-xs text-gray-600 line-clamp-2 leading-relaxed">
+                <div class="bg-gray-50/80 rounded-2xl p-3.5 border border-gray-100 space-y-1">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Diretriz Operacional:</p>
+                    <p class="text-xs text-gray-700 leading-relaxed whitespace-pre-line">
                         {{ $agente->gemini_instrucoes }}
                     </p>
                 </div>
                 @endif
 
-                {{-- Base de Conhecimento (Preview) --}}
+                {{-- Base de Conhecimento & Aprendizado --}}
                 @if($agente->base_conhecimento)
-                <div class="bg-amber-50/60 rounded-2xl p-3.5 border border-amber-200/60">
-                    <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-800 mb-1">
+                <div class="bg-amber-50/60 rounded-2xl p-3.5 border border-amber-200/60 space-y-1">
+                    <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-800">
                         <span>📚</span> Base de Conhecimento & Aprendizado:
                     </div>
-                    <p class="text-xs text-amber-950 font-mono text-[11px] line-clamp-2 leading-relaxed">
+                    <div class="text-xs text-amber-950 font-mono text-[11px] leading-relaxed whitespace-pre-line bg-white/70 p-2.5 rounded-xl border border-amber-200/60">
                         {{ $agente->base_conhecimento }}
-                    </p>
+                    </div>
                 </div>
                 @endif
             </div>
