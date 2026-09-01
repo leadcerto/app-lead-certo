@@ -12,10 +12,17 @@
             <p class="text-xs text-gray-500 mt-0.5">Validação de DDI/países, telefones internacionais, conflitos e qualidade cadastral</p>
         </div>
         <div class="flex gap-2">
-            <button @click="autoLimparNaoPessoas()" 
+            <button x-show="aba === 'conflitos'" 
+                    @click="autoResolverConflitos()" 
+                    class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5"
+                    title="Analisa todos os conflitos, preserva o nome de pessoa real e funde os cadastros automaticamente">
+                <span>⚡ Auto-Resolver Conflitos com IA</span>
+            </button>
+            <button x-show="aba !== 'conflitos'" 
+                    @click="autoLimparNaoPessoas()" 
                     class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5"
-                    title="Varre todas as sugestões que não forem nomes reais de pessoas (ex: Frete 35, números) e define como 'Sem Nome'">
-                <span>⚡ Auto-Limpar Não-Pessoas → "Sem Nome"</span>
+                    title="Varre todas as sugestões e contatos, preserva os nomes próprios de pessoas reais e define termos genéricos como 'Sem Nome'">
+                <span>⚡ Auto-Limpar & Preservar Nomes Próprios</span>
             </button>
         </div>
     </div>
