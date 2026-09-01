@@ -12,51 +12,59 @@
             <p class="text-xs text-gray-500 mt-0.5">Validação de DDI/países, telefones internacionais, conflitos e qualidade cadastral</p>
         </div>
         <div class="flex gap-2">
-            <button x-show="aba === 'conflitos'" 
-                    @click="autoResolverConflitos()" 
-                    class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5"
-                    title="Analisa todos os conflitos, preserva o nome de pessoa real e funde os cadastros automaticamente">
-                <span>⚡ Auto-Resolver Conflitos com IA</span>
-            </button>
-            <button x-show="aba !== 'conflitos'" 
-                    @click="autoLimparNaoPessoas()" 
-                    class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5"
-                    title="Varre todas as sugestões e contatos, preserva os nomes próprios de pessoas reais e define termos genéricos como 'Sem Nome'">
-                <span>⚡ Auto-Limpar & Preservar Nomes Próprios</span>
+            <button @click="executarIAGeral()" 
+                    class="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-black transition shadow-md flex items-center gap-2 active:scale-95"
+                    title="Executa a IA em toda a base: resolve conflitos, preserva nomes próprios e higieniza dados">
+                <span class="text-sm">⚡</span>
+                <span>Auto-Limpar & Resolver Conflitos com IA</span>
             </button>
         </div>
     </div>
 
-    {{-- Cards de Saúde dos Dados --}}
+    {{-- Cards de Saúde dos Dados (Todos Clicáveis com Ações Rápidas) --}}
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-            <p class="text-xs text-gray-400">Total Contatos</p>
-            <p class="text-2xl font-bold text-gray-800 mt-1" x-text="stats.total ?? '—'"></p>
+        <div class="bg-white rounded-2xl p-4 shadow-sm border-2 border-gray-200 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-all"
+             @click="aba = 'contatos'; busca = ''; buscarContatos()"
+             title="Clique para ver a Base Geral de Contatos">
+            <p class="text-xs font-bold text-gray-500">Total Contatos</p>
+            <p class="text-2xl font-black text-gray-900 mt-1" x-text="stats.total ?? '—'"></p>
         </div>
-        <div class="bg-red-50 rounded-xl p-4 shadow-sm border border-red-200 cursor-pointer hover:bg-red-100/70 transition"
-             @click="aba = 'telefones'; carregarTelefones()">
-            <p class="text-xs text-red-700 font-semibold flex items-center gap-1">
+
+        <div class="bg-red-50 rounded-2xl p-4 shadow-sm border-2 border-red-200 cursor-pointer hover:bg-red-100 transition-all"
+             @click="aba = 'telefones'; carregarTelefones()"
+             title="Clique para auditar Telefones com Erro / DDI">
+            <p class="text-xs text-red-700 font-bold flex items-center gap-1">
                 <span>📞 Erros Formato / DDI</span>
             </p>
-            <p class="text-2xl font-bold text-red-600 mt-1" x-text="stats.telefones_erros ?? '—'"></p>
+            <p class="text-2xl font-black text-red-600 mt-1" x-text="stats.telefones_erros ?? '—'"></p>
         </div>
-        <div class="bg-yellow-50 rounded-xl p-4 shadow-sm border border-yellow-200 cursor-pointer hover:bg-yellow-100/70 transition"
-             @click="aba = 'pendentes'; carregarPendentes()">
-            <p class="text-xs text-yellow-700 font-semibold">Sugestões Nomes</p>
-            <p class="text-2xl font-bold text-yellow-600 mt-1" x-text="stats.pendentes ?? '—'"></p>
+
+        <div class="bg-yellow-50 rounded-2xl p-4 shadow-sm border-2 border-yellow-200 cursor-pointer hover:bg-yellow-100 transition-all"
+             @click="aba = 'pendentes'; carregarPendentes()"
+             title="Clique para ver Sugestões de Nomes">
+            <p class="text-xs text-yellow-800 font-bold">Sugestões Nomes</p>
+            <p class="text-2xl font-black text-yellow-600 mt-1" x-text="stats.pendentes ?? '—'"></p>
         </div>
-        <div class="bg-purple-50 rounded-xl p-4 shadow-sm border border-purple-200 cursor-pointer hover:bg-purple-100/70 transition"
-             @click="aba = 'conflitos'; carregarConflitos()">
-            <p class="text-xs text-purple-700 font-semibold">Conflitos Google</p>
-            <p class="text-2xl font-bold text-purple-600 mt-1" x-text="stats.conflitos ?? '—'"></p>
+
+        <div class="bg-purple-50 rounded-2xl p-4 shadow-sm border-2 border-purple-200 cursor-pointer hover:bg-purple-100 transition-all"
+             @click="aba = 'conflitos'; carregarConflitos()"
+             title="Clique para ver Conflitos Google">
+            <p class="text-xs text-purple-800 font-bold">Conflitos Google</p>
+            <p class="text-2xl font-black text-purple-600 mt-1" x-text="stats.conflitos ?? '—'"></p>
         </div>
-        <div class="bg-orange-50 rounded-xl p-4 shadow-sm border border-orange-200">
-            <p class="text-xs text-orange-700 font-semibold">Sem Nome</p>
-            <p class="text-2xl font-bold text-orange-500 mt-1" x-text="stats.sem_nome ?? '—'"></p>
+
+        <div class="bg-orange-50 rounded-2xl p-4 shadow-sm border-2 border-orange-200 cursor-pointer hover:bg-orange-100 transition-all"
+             @click="aba = 'contatos'; busca = 'Sem Nome'; buscarContatos()"
+             title="Clique para filtrar contatos 'Sem Nome'">
+            <p class="text-xs text-orange-800 font-bold">Sem Nome</p>
+            <p class="text-2xl font-black text-orange-600 mt-1" x-text="stats.sem_nome ?? '—'"></p>
         </div>
-        <div class="bg-blue-50 rounded-xl p-4 shadow-sm border border-blue-200">
-            <p class="text-xs text-blue-700 font-semibold">Inativos</p>
-            <p class="text-2xl font-bold text-blue-500 mt-1" x-text="stats.inativos ?? '—'"></p>
+
+        <div class="bg-blue-50 rounded-2xl p-4 shadow-sm border-2 border-blue-200 cursor-pointer hover:bg-blue-100 transition-all"
+             @click="aba = 'contatos'; filtroStatus = 'inativo'; buscarContatos()"
+             title="Clique para filtrar contatos Inativos">
+            <p class="text-xs text-blue-800 font-bold">Inativos</p>
+            <p class="text-2xl font-black text-blue-600 mt-1" x-text="stats.inativos ?? '—'"></p>
         </div>
     </div>
 
@@ -326,7 +334,7 @@
                                 <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase whitespace-nowrap min-w-[180px]">Nome no Google</th>
                                 <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase whitespace-nowrap min-w-[180px]">Nome Existente</th>
                                 <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase whitespace-nowrap">Similaridade</th>
-                                <th class="text-right px-4 py-3 text-xs text-gray-500 font-bold uppercase whitespace-nowrap min-w-[240px]">Decisão</th>
+                                <th class="text-right px-4 py-3 text-xs text-gray-500 font-bold uppercase whitespace-nowrap min-w-[280px]">Decisão</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
@@ -341,7 +349,11 @@
                                               x-text="Math.round(c.similaridade_nome * 100) + '%'"></span>
                                     </td>
                                     <td class="px-4 py-3 text-right">
-                                        <div class="flex items-center justify-end gap-2">
+                                        <div class="flex items-center justify-end gap-1.5 flex-wrap">
+                                            <button @click="abrirEditarConflitoModal(c)"
+                                                    class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition flex items-center gap-1">
+                                                <span>✏️ Editar</span>
+                                            </button>
                                             <button @click="resolverConflito(c, 'fundir')"
                                                     class="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold shadow-sm">
                                                 Mesma Pessoa
@@ -388,6 +400,7 @@
                             <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Telefone</th>
                             <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Origem</th>
                             <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Status</th>
+                            <th class="text-right px-4 py-3 text-xs text-gray-500 font-bold uppercase">Ações</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
@@ -400,6 +413,12 @@
                                     <span class="px-2 py-0.5 rounded-full text-xs font-bold"
                                           :class="c.status_validacao === 'aprovado' ? 'bg-green-100 text-green-700' : (c.status_validacao === 'inconsistente' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600')"
                                           x-text="c.status_validacao"></span>
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <button @click="abrirEditarModal(c)"
+                                            class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition inline-flex items-center gap-1">
+                                        <span>✏️ Editar</span>
+                                    </button>
                                 </td>
                             </tr>
                         </template>
@@ -817,6 +836,30 @@ function auditor() {
             this.modalEditar = true;
         },
 
+        // Edição de Conflito de Identidade no Modal Completo
+        abrirEditarConflitoModal(c) {
+            const ddi = '55';
+            const p = this.paises.find(x => x.ddi === ddi) || { ddi: '55', bandeira: '🇧🇷' };
+            
+            let nomeSugerido = c.nome_existente;
+            if (this.extrairNomeJS(c.nome_google) !== 'Sem Nome') {
+                nomeSugerido = c.nome_google;
+            }
+
+            this.itemEdicao = {
+                vinculo_id: null,
+                contato_id: c.contato_existente_id,
+                nome: this.extrairNomeJS(nomeSugerido),
+                sobrenome: '',
+                email: '',
+                ddi: ddi,
+                numero_local: c.telefone ? c.telefone.replace(/\D/g, '').replace(/^55/, '') : '',
+                bandeira: p.bandeira,
+                campo_origem: 'conflito',
+            };
+            this.modalEditar = true;
+        },
+
         atualizarPrefixoModal() {
             const p = this.paises.find(x => x.ddi === this.itemEdicao.ddi);
             if (p) {
@@ -838,6 +881,7 @@ function auditor() {
                 this.modalEditar = false;
                 await this.carregarPendentes();
                 await this.carregarTelefones();
+                await this.carregarConflitos();
                 await this.carregarStats();
             } else {
                 alert('Erro ao salvar dados do contato.');
@@ -855,8 +899,29 @@ function auditor() {
             if (res.ok) {
                 await this.carregarPendentes();
                 await this.carregarTelefones();
+                await this.carregarConflitos();
                 await this.carregarStats();
             }
+        },
+
+        async executarIAGeral() {
+            if (!confirm('Deseja executar a IA em toda a base de contatos? O sistema analisará todas as sugestões e conflitos, PRESERVANDO todos os nomes próprios reais e fundindo os cadastros automaticamente.')) return;
+
+            const res1 = await this.api('/auditor/pendentes/auto-limpar-nao-pessoas', 'POST');
+            const res2 = await this.api('/auditor/conflitos/auto-resolver', 'POST');
+
+            await Promise.all([
+                this.carregarStats(),
+                this.carregarTelefones(),
+                this.carregarPendentes(),
+                this.carregarConflitos(),
+            ]);
+
+            let t1 = 0; let t2 = 0;
+            if (res1.ok) { const d1 = await res1.json(); t1 = d1.total || 0; }
+            if (res2.ok) { const d2 = await res2.json(); t2 = d2.total || 0; }
+
+            alert(`IA Concluída com sucesso!\n• ${t1} registro(s) de sugestões e contatos higienizados.\n• ${t2} conflito(s) resolvidos e fundidos com sucesso.`);
         },
 
         async executarAcaoLote(acao) {
