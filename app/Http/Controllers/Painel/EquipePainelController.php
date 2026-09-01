@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class EquipePainelController extends Controller
@@ -169,6 +170,7 @@ class EquipePainelController extends Controller
             'email'                         => 'required|email|max:200|unique:users,email',
             'whatsapp'                      => 'nullable|string|max:25',
             'avatar_url'                    => 'nullable|string|max:500',
+            'avatar_arquivo'                => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
             'provedor_ia'                   => 'nullable|string|in:openrouter,gemini_direto',
             'openrouter_modelo'             => 'nullable|string|max:150',
             'openrouter_modelos_permitidos' => 'nullable|array',
@@ -182,6 +184,12 @@ class EquipePainelController extends Controller
             'cargos.*'                      => 'integer|exists:cargos,id',
         ]);
 
+        $avatarUrl = $validated['avatar_url'] ?? null;
+        if ($request->hasFile('avatar_arquivo')) {
+            $path = $request->file('avatar_arquivo')->store('avatars', 'public');
+            $avatarUrl = Storage::url($path);
+        }
+
         $agente = User::create([
             'tenant_id'                     => 2, // Equipe Lead Certo
             'nome'                          => $validated['nome'],
@@ -189,7 +197,7 @@ class EquipePainelController extends Controller
             'password'                      => Hash::make('LeadCerto@IA#' . rand(1000, 9999)),
             'perfil'                        => 'diretor_marketing',
             'whatsapp'                      => $validated['whatsapp'] ?? null,
-            'avatar_url'                    => $validated['avatar_url'] ?? null,
+            'avatar_url'                    => $avatarUrl,
             'is_ia'                         => true,
             'provedor_ia'                   => $validated['provedor_ia'] ?? 'openrouter',
             'openrouter_modelo'             => $validated['openrouter_modelo'] ?? 'openai/gpt-4o-mini',
@@ -222,6 +230,7 @@ class EquipePainelController extends Controller
             'email'                         => ['required', 'email', 'max:200', Rule::unique('users', 'email')->ignore($agente->id)],
             'whatsapp'                      => 'nullable|string|max:25',
             'avatar_url'                    => 'nullable|string|max:500',
+            'avatar_arquivo'                => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
             'provedor_ia'                   => 'nullable|string|in:openrouter,gemini_direto',
             'openrouter_modelo'             => 'nullable|string|max:150',
             'openrouter_modelos_permitidos' => 'nullable|array',
@@ -236,11 +245,19 @@ class EquipePainelController extends Controller
             'cargos.*'                      => 'integer|exists:cargos,id',
         ]);
 
+        $avatarUrl = $agente->avatar_url;
+        if ($request->hasFile('avatar_arquivo')) {
+            $path = $request->file('avatar_arquivo')->store('avatars', 'public');
+            $avatarUrl = Storage::url($path);
+        } elseif (! empty($validated['avatar_url'])) {
+            $avatarUrl = $validated['avatar_url'];
+        }
+
         $agente->update([
             'nome'                          => $validated['nome'],
             'email'                         => $validated['email'],
             'whatsapp'                      => $validated['whatsapp'] ?? null,
-            'avatar_url'                    => $validated['avatar_url'] ?? null,
+            'avatar_url'                    => $avatarUrl,
             'provedor_ia'                   => $validated['provedor_ia'] ?? $agente->provedor_ia ?? 'openrouter',
             'openrouter_modelo'             => $validated['openrouter_modelo'] ?? $agente->openrouter_modelo ?? 'openai/gpt-4o-mini',
             'openrouter_modelos_permitidos' => $validated['openrouter_modelos_permitidos'] ?? $agente->openrouter_modelos_permitidos ?? [],

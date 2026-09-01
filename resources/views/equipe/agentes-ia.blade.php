@@ -95,7 +95,7 @@
                     <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">
                         Funções sob Responsabilidade:
                     </label>
-                    <div class="flex flex-wrap gap-1.5">
+                    <div class="flex flex-wrap gap-1.5 min-h-[32px]">
                         @forelse($agente->cargos as $c)
                             <span class="inline-flex items-center gap-1.5 text-xs bg-indigo-50 text-indigo-700 font-medium px-2.5 py-1 rounded-xl border border-indigo-100/80">
                                 <span>{{ $c->icone ?: '💼' }}</span> {{ $c->nome }}
@@ -105,28 +105,6 @@
                         @endforelse
                     </div>
                 </div>
-
-                {{-- Instruções / System Prompt --}}
-                @if($agente->gemini_instrucoes)
-                <div class="bg-gray-50/80 rounded-2xl p-3.5 border border-gray-100 space-y-1">
-                    <p class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Diretriz Operacional:</p>
-                    <p class="text-xs text-gray-700 leading-relaxed whitespace-pre-line">
-                        {{ $agente->gemini_instrucoes }}
-                    </p>
-                </div>
-                @endif
-
-                {{-- Base de Conhecimento & Aprendizado --}}
-                @if($agente->base_conhecimento)
-                <div class="bg-amber-50/60 rounded-2xl p-3.5 border border-amber-200/60 space-y-1">
-                    <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-800">
-                        <span>📚</span> Base de Conhecimento & Aprendizado:
-                    </div>
-                    <div class="text-xs text-amber-950 font-mono text-[11px] leading-relaxed whitespace-pre-line bg-white/70 p-2.5 rounded-xl border border-amber-200/60">
-                        {{ $agente->base_conhecimento }}
-                    </div>
-                </div>
-                @endif
             </div>
 
             {{-- Rodapé do Card com Consumo de Tokens --}}
@@ -437,38 +415,144 @@
                                 <!-- GPT-4o -->
                                 <label class="p-2.5 rounded-xl border transition-all cursor-pointer text-xs select-none relative"
                                        :class="form.openrouter_modelo === 'openai/gpt-4o' ? 'bg-purple-50 border-purple-400 ring-2 ring-purple-200' : 'bg-white border-gray-200 hover:border-gray-300'">
-                                    <div class="flex items-center justify-between mb-1">
-                                        <input type="radio" name="openrouter_modelo" value="openai/gpt-4o" x-model="form.openrouter_modelo" class="text-purple-600 focus:ring-purple-500">
-                                        <span class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">~$2.50/1M</span>
+                                        Conexão nativa com a conta Google do usuário via Gemini API Key ou OAuth corporativo.
+                                    </p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    {{-- BLOCO OPENROUTER: SELEÇÃO DE MODELOS COM ETIQUETAS DE DIFICULDADE E CUSTO --}}
+                    <div x-show="form.provedor_ia === 'openrouter'" x-transition class="space-y-4 p-4 bg-blue-50/60 border border-blue-200/80 rounded-2xl">
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <h4 class="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                                    <span>🤖</span> Escolha o Modelo OpenRouter para este Agente:
+                                </h4>
+                                <span class="text-[10px] font-semibold text-blue-800 bg-blue-100 px-2 py-0.5 rounded-md">
+                                    Selecione 1 Modelo Principal
+                                </span>
+                            </div>
+                            <p class="text-[11px] text-blue-800 mt-0.5">
+                                As funções foram categorizadas por nível de complexidade para ajudar na escolha do menor custo mensal.
+                            </p>
+                        </div>
+
+                        {{-- Categoria 1: Baixa Dificuldade --}}
+                        <div class="space-y-2 bg-white/80 p-3 rounded-xl border border-emerald-200">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[11px] font-bold text-emerald-800 flex items-center gap-1">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    BAIXA DIFICULDADE (Triagem, Confirmações e Mensagens Rápidas)
+                                </span>
+                                <span class="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                    Menor Custo ($0 a $0.08/1M)
+                                </span>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                @foreach($openrouterModelos['baixo'] as $m)
+                                <label class="p-2.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between text-left relative"
+                                       :class="form.openrouter_modelo === '{{ $m['id'] }}' ? 'bg-emerald-50/90 border-emerald-500 ring-2 ring-emerald-200' : 'bg-white border-gray-200 hover:border-emerald-300'">
+                                    <div class="flex items-start justify-between gap-1">
+                                        <div class="font-bold text-xs text-gray-900 leading-tight">{{ $m['nome'] }}</div>
+                                        <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 flex-shrink-0">{{ $m['badge'] }}</span>
                                     </div>
-                                    <div class="font-bold text-gray-900 text-xs truncate">OpenAI GPT-4o</div>
-                                    <p class="text-[10px] text-gray-500 mt-0.5 line-clamp-2">Visão multimodal e resolução de problemas executivos complexos.</p>
+                                    <p class="text-[10px] text-gray-500 mt-1 leading-snug">{{ $m['desc'] }}</p>
+                                    <div class="mt-2 pt-1 border-t border-gray-100 flex items-center justify-between text-[10px]">
+                                        <span class="text-gray-400">{{ $m['empresa'] }}</span>
+                                        <input type="radio" name="openrouter_modelo" value="{{ $m['id'] }}" x-model="form.openrouter_modelo" class="text-emerald-600 focus:ring-emerald-500">
+                                    </div>
                                 </label>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        {{-- Categoria 2: Média Dificuldade --}}
+                        <div class="space-y-2 bg-white/80 p-3 rounded-xl border border-amber-200">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[11px] font-bold text-amber-800 flex items-center gap-1">
+                                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                                    MÉDIA DIFICULDADE (Suporte, Atendimento Comercial e Qualificação)
+                                </span>
+                                <span class="text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                    Ótimo ROI (~$0.14 a $0.25/1M)
+                                </span>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                @foreach($openrouterModelos['medio'] as $m)
+                                <label class="p-2.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between text-left relative"
+                                       :class="form.openrouter_modelo === '{{ $m['id'] }}' ? 'bg-amber-50/90 border-amber-500 ring-2 ring-amber-200' : 'bg-white border-gray-200 hover:border-amber-300'">
+                                    <div class="flex items-start justify-between gap-1">
+                                        <div class="font-bold text-xs text-gray-900 leading-tight">{{ $m['nome'] }}</div>
+                                        <span class="text-[9px] font-bold px-1.5 py-0.5 rounded {{ str_contains($m['badge'], 'Recomendado') ? 'bg-amber-200 text-amber-900' : 'bg-amber-100 text-amber-800' }} flex-shrink-0">{{ $m['badge'] }}</span>
+                                    </div>
+                                    <p class="text-[10px] text-gray-500 mt-1 leading-snug">{{ $m['desc'] }}</p>
+                                    <div class="mt-2 pt-1 border-t border-gray-100 flex items-center justify-between text-[10px]">
+                                        <span class="text-gray-400">{{ $m['empresa'] }}</span>
+                                        <input type="radio" name="openrouter_modelo" value="{{ $m['id'] }}" x-model="form.openrouter_modelo" class="text-amber-600 focus:ring-amber-500">
+                                    </div>
+                                </label>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        {{-- Categoria 3: Alta Dificuldade --}}
+                        <div class="space-y-2 bg-white/80 p-3 rounded-xl border border-rose-200">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[11px] font-bold text-rose-800 flex items-center gap-1">
+                                    <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                                    ALTA DIFICULDADE (Orquestrador Geral, Decisões Críticas e Raciocínio)
+                                </span>
+                                <span class="text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                    Alta Inteligência (~$0.55 a $3.00/1M)
+                                </span>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                @foreach($openrouterModelos['alto'] as $m)
+                                <label class="p-2.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between text-left relative"
+                                       :class="form.openrouter_modelo === '{{ $m['id'] }}' ? 'bg-rose-50/90 border-rose-500 ring-2 ring-rose-200' : 'bg-white border-gray-200 hover:border-rose-300'">
+                                    <div class="flex items-start justify-between gap-1">
+                                        <div class="font-bold text-xs text-gray-900 leading-tight">{{ $m['nome'] }}</div>
+                                        <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 flex-shrink-0">{{ $m['badge'] }}</span>
+                                    </div>
+                                    <p class="text-[10px] text-gray-500 mt-1 leading-snug">{{ $m['desc'] }}</p>
+                                    <div class="mt-2 pt-1 border-t border-gray-100 flex items-center justify-between text-[10px]">
+                                        <span class="text-gray-400">{{ $m['empresa'] }}</span>
+                                        <input type="radio" name="openrouter_modelo" value="{{ $m['id'] }}" x-model="form.openrouter_modelo" class="text-rose-600 focus:ring-rose-500">
+                                    </div>
+                                </label>
+                                @endforeach
                             </div>
                         </div>
                     </div>
 
-                    {{-- CONFIGURAÇÕES DA CONTA / API GOOGLE GEMINI PRO --}}
-                    <div x-show="form.provedor_ia === 'gemini_direto'" class="p-4 bg-purple-50/60 border border-purple-200 rounded-2xl space-y-3">
-                        <div class="flex items-center gap-1.5 text-xs font-bold text-purple-900">
-                            <span>✨</span> Credenciais Google Gemini Pro
+                    {{-- BLOCO GOOGLE GEMINI PRO DIRETO --}}
+                    <div x-show="form.provedor_ia === 'gemini_direto'" x-transition class="space-y-3 p-4 bg-purple-50/60 border border-purple-200/80 rounded-2xl">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                                <span>✨</span> Credenciais & Modelo Google Gemini Pro
+                            </h4>
+                            <span class="text-[10px] font-semibold text-purple-800 bg-purple-100 px-2 py-0.5 rounded-md">
+                                Conexão Direta Google AI
+                            </span>
                         </div>
+
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div class="space-y-1">
-                                <label class="text-xs font-medium text-purple-800">E-mail da Conta Google</label>
-                                <input type="email" name="gemini_email" x-model="form.gemini_email" placeholder="nathanelllfernandees@gmail.com" class="w-full text-xs border border-purple-300 bg-white rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500">
+                                <label class="text-xs font-medium text-purple-800">E-mail da Conta Google (Gemini Pro)</label>
+                                <input type="email" name="gemini_email" x-model="form.gemini_email" placeholder="Ex: nathanelllfernandees@gmail.com" class="w-full text-xs border border-purple-300 bg-white rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500">
                             </div>
                             <div class="space-y-1">
-                                <label class="text-xs font-medium text-purple-800">Modelo Nativo do Gemini</label>
+                                <label class="text-xs font-medium text-purple-800">Modelo Gemini</label>
                                 <select name="gemini_modelo" x-model="form.gemini_modelo" class="w-full text-xs border border-purple-300 bg-white rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500">
-                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro (Raciocínio & Precisão Máxima)</option>
+                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro (Raciocínio & Janela de 2M tokens)</option>
                                     <option value="gemini-2.0-flash">Gemini 2.0 Flash (Velocidade & Resposta Instantânea)</option>
                                     <option value="gemini-1.5-flash">Gemini 1.5 Flash (Leve & Econômico)</option>
                                 </select>
                             </div>
                         </div>
                         <div class="space-y-1">
-                            <label class="text-xs font-medium text-purple-800">Chave de API do Google AI Studio / Gemini Key (Opcional se usar chave global)</label>
+                            <label class="text-xs font-medium text-purple-800">Chave de API do Google AI Studio (Opcional se usar chave global)</label>
                             <input type="password" name="gemini_api_key" x-model="form.gemini_api_key" placeholder="AIzaSy..." class="w-full text-xs border border-purple-300 bg-white rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500">
                         </div>
                     </div>
@@ -496,14 +580,43 @@
                                   class="w-full text-xs font-mono border border-amber-300 bg-white rounded-xl p-3 focus:ring-2 focus:ring-amber-500 leading-relaxed min-h-[180px] resize-y"></textarea>
                     </div>
 
+                    {{-- FOTO / AVATAR DO AGENTE COM UPLOAD E DIMENSÕES --}}
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         <div class="space-y-1">
                             <label class="text-xs font-bold text-gray-800">WhatsApp de Notificação / Recuperação</label>
                             <input type="text" name="whatsapp" x-model="form.whatsapp" placeholder="Ex: 21984503924" class="w-full text-xs border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500">
                         </div>
-                        <div class="space-y-1">
-                            <label class="text-xs font-bold text-gray-800">Avatar / Foto URL</label>
-                            <input type="url" name="avatar_url" x-model="form.avatar_url" placeholder="https://..." class="w-full text-xs border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-purple-500">
+
+                        <div class="space-y-1.5 p-3.5 bg-gray-50/80 rounded-2xl border border-gray-200/80">
+                            <div class="flex items-center justify-between">
+                                <label class="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                                    <span>📸</span> Foto / Avatar do Agente
+                                </label>
+                                <span class="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-200/60">
+                                    400x400 px (Quadrada)
+                                </span>
+                            </div>
+
+                            <div class="flex items-center gap-3">
+                                <template x-if="avatarPreview || form.avatar_url">
+                                    <img :src="avatarPreview || form.avatar_url" class="w-12 h-12 rounded-2xl object-cover ring-2 ring-purple-200 flex-shrink-0 shadow-xs" alt="">
+                                </template>
+                                <template x-if="!avatarPreview && !form.avatar_url">
+                                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center text-lg font-bold flex-shrink-0 shadow-xs">
+                                        🤖
+                                    </div>
+                                </template>
+
+                                <div class="flex-1 space-y-1 min-w-0">
+                                    <input type="file" name="avatar_arquivo" accept="image/png,image/jpeg,image/webp"
+                                           @change="handleAvatarFile($event)"
+                                           class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-purple-100 file:text-purple-700 hover:file:bg-purple-200 cursor-pointer">
+                                    <input type="url" name="avatar_url" x-model="form.avatar_url" placeholder="Ou cole a URL da imagem (https://...)" class="w-full text-[11px] border border-gray-300 rounded-lg p-1.5 focus:ring-2 focus:ring-purple-500 bg-white">
+                                </div>
+                            </div>
+                            <p class="text-[10px] text-gray-400">
+                                Formato ideal: <strong>400x400 px</strong> quadrada (JPG, PNG ou WebP até 2MB).
+                            </p>
                         </div>
                     </div>
 
@@ -571,6 +684,7 @@ function agentesIaModule() {
         modalForm: false,
         editandoId: null,
         agenteSelecionado: {},
+        avatarPreview: null,
         form: {
             nome: '',
             email: '',
@@ -585,6 +699,12 @@ function agentesIaModule() {
             gemini_instrucoes: '',
             base_conhecimento: ''
         },
+        handleAvatarFile(event) {
+            const file = event.target.files[0];
+            if (file) {
+                this.avatarPreview = URL.createObjectURL(file);
+            }
+        },
         toggleCargo(id) {
             if (this.form.cargos.includes(id)) {
                 this.form.cargos = this.form.cargos.filter(c => c !== id);
@@ -598,6 +718,7 @@ function agentesIaModule() {
         },
         abrirNovo() {
             this.editandoId = null;
+            this.avatarPreview = null;
             this.form = {
                 nome: '',
                 email: '',
@@ -616,6 +737,7 @@ function agentesIaModule() {
         },
         editar(agente, cargosIds) {
             this.editandoId = agente.id;
+            this.avatarPreview = null;
             this.form = {
                 nome: agente.nome,
                 email: agente.email,
