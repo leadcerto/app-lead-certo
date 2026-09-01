@@ -3,7 +3,7 @@
 @section('title', 'Auditoria & Governança de Contatos — Lead Certo')
 
 @section('content')
-<div x-data="auditor()" x-init="init()" class="p-6 max-w-7xl mx-auto space-y-6">
+<div x-data="auditor()" class="p-6 max-w-7xl mx-auto space-y-6">
 
     {{-- Header --}}
     <div class="flex items-center justify-between flex-wrap gap-4">
@@ -545,12 +545,13 @@ function auditor() {
         modalTelefone: false,
         itemEdicaoTelefone: { ddi: '55', numero_local: '', bandeira: '🇧🇷', nome: '' },
 
-        filtros: { busca: '', status: '', tipo_pessoa: '', origem: '' },
-
         async init() {
-            await this.carregarStats();
-            await this.carregarTelefones();
-            await this.carregarPendentes();
+            await Promise.all([
+                this.carregarStats(),
+                this.carregarTelefones(),
+                this.carregarPendentes(),
+                this.carregarConflitos(),
+            ]);
         },
 
         async carregarStats() {

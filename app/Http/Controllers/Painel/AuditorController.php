@@ -157,7 +157,11 @@ class AuditorController extends Controller
 
     public function conflitos(Request $request): JsonResponse
     {
+        $user = $request->user();
+        $tenantId = $user?->tenant_id;
+
         $conflitos = ContatoPendente::with('contatoExistente')
+            ->when($tenantId && !($user?->isAdmin()), fn($q) => $q->where('tenant_id', $tenantId))
             ->where('status', 'aguardando')
             ->orderBy('similaridade_nome')   // os mais diferentes primeiro
             ->paginate(50);
@@ -260,10 +264,17 @@ class AuditorController extends Controller
 
     public function pendentesCampos(Request $request): JsonResponse
     {
-        $vinculos = VinculoContatoTenant::with('contato')
-            ->whereNotNull('campos_pendentes_auditoria')
-            ->orderBy('contato_id')
-            ->get();
+        $user = $request->user();
+        $tenantId = $user?->tenant_id;
+
+        $vinculosQuery = VinculoContatoTenant::with('contato')
+            ->whereNotNull('campos_pendentes_auditoria');
+
+        if ($tenantId && !($user?->isAdmin())) {
+            $vinculosQuery->where('tenant_id', $tenantId);
+        }
+
+        $vinculos = $vinculosQuery->orderBy('contato_id')->get();
 
         $itens = [];
         foreach ($vinculos as $v) {
