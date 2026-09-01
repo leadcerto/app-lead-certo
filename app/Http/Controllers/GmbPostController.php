@@ -325,11 +325,30 @@ class GmbPostController extends Controller
             'categoria'       => $validated['categoria'],
             'titulo_template' => $validated['titulo_template'],
             'texto_template'  => $validated['texto_template'],
-            'cta_tipo_padrao' => $validated['cta_tipo_padrao'],
+            'cta_tipo_padrao' => $validated['cta_tipo_padrao'] ?? 'CALL',
             'ativo'           => true,
         ]);
 
         return back()->with('sucesso', 'Template de postagem criado com sucesso!');
+    }
+
+    public function updateTemplate(Request $request, GmbPostTemplate $template): RedirectResponse
+    {
+        $validated = $request->validate([
+            'categoria'       => 'required|string|max:50',
+            'titulo_template' => 'required|string|max:150',
+            'texto_template'  => 'required|string|max:1500',
+            'cta_tipo_padrao' => 'required|in:CALL,LEARN_MORE,ORDER,BOOK,SIGN_UP,SHOP,NENHUM',
+        ]);
+
+        $template->update([
+            'categoria'       => $validated['categoria'],
+            'titulo_template' => $validated['titulo_template'],
+            'texto_template'  => $validated['texto_template'],
+            'cta_tipo_padrao' => $validated['cta_tipo_padrao'] ?? 'CALL',
+        ]);
+
+        return back()->with('sucesso', "Template '{$template->titulo_template}' atualizado com sucesso!");
     }
 
     public function destroyTemplate(GmbPostTemplate $template): RedirectResponse
@@ -337,6 +356,33 @@ class GmbPostController extends Controller
         $template->delete();
 
         return back()->with('sucesso', 'Template de postagem removido.');
+    }
+
+    public function gerarTemplatesIa(Request $request, GmbPostIaService $iaService): RedirectResponse
+    {
+        $tenant = auth()->user()->tenant;
+        $categoria = $request->input('categoria', 'promocoes');
+        $quantidade = (int) $request->input('quantidade', 3);
+        $nicho = $request->input('nicho', $tenant->nicho ?? 'Fretes e Mudanças');
+
+        $gerados = $iaService->gerarTemplatesLote($tenant, $categoria, $quantidade, $nicho);
+        $salvos = 0;
+
+        foreach ($gerados as $item) {
+            if (!empty($item['titulo_template']) && !empty($item['texto_template'])) {
+                GmbPostTemplate::create([
+                    'tenant_id'       => $tenant->id,
+                    'categoria'       => $item['categoria'] ?? $categoria,
+                    'titulo_template' => $item['titulo_template'],
+                    'texto_template'  => $item['texto_template'],
+                    'cta_tipo_padrao' => $item['cta_tipo_padrao'] ?? 'CALL',
+                    'ativo'           => true,
+                ]);
+                $salvos++;
+            }
+        }
+
+        return back()->with('sucesso', "{$salvos} novos templates focados em WhatsApp/Ligações foram gerados automaticamente com IA e adicionados!");
     }
 
     public function publicarAgora(GmbPost $post, GmbPostPublishService $publishService): RedirectResponse

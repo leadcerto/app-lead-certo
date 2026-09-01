@@ -101,4 +101,92 @@ class GmbPostIaService
             return null;
         }
     }
+
+    public function gerarCopy(PerfilGmb $perfil, string $tipo = 'novidade', ?string $objetivo = null, ?string $tema = null): array
+    {
+        $res = $this->gerarPost($perfil, $tipo, $objetivo, $tema);
+        return $res ?: [
+            'titulo' => null,
+            'texto' => "Atendimento de alta qualidade da {$perfil->nome} em {$perfil->city}. Entre em contato conosco e solicite seu orçamento rápido!",
+            'cta_tipo' => 'CALL',
+        ];
+    }
+
+    /**
+     * Gera templates de alta conversão em lote usando IA para um tenant e categoria específicos.
+     */
+    public function gerarTemplatesLote(Tenant $tenant, string $categoria = 'geral', int $quantidade = 3, ?string $nichoExtra = null): array
+    {
+        $nicho = $nichoExtra ?: ($tenant->nicho ?? 'serviços e atendimento local');
+        $empresa = $tenant->nome ?? 'Nossa Empresa';
+
+        $prompt = [
+            [
+                'role' => 'system',
+                'content' => "Você é um Copywriter Sênior e Especialista em Google Meu Negócio.\n"
+                           . "Crie {$quantidade} modelos de templates para posts no Google Maps.\n\n"
+                           . "REGRAS OBRIGATÓRIAS:\n"
+                           . "1. Use SEMPRE as tags dinâmicas: {empresa}, {bairro} e {cidade} no título e no corpo do post.\n"
+                           . "2. Crie copies persuasivas focadas em gerar ligações e orçamentos locais.\n"
+                           . "3. Inclua emojis de forma estratégica.\n"
+                           . "4. Retorne APENAS um array JSON de objetos, sem formatação ou markdown adicional.\n"
+            ],
+            [
+                'role' => 'user',
+                'content' => "Gere {$quantidade} templates de postagens para o nicho de: '{$nicho}' (Empresa: {$empresa}).\n"
+                           . "Categoria desejada: '{$categoria}'.\n\n"
+                           . "Estrutura esperada do JSON:\n"
+                           . "[\n"
+                           . "  {\n"
+                           . '    "categoria": "' . $categoria . '",' . "\n"
+                           . '    "titulo_template": "Título persuasivo com {bairro} ou {cidade}",' . "\n"
+                           . '    "texto_template": "Texto completo do post com emojis e com {empresa}, {bairro}, {cidade} e chamada para ação final.",' . "\n"
+                           . '    "cta_tipo_padrao": "CALL | LEARN_MORE | ORDER | BOOK"' . "\n"
+                           . "  }\n"
+                           . "]"
+            ]
+        ];
+
+        try {
+            $resposta = $this->openRouter->chat(
+                $prompt,
+                'complexo',
+                2000,
+                'gmb_templates_gerar_ia',
+                $tenant->id
+            );
+
+            if ($resposta) {
+                $jsonLimpo = trim($resposta);
+                if (str_starts_with($jsonLimpo, '```')) {
+                    $jsonLimpo = preg_replace('/^```(?:json)?\s*/i', '', $jsonLimpo);
+                    $jsonLimpo = preg_replace('/\s*```$/', '', $jsonLimpo);
+                }
+
+                $dados = json_decode($jsonLimpo, true);
+                if (is_array($dados) && !empty($dados)) {
+                    return $dados;
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error('Erro ao gerar templates por IA: ' . $e->getMessage());
+        }
+
+        // Fallback robusto se a IA não retornar
+        return [
+            [
+                'categoria'       => $categoria,
+                'titulo_template' => "Atendimento Rápido e Seguro em {bairro}",
+                'texto_template'  => "Procurando o melhor serviço em {bairro} e {cidade}? ✨\n\nA {empresa} oferece soluções completas, equipe qualificada e agilidade que você merece.\n\n📞 Clique no botão abaixo e fale direto com nossos especialistas agora mesmo!",
+                'cta_tipo_padrao' => 'CALL',
+            ],
+            [
+                'categoria'       => $categoria,
+                'titulo_template' => "Oferta Exclusiva da Semana para {cidade}",
+                'texto_template'  => "Chegou a oportunidade que você esperava em {bairro}! 🔥\n\nAproveite condições especiais e orçamento sem compromisso com a {empresa}.\n\n👉 Toque no botão e garanta seu desconto antes que acabe!",
+                'cta_tipo_padrao' => 'CALL',
+            ],
+        ];
+    }
 }
+
