@@ -156,7 +156,25 @@ class EquipePainelController extends Controller
 
         $cargos = Cargo::where('ativo', true)->orderBy('ordem')->get();
 
-        return view('equipe.agentes-ia', compact('agentes', 'cargos'));
+        $openrouterModelos = [
+            'baixo' => [
+                ['id' => 'meta-llama/llama-3.3-70b-instruct:free', 'nome' => 'Llama 3.3 70B', 'empresa' => 'Meta', 'preco' => 'Grátis $0', 'desc' => 'Triagem rápida e respostas preliminares a custo zero.', 'badge' => 'Grátis'],
+                ['id' => 'google/gemini-2.0-flash-exp:free', 'nome' => 'Gemini 2.0 Flash', 'empresa' => 'Google', 'preco' => 'Grátis $0', 'desc' => 'Velocidade instantânea para saudações e triagem.', 'badge' => 'Grátis'],
+                ['id' => 'google/gemini-flash-1.5', 'nome' => 'Gemini 1.5 Flash', 'empresa' => 'Google', 'preco' => '~$0.075/1M', 'desc' => 'Ultra econômico e estável para alto volume.', 'badge' => '~$0.075/1M'],
+            ],
+            'medio' => [
+                ['id' => 'openai/gpt-4o-mini', 'nome' => 'GPT-4o Mini', 'empresa' => 'OpenAI', 'preco' => '~$0.15/1M', 'desc' => 'Melhor equilíbrio de inteligência e negociação para Suporte e Vendas.', 'badge' => '⭐ Recomendado'],
+                ['id' => 'deepseek/deepseek-chat', 'nome' => 'DeepSeek V3 Chat', 'empresa' => 'DeepSeek', 'preco' => '~$0.14/1M', 'desc' => 'Fluidez conversacional e persuasão a custo 90% menor.', 'badge' => '~$0.14/1M'],
+                ['id' => 'anthropic/claude-3-haiku', 'nome' => 'Claude 3 Haiku', 'empresa' => 'Anthropic', 'preco' => '~$0.25/1M', 'desc' => 'Tom empático e altamente humanizado para retenção.', 'badge' => '~$0.25/1M'],
+            ],
+            'alto' => [
+                ['id' => 'anthropic/claude-3.5-sonnet', 'nome' => 'Claude 3.5 Sonnet', 'empresa' => 'Anthropic', 'preco' => '~$3.00/1M', 'desc' => 'Líder em precisão e análise crítica para o Orquestrador Geral.', 'badge' => 'Top Tier'],
+                ['id' => 'deepseek/deepseek-r1', 'nome' => 'DeepSeek R1', 'empresa' => 'DeepSeek', 'preco' => '~$0.55/1M', 'desc' => 'Raciocínio analítico avançado com 80% de economia.', 'badge' => '~$0.55/1M'],
+                ['id' => 'openai/gpt-4o', 'nome' => 'OpenAI GPT-4o', 'empresa' => 'OpenAI', 'preco' => '~$2.50/1M', 'desc' => 'Visão multimodal e resolução de problemas executivos complexos.', 'badge' => '~$2.50/1M'],
+            ],
+        ];
+
+        return view('equipe.agentes-ia', compact('agentes', 'cargos', 'openrouterModelos'));
     }
 
     public function agentesIaStore(Request $request): RedirectResponse
