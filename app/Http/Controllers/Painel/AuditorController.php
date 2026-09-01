@@ -291,16 +291,25 @@ class AuditorController extends Controller
                     'valor_atual'       => $valorAtual,
                     'valor_sugerido'    => $valorSugerido,
                     'origem'            => $pendencia['origem'] ?? null,
+                    'nome'              => $v->contato?->nome ?: 'Sem Nome',
+                    'sobrenome'         => $v->contato?->sobrenome,
+                    'email'             => $v->contato?->email,
+                    'telefone_original' => $v->contato?->telefone,
                     'telefone'          => $infoPais['formatado'],
                     'bandeira'          => $infoPais['bandeira'],
                     'pais_nome'         => $infoPais['nome'],
                     'ddi'               => $infoPais['ddi'],
+                    'numero_local'      => $infoPais['numero_local'] ?: preg_replace('/^' . $infoPais['ddi'] . '/', '', preg_replace('/\D/', '', $v->contato?->telefone ?? '')),
                     'telefone_exibicao' => $infoPais['exibicao'],
                 ];
             }
         }
 
-        return response()->json(['data' => $itens, 'total' => count($itens)]);
+        return response()->json([
+            'data'   => $itens,
+            'total'  => count($itens),
+            'paises' => \App\Services\PaisTelefoneService::PAISES,
+        ]);
     }
 
     public function aprovarCampo(Request $request, VinculoContatoTenant $vinculo, string $campo): JsonResponse

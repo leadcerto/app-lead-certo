@@ -664,6 +664,9 @@ function auditor() {
                     const d = await res.json();
                     this.pendentes = d.data || [];
                     this.stats.pendentes = d.total || 0;
+                    if (d.paises && d.paises.length) {
+                        this.paises = d.paises;
+                    }
                 }
             } catch (e) {
                 console.error(e);
@@ -698,7 +701,7 @@ function auditor() {
                 contato_id: item.contato_id,
                 nome: item.nome,
                 ddi: item.ddi || '55',
-                numero_local: item.numero_local || item.valor_original.replace(/\D/g, ''),
+                numero_local: item.numero_local || (item.valor_original ? item.valor_original.replace(/\D/g, '') : ''),
                 bandeira: item.bandeira || p.bandeira,
             };
             this.modalTelefone = true;
@@ -752,6 +755,14 @@ function auditor() {
                 sobrenomeInicial = item.valor_sugerido;
             }
 
+            let numLocal = item.numero_local || '';
+            if (!numLocal && item.telefone_original) {
+                numLocal = item.telefone_original.replace(/\D/g, '').replace(new RegExp('^' + ddi), '');
+            }
+            if (!numLocal && item.telefone) {
+                numLocal = item.telefone.replace(/\D/g, '').replace(new RegExp('^' + ddi), '');
+            }
+
             this.itemEdicao = {
                 vinculo_id: item.vinculo_id,
                 contato_id: item.contato_id,
@@ -759,7 +770,7 @@ function auditor() {
                 sobrenome: sobrenomeInicial,
                 email: item.email || '',
                 ddi: ddi,
-                numero_local: item.numero_local || (item.telefone_original ? item.telefone_original.replace(/\D/g, '').replace(new RegExp('^' + ddi), '') : ''),
+                numero_local: numLocal,
                 bandeira: item.bandeira || p.bandeira,
                 campo_origem: item.campo,
             };
