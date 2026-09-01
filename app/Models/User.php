@@ -17,6 +17,7 @@ class User extends Authenticatable
     protected $fillable = [
         'tenant_id', 'nome', 'email', 'password', 'perfil', 'ativo',
         'city', 'state', 'whatsapp', 'avatar_url',
+        'is_ia', 'gemini_email', 'gemini_instrucoes',
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -26,24 +27,26 @@ class User extends Authenticatable
         return [
             'password' => 'hashed',
             'ativo'    => 'boolean',
+            'is_ia'    => 'boolean',
         ];
     }
 
     // ── Matriz de permissões por recurso ──────────────────────────────────────
 
     private const PERMISSOES = [
-        'dashboard'         => ['admin', 'dono', 'diretor', 'gerente', 'gestor', 'vendedor', 'growth_manager', 'revops', 'diretor_marketing'],
-        'kanban'            => ['admin', 'dono', 'diretor', 'gerente', 'gestor', 'vendedor', 'pos_venda', 'diretor_marketing'],
-        'contatos'          => ['admin', 'dono', 'diretor', 'gerente', 'gestor', 'vendedor', 'growth_manager', 'diretor_marketing'],
+        'dashboard'         => ['admin', 'dono', 'diretor', 'gerente', 'coordenador', 'gestor', 'vendedor', 'sdr', 'growth_manager', 'revops', 'diretor_marketing'],
+        'kanban'            => ['admin', 'dono', 'diretor', 'gerente', 'coordenador', 'gestor', 'vendedor', 'pos_venda', 'diretor_marketing'],
+        'contatos'          => ['admin', 'dono', 'diretor', 'gerente', 'coordenador', 'gestor', 'vendedor', 'growth_manager', 'diretor_marketing'],
         'integracoes'       => ['admin', 'dono', 'growth_manager'],
         'configuracoes'     => ['admin', 'dono'],
         'auditor'           => ['admin', 'dono', 'diretor', 'auditor'],
-        'personas'          => ['admin', 'dono', 'diretor', 'growth_manager', 'diretor_marketing'],
+        'personas'          => ['admin', 'dono', 'diretor', 'gerente', 'coordenador', 'gestor', 'vendedor', 'sdr', 'growth_manager', 'diretor_marketing'],
+        'equipe'            => ['admin', 'dono', 'diretor', 'gerente', 'coordenador', 'gestor', 'vendedor', 'sdr', 'growth_manager', 'revops', 'pos_venda', 'auditor', 'diretor_marketing'],
         'campanhas'         => ['admin', 'dono', 'diretor', 'growth_manager', 'diretor_marketing'],
         'revops'            => ['admin', 'dono', 'diretor', 'revops'],
         'usuarios'          => ['admin', 'dono'],
-        'contatos.editar'   => ['admin', 'dono', 'diretor', 'gerente', 'gestor'],
-        'kanban.encerrar'   => ['admin', 'dono', 'diretor', 'gerente', 'gestor', 'vendedor'],
+        'contatos.editar'   => ['admin', 'dono', 'diretor', 'gerente', 'coordenador', 'gestor'],
+        'kanban.encerrar'   => ['admin', 'dono', 'diretor', 'gerente', 'coordenador', 'gestor', 'vendedor'],
         'avaliacoes_gmb'    => ['admin', 'dono', 'diretor', 'diretor_marketing'],
         'avaliador_dash'    => ['admin', 'avaliador'],
         // Os 4 sub-perfis dormentes (ver EQUIPE_MARKETING abaixo) ainda não

@@ -275,15 +275,37 @@
             </a>
             @endif
 
-            {{-- Personas SDR --}}
-            @if($verPersonas)
-            <a href="{{ route('personas') }}"
-               class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('personas') ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-gray-700' }}">
-                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                </svg>
-                SDR Personas
-            </a>
+            {{-- Módulo Equipe (Funções, Agentes IA, Agentes Humanos) --}}
+            @if($verPersonas || ($user?->podeAcessar('equipe') ?? true))
+            @php
+                $equipeAtivo = request()->routeIs('equipe.*') || request()->routeIs('personas');
+            @endphp
+            <div x-data="{ aberto: {{ $equipeAtivo ? 'true' : 'false' }} }">
+                <button @click="aberto = !aberto"
+                        class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm w-full {{ $equipeAtivo ? 'bg-purple-600 text-white font-semibold' : 'text-gray-300 hover:bg-gray-700' }}">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                    <span class="flex-1 text-left">Equipe</span>
+                    <svg class="w-3 h-3 transition-transform duration-200 flex-shrink-0" :class="aberto ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="aberto" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="ml-6 mt-1 space-y-0.5">
+                    <a href="{{ route('equipe.funcoes') }}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('equipe.funcoes') ? 'bg-purple-700 text-white font-bold' : 'text-gray-400 hover:text-white hover:bg-gray-700' }}">
+                        <span>📋</span> Funções
+                    </a>
+                    <a href="{{ route('equipe.agentes-ia') }}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('equipe.agentes-ia') || request()->routeIs('personas') ? 'bg-purple-700 text-white font-bold' : 'text-gray-400 hover:text-white hover:bg-gray-700' }}">
+                        <span>🤖</span> Agentes IA
+                    </a>
+                    <a href="{{ route('equipe.humanos') }}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('equipe.humanos') ? 'bg-purple-700 text-white font-bold' : 'text-gray-400 hover:text-white hover:bg-gray-700' }}">
+                        <span>👥</span> Agentes Humanos
+                    </a>
+                </div>
+            </div>
             @endif
 
             {{-- GMB (Google Meu Negócio) --}}
