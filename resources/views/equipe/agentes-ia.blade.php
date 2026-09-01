@@ -16,7 +16,7 @@
             </p>
         </div>
 
-        @if(auth()->user()->isAdmin())
+        @if(auth()->user()?->isDono())
         <button @click="abrirNovo()"
                 class="bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-sm hover:shadow transition-all flex items-center gap-2 self-start sm:self-auto">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -59,7 +59,7 @@
                         </div>
                     </div>
 
-                    @if(auth()->user()->isAdmin())
+                    @if(auth()->user()?->isDono())
                     <button @click="editar({{ json_encode($agente) }}, {{ json_encode($agente->cargos->pluck('id')) }})"
                             class="text-gray-400 hover:text-purple-600 p-1.5 rounded-xl hover:bg-gray-50 transition"
                             title="Editar Agente IA">
@@ -179,7 +179,7 @@
     </div>
 
     {{-- Modal de Criar / Editar Agente IA (Apenas Super Admin) --}}
-    @if(auth()->user()->isAdmin())
+    @if(auth()->user()?->isDono())
     <div x-show="modalForm" x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 sm:p-6">
         <div @click.outside="modalForm = false" class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden max-h-[92vh] flex flex-col">
             <div class="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-purple-50/60 via-white to-indigo-50/60">
