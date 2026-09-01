@@ -28,14 +28,11 @@
     $verGmb          = $user?->podeAcessar('avaliacoes_gmb');
     $verGmbAvaliador = $user?->podeAcessar('avaliador_dash');
 
-    $pendentesAuditoria = $verAuditor
-        ? \App\Models\VinculoContatoTenant::whereNotNull('campos_pendentes_auditoria')->get()
-            ->sum(fn ($v) => count($v->campos_pendentes_auditoria ?? []))
-        : 0;
-
-    $pendentesContatosAuditoria = $verContatos
-        ? \App\Models\AuditoriaContato::where('status', 'pendente')->count()
-        : 0;
+    $pendentesCampos = \App\Models\VinculoContatoTenant::whereNotNull('campos_pendentes_auditoria')->get()
+        ->sum(fn ($v) => count($v->campos_pendentes_auditoria ?? []));
+    $pendentesTelefones = \App\Models\AuditoriaContato::where('status', 'pendente')->count();
+    $pendentesConflitos = \App\Models\ContatoPendente::where('status', 'aguardando')->count();
+    $totalAuditoriaGeral = $pendentesCampos + $pendentesTelefones + $pendentesConflitos;
 
     $googleFalhou = $verIntegra
         ? \App\Models\GoogleToken::where('tenant_id', $user?->tenant_id)->whereNotNull('falha_renovacao_em')->exists()
@@ -187,17 +184,17 @@
 
             {{-- Contatos (com submenu) --}}
             @if($verContatos)
-            <div x-data="{ aberto: {{ request()->routeIs('contatos.*') ? 'true' : 'false' }} }">
+            <div x-data="{ aberto: {{ request()->routeIs('contatos.*') || request()->routeIs('auditor*') ? 'true' : 'false' }} }">
 
                 {{-- Cabeçalho do grupo --}}
                 <button @click="aberto = !aberto"
-                        class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm w-full {{ request()->routeIs('contatos.*') ? 'bg-green-600 text-white' : 'text-gray-300 hover:bg-gray-700' }}">
+                        class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm w-full {{ request()->routeIs('contatos.*') || request()->routeIs('auditor*') ? 'bg-green-600 text-white' : 'text-gray-300 hover:bg-gray-700' }}">
                     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
                     </svg>
                     <span class="flex-1 text-left">Contatos</span>
-                    @if($pendentesContatosAuditoria > 0)
-                        <span class="bg-red-500 text-white text-xs font-bold rounded-full px-1.5 py-0.5 mr-1">{{ $pendentesContatosAuditoria }}</span>
+                    @if($totalAuditoriaGeral > 0)
+                        <span class="bg-red-500 text-white text-xs font-bold rounded-full px-1.5 py-0.5 mr-1">{{ $totalAuditoriaGeral }}</span>
                     @endif
                     <svg class="w-3 h-3 transition-transform duration-200 flex-shrink-0" :class="aberto ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -216,15 +213,15 @@
                         Lista
                     </a>
 
-                    {{-- Auditoria --}}
-                    <a href="{{ route('contatos.auditoria') }}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('contatos.auditoria') ? 'bg-green-700 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' }}">
+                    {{-- Auditoria Unificada --}}
+                    <a href="{{ route('auditor') }}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('auditor*') || request()->routeIs('contatos.auditoria*') ? 'bg-green-700 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' }}">
                         <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                         </svg>
                         <span class="flex-1">Auditoria</span>
-                        @if($pendentesContatosAuditoria > 0)
-                            <span class="bg-red-500 text-white text-xs font-bold rounded-full px-1.5 py-0.5">{{ $pendentesContatosAuditoria }}</span>
+                        @if($totalAuditoriaGeral > 0)
+                            <span class="bg-red-500 text-white text-xs font-bold rounded-full px-1.5 py-0.5">{{ $totalAuditoriaGeral }}</span>
                         @endif
                     </a>
 
@@ -446,20 +443,6 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                 </svg>
                 Uso de IA
-            </a>
-            @endif
-
-            {{-- Auditor --}}
-            @if($verAuditor)
-            <a href="{{ route('auditor') }}"
-               class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('auditor') ? 'bg-yellow-600 text-white' : 'text-gray-300 hover:bg-gray-700' }}">
-                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                </svg>
-                <span class="flex-1">Auditor</span>
-                @if($pendentesAuditoria > 0)
-                    <span class="bg-yellow-400 text-gray-900 text-xs font-bold rounded-full px-1.5 py-0.5">{{ $pendentesAuditoria }}</span>
-                @endif
             </a>
             @endif
 

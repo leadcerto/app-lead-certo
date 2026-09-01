@@ -329,6 +329,9 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
             Route::prefix($prefix)->group(function () {
                 Route::get('/stats',                                         [AuditorController::class, 'stats']);
                 Route::get('/pendentes',                                     [AuditorController::class, 'pendentesCampos']);
+                Route::get('/telefones-invalidos',                           [AuditorController::class, 'telefonesInvalidos']);
+                Route::post('/telefones-invalidos/{id}/resolver',            [AuditorController::class, 'resolverTelefoneInvalido']);
+                Route::post('/telefones-invalidos/{id}/ignorar',             [AuditorController::class, 'ignorarTelefoneInvalido']);
                 Route::post('/pendente/{vinculo}/campo/{campo}/aprovar',     [AuditorController::class, 'aprovarCampo']);
                 Route::post('/pendente/{vinculo}/campo/{campo}/rejeitar',    [AuditorController::class, 'rejeitarCampo']);
                 Route::post('/pendente/{vinculo}/campo/{campo}/salvar',      [AuditorController::class, 'salvarValorCampo']);

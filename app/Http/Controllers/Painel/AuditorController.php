@@ -27,21 +27,89 @@ class AuditorController extends Controller
         $total          = Contato::count();
         $pendentes      = VinculoContatoTenant::whereNotNull('campos_pendentes_auditoria')->get()
             ->sum(fn ($v) => count($v->campos_pendentes_auditoria ?? []));
+        $telefonesErros = \App\Models\AuditoriaContato::where('status', 'pendente')->count();
         $conflitos      = ContatoPendente::where('status', 'aguardando')->count();
         $inconsistentes = Contato::where('status_validacao', 'inconsistente')->count();
-        $semNome        = Contato::whereNull('nome')->orWhere('nome', '')->count();
+        $semNome        = Contato::whereNull('nome')->orWhere('nome', '')->orWhere('nome', 'Sem Nome')->count();
         $semTelefone    = Contato::whereNull('telefone')->orWhere('telefone', '')->count();
         $inativos       = Contato::onlyTrashed()->count();
 
         return response()->json([
-            'total'          => $total,
-            'pendentes'      => $pendentes,
-            'conflitos'      => $conflitos,
-            'inconsistentes' => $inconsistentes,
-            'sem_nome'       => $semNome,
-            'sem_telefone'   => $semTelefone,
-            'inativos'       => $inativos,
+            'total'           => $total,
+            'pendentes'       => $pendentes,
+            'telefones_erros' => $telefonesErros,
+            'conflitos'       => $conflitos,
+            'inconsistentes'  => $inconsistentes,
+            'sem_nome'        => $semNome,
+            'sem_telefone'    => $semTelefone,
+            'inativos'        => $inativos,
         ]);
+    }
+
+    // ── Telefones com Erro / Formato Internacional ───────────────────────────
+
+    public function telefonesInvalidos(Request $request): JsonResponse
+    {
+        $registros = \App\Models\AuditoriaContato::with('contato')
+            ->where('status', 'pendente')
+            ->orderBy('id', 'desc')
+            ->get();
+
+        $itens = $registros->map(function ($r) {
+            $infoPais = \App\Services\PaisTelefoneService::identificarPais($r->valor_original ?? $r->contato?->telefone);
+            return [
+                'id'             => $r->id,
+                'contato_id'     => $r->contato_id,
+                'nome'           => $r->contato?->nome ?: 'Sem Nome',
+                'tipo'           => $r->tipo,
+                'campo'          => $r->campo,
+                'observacao'     => $r->observacao,
+                'valor_original' => $r->valor_original,
+                'valor_sugerido' => $r->valor_sugerido,
+                'telefone'       => $infoPais['formatado'],
+                'bandeira'       => $infoPais['bandeira'],
+                'pais_nome'      => $infoPais['nome'],
+                'ddi'            => $infoPais['ddi'],
+                'iso'            => $infoPais['iso'],
+                'numero_local'   => $infoPais['numero_local'],
+            ];
+        });
+
+        return response()->json([
+            'data'   => $itens,
+            'total'  => $registros->count(),
+            'paises' => \App\Services\PaisTelefoneService::PAISES,
+        ]);
+    }
+
+    public function resolverTelefoneInvalido(Request $request, int $id, \App\Services\ContatoMergeService $merge): JsonResponse
+    {
+        $request->validate(['valor_novo' => 'required|string|max:50']);
+        $auditoria = \App\Models\AuditoriaContato::findOrFail($id);
+        $contato = $auditoria->contato;
+        if (!$contato) return response()->json(['erro' => 'Contato não encontrado.'], 404);
+
+        $valorNovo = preg_replace('/\D/', '', $request->input('valor_novo'));
+
+        try {
+            $contato->update(['telefone' => $valorNovo]);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            $canonico = Contato::withTrashed()->where('telefone', $valorNovo)->first();
+            if ($canonico) {
+                $merge->mesclar($contato, $canonico);
+            }
+        }
+
+        $auditoria->update(['status' => 'resolvido', 'resolvido_em' => now()]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function ignorarTelefoneInvalido(int $id): JsonResponse
+    {
+        $auditoria = \App\Models\AuditoriaContato::findOrFail($id);
+        $auditoria->update(['status' => 'ignorado', 'resolvido_em' => now()]);
+        return response()->json(['ok' => true]);
     }
 
     // ── Conflitos de Identidade (número possivelmente reciclado) ─────────────
@@ -161,16 +229,21 @@ class AuditorController extends Controller
             foreach ($v->campos_pendentes_auditoria ?? [] as $campo => $pendencia) {
                 $valorAtual    = $v->contato?->$campo;
                 $valorSugerido = $pendencia['sugerido'] ?? null;
+                $infoPais      = \App\Services\PaisTelefoneService::identificarPais($v->contato?->telefone ?? '');
 
                 $itens[] = [
-                    'vinculo_id'     => $v->id,
-                    'contato_id'     => $v->contato_id,
-                    'tenant_id'      => $v->tenant_id,
-                    'campo'          => $campo,
-                    'valor_atual'    => $valorAtual,
-                    'valor_sugerido' => $valorSugerido,
-                    'origem'         => $pendencia['origem'] ?? null,
-                    'telefone'       => $this->formatarTelefoneCompleto($v->contato?->telefone ?? ''),
+                    'vinculo_id'        => $v->id,
+                    'contato_id'        => $v->contato_id,
+                    'tenant_id'         => $v->tenant_id,
+                    'campo'             => $campo,
+                    'valor_atual'       => $valorAtual,
+                    'valor_sugerido'    => $valorSugerido,
+                    'origem'            => $pendencia['origem'] ?? null,
+                    'telefone'          => $infoPais['formatado'],
+                    'bandeira'          => $infoPais['bandeira'],
+                    'pais_nome'         => $infoPais['nome'],
+                    'ddi'               => $infoPais['ddi'],
+                    'telefone_exibicao' => $infoPais['exibicao'],
                 ];
             }
         }

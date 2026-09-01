@@ -1,15 +1,15 @@
 @extends('layouts.app')
 
-@section('title', 'Auditor — Lead Certo')
+@section('title', 'Auditoria & Governança de Contatos — Lead Certo')
 
 @section('content')
-<div x-data="auditor()" x-init="carregar()" class="h-full space-y-6">
+<div x-data="auditor()" x-init="init()" class="p-6 max-w-7xl mx-auto space-y-6">
 
     {{-- Header --}}
     <div class="flex items-center justify-between flex-wrap gap-4">
         <div>
-            <h1 class="text-2xl font-bold text-gray-800">Painel do Auditor</h1>
-            <p class="text-xs text-gray-400 mt-0.5">Governança e qualidade dos dados cadastrais</p>
+            <h1 class="text-2xl font-bold text-gray-800">Auditoria & Governança de Contatos</h1>
+            <p class="text-xs text-gray-500 mt-0.5">Validação de DDI/países, telefones internacionais, conflitos e qualidade cadastral</p>
         </div>
         <div class="flex gap-2">
             <button @click="autoLimparNaoPessoas()" 
@@ -22,28 +22,30 @@
 
     {{-- Cards de Saúde dos Dados --}}
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <p class="text-xs text-gray-400">Total</p>
+        <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+            <p class="text-xs text-gray-400">Total Contatos</p>
             <p class="text-2xl font-bold text-gray-800 mt-1" x-text="stats.total ?? '—'"></p>
         </div>
-        <div class="bg-yellow-50 rounded-xl p-4 shadow-sm border border-yellow-200 cursor-pointer"
-             @click="aba = 'pendentes'">
-            <p class="text-xs text-yellow-700 font-semibold">Pendentes</p>
+        <div class="bg-red-50 rounded-xl p-4 shadow-sm border border-red-200 cursor-pointer hover:bg-red-100/70 transition"
+             @click="aba = 'telefones'; carregarTelefones()">
+            <p class="text-xs text-red-700 font-semibold flex items-center gap-1">
+                <span>📞 Erros Formato / DDI</span>
+            </p>
+            <p class="text-2xl font-bold text-red-600 mt-1" x-text="stats.telefones_erros ?? '—'"></p>
+        </div>
+        <div class="bg-yellow-50 rounded-xl p-4 shadow-sm border border-yellow-200 cursor-pointer hover:bg-yellow-100/70 transition"
+             @click="aba = 'pendentes'; carregarPendentes()">
+            <p class="text-xs text-yellow-700 font-semibold">Sugestões Nomes</p>
             <p class="text-2xl font-bold text-yellow-600 mt-1" x-text="stats.pendentes ?? '—'"></p>
         </div>
-        <div class="bg-red-50 rounded-xl p-4 shadow-sm border border-red-200 cursor-pointer"
-             @click="aba = 'contatos'; filtros.status = 'inconsistente'; buscarContatos()">
-            <p class="text-xs text-red-700 font-semibold">Inconsistentes</p>
-            <p class="text-2xl font-bold text-red-600 mt-1" x-text="stats.inconsistentes ?? '—'"></p>
+        <div class="bg-purple-50 rounded-xl p-4 shadow-sm border border-purple-200 cursor-pointer hover:bg-purple-100/70 transition"
+             @click="aba = 'conflitos'; carregarConflitos()">
+            <p class="text-xs text-purple-700 font-semibold">Conflitos Google</p>
+            <p class="text-2xl font-bold text-purple-600 mt-1" x-text="stats.conflitos ?? '—'"></p>
         </div>
         <div class="bg-orange-50 rounded-xl p-4 shadow-sm border border-orange-200">
-            <p class="text-xs text-orange-700 font-semibold">Sem nome</p>
+            <p class="text-xs text-orange-700 font-semibold">Sem Nome</p>
             <p class="text-2xl font-bold text-orange-500 mt-1" x-text="stats.sem_nome ?? '—'"></p>
-        </div>
-        <div class="bg-purple-50 rounded-xl p-4 shadow-sm border border-purple-200 cursor-pointer"
-             @click="aba = 'conflitos'; carregarConflitos()">
-            <p class="text-xs text-purple-700 font-semibold">Conflitos</p>
-            <p class="text-2xl font-bold text-purple-600 mt-1" x-text="stats.conflitos ?? '—'"></p>
         </div>
         <div class="bg-blue-50 rounded-xl p-4 shadow-sm border border-blue-200">
             <p class="text-xs text-blue-700 font-semibold">Inativos</p>
@@ -51,50 +53,124 @@
         </div>
     </div>
 
-    {{-- Abas --}}
-    <div class="flex gap-1 border-b border-gray-200">
-        <button @click="aba = 'pendentes'"
+    {{-- Navegação por Abas --}}
+    <div class="flex gap-2 border-b border-gray-200 overflow-x-auto pb-1">
+        <button @click="aba = 'telefones'; carregarTelefones()"
+                :class="aba === 'telefones' ? 'border-b-2 border-red-500 text-red-700 font-bold' : 'text-gray-500 hover:text-gray-700'"
+                class="px-4 py-2.5 text-sm transition-colors flex items-center gap-2 whitespace-nowrap">
+            <span>📞 Telefones com Erro / DDI Internacional</span>
+            <span x-show="stats.telefones_erros > 0"
+                  class="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5"
+                  x-text="stats.telefones_erros"></span>
+        </button>
+        <button @click="aba = 'pendentes'; carregarPendentes()"
                 :class="aba === 'pendentes' ? 'border-b-2 border-yellow-500 text-yellow-700 font-bold' : 'text-gray-500 hover:text-gray-700'"
-                class="px-4 py-2.5 text-sm transition-colors flex items-center gap-1.5">
-            <span>Sugestões Pendentes</span>
+                class="px-4 py-2.5 text-sm transition-colors flex items-center gap-2 whitespace-nowrap">
+            <span>📝 Sugestões de Nomes & Sincronização</span>
             <span x-show="stats.pendentes > 0"
                   class="bg-yellow-400 text-gray-900 text-xs font-bold rounded-full px-2 py-0.5"
                   x-text="stats.pendentes"></span>
         </button>
-        <button @click="aba = 'contatos'; buscarContatos()"
-                :class="aba === 'contatos' ? 'border-b-2 border-blue-500 text-blue-700 font-bold' : 'text-gray-500 hover:text-gray-700'"
-                class="px-4 py-2.5 text-sm transition-colors">
-            Contatos
-        </button>
         <button @click="aba = 'conflitos'; carregarConflitos()"
                 :class="aba === 'conflitos' ? 'border-b-2 border-purple-500 text-purple-700 font-bold' : 'text-gray-500 hover:text-gray-700'"
-                class="px-4 py-2.5 text-sm transition-colors flex items-center gap-1.5">
-            <span>Conflitos de Identidade</span>
+                class="px-4 py-2.5 text-sm transition-colors flex items-center gap-2 whitespace-nowrap">
+            <span>👥 Conflitos de Identidade</span>
             <span x-show="stats.conflitos > 0"
                   class="bg-purple-400 text-white text-xs font-bold rounded-full px-2 py-0.5"
                   x-text="stats.conflitos"></span>
         </button>
+        <button @click="aba = 'contatos'; buscarContatos()"
+                :class="aba === 'contatos' ? 'border-b-2 border-blue-500 text-blue-700 font-bold' : 'text-gray-500 hover:text-gray-700'"
+                class="px-4 py-2.5 text-sm transition-colors whitespace-nowrap">
+            👤 Base Geral de Contatos
+        </button>
         <button @click="aba = 'logs'; buscarLogs()"
                 :class="aba === 'logs' ? 'border-b-2 border-gray-500 text-gray-700 font-bold' : 'text-gray-500 hover:text-gray-700'"
-                class="px-4 py-2.5 text-sm transition-colors">
-            Histórico de Auditoria
+                class="px-4 py-2.5 text-sm transition-colors whitespace-nowrap">
+            📜 Histórico de Auditoria
         </button>
     </div>
 
-    {{-- ABA: Sugestões Pendentes --}}
+    {{-- ABA 1: Telefones com Erro / DDI Internacional --}}
+    <div x-show="aba === 'telefones'" class="space-y-4">
+        <template x-if="telefones.length === 0">
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 text-center py-16 text-gray-400">
+                <svg class="w-12 h-12 mx-auto mb-3 text-green-500 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <p class="text-base font-bold text-gray-700">Todos os telefones estão em formato válido!</p>
+                <p class="text-xs text-gray-400 mt-1">Nenhum número com dígitos anômalos ou DDI não identificado.</p>
+            </div>
+        </template>
+
+        <div x-show="telefones.length > 0" class="space-y-3">
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">Contato</th>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">Problema Sinalizado</th>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">País & DDI Identificado</th>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">Número Original</th>
+                                <th class="text-right px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <template x-for="item in telefones" :key="item.id">
+                                <tr class="hover:bg-gray-50/80 transition-colors">
+                                    <td class="px-4 py-3">
+                                        <div class="font-bold text-gray-800" x-text="item.nome"></div>
+                                        <div class="text-xs text-gray-400">ID #<span x-text="item.contato_id"></span></div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                                            <span>📞 Telefone</span>
+                                        </span>
+                                        <div class="text-xs text-gray-500 mt-0.5" x-text="item.observacao || 'Formato desconhecido'"></div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-gray-100 text-gray-800 border border-gray-200">
+                                            <span class="text-base leading-none" x-text="item.bandeira"></span>
+                                            <span x-text="item.pais_nome"></span>
+                                            <span class="text-gray-400 font-mono" x-text="item.ddi ? '(+' + item.ddi + ')' : ''"></span>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 font-mono text-xs font-bold text-gray-700" x-text="item.valor_original"></td>
+                                    <td class="px-4 py-3 text-right">
+                                        <div class="flex items-center justify-end gap-1.5">
+                                            <button @click="abrirEditarTelefoneModal(item)"
+                                                    class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition shadow-sm flex items-center gap-1">
+                                                <span>✏️ Editar com DDI</span>
+                                            </button>
+                                            <button @click="ignorarTelefone(item)"
+                                                    class="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-xs font-medium transition">
+                                                Ignorar
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- ABA 2: Sugestões de Nomes & Sincronização --}}
     <div x-show="aba === 'pendentes'" class="space-y-4">
         <template x-if="pendentes.length === 0">
-            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-16 text-gray-400">
-                <svg class="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 text-center py-16 text-gray-400">
+                <svg class="w-12 h-12 mx-auto mb-3 text-green-500 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                <p class="text-sm font-semibold">Nenhuma sugestão pendente de auditoria</p>
+                <p class="text-base font-bold text-gray-700">Nenhuma sugestão pendente de auditoria</p>
                 <p class="text-xs text-gray-400 mt-1">Todos os dados dos seus contatos estão atualizados e em conformidade.</p>
             </div>
         </template>
 
         <div x-show="pendentes.length > 0" class="space-y-3">
-
             {{-- Barra de Ações em Lote --}}
             <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3.5 flex items-center justify-between flex-wrap gap-3">
                 <div class="flex items-center gap-3">
@@ -148,58 +224,57 @@
                                            class="rounded border-gray-300 text-green-600 focus:ring-green-500 w-4 h-4 cursor-pointer">
                                 </th>
                                 <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">ID Contato</th>
+                                <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">Telefone</th>
                                 <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">Campo</th>
                                 <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">Valor Atual</th>
                                 <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">Valor Sugerido</th>
-                                <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">Telefone Completo</th>
-                                <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">Origem</th>
                                 <th class="text-right px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider">Ações</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
                             <template x-for="item in pendentes" :key="itemChave(item)">
-                                <tr class="hover:bg-gray-50/80 transition-colors">
+                                <tr class="hover:bg-gray-50/80 transition-colors" :class="selecionados.includes(itemChave(item)) ? 'bg-green-50/40' : ''">
                                     <td class="px-4 py-3 text-center">
                                         <input type="checkbox" 
-                                               :value="itemChave(item)" 
-                                               x-model="selecionados"
+                                               :value="itemChave(item)"
+                                               :checked="selecionados.includes(itemChave(item))"
+                                               @change="toggleSelecionarItem(itemChave(item))"
                                                class="rounded border-gray-300 text-green-600 focus:ring-green-500 w-4 h-4 cursor-pointer">
                                     </td>
-                                    <td class="px-3 py-3 text-gray-400 font-mono text-xs font-semibold" x-text="'#' + item.contato_id"></td>
-                                    <td class="px-3 py-3">
-                                        <span class="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-mono font-bold"
-                                              x-text="item.campo"></span>
+                                    <td class="px-3 py-3 font-mono text-xs text-gray-500">
+                                        #<span x-text="item.contato_id"></span>
                                     </td>
                                     <td class="px-3 py-3">
-                                        <span class="text-gray-500 italic text-xs" x-text="item.valor_atual || '(vazio)'"></span>
+                                        <div class="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-gray-800">
+                                            <span class="text-base leading-none" x-text="item.bandeira || '🇧🇷'"></span>
+                                            <span x-text="item.telefone"></span>
+                                        </div>
                                     </td>
                                     <td class="px-3 py-3">
-                                        <span class="font-bold text-yellow-800 bg-yellow-100 px-2.5 py-1 rounded-lg text-xs"
-                                              x-text="item.valor_sugerido"></span>
+                                        <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-blue-100 text-blue-800 uppercase tracking-wide" x-text="item.campo"></span>
                                     </td>
-                                    <td class="px-3 py-3 font-mono text-xs font-bold text-gray-800" x-text="item.telefone"></td>
+                                    <td class="px-3 py-3 text-gray-500">
+                                        <span class="line-through text-xs" x-text="item.valor_atual || '(vazio)'"></span>
+                                    </td>
                                     <td class="px-3 py-3">
-                                        <span class="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-semibold"
-                                              x-text="item.origem"></span>
+                                        <span class="font-bold text-gray-900 bg-yellow-100 px-2 py-0.5 rounded text-xs" x-text="item.valor_sugerido"></span>
                                     </td>
                                     <td class="px-4 py-3 text-right">
-                                        <div class="flex items-center justify-end gap-1.5 flex-wrap">
-                                            <button @click="abrirEditar(item)"
-                                                    class="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-2.5 py-1.5 rounded-lg font-bold transition flex items-center gap-1"
-                                                    title="Editar este valor manualmente">
+                                        <div class="flex items-center justify-end gap-1.5">
+                                            <button @click="abrirEditarModal(item)"
+                                                    class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition flex items-center gap-1">
                                                 <span>✏️ Editar</span>
                                             </button>
-                                            <button @click="marcarSemNomeIndividual(item)"
-                                                    class="text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 px-2 py-1.5 rounded-lg font-bold transition"
-                                                    title="Definir diretamente como 'Sem Nome'">
+                                            <button @click="definirSemNome(item)"
+                                                    class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-bold transition flex items-center gap-1">
                                                 <span>Sem Nome</span>
                                             </button>
                                             <button @click="aprovarCampo(item)"
-                                                    class="text-xs bg-green-600 hover:bg-green-700 text-white px-2.5 py-1.5 rounded-lg font-bold transition shadow-sm">
+                                                    class="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition shadow-sm">
                                                 Aprovar
                                             </button>
                                             <button @click="rejeitarCampo(item)"
-                                                    class="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1.5 rounded-lg font-bold transition">
+                                                    class="px-2 py-1 text-gray-400 hover:text-red-600 rounded-lg text-xs font-medium transition">
                                                 Rejeitar
                                             </button>
                                         </div>
@@ -210,258 +285,239 @@
                     </table>
                 </div>
             </div>
-
         </div>
     </div>
 
-    {{-- ABA: Contatos --}}
-    <div x-show="aba === 'contatos'">
-        {{-- Filtros --}}
-        <div class="flex gap-3 mb-4 flex-wrap">
-            <input x-model="filtros.busca" @input.debounce.400ms="buscarContatos()"
-                   type="text" placeholder="Nome, telefone ou e-mail..."
-                   class="border border-gray-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-64 shadow-sm bg-white">
-            <select x-model="filtros.status" @change="buscarContatos()"
-                    class="border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
-                <option value="">Todos os status</option>
-                <option value="pendente">Pendente</option>
-                <option value="aprovado">Aprovado</option>
-                <option value="inconsistente">Inconsistente</option>
-            </select>
-            <select x-model="filtros.tipo_pessoa" @change="buscarContatos()"
-                    class="border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
-                <option value="">PF e PJ</option>
-                <option value="pf">Pessoa Física</option>
-                <option value="pj">Pessoa Jurídica</option>
-            </select>
-            <select x-model="filtros.origem" @change="buscarContatos()"
-                    class="border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
-                <option value="">Todas as origens</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="agenda_google">Google</option>
-                <option value="csv">CSV</option>
-            </select>
-            <span class="text-xs text-gray-400 self-center" x-text="totalContatos + ' resultados'"></span>
-        </div>
-
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-            <table class="w-full text-sm">
-                <thead class="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">ID</th>
-                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Nome</th>
-                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Telefone Completo</th>
-                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">E-mail</th>
-                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">CPF/CNPJ</th>
-                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Tipo</th>
-                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Status</th>
-                        <th class="text-right px-4 py-3 text-xs text-gray-500 font-bold uppercase">Ações</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100">
-                    <template x-for="c in listaContatos" :key="c.id">
-                        <tr class="hover:bg-gray-50/80 transition-colors">
-                            <td class="px-4 py-3 text-gray-400 font-mono text-xs font-semibold" x-text="'#' + c.id"></td>
-                            <td class="px-4 py-3">
-                                <p class="font-bold text-gray-800" x-text="[c.nome, c.sobrenome].filter(Boolean).join(' ') || 'Sem Nome'"></p>
-                                <p class="text-xs text-gray-400" x-text="c.empresa"></p>
-                            </td>
-                            <td class="px-4 py-3 font-mono text-xs font-bold text-gray-800" x-text="c.telefone || '—'"></td>
-                            <td class="px-4 py-3 text-xs text-gray-600" x-text="c.email || '—'"></td>
-                            <td class="px-4 py-3 font-mono text-xs text-gray-500"
-                                x-text="c.tipo_pessoa === 'pj' ? (c.cnpj || '—') : (c.cpf || '—')"></td>
-                            <td class="px-4 py-3">
-                                <span class="text-xs uppercase font-mono px-2 py-0.5 rounded"
-                                      :class="c.tipo_pessoa === 'pj' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'"
-                                      x-text="c.tipo_pessoa || 'pf'"></span>
-                            </td>
-                            <td class="px-4 py-3">
-                                <span class="text-xs px-2.5 py-1 rounded-full font-bold"
-                                      :class="{
-                                          'bg-green-100 text-green-700': c.status_validacao === 'aprovado',
-                                          'bg-yellow-100 text-yellow-700': c.status_validacao === 'pendente',
-                                          'bg-red-100 text-red-700': c.status_validacao === 'inconsistente'
-                                      }"
-                                      x-text="c.status_validacao"></span>
-                            </td>
-                            <td class="px-4 py-3 text-right">
-                                <div class="flex items-center justify-end gap-1.5">
-                                    <template x-if="c.status_validacao === 'pendente'">
-                                        <button @click="aprovarCadastro(c)"
-                                                class="text-xs bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded-lg font-semibold transition">
-                                            Aprovar
-                                        </button>
-                                    </template>
-                                    <template x-if="c.status_validacao !== 'inconsistente'">
-                                        <button @click="abrirSinalizar(c)"
-                                                class="text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-2.5 py-1 rounded-lg font-semibold transition">
-                                            Sinalizar
-                                        </button>
-                                    </template>
-                                    <button @click="abrirInativar(c)"
-                                            class="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-2.5 py-1 rounded-lg font-semibold transition">
-                                            Inativar
-                                        </button>
-                                </div>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    {{-- ABA: Conflitos de Identidade --}}
-    <div x-show="aba === 'conflitos'">
+    {{-- ABA 3: Conflitos de Identidade --}}
+    <div x-show="aba === 'conflitos'" class="space-y-4">
         <template x-if="conflitos.length === 0">
-            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-16 text-gray-400">
-                <svg class="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 text-center py-16 text-gray-400">
+                <svg class="w-12 h-12 mx-auto mb-3 text-green-500 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                <p class="text-sm font-semibold">Nenhum conflito de identidade pendente</p>
+                <p class="text-base font-bold text-gray-700">Nenhum conflito de identidade pendente</p>
+                <p class="text-xs text-gray-400 mt-1">Nenhum caso de número reciclado ou sobreposição cadastral encontrado.</p>
             </div>
         </template>
 
-        <div class="space-y-4" x-show="conflitos.length > 0">
-            <template x-for="c in conflitos" :key="c.id">
-                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 space-y-3">
-                    <div class="flex items-start justify-between gap-4 flex-wrap">
-                        <div>
-                            <span class="text-xs bg-purple-100 text-purple-800 px-2.5 py-1 rounded-lg font-bold"
-                                  x-text="c.tipo_conflito"></span>
-                            <span class="text-xs text-gray-400 ml-2" x-text="c.criado_em"></span>
-                            <p class="text-sm font-mono font-bold text-gray-800 mt-2">
-                                Telefone: <span x-text="c.telefone" class="text-blue-600"></span>
-                            </p>
-                        </div>
-                        <div class="flex gap-2">
-                            <button @click="resolverConflito(c, 'fundir')"
-                                    class="px-3.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition shadow-sm">
-                                Mesma Pessoa (Fundir)
-                            </button>
-                            <button @click="resolverConflito(c, 'criar-novo')"
-                                    class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm">
-                                Número Reciclado (Novo Contato)
-                            </button>
-                            <button @click="resolverConflito(c, 'descartar')"
-                                    class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold transition">
-                                Descartar
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
-                        <div>
-                            <p class="text-xs text-gray-500 font-semibold mb-1">Nome no Google</p>
-                            <p class="text-sm font-bold text-gray-800" x-text="c.nome_google || '(sem nome)'"></p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-gray-500 font-semibold mb-1">Nome Existente no Sistema</p>
-                            <p class="text-sm font-bold text-gray-800" x-text="c.nome_existente || '(sem nome)'"></p>
-                        </div>
-                    </div>
+        <div x-show="conflitos.length > 0" class="space-y-3">
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Telefone</th>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Nome no Google</th>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Nome Existente</th>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Similaridade</th>
+                                <th class="text-right px-4 py-3 text-xs text-gray-500 font-bold uppercase">Decisão</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <template x-for="c in conflitos" :key="c.id">
+                                <tr class="hover:bg-gray-50 transition-colors">
+                                    <td class="px-4 py-3 font-mono font-bold text-gray-800 text-xs" x-text="c.telefone"></td>
+                                    <td class="px-4 py-3 font-semibold text-blue-700" x-text="c.nome_google"></td>
+                                    <td class="px-4 py-3 text-gray-600" x-text="c.nome_existente"></td>
+                                    <td class="px-4 py-3">
+                                        <span class="px-2 py-0.5 rounded text-xs font-bold"
+                                              :class="c.similaridade_nome >= 0.7 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                                              x-text="Math.round(c.similaridade_nome * 100) + '%'"></span>
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <div class="flex items-center justify-end gap-2">
+                                            <button @click="resolverConflito(c, 'fundir')"
+                                                    class="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold shadow-sm">
+                                                Mesma Pessoa
+                                            </button>
+                                            <button @click="resolverConflito(c, 'criar-novo')"
+                                                    class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shadow-sm">
+                                                Número Reciclado
+                                            </button>
+                                            <button @click="resolverConflito(c, 'descartar')"
+                                                    class="px-2 py-1 text-gray-400 hover:text-red-600 rounded-lg text-xs">
+                                                Descartar
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
                 </div>
-            </template>
+            </div>
         </div>
     </div>
 
-    {{-- ABA: Logs de Auditoria --}}
-    <div x-show="aba === 'logs'">
+    {{-- ABA 4: Base Geral de Contatos --}}
+    <div x-show="aba === 'contatos'" class="space-y-4">
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 flex gap-3 flex-wrap">
+            <input type="text" x-model="filtros.busca" @keyup.enter="buscarContatos()" placeholder="Buscar por nome, telefone, email..."
+                   class="border border-gray-300 rounded-xl px-3.5 py-2 text-xs flex-1 min-w-[200px] focus:ring-2 focus:ring-green-500 focus:outline-none">
+            <select x-model="filtros.status" @change="buscarContatos()" class="border border-gray-300 rounded-xl px-3 py-2 text-xs">
+                <option value="">Status Validação (Todos)</option>
+                <option value="aprovado">Aprovados</option>
+                <option value="inconsistente">Inconsistentes</option>
+                <option value="pendente">Pendentes</option>
+            </select>
+            <button @click="buscarContatos()" class="px-4 py-2 bg-green-600 text-white rounded-xl text-xs font-bold hover:bg-green-700">Buscar</button>
+        </div>
+
         <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-            <table class="w-full text-sm">
-                <thead class="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Data/Hora</th>
-                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Auditor</th>
-                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Ação</th>
-                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Campo</th>
-                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Valor Anterior</th>
-                        <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Novo Valor</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100">
-                    <template x-for="l in logs" :key="l.id">
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-4 py-3 text-xs text-gray-500" x-text="l.criado_em"></td>
-                            <td class="px-4 py-3 font-semibold text-gray-800" x-text="l.auditor"></td>
-                            <td class="px-4 py-3">
-                                <span class="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-mono font-bold"
-                                      x-text="l.acao"></span>
-                            </td>
-                            <td class="px-4 py-3 text-xs text-gray-600 font-mono" x-text="l.campo || '—'"></td>
-                            <td class="px-4 py-3 text-xs text-gray-400 line-through" x-text="l.valor_antigo || '(vazio)'"></td>
-                            <td class="px-4 py-3 text-xs font-bold text-green-700" x-text="l.valor_novo || '(vazio)'"></td>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                            <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Nome</th>
+                            <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Telefone</th>
+                            <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Origem</th>
+                            <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Status</th>
                         </tr>
-                    </template>
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        <template x-for="c in listaContatos" :key="c.id">
+                            <tr class="hover:bg-gray-50 transition-colors">
+                                <td class="px-4 py-3 font-semibold text-gray-800" x-text="c.nome || 'Sem Nome'"></td>
+                                <td class="px-4 py-3 font-mono text-xs font-bold text-gray-700" x-text="c.telefone_exibicao || c.telefone"></td>
+                                <td class="px-4 py-3 text-xs text-gray-500" x-text="c.origem"></td>
+                                <td class="px-4 py-3">
+                                    <span class="px-2 py-0.5 rounded-full text-xs font-bold"
+                                          :class="c.status_validacao === 'aprovado' ? 'bg-green-100 text-green-700' : (c.status_validacao === 'inconsistente' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600')"
+                                          x-text="c.status_validacao"></span>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
-    {{-- Modal de Edição de Valor Sugerido / Campo --}}
-    <div x-show="modalEditar" 
-         x-transition:enter="transition ease-out duration-150"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" 
-         style="display: none;">
-        <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-gray-100" @click.outside="modalEditar = false">
-            <div class="flex items-center justify-between border-b border-gray-100 pb-3">
-                <h3 class="text-base font-bold text-gray-800">✏️ Editar Valor antes de Aprovar</h3>
-                <button @click="modalEditar = false" class="text-gray-400 hover:text-gray-700 text-lg font-bold">✕</button>
+    {{-- ABA 5: Histórico de Auditoria --}}
+    <div x-show="aba === 'logs'" class="space-y-4">
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                            <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Data/Hora</th>
+                            <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Ação</th>
+                            <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Registro</th>
+                            <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase">Usuário</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        <template x-for="log in logs" :key="log.id">
+                            <tr class="hover:bg-gray-50 transition-colors">
+                                <td class="px-4 py-3 text-xs text-gray-500 font-mono" x-text="log.criado_em"></td>
+                                <td class="px-4 py-3 font-semibold text-gray-800" x-text="log.acao"></td>
+                                <td class="px-4 py-3 text-xs text-gray-600" x-text="log.tabela + ' #' + log.registro_id"></td>
+                                <td class="px-4 py-3 text-xs text-gray-500" x-text="log.usuario_nome || 'Sistema'"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
             </div>
+        </div>
+    </div>
 
-            <div class="space-y-3">
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 mb-1">Campo</label>
-                    <input type="text" :value="itemEmEdicao?.campo" disabled class="w-full bg-gray-100 border border-gray-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-gray-700">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-gray-500 mb-1">Telefone do Contato</label>
-                    <input type="text" :value="itemEmEdicao?.telefone" disabled class="w-full bg-gray-100 border border-gray-200 rounded-xl px-3 py-2 text-xs font-mono text-gray-700">
-                </div>
-                <div>
-                    <div class="flex items-center justify-between mb-1">
-                        <label class="block text-xs font-bold text-gray-700">Novo Valor a Salvar</label>
-                        <button type="button" @click="valorEditado = 'Sem Nome'" class="text-xs text-amber-600 font-bold hover:underline">
-                            Inserir "Sem Nome"
-                        </button>
+    {{-- MODAL: Editar com Seletor de País & DDI (Google Contacts Style) --}}
+    <div x-show="modalTelefone" style="display: none;"
+         class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div @click.outside="modalTelefone = false"
+             class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 animate-fadeIn">
+            
+            <div class="px-6 py-4 bg-gradient-to-r from-gray-900 to-gray-800 text-white flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">🌐</span>
+                    <div>
+                        <h3 class="font-bold text-sm">Editar Telefone & Código do País</h3>
+                        <p class="text-[11px] text-gray-300">Padrão Google Contatos (DDI + Número Local)</p>
                     </div>
-                    <input type="text" x-model="valorEditado" class="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm" autofocus>
+                </div>
+                <button @click="modalTelefone = false" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+            </div>
+
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="text-xs font-bold text-gray-700 block mb-1">Contato</label>
+                    <p class="text-sm font-semibold text-gray-900 bg-gray-50 p-2.5 rounded-xl border border-gray-200" x-text="itemEdicaoTelefone?.nome"></p>
+                </div>
+
+                {{-- Seletor de País estilo Google Contatos --}}
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                    <div class="md:col-span-5">
+                        <label class="text-xs font-bold text-gray-700 block mb-1">País / DDI</label>
+                        <select x-model="itemEdicaoTelefone.ddi"
+                                @change="atualizarPrefixoPais()"
+                                class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-xs font-semibold focus:ring-2 focus:ring-blue-500 bg-white shadow-sm">
+                            <template x-for="p in paises" :key="p.iso">
+                                <option :value="p.ddi" x-text="p.bandeira + ' ' + p.nome + ' (+' + p.ddi + ')'" :selected="p.ddi === itemEdicaoTelefone.ddi"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <div class="md:col-span-7">
+                        <label class="text-xs font-bold text-gray-700 block mb-1">Número Local / Completo</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-xs font-mono font-bold text-gray-400" x-text="'+' + itemEdicaoTelefone.ddi"></span>
+                            <input type="text" 
+                                   x-model="itemEdicaoTelefone.numero_local"
+                                   placeholder="21999999999"
+                                   class="w-full border border-gray-300 rounded-xl pl-12 pr-3 py-2.5 text-sm font-mono font-bold focus:ring-2 focus:ring-blue-500 bg-white shadow-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-blue-50 rounded-xl border border-blue-200 text-xs text-blue-800">
+                    <p class="font-bold flex items-center gap-1">
+                        <span>💡 Visualização Final Formatada:</span>
+                    </p>
+                    <p class="font-mono text-sm font-bold text-blue-900 mt-1">
+                        <span x-text="itemEdicaoTelefone.bandeira || '🌐'"></span>
+                        +<span x-text="itemEdicaoTelefone.ddi"></span>
+                        <span x-text="itemEdicaoTelefone.numero_local"></span>
+                    </p>
                 </div>
             </div>
 
-            <div class="flex justify-end gap-2 pt-3 border-t border-gray-100">
-                <button type="button" @click="modalEditar = false" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-xl transition">
-                    Cancelar
-                </button>
-                <button type="button" @click="salvarEdicao()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow transition">
-                    Salvar e Aprovar
+            <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2">
+                <button @click="modalTelefone = false" class="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-800 rounded-xl">Cancelar</button>
+                <button @click="salvarEdicaoTelefone()" class="px-5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md transition">
+                    Salvar e Normalizar
                 </button>
             </div>
         </div>
     </div>
 
-    {{-- Modal de Sinalizar Inconsistência --}}
-    <div x-show="modalSinalizar" class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" style="display: none;">
-        <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl" @click.outside="modalSinalizar = false">
-            <h3 class="text-base font-bold text-gray-800">Sinalizar Inconsistência</h3>
-            <textarea x-model="motivoAcao" placeholder="Descreva o motivo da inconsistência..." class="w-full border border-gray-300 rounded-xl p-3 text-sm" rows="3"></textarea>
-            <div class="flex justify-end gap-2">
-                <button type="button" @click="modalSinalizar = false" class="px-4 py-2 bg-gray-100 text-gray-700 text-xs rounded-xl font-semibold">Cancelar</button>
-                <button type="button" @click="confirmarSinalizar()" class="px-4 py-2 bg-yellow-600 text-white text-xs rounded-xl font-bold">Confirmar</button>
+    {{-- MODAL: Edição de Nomes Sugeridos --}}
+    <div x-show="modalEditar" style="display: none;"
+         class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div @click.outside="modalEditar = false"
+             class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 animate-fadeIn">
+            
+            <div class="px-6 py-4 bg-gradient-to-r from-gray-900 to-gray-800 text-white flex items-center justify-between">
+                <h3 class="font-bold text-sm">Editar Valor Sugerido</h3>
+                <button @click="modalEditar = false" class="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
             </div>
-        </div>
-    </div>
 
-    {{-- Modal de Inativar Contato --}}
-    <div x-show="modalInativar" class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" style="display: none;">
-        <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl" @click.outside="modalInativar = false">
-            <h3 class="text-base font-bold text-gray-800">Inativar Contato</h3>
-            <textarea x-model="motivoAcao" placeholder="Motivo da inativação..." class="w-full border border-gray-300 rounded-xl p-3 text-sm" rows="3"></textarea>
-            <div class="flex justify-end gap-2">
-                <button type="button" @click="modalInativar = false" class="px-4 py-2 bg-gray-100 text-gray-700 text-xs rounded-xl font-semibold">Cancelar</button>
-                <button type="button" @click="confirmarInativar()" class="px-4 py-2 bg-red-600 text-white text-xs rounded-xl font-bold">Inativar</button>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1">Campo</label>
+                    <p class="text-xs font-bold text-blue-600 uppercase" x-text="itemEdicao?.campo"></p>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-gray-700 block mb-1">Novo Valor</label>
+                    <input type="text" 
+                           x-model="valorEditado"
+                           @keyup.enter="salvarEdicaoModal()"
+                           class="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm">
+                </div>
+            </div>
+
+            <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2">
+                <button @click="modalEditar = false" class="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-800 rounded-xl">Cancelar</button>
+                <button @click="salvarEdicaoModal()" class="px-5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md transition">Salvar e Aprovar</button>
             </div>
         </div>
     </div>
@@ -471,47 +527,67 @@
 <script>
 function auditor() {
     return {
-        aba: 'pendentes',
+        aba: 'telefones',
         stats: {},
+        telefones: [],
         pendentes: [],
-        selecionados: [],
         conflitos: [],
-        logs: [],
         listaContatos: [],
-        totalContatos: 0,
-        paginaAtual: 1,
-        totalPaginas: 1,
-        filtros: { busca: '', status: '', tipo_pessoa: '', origem: '' },
+        logs: [],
+        paises: [],
+        selecionados: [],
 
+        // Modais
         modalEditar: false,
-        itemEmEdicao: null,
+        itemEdicao: null,
         valorEditado: '',
 
-        modalSinalizar: false,
-        modalInativar: false,
-        contatoAtivo: null,
-        motivoAcao: '',
+        modalTelefone: false,
+        itemEdicaoTelefone: { ddi: '55', numero_local: '', bandeira: '🇧🇷', nome: '' },
 
-        async carregar() {
-            await Promise.all([
-                this.carregarStats(),
-                this.carregarPendentes(),
-            ]);
+        filtros: { busca: '', status: '', tipo_pessoa: '', origem: '' },
+
+        async init() {
+            await this.carregarStats();
+            await this.carregarTelefones();
+            await this.carregarPendentes();
         },
 
         async carregarStats() {
-            const res = await this.api('/auditor/stats');
-            if (res.ok) {
-                this.stats = await res.json();
+            try {
+                const res = await this.api('/auditor/stats');
+                if (res.ok) {
+                    this.stats = await res.json();
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        },
+
+        async carregarTelefones() {
+            try {
+                const res = await this.api('/auditor/telefones-invalidos');
+                if (res.ok) {
+                    const d = await res.json();
+                    this.telefones = d.data || [];
+                    this.paises = d.paises || [];
+                    this.stats.telefones_erros = d.total || 0;
+                }
+            } catch (e) {
+                console.error(e);
             }
         },
 
         async carregarPendentes() {
-            const res = await this.api('/auditor/pendentes');
-            if (res.ok) {
-                const d = await res.json();
-                this.pendentes = d.data || [];
-                this.selecionados = [];
+            try {
+                const res = await this.api('/auditor/pendentes');
+                if (res.ok) {
+                    const d = await res.json();
+                    this.pendentes = d.data || [];
+                    this.stats.pendentes = d.total || 0;
+                }
+            } catch (e) {
+                console.error(e);
             }
         },
 
@@ -521,38 +597,93 @@ function auditor() {
 
         toggleSelecionarTodos(e) {
             if (e.target.checked) {
-                this.selecionados = this.pendentes.map(item => this.itemChave(item));
+                this.selecionados = this.pendentes.map(p => this.itemChave(p));
             } else {
                 this.selecionados = [];
             }
         },
 
-        abrirEditar(item) {
-            this.itemEmEdicao = item;
-            this.valorEditado = item.valor_sugerido || item.valor_atual || '';
-            this.modalEditar = true;
+        toggleSelecionarItem(chave) {
+            if (this.selecionados.includes(chave)) {
+                this.selecionados = this.selecionados.filter(s => s !== chave);
+            } else {
+                this.selecionados.push(chave);
+            }
         },
 
-        async salvarEdicao() {
-            if (!this.itemEmEdicao) return;
-            const res = await this.api(`/auditor/pendente/${this.itemEmEdicao.vinculo_id}/campo/${this.itemEmEdicao.campo}/salvar`, 'POST', {
-                valor: this.valorEditado,
+        // Edição de Telefone & DDI
+        abrirEditarTelefoneModal(item) {
+            const p = this.paises.find(x => x.ddi === item.ddi) || { ddi: '55', bandeira: '🇧🇷' };
+            this.itemEdicaoTelefone = {
+                id: item.id,
+                contato_id: item.contato_id,
+                nome: item.nome,
+                ddi: item.ddi || '55',
+                numero_local: item.numero_local || item.valor_original.replace(/\D/g, ''),
+                bandeira: item.bandeira || p.bandeira,
+            };
+            this.modalTelefone = true;
+        },
+
+        atualizarPrefixoPais() {
+            const p = this.paises.find(x => x.ddi === this.itemEdicaoTelefone.ddi);
+            if (p) {
+                this.itemEdicaoTelefone.bandeira = p.bandeira;
+            }
+        },
+
+        async salvarEdicaoTelefone() {
+            const ddi = this.itemEdicaoTelefone.ddi.replace(/\D/g, '');
+            const local = this.itemEdicaoTelefone.numero_local.replace(/\D/g, '');
+            const numeroFinal = ddi + local;
+
+            const res = await this.api(`/auditor/telefones-invalidos/${this.itemEdicaoTelefone.id}/resolver`, 'POST', {
+                valor_novo: numeroFinal,
             });
+
             if (res.ok) {
-                this.pendentes = this.pendentes.filter(p => this.itemChave(p) !== this.itemChave(this.itemEmEdicao));
-                this.selecionados = this.selecionados.filter(s => s !== this.itemChave(this.itemEmEdicao));
-                this.modalEditar = false;
+                this.modalTelefone = false;
+                await this.carregarTelefones();
+                await this.carregarStats();
+            } else {
+                alert('Erro ao salvar número.');
+            }
+        },
+
+        async ignorarTelefone(item) {
+            if (!confirm('Ignorar este erro de telefone?')) return;
+            const res = await this.api(`/auditor/telefones-invalidos/${item.id}/ignorar`, 'POST');
+            if (res.ok) {
+                await this.carregarTelefones();
                 await this.carregarStats();
             }
         },
 
-        async marcarSemNomeIndividual(item) {
+        // Edição de Sugestões Pendentes
+        abrirEditarModal(item) {
+            this.itemEdicao = item;
+            this.valorEditado = item.valor_sugerido || item.valor_atual || '';
+            this.modalEditar = true;
+        },
+
+        async salvarEdicaoModal() {
+            if (!this.itemEdicao) return;
+            const res = await this.api(`/auditor/pendente/${this.itemEdicao.vinculo_id}/campo/${this.itemEdicao.campo}/salvar`, 'POST', {
+                valor: this.valorEditado,
+            });
+            if (res.ok) {
+                this.modalEditar = false;
+                await this.carregarPendentes();
+                await this.carregarStats();
+            }
+        },
+
+        async definirSemNome(item) {
             const res = await this.api(`/auditor/pendente/${item.vinculo_id}/campo/${item.campo}/salvar`, 'POST', {
                 valor: 'Sem Nome',
             });
             if (res.ok) {
-                this.pendentes = this.pendentes.filter(p => this.itemChave(p) !== this.itemChave(item));
-                this.selecionados = this.selecionados.filter(s => s !== this.itemChave(item));
+                await this.carregarPendentes();
                 await this.carregarStats();
             }
         },
@@ -571,18 +702,19 @@ function auditor() {
 
             const res = await this.api(rota, 'POST', { itens: itensParaEnviar });
             if (res.ok) {
+                this.selecionados = [];
                 await this.carregarPendentes();
                 await this.carregarStats();
             }
         },
 
         async autoLimparNaoPessoas() {
-            if (!confirm('Deseja converter automaticamente todas as sugestões com nomes de empresas, termos genéricos e números (ex: "Frete 35", "Bongo") para "Sem Nome"?')) return;
+            if (!confirm('Deseja converter automaticamente todas as sugestões que não forem nomes de pessoas (ex: "Frete 35", "Bongo", números) para "Sem Nome"?')) return;
 
             const res = await this.api('/auditor/pendentes/auto-limpar-nao-pessoas', 'POST');
             if (res.ok) {
                 const data = await res.json();
-                alert(`${data.total} contato(s) limpos e definidos como "Sem Nome" com sucesso!`);
+                alert(`${data.total} registro(s) convertidos para "Sem Nome" com sucesso!`);
                 await this.carregarPendentes();
                 await this.carregarStats();
             }
@@ -591,8 +723,7 @@ function auditor() {
         async aprovarCampo(item) {
             const res = await this.api(`/auditor/pendente/${item.vinculo_id}/campo/${item.campo}/aprovar`, 'POST');
             if (res.ok) {
-                this.pendentes = this.pendentes.filter(p => this.itemChave(p) !== this.itemChave(item));
-                this.selecionados = this.selecionados.filter(s => s !== this.itemChave(item));
+                await this.carregarPendentes();
                 await this.carregarStats();
             }
         },
@@ -601,26 +732,20 @@ function auditor() {
             if (!confirm(`Rejeitar sugestão "${item.valor_sugerido}" pro campo "${item.campo}" e manter "${item.valor_atual}"?`)) return;
             const res = await this.api(`/auditor/pendente/${item.vinculo_id}/campo/${item.campo}/rejeitar`, 'POST');
             if (res.ok) {
-                this.pendentes = this.pendentes.filter(p => this.itemChave(p) !== this.itemChave(item));
-                this.selecionados = this.selecionados.filter(s => s !== this.itemChave(item));
+                await this.carregarPendentes();
                 await this.carregarStats();
             }
         },
 
         async buscarContatos() {
             const params = new URLSearchParams({
-                page:        this.paginaAtual,
-                busca:       this.filtros.busca,
-                status:      this.filtros.status,
-                tipo_pessoa: this.filtros.tipo_pessoa,
-                origem:      this.filtros.origem,
+                busca:  this.filtros.busca,
+                status: this.filtros.status,
             });
             const res = await this.api('/auditor/contatos?' + params);
             if (res.ok) {
                 const d = await res.json();
-                this.listaContatos = d.data;
-                this.totalContatos = d.total;
-                this.totalPaginas  = d.ultima_pagina;
+                this.listaContatos = d.data || [];
             }
         },
 
@@ -628,7 +753,7 @@ function auditor() {
             const res = await this.api('/auditor/conflitos');
             if (res.ok) {
                 const d = await res.json();
-                this.conflitos = d.data;
+                this.conflitos = d.data || [];
             }
         },
 
@@ -651,50 +776,7 @@ function auditor() {
             const res = await this.api('/auditor/logs');
             if (res.ok) {
                 const d = await res.json();
-                this.logs = d.data;
-            }
-        },
-
-        async aprovarCadastro(contato) {
-            const res = await this.api(`/auditor/contato/${contato.id}/aprovar-cadastro`, 'POST');
-            if (res.ok) {
-                contato.status_validacao = 'aprovado';
-            }
-        },
-
-        abrirSinalizar(contato) {
-            this.contatoAtivo  = contato;
-            this.motivoAcao    = '';
-            this.modalSinalizar = true;
-        },
-
-        async confirmarSinalizar() {
-            if (!this.motivoAcao.trim()) return;
-            const res = await this.api(`/auditor/contato/${this.contatoAtivo.id}/sinalizar`, 'POST', {
-                motivo: this.motivoAcao,
-            });
-            if (res.ok) {
-                this.contatoAtivo.status_validacao = 'inconsistente';
-                this.modalSinalizar = false;
-                await this.carregarStats();
-            }
-        },
-
-        abrirInativar(contato) {
-            this.contatoAtivo = contato;
-            this.motivoAcao   = '';
-            this.modalInativar = true;
-        },
-
-        async confirmarInativar() {
-            if (!this.motivoAcao.trim()) return;
-            const res = await this.api(`/auditor/contato/${this.contatoAtivo.id}/inativar`, 'POST', {
-                motivo: this.motivoAcao,
-            });
-            if (res.ok) {
-                this.listaContatos = this.listaContatos.filter(c => c.id !== this.contatoAtivo.id);
-                this.modalInativar = false;
-                await this.carregarStats();
+                this.logs = d.data || [];
             }
         },
 
@@ -704,7 +786,7 @@ function auditor() {
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept':       'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
                 },
                 body: body ? JSON.stringify(body) : null,
             });

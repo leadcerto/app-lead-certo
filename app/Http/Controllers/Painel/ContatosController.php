@@ -109,12 +109,15 @@ class ContatosController extends Controller
             }
         });
 
+        $paises = \App\Services\PaisTelefoneService::PAISES;
+
         return view('contatos.auditoria', [
             'registros'  => $registros,
             'filtro'     => $filtro,
             'tipoFiltro' => $tipoFiltro,
             'contagens'  => $contagens,
             'breakdown'  => $breakdown,
+            'paises'     => $paises,
         ]);
     }
 
