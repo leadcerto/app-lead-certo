@@ -158,9 +158,9 @@
     </div>
 
     {{-- Modal de Visualização de Detalhes do Agente IA --}}
-    <div x-show="modalDetalhes" x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
-        <div @click.outside="modalDetalhes = false" class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[88vh] flex flex-col my-auto">
-            <div class="p-6 border-b border-gray-100 flex items-start justify-between bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/70 flex-shrink-0">
+    <div x-show="modalDetalhes" x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+        <div @click.outside="modalDetalhes = false" class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col my-auto max-h-[90vh] overflow-hidden border border-gray-100">
+            <div class="p-5 sm:p-6 border-b border-gray-100 flex items-start justify-between bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/70 flex-shrink-0">
                 <div class="flex items-center gap-3.5">
                     <template x-if="agenteSelecionado.avatar_url">
                         <img :src="agenteSelecionado.avatar_url" class="w-14 h-14 rounded-2xl object-cover ring-2 ring-purple-200" alt="">
@@ -178,7 +178,7 @@
                 <button @click="modalDetalhes = false" class="text-gray-400 hover:text-gray-600 text-xl font-medium p-1">✕</button>
             </div>
 
-            <div class="p-6 space-y-4 text-sm overflow-y-auto flex-1">
+            <div class="p-6 space-y-4 text-sm overflow-y-auto flex-1 overscroll-contain" style="max-height: calc(90vh - 140px);">
                 {{-- Funções --}}
                 <div>
                     <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Funções Atribuídas:</h3>
@@ -241,8 +241,8 @@
 
     {{-- Modal de Criar / Editar Agente IA (Apenas Super Admin / Dono) --}}
     @if(auth()->user()?->isDono())
-    <div x-show="modalForm" x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-hidden">
-        <div @click.outside="modalForm = false" class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[88vh] flex flex-col my-auto overflow-hidden">
+    <div x-show="modalForm" x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto">
+        <div @click.outside="modalForm = false" class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col my-auto max-h-[92vh] overflow-hidden border border-gray-100 relative">
             
             {{-- Header Fixo do Modal --}}
             <div class="p-5 sm:p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/70 flex-shrink-0">
@@ -257,14 +257,14 @@
             </div>
 
             {{-- Formulário com Corpo Rolável e Rodapé Fixo --}}
-            <form :action="editandoId ? '/equipe/agentes-ia/' + editandoId : '{{ route('equipe.agentes-ia.store') }}'" method="POST" class="flex flex-col flex-1 overflow-hidden min-h-0">
+            <form :action="editandoId ? '/equipe/agentes-ia/' + editandoId : '{{ route('equipe.agentes-ia.store') }}'" method="POST" class="flex flex-col flex-1 min-h-0 overflow-hidden">
                 @csrf
                 <template x-if="editandoId">
                     <input type="hidden" name="_method" value="PUT">
                 </template>
 
-                {{-- Corpo do Formulário (Scroll Interno Suave) --}}
-                <div class="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
+                {{-- Corpo do Formulário com Barra de Rolagem Suave --}}
+                <div class="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 overscroll-contain" style="max-height: calc(92vh - 150px);">
                     
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         <div class="space-y-1">
