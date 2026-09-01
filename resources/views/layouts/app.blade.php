@@ -29,23 +29,25 @@
     $verGmbAvaliador = $user?->podeAcessar('avaliador_dash');
 
     $tenantId = $user?->tenant_id;
+    $eAdmin   = $user?->isAdmin();
 
-    $pendentesCampos = $tenantId
+    $pendentesCampos = ($tenantId && !$eAdmin)
         ? \App\Models\VinculoContatoTenant::where('tenant_id', $tenantId)->whereNotNull('campos_pendentes_auditoria')->get()
             ->sum(fn ($v) => count($v->campos_pendentes_auditoria ?? []))
-        : 0;
+        : \App\Models\VinculoContatoTenant::whereNotNull('campos_pendentes_auditoria')->get()
+            ->sum(fn ($v) => count($v->campos_pendentes_auditoria ?? []));
 
-    $contatoIdsTenant = $tenantId
+    $contatoIdsTenant = ($tenantId && !$eAdmin)
         ? \App\Models\VinculoContatoTenant::where('tenant_id', $tenantId)->pluck('contato_id')
         : collect();
 
     $pendentesTelefones = $contatoIdsTenant->isNotEmpty()
         ? \App\Models\AuditoriaContato::whereIn('contato_id', $contatoIdsTenant)->where('status', 'pendente')->count()
-        : 0;
+        : \App\Models\AuditoriaContato::where('status', 'pendente')->count();
 
-    $pendentesConflitos = $tenantId
+    $pendentesConflitos = ($tenantId && !$eAdmin)
         ? \App\Models\ContatoPendente::where('tenant_id', $tenantId)->where('status', 'aguardando')->count()
-        : 0;
+        : \App\Models\ContatoPendente::where('status', 'aguardando')->count();
 
     $totalAuditoriaGeral = $pendentesCampos + $pendentesTelefones + $pendentesConflitos;
 

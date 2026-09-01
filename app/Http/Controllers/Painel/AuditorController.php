@@ -24,22 +24,51 @@ class AuditorController extends Controller
 
     public function stats(Request $request): JsonResponse
     {
-        $tenantId = $request->user()?->tenant_id;
-        $contatoIds = $tenantId ? VinculoContatoTenant::where('tenant_id', $tenantId)->pluck('contato_id') : collect();
+        $user = $request->user();
+        $tenantId = $user?->tenant_id;
 
-        $total          = $contatoIds->count();
-        $pendentes      = $tenantId
-            ? VinculoContatoTenant::where('tenant_id', $tenantId)->whereNotNull('campos_pendentes_auditoria')->get()
-                ->sum(fn ($v) => count($v->campos_pendentes_auditoria ?? []))
-            : 0;
-        $telefonesErros = $contatoIds->isNotEmpty()
-            ? \App\Models\AuditoriaContato::whereIn('contato_id', $contatoIds)->where('status', 'pendente')->count()
-            : 0;
-        $conflitos      = $tenantId ? ContatoPendente::where('tenant_id', $tenantId)->where('status', 'aguardando')->count() : 0;
-        $inconsistentes = $contatoIds->isNotEmpty() ? Contato::whereIn('id', $contatoIds)->where('status_validacao', 'inconsistente')->count() : 0;
-        $semNome        = $contatoIds->isNotEmpty() ? Contato::whereIn('id', $contatoIds)->where(fn($q) => $q->whereNull('nome')->orWhere('nome', '')->orWhere('nome', 'Sem Nome'))->count() : 0;
-        $semTelefone    = $contatoIds->isNotEmpty() ? Contato::whereIn('id', $contatoIds)->where(fn($q) => $q->whereNull('telefone')->orWhere('telefone', ''))->count() : 0;
-        $inativos       = $contatoIds->isNotEmpty() ? Contato::onlyTrashed()->whereIn('id', $contatoIds)->count() : 0;
+        $vinculoQuery = VinculoContatoTenant::query();
+        if ($tenantId && !($user?->isAdmin())) {
+            $vinculoQuery->where('tenant_id', $tenantId);
+        }
+        $contatoIds = $vinculoQuery->pluck('contato_id');
+
+        $total = $contatoIds->count();
+        if ($total === 0) {
+            $total = Contato::count();
+        }
+
+        $pendentesQuery = VinculoContatoTenant::whereNotNull('campos_pendentes_auditoria');
+        if ($tenantId && !($user?->isAdmin())) {
+            $pendentesQuery->where('tenant_id', $tenantId);
+        }
+        $pendentes = $pendentesQuery->get()->sum(fn ($v) => count($v->campos_pendentes_auditoria ?? []));
+
+        $telefonesErros = \App\Models\AuditoriaContato::where('status', 'pendente')
+            ->when($contatoIds->isNotEmpty() && !($user?->isAdmin()), fn($q) => $q->whereIn('contato_id', $contatoIds))
+            ->count();
+
+        $conflitosQuery = ContatoPendente::where('status', 'aguardando');
+        if ($tenantId && !($user?->isAdmin())) {
+            $conflitosQuery->where('tenant_id', $tenantId);
+        }
+        $conflitos = $conflitosQuery->count();
+
+        $inconsistentes = Contato::where('status_validacao', 'inconsistente')
+            ->when($contatoIds->isNotEmpty() && !($user?->isAdmin()), fn($q) => $q->whereIn('id', $contatoIds))
+            ->count();
+
+        $semNome = Contato::where(fn($q) => $q->whereNull('nome')->orWhere('nome', '')->orWhere('nome', 'Sem Nome'))
+            ->when($contatoIds->isNotEmpty() && !($user?->isAdmin()), fn($q) => $q->whereIn('id', $contatoIds))
+            ->count();
+
+        $semTelefone = Contato::where(fn($q) => $q->whereNull('telefone')->orWhere('telefone', ''))
+            ->when($contatoIds->isNotEmpty() && !($user?->isAdmin()), fn($q) => $q->whereIn('id', $contatoIds))
+            ->count();
+
+        $inativos = Contato::onlyTrashed()
+            ->when($contatoIds->isNotEmpty() && !($user?->isAdmin()), fn($q) => $q->whereIn('id', $contatoIds))
+            ->count();
 
         return response()->json([
             'total'           => $total,
@@ -57,8 +86,9 @@ class AuditorController extends Controller
 
     public function telefonesInvalidos(Request $request): JsonResponse
     {
-        $tenantId = $request->user()?->tenant_id;
-        $contatoIds = $tenantId ? VinculoContatoTenant::where('tenant_id', $tenantId)->pluck('contato_id') : collect();
+        $user = $request->user();
+        $tenantId = $user?->tenant_id;
+        $contatoIds = ($tenantId && !($user?->isAdmin())) ? VinculoContatoTenant::where('tenant_id', $tenantId)->pluck('contato_id') : collect();
 
         $registros = \App\Models\AuditoriaContato::with('contato')
             ->when($contatoIds->isNotEmpty(), fn($q) => $q->whereIn('contato_id', $contatoIds))
