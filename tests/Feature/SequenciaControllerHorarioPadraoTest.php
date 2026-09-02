@@ -26,7 +26,7 @@ class SequenciaControllerHorarioPadraoTest extends TestCase
         ]);
     }
 
-    public function test_store_sem_horario_nasce_com_janela_11_13_por_padrao(): void
+    public function test_store_sem_horario_nasce_24h_por_padrao(): void
     {
         $tenant = Tenant::factory()->create();
         $user   = $this->criarUsuarioDono($tenant);
@@ -38,9 +38,7 @@ class SequenciaControllerHorarioPadraoTest extends TestCase
 
         $response->assertStatus(201);
         $response->assertJsonFragment([
-            'horario_ativo'  => true,
-            'horario_inicio' => '11:00',
-            'horario_fim'    => '13:00',
+            'horario_ativo' => false,
         ]);
     }
 

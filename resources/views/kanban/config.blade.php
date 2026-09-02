@@ -251,11 +251,16 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                                 </svg>
                                 <div class="min-w-0">
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex items-center gap-2 flex-wrap">
                                         <span class="text-sm font-semibold text-gray-800" x-text="seq.nome"></span>
                                         <span x-show="!seq.ativo"
                                               class="text-xs px-1.5 py-0.5 rounded-full"
                                               style="background:#f3f4f6;color:#9ca3af">inativa</span>
+                                        <span x-show="seq.horario_ativo"
+                                              class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200"
+                                              x-text="'🕒 ' + (seq.horario_inicio ? seq.horario_inicio.substring(0,5) : '') + '–' + (seq.horario_fim ? seq.horario_fim.substring(0,5) : '')"></span>
+                                        <span x-show="!seq.horario_ativo"
+                                              class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">🕒 24h</span>
                                     </div>
                                     <p class="text-xs text-gray-400 truncate italic"
                                        x-show="!editandoDescricao[seq.id]"
@@ -1850,7 +1855,16 @@ function kanbanConfig() {
 
         novaSequencia(colunaKey) {
             this.editando = null;
-            this.form = { nome: '', descricao: '', coluna_kanban: colunaKey, horario_ativo: true, horario_inicio: '11:00', horario_fim: '13:00', sequencia_repouso_id: null };
+            const ehAguardandoLead = (colunaKey === 'aguardando_lead');
+            this.form = {
+                nome: '',
+                descricao: '',
+                coluna_kanban: colunaKey,
+                horario_ativo: ehAguardandoLead,
+                horario_inicio: ehAguardandoLead ? '11:00' : '08:00',
+                horario_fim: ehAguardandoLead ? '13:00' : '18:00',
+                sequencia_repouso_id: null
+            };
             this.modalAberto = true;
         },
 

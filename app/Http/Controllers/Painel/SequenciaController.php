@@ -46,26 +46,10 @@ class SequenciaController extends Controller
             ],
         ]);
 
-        // Sequência nova nasce restrita a 11h-13h por padrão (pedido do
-        // Leonardo, 2026-08-28, depois do incidente de mensagens fora do
-        // horário comercial) — só entra em vigor se quem criar não mandar
-        // esses campos explicitamente. Fica aqui no controller (endpoint
-        // real de criação), não no model: um default no model afetaria
-        // toda fixture de teste que cria uma Sequencia só de apoio pra
-        // testar outra coisa, tornando esses testes dependentes do
-        // horário real do relógio.
-        //
-        // horario_inicio/fim só ganham o default quando horario_ativo
-        // também não foi mandado — senão um "horario_ativo: false" sem os
-        // campos de hora ficaria com 11:00/13:00 gravados apesar de
-        // desativado (dado inconsistente, mesmo não tendo efeito prático
-        // porque resolverJanela() nem olha pra eles quando ativo é false).
         $dados = array_merge($validated, ['tenant_id' => $request->user()->tenant_id]);
 
         if (! array_key_exists('horario_ativo', $validated)) {
-            $dados['horario_ativo']  = true;
-            $dados['horario_inicio'] = '11:00';
-            $dados['horario_fim']    = '13:00';
+            $dados['horario_ativo'] = false;
         }
 
         $sequencia = Sequencia::create($dados);
