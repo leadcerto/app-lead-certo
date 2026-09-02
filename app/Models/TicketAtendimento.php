@@ -250,6 +250,7 @@ class TicketAtendimento extends Model
         'aguardando_orientacao_em',
         'mensagem_espera_enviada',
         'tentativas_envio_falhas',
+        'ultima_mensagem_lead_em',
     ];
 
     protected function casts(): array
@@ -266,6 +267,7 @@ class TicketAtendimento extends Model
             'visualizado_em'        => 'datetime',
             'janela_expira_em'      => 'datetime',
             'janela_origem_anuncio' => 'boolean',
+            'ultima_mensagem_lead_em' => 'datetime',
             'objetivos_cumpridos'   => 'array',
             'aguardando_orientacao_em' => 'datetime',
             'mensagem_espera_enviada'  => 'boolean',

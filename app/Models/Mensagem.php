@@ -19,11 +19,12 @@ class Mensagem extends Model
         static::addGlobalScope(new TenantScope());
 
         static::created(function (Mensagem $mensagem) {
-            match ($mensagem->remetente) {
-                'humano' => static::avaliarObjetivosSeHumanoAssumiu($mensagem),
-                'lead'   => static::identificarNomeSeAindaInvalido($mensagem),
-                default  => null,
-            };
+            if ($mensagem->remetente === 'humano') {
+                static::avaliarObjetivosSeHumanoAssumiu($mensagem);
+            } elseif ($mensagem->remetente === 'lead') {
+                static::identificarNomeSeAindaInvalido($mensagem);
+                static::atualizarUltimaMensagemLead($mensagem);
+            }
         });
     }
 
@@ -91,6 +92,15 @@ class Mensagem extends Model
         }
 
         IdentificarNomeConversaJob::dispatch($mensagem->id);
+    }
+
+    private static function atualizarUltimaMensagemLead(Mensagem $mensagem): void
+    {
+        TicketAtendimento::withoutGlobalScopes()
+            ->where('id', $mensagem->ticket_id)
+            ->update([
+                'ultima_mensagem_lead_em' => $mensagem->enviado_em ?? now(),
+            ]);
     }
 
     protected $fillable = [

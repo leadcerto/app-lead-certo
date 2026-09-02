@@ -556,6 +556,15 @@ class SdrResponderService
             . "sobre eles."
             . "\n===";
 
+        // Regra de Ouro da Janela de Atendimento (Meta 24h)
+        $iaContexto .= "\n\n=== REGRA DE OURO: MANTER O LEAD RESPONDENDO (RENOVAÇÃO DA JANELA 24H) ===\n"
+            . "Para manter o atendimento ativo e renovar a janela de atendimento do WhatsApp continuamente, "
+            . "toda resposta sua deve OBRIGATORIAMENTE terminar com uma pergunta curta, clara e fácil de responder "
+            . "(ex: opções de horário, confirmação de detalhe, preferência do cliente). "
+            . "NUNCA termine uma mensagem com declaração passiva que encerre a conversa (como 'estou à disposição' ou 'qualquer dúvida me avise'). "
+            . "Sempre convide o cliente a interagir para que ele continue respondendo e a conversa progrida."
+            . "\n===";
+
         // Regra 7 — autovalidação antes de responder (1 chamada só, sem chamada
         // dupla — decisão fechada). Regra 2 é o efeito prático desta validação:
         // é este bloco que ensina o modelo a emitir [DUVIDA:...] quando não tem

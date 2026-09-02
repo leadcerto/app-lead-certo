@@ -122,6 +122,19 @@
                                 </template>
                             </div>
 
+                            {{-- Badge da Janela Meta 24h / 72h --}}
+                            <template x-if="ticket.janela_expira_em">
+                                <div class="mt-2 flex items-center justify-between gap-1 text-[11px] px-2 py-0.5 rounded-md font-medium"
+                                     :style="janelaMetaBadgeStyle(ticket.janela_expira_em)"
+                                     :title="janelaMetaTooltip(ticket)">
+                                    <span class="flex items-center gap-1.5">
+                                        <span class="w-1.5 h-1.5 rounded-full" :style="janelaMetaDotStyle(ticket.janela_expira_em)"></span>
+                                        <span x-text="janelaMetaTexto(ticket.janela_expira_em)"></span>
+                                    </span>
+                                    <span x-show="ticket.janela_origem_anuncio" class="text-[9px] uppercase px-1 py-0.5 rounded bg-black/10">Anúncio</span>
+                                </div>
+                            </template>
+
                             {{-- Badge de retorno agendado --}}
                             <template x-if="ticket.retorno_agendado_em">
                                 <div class="mt-2 flex items-center gap-1 text-xs px-2 py-1 rounded-lg"
@@ -203,8 +216,19 @@
                             <button @click="editandoNome = false"
                                     class="text-xs text-gray-400 hover:underline">×</button>
                         </div>
-                        <p class="text-xs text-gray-400"
-                           x-text="[ticketAtivo.contato?.telefone, ticketAtivo.contato?.id, 'Ticket #' + ticketAtivo.id].filter(Boolean).join(' · ')"></p>
+                        <div class="flex items-center gap-2 flex-wrap mt-0.5">
+                            <p class="text-xs text-gray-400"
+                               x-text="[ticketAtivo.contato?.telefone, ticketAtivo.contato?.id, 'Ticket #' + ticketAtivo.id].filter(Boolean).join(' · ')"></p>
+                            <template x-if="ticketAtivo.janela_expira_em">
+                                <span class="text-[11px] px-2 py-0.5 rounded-md font-medium inline-flex items-center gap-1.5"
+                                      :style="janelaMetaBadgeStyle(ticketAtivo.janela_expira_em)"
+                                      :title="janelaMetaTooltip(ticketAtivo)">
+                                    <span class="w-1.5 h-1.5 rounded-full" :style="janelaMetaDotStyle(ticketAtivo.janela_expira_em)"></span>
+                                    <span x-text="janelaMetaTexto(ticketAtivo.janela_expira_em)"></span>
+                                    <span x-show="ticketAtivo.janela_origem_anuncio" class="text-[9px] uppercase px-1 rounded bg-black/10">Anúncio</span>
+                                </span>
+                            </template>
+                        </div>
                         {{-- Retorno agendado --}}
                         <div class="flex items-center gap-1 mt-1">
                             <svg class="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1302,6 +1326,51 @@ function kanban() {
             if (diff < 60) return `${diff}min atrás`;
             if (diff < 1440) return `${Math.floor(diff/60)}h atrás`;
             return `${Math.floor(diff/1440)}d atrás`;
+        },
+
+        janelaMetaInfo(expiraEm) {
+            if (!expiraEm) return null;
+            const diffMs = new Date(expiraEm).getTime() - Date.now();
+            const horasRestantes = diffMs / 3600000;
+            return {
+                expirada: diffMs <= 0,
+                urgente: diffMs > 0 && horasRestantes <= 6,
+                horasRestantes: Math.max(0, Math.floor(horasRestantes)),
+                minutosRestantes: Math.max(0, Math.floor((diffMs % 3600000) / 60000)),
+            };
+        },
+
+        janelaMetaTexto(expiraEm) {
+            const info = this.janelaMetaInfo(expiraEm);
+            if (!info) return '';
+            if (info.expirada) return 'Janela Meta: Fechada';
+            if (info.horasRestantes > 0) return `Janela Meta: ${info.horasRestantes}h rest.`;
+            return `Janela Meta: ${info.minutosRestantes}min rest.`;
+        },
+
+        janelaMetaBadgeStyle(expiraEm) {
+            const info = this.janelaMetaInfo(expiraEm);
+            if (!info) return '';
+            if (info.expirada) return 'background:#fef2f2;color:#991b1b;border:1px solid #fecaca';
+            if (info.urgente)  return 'background:#fffbeb;color:#92400e;border:1px solid #fde68a';
+            return 'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0';
+        },
+
+        janelaMetaDotStyle(expiraEm) {
+            const info = this.janelaMetaInfo(expiraEm);
+            if (!info) return '';
+            if (info.expirada) return 'background:#ef4444';
+            if (info.urgente)  return 'background:#f59e0b';
+            return 'background:#22c55e';
+        },
+
+        janelaMetaTooltip(ticket) {
+            if (!ticket) return '';
+            const expira = ticket.janela_expira_em ? new Date(ticket.janela_expira_em).toLocaleString('pt-BR') : '';
+            const ultima = ticket.ultima_mensagem_lead_em ? new Date(ticket.ultima_mensagem_lead_em).toLocaleString('pt-BR') : '';
+            let txt = `Janela livre da Meta até: ${expira}`;
+            if (ultima) txt += `\nÚltima mensagem recebida do lead: ${ultima}`;
+            return txt;
         },
 
         async orcamentoEnviado(id) {

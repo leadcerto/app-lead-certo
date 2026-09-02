@@ -91,7 +91,7 @@ class KanbanController extends Controller
 
             $totais[$coluna] = (clone $query)->count();
 
-            $ticketsColuna = $query->with(['contato', 'vendedor'])
+            $ticketsColuna = $query->with(['contato', 'vendedor', 'canal'])
                 ->withCount(['mensagens as count_midias' => fn ($q) => $q->where('tipo', '!=', 'texto')])
                 ->addSelect([
                     'ultimo_remetente'   => $ultimoRemetenteSub,
