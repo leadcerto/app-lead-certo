@@ -218,9 +218,11 @@ class KanbanController extends Controller
      */
     private function assumirAutomaticamente(TicketAtendimento $model, $usuario): ?JsonResponse
     {
-        if ($model->vendedor_id && $model->vendedor_id !== $usuario->id) {
+        // Se já tiver outro vendedor e o usuário logado não for Dono nem o próprio vendedor, avisa conflito
+        if ($model->vendedor_id && $model->vendedor_id !== $usuario->id && ! $usuario->isDono()) {
+            $nomeVendedor = $model->vendedor?->nome ?? 'outro atendente';
             return response()->json([
-                'message' => 'Já assumido por ' . $model->vendedor->nome . '.',
+                'message' => 'Já assumido por ' . $nomeVendedor . '.',
             ], 409);
         }
 
@@ -249,53 +251,72 @@ class KanbanController extends Controller
     {
         $request->validate(['conteudo' => 'required|string|min:1']);
 
-        $model = TicketAtendimento::with(['contato', 'tenant', 'canal'])->findOrFail($ticket);
+        try {
+            $model = TicketAtendimento::with(['contato', 'tenant', 'canal', 'vendedor'])->findOrFail($ticket);
 
-        if ($conflito = $this->assumirAutomaticamente($model, $request->user())) {
-            return $conflito;
-        }
-
-        $telefone = $model->contato->telefone;
-        $canal    = $this->resolverCanal($model);
-
-        if (! $canal) {
-            return response()->json(['message' => 'Nenhum canal de WhatsApp vinculado a este atendimento.'], 502);
-        }
-
-        // Item 11 do roteiro (2026-08-20): traduz o texto do atendente pro
-        // idioma do lead antes de enviar — "eu falo com você em português e
-        // você traduz pra ele" (Leonardo). Falha de tradução nunca bloqueia
-        // o envio, manda o texto original em português mesmo.
-        $textoParaEnviar = $request->conteudo;
-        $idiomaEnviado    = 'pt';
-        $conteudoPt       = null;
-
-        if ($model->idioma_lead && $model->idioma_lead !== 'pt') {
-            $traduzido = app(\App\Services\TraducaoService::class)->traduzir($request->conteudo, $model->idioma_lead);
-            if ($traduzido) {
-                $textoParaEnviar = $traduzido;
-                $idiomaEnviado    = $model->idioma_lead;
-                $conteudoPt       = $request->conteudo;
+            if ($conflito = $this->assumirAutomaticamente($model, $request->user())) {
+                return $conflito;
             }
+
+            $telefone = $model->contato?->telefone;
+            if (! $telefone) {
+                return response()->json(['message' => 'Contato sem número de telefone cadastrado.'], 422);
+            }
+
+            $canal = $this->resolverCanal($model);
+
+            if (! $canal) {
+                return response()->json(['message' => 'Nenhum canal de WhatsApp conectado no momento.'], 502);
+            }
+
+            // Item 11 do roteiro (2026-08-20): traduz o texto do atendente pro
+            // idioma do lead antes de enviar — "eu falo com você em português e
+            // você traduz pra ele" (Leonardo). Falha de tradução nunca bloqueia
+            // o envio, manda o texto original em português mesmo.
+            $textoParaEnviar = $request->conteudo;
+            $idiomaEnviado   = 'pt';
+            $conteudoPt      = null;
+
+            if ($model->idioma_lead && $model->idioma_lead !== 'pt') {
+                try {
+                    $traduzido = app(\App\Services\TraducaoService::class)->traduzir($request->conteudo, $model->idioma_lead);
+                    if ($traduzido) {
+                        $textoParaEnviar = $traduzido;
+                        $idiomaEnviado   = $model->idioma_lead;
+                        $conteudoPt      = $request->conteudo;
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('KanbanController: falha na tradução da mensagem', ['erro' => $e->getMessage()]);
+                }
+            }
+
+            $enviado = $canal->servico()->enviarTextoDireto($canal, $telefone, $textoParaEnviar);
+
+            if (! $enviado) {
+                return response()->json(['message' => 'Falha ao enviar pelo WhatsApp. Verifique a conexão do canal.'], 502);
+            }
+
+            $mensagem = Mensagem::create([
+                'ticket_id'   => $ticket,
+                'tenant_id'   => $model->tenant_id,
+                'remetente'   => 'humano',
+                'tipo'        => 'texto',
+                'conteudo'    => $textoParaEnviar,
+                'idioma'      => $idiomaEnviado,
+                'conteudo_pt' => $conteudoPt,
+                'enviado_em'  => now(),
+            ]);
+
+            return response()->json(['mensagem_id' => $mensagem->id, 'enviado' => true], 201);
+        } catch (\Throwable $e) {
+            Log::error('KanbanController: erro ao enviar mensagem no ticket', [
+                'ticket_id' => $ticket,
+                'erro'      => $e->getMessage(),
+                'trace'     => $e->getTraceAsString(),
+            ]);
+
+            return response()->json(['message' => 'Erro interno ao processar envio: ' . $e->getMessage()], 500);
         }
-
-        $enviado = $canal->servico()->enviarTextoDireto($canal, $telefone, $textoParaEnviar);
-
-        if (! $enviado) {
-            return response()->json(['message' => 'Falha ao enviar pelo WhatsApp.'], 502);
-        }
-
-        $mensagem = Mensagem::create([
-            'ticket_id'   => $ticket,
-            'tenant_id'   => $model->tenant_id,
-            'remetente'   => 'humano',
-            'tipo'        => 'texto',
-            'conteudo'    => $textoParaEnviar,
-            'idioma'      => $idiomaEnviado,
-            'conteudo_pt' => $conteudoPt,
-        ]);
-
-        return response()->json(['mensagem_id' => $mensagem->id, 'enviado' => true], 201);
     }
 
     public function encerrar(Request $request, int $ticket): JsonResponse
