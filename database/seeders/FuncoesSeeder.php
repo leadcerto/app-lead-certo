@@ -207,6 +207,20 @@ class FuncoesSeeder extends Seeder
                 'ordem'                 => 13,
                 'visivel_para_clientes' => false,
             ],
+            // 14. Especialista Multilíngue (Inteligência & Tradução)
+            [
+                'nome'                  => 'Intérprete Multilíngue IA',
+                'tipo'                  => 'inteligencia',
+                'icone'                 => '🌐',
+                'descricao'             => 'Tradução contextual simultânea, transcrição de áudios em tempo real e adaptação cultural para atendimento internacional.',
+                'descricao_cliente'     => 'Permite que atendentes e leads conversem em diferentes idiomas com tradução automática bidirecional instantânea.',
+                'detalhes_escopo'       => "1. Transcrição e tradução em tempo real de áudios e textos recebidos de leads internacionais.\n2. Tradução com revisão gramatical de mensagens e áudios do atendente para envio em texto ao lead.\n3. Detecção automática de DDI (+1 EUA, +34 Espanha, +33 França, etc.) e idioma preferido do cliente.\n4. Gestão de fallback dinâmico entre modelos gratuitos e de alta performance para garantir latência ultra-baixa.",
+                'ferramentas'           => 'OpenRouter Hub, Whisper Audio API, Gemini 2.0 Flash, Pipeline Multilíngue Lead Certo',
+                'kpis'                  => 'Tempo médio de tradução (< 1s), Taxa de precisão contextual (> 98%), Uptime do fallback dinâmico (99.9%)',
+                'cargo_pai_id'          => null,
+                'ordem'                 => 14,
+                'visivel_para_clientes' => false,
+            ],
         ];
 
         // 1. Cadastrar / Atualizar Cargos
@@ -257,15 +271,19 @@ class FuncoesSeeder extends Seeder
                 'perfil'           => 'dono',
                 'whatsapp'         => '21984503924',
                 'is_ia'            => true,
+                'provedor_ia'      => 'openrouter',
+                'openrouter_modelo'=> 'openai/gpt-4o-mini',
                 'gemini_email'     => 'adrianaaviag@gmail.com',
-                'gemini_instrucoes'=> 'Atue como Gerente de Suporte dedicada da Lead Certo. Responda com clareza, empatia e resolutividade.',
+                'gemini_instrucoes'=> "Seu nome é Adriana; Você é a gerente de suporte e atendimento da Lead Certo. Você é responsável por verificar a qualidade das conversas no Kanban, acolher leads, captar dados para orçamento e guiar o usuário na plataforma.",
                 'ativo'            => true,
             ]);
         } else {
             $adriana->update([
                 'is_ia' => true,
+                'provedor_ia' => 'openrouter',
+                'openrouter_modelo' => $adriana->openrouter_modelo ?: 'openai/gpt-4o-mini',
                 'gemini_email' => 'adrianaaviag@gmail.com',
-                'gemini_instrucoes'=> 'Atue como Gerente de Suporte dedicada da Lead Certo. Responda com clareza, empatia e resolutividade.',
+                'gemini_instrucoes'=> "Seu nome é Adriana; Você é a gerente de suporte e atendimento da Lead Certo. Você é responsável por verificar a qualidade das conversas no Kanban, acolher leads, captar dados para orçamento e guiar o usuário na plataforma.",
             ]);
         }
         if (isset($cargosCriados['Gerente de Suporte'])) {
@@ -283,6 +301,8 @@ class FuncoesSeeder extends Seeder
                 'perfil'           => 'diretor_marketing',
                 'whatsapp'         => '21984503924',
                 'is_ia'            => true,
+                'provedor_ia'      => 'openrouter',
+                'openrouter_modelo'=> 'anthropic/claude-3.5-sonnet',
                 'gemini_email'     => 'nathanelllfernandees@gmail.com',
                 'gemini_instrucoes'=> 'Atue como Diretora de Marketing e Gestora Comercial da Lead Certo.',
                 'ativo'            => true,
@@ -290,6 +310,8 @@ class FuncoesSeeder extends Seeder
         } else {
             $nathanel->update([
                 'is_ia' => true,
+                'provedor_ia' => 'openrouter',
+                'openrouter_modelo' => $nathanel->openrouter_modelo ?: 'anthropic/claude-3.5-sonnet',
                 'gemini_email' => 'nathanelllfernandees@gmail.com',
                 'gemini_instrucoes'=> 'Atue como Diretora de Marketing e Gestora Comercial da Lead Certo.',
             ]);
@@ -315,6 +337,8 @@ class FuncoesSeeder extends Seeder
                 'password'         => Hash::make('LeadCerto@2026'),
                 'perfil'           => 'admin',
                 'is_ia'            => true,
+                'provedor_ia'      => 'openrouter',
+                'openrouter_modelo'=> 'anthropic/claude-3.5-sonnet',
                 'gemini_email'     => 'gabriel.orquestrador@leadcerto.com',
                 'gemini_instrucoes'=> 'Atue como Orquestrador Geral e Auditor do sistema SaaS Lead Certo.',
                 'ativo'            => true,
@@ -323,12 +347,82 @@ class FuncoesSeeder extends Seeder
             $gabriel->update([
                 'nome'             => 'Gabriel',
                 'is_ia'            => true,
+                'provedor_ia'      => 'openrouter',
+                'openrouter_modelo' => $gabriel->openrouter_modelo ?: 'anthropic/claude-3.5-sonnet',
                 'gemini_email'     => 'gabriel.orquestrador@leadcerto.com',
                 'gemini_instrucoes' => 'Atue como Orquestrador Geral e Auditor do sistema SaaS Lead Certo.',
             ]);
         }
         if (isset($cargosCriados['Orquestrador Geral IA'])) {
             $gabriel->cargos()->syncWithoutDetaching([$cargosCriados['Orquestrador Geral IA']->id]);
+        }
+
+        // 3. Agente Multilíngue Gratuito (Maya — Tier Primário)
+        $maya = User::where('email', 'maya.multilingual@leadcerto.com')->first();
+        $mayaInstrucoes = "# PAPEL E IDENTIDADE\nSeu nome é Maya. Você atua como Intérprete Simultânea e Especialista em Tradução Multilíngue da Lead Certo.\n\n# MISSÃO\n- Receber áudios transcritos e textos em qualquer idioma e traduzir com fluência nativa e precisão gramatical.\n- Preservar rigorosamente números, valores monetários (moedas), nomes de bairros, endereços, datas e horários.\n- Entregar sempre saídas em texto limpo, claro e natural, sem adicionar comentários ou explicações extras.\n\n# REGRAS OPERACIONAIS\n- Quando o Atendente falar em Português, traduza para o idioma do Lead (ex: Inglês).\n- Quando o Lead falar no idioma dele, traduza para o Português para o Atendente.\n- Corrija falhas de pontuação e gaguejos da fala falada.";
+        $mayaBase = "- Idiomas suportados nativamente: Português (pt-BR), Inglês (en-US), Espanhol (es-ES), Francês (fr-FR), Alemão (de-DE), Italiano (it-IT).\n- Mapeamento de DDI: +1 (EUA/Canadá -> Inglês), +34 (Espanha -> Espanhol), +33 (França -> Francês), +351 (Portugal -> Português), +55 (Brasil -> Português).\n- Preservação de Moedas: R$ para BRL, $ para USD, € para EUR.";
+
+        if (!$maya) {
+            $maya = User::create([
+                'tenant_id'        => 2,
+                'nome'             => 'Maya — Intérprete Multilíngue (Free)',
+                'email'            => 'maya.multilingual@leadcerto.com',
+                'password'         => Hash::make('LeadCerto@2026'),
+                'perfil'           => 'vendedor',
+                'is_ia'            => true,
+                'provedor_ia'      => 'openrouter',
+                'openrouter_modelo'=> 'meta-llama/llama-3.3-70b-instruct:free',
+                'gemini_instrucoes'=> $mayaInstrucoes,
+                'base_conhecimento'=> $mayaBase,
+                'ativo'            => true,
+            ]);
+        } else {
+            $maya->update([
+                'nome'             => 'Maya — Intérprete Multilíngue (Free)',
+                'is_ia'            => true,
+                'provedor_ia'      => 'openrouter',
+                'openrouter_modelo'=> $maya->openrouter_modelo ?: 'meta-llama/llama-3.3-70b-instruct:free',
+                'gemini_instrucoes'=> $mayaInstrucoes,
+                'base_conhecimento'=> $mayaBase,
+                'ativo'            => true,
+            ]);
+        }
+        if (isset($cargosCriados['Intérprete Multilíngue IA'])) {
+            $maya->cargos()->syncWithoutDetaching([$cargosCriados['Intérprete Multilíngue IA']->id]);
+        }
+
+        // 4. Agente Multilíngue Baixo Custo / Pro (Leo — Tier Resiliência & Fallback)
+        $leo = User::where('email', 'leo.multilingual@leadcerto.com')->first();
+        $leoInstrucoes = "# PAPEL E IDENTIDADE\nSeu nome é Leo. Você é o Intérprete de Alta Performance e Resiliência Multilíngue da Lead Certo.\n\n# MISSÃO\n- Atuar como motor de tradução e revisão contextual ultra-rápida (< 500ms).\n- Corrigir falhas de pontuação da fala e traduzir com máxima fidelidade e velocidade para o idioma de destino.\n- Preservar rigorosamente valores, datas, nomes de pessoas e logradouros sem hesitação.\n\n# PROTOCOLO DE FALLBACK\n- Operar nos momentos de alta demanda ou quando houver instabilidade no canal gratuito, assegurando entrega instantânea ao cliente.";
+        $leoBase = "- Idiomas suportados nativamente: Português, Inglês, Espanhol, Francês, Alemão, Italiano, Japonês, Mandarim.\n- Modo de operação: Alta prioridade com latência mínima e processamento veloz.";
+
+        if (!$leo) {
+            $leo = User::create([
+                'tenant_id'        => 2,
+                'nome'             => 'Leo — Intérprete Multilíngue (Pro)',
+                'email'            => 'leo.multilingual@leadcerto.com',
+                'password'         => Hash::make('LeadCerto@2026'),
+                'perfil'           => 'vendedor',
+                'is_ia'            => true,
+                'provedor_ia'      => 'openrouter',
+                'openrouter_modelo'=> 'openai/gpt-4o-mini',
+                'gemini_instrucoes'=> $leoInstrucoes,
+                'base_conhecimento'=> $leoBase,
+                'ativo'            => true,
+            ]);
+        } else {
+            $leo->update([
+                'nome'             => 'Leo — Intérprete Multilíngue (Pro)',
+                'is_ia'            => true,
+                'provedor_ia'      => 'openrouter',
+                'openrouter_modelo'=> $leo->openrouter_modelo ?: 'openai/gpt-4o-mini',
+                'gemini_instrucoes'=> $leoInstrucoes,
+                'base_conhecimento'=> $leoBase,
+                'ativo'            => true,
+            ]);
+        }
+        if (isset($cargosCriados['Intérprete Multilíngue IA'])) {
+            $leo->cargos()->syncWithoutDetaching([$cargosCriados['Intérprete Multilíngue IA']->id]);
         }
     }
 }
