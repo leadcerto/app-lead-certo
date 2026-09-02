@@ -11,35 +11,63 @@ class SequenciaVariacaoIaService
     public function __construct(private OpenRouterService $openRouter) {}
 
     /**
-     * Cria as 6 variações iniciais de uma mensagem, via IA — mas nascem todas
-     * INATIVAS no sorteio. Histórico: a versão original (até 2026-08-20)
-     * chamava IA e já saía tudo ATIVO sem revisão ("estranho e complicado" —
-     * Leonardo, 2026-08-21); o redesenho seguinte trocou a IA por 6 cópias
-     * verbatim do texto original pra resolver isso, mas foi longe demais —
-     * Leonardo apontou (2026-08-16... na prática mesma virada de sessão)
-     * que as 6 abas ficavam idênticas, sem nenhuma variedade de verdade.
-     * Este é o meio-termo: continua chamando a IA pra ter texto realmente
-     * diferente entre as abas (mesmo prompt/regras de `chamarIaEGerar()`,
-     * reusado por `regenerar()` também), só que sempre `ativa=false` — o
-     * humano revisa e ativa cada uma que aprovar, a Original protegida
-     * continua sendo a única que envia até isso acontecer.
-     * Não faz nada se a mensagem não tem texto, se já existe alguma variação
-     * não-protegida (evita duplicar a criação), ou se a IA estiver
-     * indisponível no momento (a mensagem principal continua funcionando
-     * normalmente via a variação Original, protegida).
+     * Garante que a mensagem possui exatamente 7 variações no banco de dados:
+     * - Aba 1: Original protegida (escrita pelo humano, ativa por padrão no sorteio).
+     * - Abas 2 a 7: 6 variações (nascem com sugestões e SEMPRE INATIVAS no sorteio até o humano aprovar).
+     *
+     * Se faltarem variações, tenta gerar via IA. Se a IA estiver indisponível ou retornar
+     * menos de 6, preenche as vagas restantes com o rascunho sugerido baseado no original.
      */
-    public function gerarVariacoesIniciais(SequenciaMensagem $mensagem): int
+    public function garantir7Variacoes(SequenciaMensagem $mensagem): int
     {
         if (trim((string) $mensagem->conteudo) === '') {
             return 0;
         }
 
-        $jaTemVariacao = $mensagem->variacoes()->where('protegida', false)->exists();
-        if ($jaTemVariacao) {
-            return 0;
+        // 1. Garante a variação original protegida (Aba 1)
+        $protegida = $mensagem->variacoes()->where('protegida', true)->first();
+        if (! $protegida) {
+            $protegida = SequenciaMensagemVariacao::create([
+                'tenant_id'             => $mensagem->tenant_id,
+                'sequencia_mensagem_id' => $mensagem->id,
+                'conteudo'              => $mensagem->conteudo,
+                'origem'                => 'humano',
+                'protegida'             => true,
+                'ativa'                 => true,
+            ]);
         }
 
-        return $this->chamarIaEGerar($mensagem, 'sequencia_variacoes_iniciais');
+        // 2. Garante que existem exatamente 6 variações não protegidas (Abas 2 a 7)
+        $atuais = $mensagem->variacoes()->where('protegida', false)->get();
+        $qtdAtuais = $atuais->count();
+
+        $criadas = 0;
+        if ($qtdAtuais === 0) {
+            $criadas = $this->chamarIaEGerar($mensagem, 'sequencia_variacoes_iniciais');
+            $atuais = $mensagem->variacoes()->where('protegida', false)->get();
+            $qtdAtuais = $atuais->count();
+        }
+
+        // Se ainda faltarem slots para completar 6 variações, cria como rascunho sugerido inativo
+        $faltam = max(0, 6 - $qtdAtuais);
+        for ($i = 0; $i < $faltam; $i++) {
+            SequenciaMensagemVariacao::create([
+                'tenant_id'             => $mensagem->tenant_id,
+                'sequencia_mensagem_id' => $mensagem->id,
+                'conteudo'              => $mensagem->conteudo,
+                'origem'                => 'humano',
+                'protegida'             => false,
+                'ativa'                 => false,
+            ]);
+            $criadas++;
+        }
+
+        return $criadas;
+    }
+
+    public function gerarVariacoesIniciais(SequenciaMensagem $mensagem): int
+    {
+        return $this->garantir7Variacoes($mensagem);
     }
 
     /**

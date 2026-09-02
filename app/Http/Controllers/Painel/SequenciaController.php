@@ -380,9 +380,11 @@ PROMPT,
 
     // ── Variações por mensagem ────────────────────────────────────────────────
 
-    public function variacoes(Request $request, int $sequenciaId, int $msgId): JsonResponse
+    public function variacoes(Request $request, int $sequenciaId, int $msgId, SequenciaVariacaoIaService $variacaoIa): JsonResponse
     {
         $msg = $this->mensagemDoTenant($request, $sequenciaId, $msgId);
+
+        $variacaoIa->garantir7Variacoes($msg);
 
         $variacoes = $msg->variacoes()
             ->orderByDesc('protegida')
@@ -440,7 +442,7 @@ PROMPT,
 
     public function destroyVariacao(Request $request, int $sequenciaId, int $msgId, int $id): JsonResponse
     {
-        $this->mensagemDoTenant($request, $sequenciaId, $msgId);
+        $msg = $this->mensagemDoTenant($request, $sequenciaId, $msgId);
 
         $variacao = SequenciaMensagemVariacao::where('id', $id)
             ->where('sequencia_mensagem_id', $msgId)
@@ -450,7 +452,13 @@ PROMPT,
             return response()->json(['message' => 'A versão original não pode ser excluída.'], 422);
         }
 
-        $variacao->delete();
+        // Reseta o conteúdo para o rascunho sugerido inicial e desativa no sorteio,
+        // garantindo que as 7 abas permaneçam intactas na interface.
+        $variacao->update([
+            'conteudo' => $msg->conteudo,
+            'origem'   => 'humano',
+            'ativa'    => false,
+        ]);
 
         return response()->json(['ok' => true]);
     }

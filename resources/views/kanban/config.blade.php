@@ -451,19 +451,18 @@
                                                 <div class="flex items-end gap-1 overflow-x-auto">
                                                     <template x-for="(variacao, idx) in (variacoesPor[msg.id] || [])" :key="variacao.id">
                                                         <button @click="variacaoAbaAtiva[msg.id] = variacao.id"
-                                                                class="relative flex-shrink-0 min-w-[2rem] px-2.5 py-1.5 text-xs rounded-t-lg border border-b-0 transition-colors"
+                                                                class="relative flex-shrink-0 min-w-[2.2rem] px-3 py-1.5 text-xs rounded-t-lg border border-b-0 transition-colors flex items-center justify-center gap-1"
                                                                 :class="[
                                                                     (variacaoAbaAtiva[msg.id] ?? (variacoesPor[msg.id] || [])[0]?.id) === variacao.id
                                                                         ? 'bg-white border-gray-200 text-purple-700 font-bold z-10'
                                                                         : 'bg-gray-200 border-gray-200 text-gray-600 font-semibold hover:text-gray-800 hover:bg-gray-300',
-                                                                    (!variacao.protegida && !variacao.ativa) ? 'opacity-50' : ''
+                                                                    (!variacao.protegida && !variacao.ativa) ? 'opacity-70' : ''
                                                                 ]"
-                                                                :title="(variacao.protegida ? 'Original' : ('Variação ' + idx)) + (variacao.ativa ? ' — ativa no sorteio' : ' (inativa no sorteio)')">
+                                                                :title="(variacao.protegida ? 'Original' : ('Variação ' + (idx + 1))) + (variacao.ativa ? ' — ativa no sorteio' : ' (inativa no sorteio)')">
                                                             <span x-text="idx + 1"></span>
-                                                            {{-- Pedido do Leonardo (2026-08-16): sinalizar com cor qual aba
-                                                                 está ativa no sorteio de envio, sem precisar abrir cada uma. --}}
+                                                            {{-- Sinalizador visual verde quando a aba está ativa no sorteio --}}
                                                             <span x-show="variacao.ativa"
-                                                                  class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-green-500 border border-white"></span>
+                                                                  class="w-2 h-2 rounded-full bg-green-500 border border-white inline-block"></span>
                                                         </button>
                                                     </template>
                                                 </div>
@@ -474,39 +473,29 @@
                                                          style="display:none"
                                                          class="-mt-px bg-white border border-gray-200 rounded-b-lg rounded-tr-lg p-3">
                                                         <div class="flex items-center gap-2 mb-2">
-                                                            <span class="text-xs px-1.5 py-0.5 rounded-full flex-shrink-0"
-                                                                  :class="variacao.protegida ? 'bg-green-100 text-green-700' : 'bg-purple-50 text-purple-600'"
+                                                            <span class="text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
+                                                                  :class="variacao.protegida ? 'bg-green-100 text-green-700' : 'bg-purple-50 text-purple-600 border border-purple-200'"
                                                                   x-text="variacao.protegida ? 'original' : (variacao.origem === 'ia' ? 'IA' : 'manual')"></span>
-                                                            <label class="flex items-center gap-1 ml-auto flex-shrink-0" title="Ativa no sorteio de envio">
-                                                                <span class="text-xs text-gray-500">Ativa no sorteio</span>
+                                                            <label class="flex items-center gap-1.5 ml-auto flex-shrink-0 cursor-pointer" title="Ativa no sorteio de envio">
+                                                                <span class="text-xs text-gray-600 font-medium">Ativa no sorteio</span>
                                                                 <input type="checkbox" :checked="variacao.ativa"
                                                                        :disabled="variacao.protegida"
                                                                        @change="toggleAtivaVariacao(seq.id, msg, variacao)"
-                                                                       class="w-3 h-3 accent-green-600">
+                                                                       class="w-3.5 h-3.5 accent-green-600 cursor-pointer">
                                                             </label>
                                                             <button x-show="!variacao.protegida"
                                                                     @click="excluirVariacao(seq.id, msg, variacao)"
-                                                                    class="text-red-300 hover:text-red-500 flex-shrink-0 text-xs">✕ excluir</button>
+                                                                    class="text-gray-400 hover:text-red-500 flex-shrink-0 text-xs ml-2">✕ resetar</button>
                                                         </div>
 
-                                                        {{-- Pedido do Leonardo (2026-08-16): editar qualquer variação —
-                                                             inclusive a Original — só de clicar na caixa e escrever, sem
-                                                             botão/modo de edição separado. Salva ao sair do campo. A aba
-                                                             "1" (Original/protegida) edita msg.conteudo direto — mesmo
-                                                             endpoint de sempre, que já sincroniza os dois lados; as
-                                                             variações 2-7 editam o próprio conteúdo, endpoint de variação. --}}
-                                                        {{-- x-effect (não x-init): as 7 abas ficam todas montadas ao mesmo
-                                                             tempo, só escondidas via x-show — a que está escondida no
-                                                             momento do mount tem scrollHeight=0, então autoResize() precisa
-                                                             rodar de novo quando a aba realmente fica visível (mesmo padrão
-                                                             já usado nos outros campos desta tela). --}}
                                                         <template x-if="variacao.protegida">
                                                             <textarea :value="msg.conteudo || ''"
                                                                       @input="msg.conteudo = $event.target.value; autoResize($event.target)"
                                                                       @blur="salvarConteudoOriginal(seq.id, msg)"
                                                                       x-effect="(msg.conteudo, (variacaoAbaAtiva[msg.id] ?? (variacoesPor[msg.id] || [])[0]?.id) === variacao.id) && $nextTick(() => autoResize($el))"
                                                                       rows="5"
-                                                                      class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none overflow-hidden"></textarea>
+                                                                      placeholder="Digite a mensagem original aqui..."
+                                                                      class="w-full text-xs border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none overflow-hidden leading-relaxed"></textarea>
                                                         </template>
                                                         <template x-if="!variacao.protegida">
                                                             <div>
@@ -515,13 +504,20 @@
                                                                           @blur="salvarVariacaoInline(seq.id, msg, variacao)"
                                                                           x-effect="(variacao.conteudo, (variacaoAbaAtiva[msg.id] ?? (variacoesPor[msg.id] || [])[0]?.id) === variacao.id) && $nextTick(() => autoResize($el))"
                                                                           rows="5"
-                                                                          class="w-full text-xs border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none overflow-hidden"></textarea>
-                                                                <button @click="regenerarVariacaoIndividual(seq.id, msg, variacao)"
-                                                                        :disabled="regenerandoVariacaoId === variacao.id"
-                                                                        class="mt-2 text-xs text-purple-600 hover:text-purple-700 disabled:opacity-40 font-medium">
-                                                                    <span x-show="regenerandoVariacaoId !== variacao.id">🔄 Pedir nova versão à IA</span>
-                                                                    <span x-show="regenerandoVariacaoId === variacao.id">Gerando...</span>
-                                                                </button>
+                                                                          placeholder="Clique no botão abaixo para gerar uma versão com IA ou digite sua variação aqui..."
+                                                                          class="w-full text-xs border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none overflow-hidden leading-relaxed"></textarea>
+                                                                <div class="mt-2.5 flex items-center justify-between">
+                                                                    <button @click="regenerarVariacaoIndividual(seq.id, msg, variacao)"
+                                                                            :disabled="regenerandoVariacaoId === variacao.id"
+                                                                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-semibold border border-purple-200 transition-colors disabled:opacity-50">
+                                                                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                                                                            <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5 2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5 2.5 2.5 0 0 0-2.5-2.5"/>
+                                                                        </svg>
+                                                                        <span x-show="regenerandoVariacaoId !== variacao.id">Gerar nova versão com IA</span>
+                                                                        <span x-show="regenerandoVariacaoId === variacao.id">Gerando com IA...</span>
+                                                                    </button>
+                                                                    <span class="text-[11px] text-gray-400">Salva automaticamente ao digitar</span>
+                                                                </div>
                                                             </div>
                                                         </template>
                                                     </div>
@@ -2135,13 +2131,13 @@ function kanbanConfig() {
         },
 
         async excluirVariacao(seqId, msg, variacao) {
-            if (!confirm('Excluir esta variação?')) return;
+            if (!confirm('Resetar esta variação?')) return;
             const res = await this.api(`/api/painel/sequencias/${seqId}/mensagens/${msg.id}/variacoes/${variacao.id}`, 'DELETE');
             if (res.ok) {
                 await this.carregarVariacoes(seqId, msg);
             } else {
                 const erro = await res.json().catch(() => null);
-                this.mostrarToast(erro?.message || 'Esta versão não pode ser excluída.', 'erro');
+                this.mostrarToast(erro?.message || 'Esta versão não pode ser resetada.', 'erro');
             }
         },
 
