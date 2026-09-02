@@ -42,7 +42,7 @@ class SequenciaVariacaoControllerTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonPath('0.id', $humana->id);
-        $response->assertJsonCount(2);
+        $response->assertJsonCount(7);
     }
 
     public function test_404_quando_mensagem_e_de_outro_tenant(): void

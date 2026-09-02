@@ -117,6 +117,8 @@ class SequenciaVariacaoProtecaoTest extends TestCase
         );
 
         $response->assertOk();
-        $this->assertDatabaseMissing('sequencia_mensagem_variacoes', ['id' => $ia->id]);
+        $this->assertFalse($ia->fresh()->ativa);
+        $this->assertSame($msg->conteudo, $ia->fresh()->conteudo);
     }
 }
+

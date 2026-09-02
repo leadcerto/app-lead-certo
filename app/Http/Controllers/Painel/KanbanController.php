@@ -469,10 +469,27 @@ class KanbanController extends Controller
         // Regra 13 (Bloco 4) — este é um dos dois únicos endpoints de
         // movimentação manual do sistema (drag-and-drop do board).
         $model->origemMudancaColuna = 'humano';
+
+        // Se a coluna destino possui automação de IA ou sequência ativa, restaura bot
+        $temSequenciaAtiva = \App\Models\Sequencia::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('coluna_kanban', $colunaDepois)
+            ->where('ativo', true)
+            ->exists();
+
+        $colunaConfig = \App\Models\KanbanColunaConfig::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('coluna_kanban', $colunaDepois)
+            ->first();
+
+        if ($temSequenciaAtiva || ($colunaConfig && $colunaConfig->ia_ativo)) {
+            $updates['agente_responsavel'] = 'bot';
+        }
+
         $model->update($updates);
 
-        // Ao entrar em aguardando_lead: dispara sequência de follow-up
-        if ($colunaDepois === 'aguardando_lead' && $colunaAntes !== 'aguardando_lead') {
+        // Ao mudar de coluna (não encerramento): dispara sequência se houver configurada
+        if ($colunaDepois !== $colunaAntes && KanbanColuna::papelDe($tenantId, $colunaDepois) !== PapelColunaKanban::Encerramento) {
             app(SequenciaService::class)->iniciarParaTicket($model);
         }
 

@@ -72,7 +72,7 @@ class SequenciaVariacaoIaServiceTest extends TestCase
         }
     }
 
-    public function test_ia_indisponivel_nao_gera_nada_mas_nao_quebra(): void
+    public function test_ia_indisponivel_cria_rascunhos_sugeridos_sem_quebrar(): void
     {
         $tenant = Tenant::factory()->create();
         $msg    = $this->criarMensagem($tenant);
@@ -80,11 +80,11 @@ class SequenciaVariacaoIaServiceTest extends TestCase
 
         $criadas = app(SequenciaVariacaoIaService::class)->gerarVariacoesIniciais($msg);
 
-        $this->assertSame(0, $criadas);
-        $this->assertSame(0, SequenciaMensagemVariacao::where('sequencia_mensagem_id', $msg->id)->where('protegida', false)->count());
+        $this->assertSame(6, $criadas);
+        $this->assertSame(6, SequenciaMensagemVariacao::where('sequencia_mensagem_id', $msg->id)->where('protegida', false)->count());
     }
 
-    public function test_nao_gera_de_novo_se_ja_existe_variacao_nao_protegida(): void
+    public function test_completa_slots_restantes_se_ja_existe_variacao(): void
     {
         $tenant = Tenant::factory()->create();
         $msg    = $this->criarMensagem($tenant);
@@ -96,9 +96,9 @@ class SequenciaVariacaoIaServiceTest extends TestCase
 
         $criadas = app(SequenciaVariacaoIaService::class)->gerarVariacoesIniciais($msg);
 
-        $this->assertSame(0, $criadas);
+        $this->assertSame(5, $criadas);
         Http::assertNothingSent();
-        $this->assertSame(1, SequenciaMensagemVariacao::where('sequencia_mensagem_id', $msg->id)->where('protegida', false)->count());
+        $this->assertSame(6, SequenciaMensagemVariacao::where('sequencia_mensagem_id', $msg->id)->where('protegida', false)->count());
     }
 
     public function test_mensagem_sem_conteudo_nao_gera_nada(): void

@@ -159,4 +159,37 @@ class KanbanControllerMoverTest extends TestCase
             'ticket_id' => $ticket->id, 'coluna' => 'em_atendimento', 'origem' => 'humano',
         ]);
     }
+
+    public function test_mover_para_coluna_com_sequencia_dispara_sequencia_e_restaura_bot(): void
+    {
+        \Illuminate\Support\Facades\Queue::fake();
+
+        $tenant  = Tenant::factory()->create();
+        $user    = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $contato = Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'lead_novo', 'agente_responsavel' => 'humano',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $sequencia = \App\Models\Sequencia::create([
+            'tenant_id' => $tenant->id, 'nome' => 'Seq Atendimento', 'coluna_kanban' => 'em_atendimento', 'ativo' => true,
+        ]);
+        \App\Models\SequenciaMensagem::create([
+            'tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,
+            'conteudo' => 'Olá em atendimento', 'delay_segundos' => 0, 'ativo' => true,
+        ]);
+
+        $this->actingAs($user)->postJson("/api/painel/kanban/ticket/{$ticket->id}/mover", [
+            'coluna' => 'em_atendimento',
+        ])->assertOk();
+
+        $ticket->refresh();
+        $this->assertSame('em_atendimento', $ticket->coluna_kanban);
+        $this->assertSame('bot', $ticket->agente_responsavel);
+
+        \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\SequenciaMensagemJob::class);
+    }
 }
+

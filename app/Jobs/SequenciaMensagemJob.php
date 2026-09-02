@@ -91,6 +91,25 @@ class SequenciaMensagemJob implements ShouldQueue
         $tenant   = $ticket->tenant;
         $canal    = $ticket->canal;
 
+        if (! $canal || $canal->status !== 'connected') {
+            $kanban = \App\Models\Kanban::where('tenant_id', $ticket->tenant_id)->where('tipo', 'vendas')->first();
+            $canalResolvido = null;
+            if ($kanban) {
+                $canalResolvido = $kanban->canais()->where('status', 'connected')->first()
+                    ?? app(\App\Services\SelecaoCanalWhatsappService::class)->naoOficialAleatorioParaKanban($kanban);
+            }
+            if (! $canalResolvido) {
+                $canalResolvido = \App\Models\WhatsappCanal::where('tenant_id', $ticket->tenant_id)
+                    ->where('status', 'connected')
+                    ->first();
+            }
+            if ($canalResolvido) {
+                $canal = $canalResolvido;
+                $ticket->updateQuietly(['whatsapp_canal_id' => $canal->id]);
+                $ticket->setRelation('canal', $canal);
+            }
+        }
+
         // Achado Crítico 1 da revisão final: o texto passa pela abstração
         // $canal->servico()->enviarTexto() pra funcionar nos dois provedores — pra um
         // canal Covercut, tokenUazapi() é sempre null, então o guard abaixo não pode
