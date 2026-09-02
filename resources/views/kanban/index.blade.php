@@ -782,6 +782,8 @@ function kanban() {
             const termo = this.buscaTexto.trim().toLowerCase();
             if (termo.length < 2) return [];
 
+            const termoDigitos = termo.replace(/\D/g, '');
+
             const achados = [];
             for (const coluna of this.colunas) {
                 for (const ticket of (this.tickets[coluna.key] || [])) {
@@ -793,7 +795,9 @@ function kanban() {
                         ticket.id,
                     ].filter(Boolean).join(' ').toLowerCase();
 
-                    if (alvo.includes(termo)) {
+                    const telDigitos = (ticket.contato?.telefone || '').replace(/\D/g, '');
+
+                    if (alvo.includes(termo) || (termoDigitos.length >= 4 && telDigitos.includes(termoDigitos))) {
                         achados.push({ ticket, colunaLabel: coluna.label });
                         if (achados.length >= 20) return achados;
                     }
