@@ -668,7 +668,9 @@ class KanbanController extends Controller
         $canal  = null;
 
         if ($kanban) {
-            $canal = app(\App\Services\SelecaoCanalWhatsappService::class)->naoOficialAleatorioParaKanban($kanban);
+            // Prioriza canal conectado vinculado ao Kanban (seja Oficial Covercut ou não-oficial)
+            $canal = $kanban->canais()->where('status', 'connected')->first()
+                ?? app(\App\Services\SelecaoCanalWhatsappService::class)->naoOficialAleatorioParaKanban($kanban);
         }
 
         if (! $canal) {
