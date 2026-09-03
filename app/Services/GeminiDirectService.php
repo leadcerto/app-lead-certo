@@ -30,6 +30,8 @@ class GeminiDirectService
         ?int $tenantId = null,
         ?int $agenteId = null
     ): ?string {
+        $agenteId ??= AgenteIaResolver::resolverAgenteId($origem, $tenantId);
+
         $key = $apiKey ?: config('services.gemini.key', env('GEMINI_API_KEY', ''));
 
         if (empty($key)) {

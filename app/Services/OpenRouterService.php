@@ -40,6 +40,8 @@ class OpenRouterService
         ?string $modeloCustomizado = null
     ): ?string
     {
+        $agenteId ??= AgenteIaResolver::resolverAgenteId($origem, $tenantId);
+
         $modelo = $modeloCustomizado;
         if (! $modelo && $agenteId) {
             $ag = \App\Models\User::find($agenteId);
