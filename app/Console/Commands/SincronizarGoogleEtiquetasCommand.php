@@ -16,7 +16,8 @@ class SincronizarGoogleEtiquetasCommand extends Command
     protected $signature = 'contatos:sincronizar-google-etiquetas
                             {--tenant= : ID do Tenant específico}
                             {--dry-run : Apenas simula as alterações sem gravar no Google}
-                            {--limite=0 : Limite máximo de contatos a processar (0 = todos)}';
+                            {--limite=0 : Limite máximo de contatos a processar (0 = todos)}
+                            {--lote=0 : Alias para limite}';
 
     protected $description = 'Sincroniza estrutura de nomes (Nome, ID no Nome do Meio, Sobrenome) e move contatos de 🚩 NOVOS LEADS para 🚩 LEAD CERTO no Google Contatos';
 
@@ -24,7 +25,7 @@ class SincronizarGoogleEtiquetasCommand extends Command
     {
         $tenantId = $this->option('tenant');
         $dryRun   = (bool) $this->option('dry-run');
-        $limite   = (int) $this->option('limite');
+        $limite   = (int) ($this->option('lote') ?: $this->option('limite'));
 
         $tokensQuery = GoogleToken::query();
         if ($tenantId) {
