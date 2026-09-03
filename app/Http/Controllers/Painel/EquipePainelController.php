@@ -209,7 +209,7 @@ class EquipePainelController extends Controller
         }
 
         $agente = User::create([
-            'tenant_id'                     => 2, // Equipe Lead Certo
+            'tenant_id'                     => $request->user()->tenant_id ?? \App\Models\Tenant::first()?->id ?? 1,
             'nome'                          => $validated['nome'],
             'email'                         => $validated['email'],
             'password'                      => Hash::make('LeadCerto@IA#' . rand(1000, 9999)),

@@ -10,6 +10,7 @@ use App\Models\KanbanColuna;
 use App\Models\Mensagem;
 use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
+use App\Models\WhatsappCanal;
 use App\Services\AudioConversorService;
 use App\Services\EcoTranscricaoService;
 use App\Services\MediaProcessorService;

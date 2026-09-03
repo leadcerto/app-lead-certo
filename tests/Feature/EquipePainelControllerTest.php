@@ -70,7 +70,7 @@ class EquipePainelControllerTest extends TestCase
 
         $cargo = Cargo::create(['nome' => 'Diretora de Marketing', 'tipo' => 'marketing', 'descricao' => 'mkt']);
         $ia = User::factory()->create([
-            'tenant_id' => 2,
+            'tenant_id' => $tenant->id,
             'nome'      => 'Nathanel Fernandes',
             'email'     => 'nathanel@leadcerto.com',
             'is_ia'     => true,
@@ -87,7 +87,8 @@ class EquipePainelControllerTest extends TestCase
 
     public function test_admin_cria_agente_ia_com_multiplas_funcoes(): void
     {
-        $admin = User::factory()->create(['perfil' => 'admin']);
+        $tenant = Tenant::factory()->create();
+        $admin = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin']);
 
         $c1 = Cargo::create(['nome' => 'Diretora de Marketing', 'tipo' => 'marketing', 'descricao' => 'mkt']);
         $c2 = Cargo::create(['nome' => 'Gestor Comercial', 'tipo' => 'comercial', 'descricao' => 'com']);
