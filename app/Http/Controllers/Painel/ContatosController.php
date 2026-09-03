@@ -1117,6 +1117,10 @@ class ContatosController extends Controller
             return;
         }
 
+        if (in_array('nome', $camposSincronizados, true) && ! in_array('sobrenome', $camposSincronizados, true)) {
+            $camposSincronizados[] = 'sobrenome';
+        }
+
         $token = GoogleToken::where('tenant_id', $tenantId)->first();
         if (! $token) return;
 
@@ -1172,17 +1176,17 @@ class ContatosController extends Controller
      */
     private function valorEnviadoAoGoogle(GoogleService $google, ContatoSyncService $sync, Contato $contato, string $campo): string
     {
-        $valor = (string) $contato->$campo;
+        $nameEntry = $google->formatarNomeParaGoogle($contato);
 
         if ($campo === 'nome') {
-            return $contato->semNomeReal() ? 'Sem Nome' : $sync->limparNome($google->limparNome($valor));
+            return $sync->limparNome($nameEntry['givenName']);
         }
 
         if ($campo === 'sobrenome') {
-            return $valor === '' ? '' : $google->limparNome($valor);
+            return $nameEntry['familyName'] ?? '';
         }
 
-        return $valor;
+        return (string) $contato->$campo;
     }
 
     private function encontrarColuna(array $cabecalho, array $opcoes): ?int

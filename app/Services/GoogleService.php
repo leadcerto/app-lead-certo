@@ -147,21 +147,50 @@ class GoogleService
      * Cria um contato no Google.
      * Estrutura: givenName=nome limpo · middleName=ID do banco · familyName=descriptor do WhatsApp · organizations=empresa
      * Retorna o resourceName ("people/c123456789") ou null em caso de erro.
+    /**
+     * Formata os campos de nome para o padrão oficial do Google Contatos:
+     * - givenName: Primeiro Nome (ex: "Adalberto")
+     * - middleName: ID do banco de dados da Lead Certo (ex: "14380")
+     * - familyName: Sobrenome (ex: "Martins" ou "Martins Silva")
+     */
+    public function formatarNomeParaGoogle(Contato $contato, ?string $pushName = null): array
+    {
+        $semNome = ! $contato->nome || $contato->nome === $contato->telefone || $contato->semNomeReal();
+
+        if ($semNome) {
+            $givenName = 'Sem Nome';
+            $descriptor = $contato->sobrenome ?: ($pushName ? $this->extrairDescriptor($pushName) : null);
+            $familyName = $descriptor ? $this->limparNome($descriptor) : null;
+        } else {
+            $nomeLimpo = $this->limparNome($contato->nome);
+            $partes = explode(' ', $nomeLimpo);
+            $givenName = array_shift($partes);
+            $sobrenomeExtraido = ! empty($partes) ? implode(' ', $partes) : null;
+            $familyName = $contato->sobrenome
+                ?: ($sobrenomeExtraido ?: ($pushName ? $this->extrairDescriptor($pushName) : null));
+        }
+
+        $nameEntry = [
+            'givenName'  => $givenName,
+            'middleName' => (string) $contato->id,
+        ];
+
+        if (! empty($familyName)) {
+            $nameEntry['familyName'] = $this->limparNome($familyName);
+        }
+
+        return $nameEntry;
+    }
+
+    /**
+     * Cria um contato no Google com nome, nome do meio (ID) e sobrenome estruturados.
      */
     public function criarContato(GoogleToken $token, Contato $contato, ?string $pushName = null): ?string
     {
         $token = $this->tokenValido($token);
         if (! $token) return null;
 
-        $semNome     = ! $contato->nome || $contato->nome === $contato->telefone;
-        $nomeTratado = $semNome ? 'Sem Nome' : $this->limparNome($contato->nome);
-        $descriptor  = $contato->sobrenome
-            ?: ($pushName ? $this->extrairDescriptor($pushName) : null);
-
-        $nameEntry = ['givenName' => $nomeTratado, 'middleName' => (string) $contato->id];
-        if ($descriptor) {
-            $nameEntry['familyName'] = $this->limparNome($descriptor);
-        }
+        $nameEntry = $this->formatarNomeParaGoogle($contato, $pushName);
 
         $telefone = $contato->telefone;
         if (! str_starts_with($telefone, '+')) {
@@ -177,9 +206,6 @@ class GoogleService
             $body['emailAddresses'] = [['value' => $contato->email, 'type' => 'work']];
         }
 
-        // Pedido do Leonardo (2026-08-16): campo "Empresa" do mapeamento
-        // Lead Certo ↔ Google Contatos faltava — nome/nome do meio/sobrenome/
-        // e-mail/telefone já eram enviados, só "Empresa" nunca ia junto.
         if ($contato->empresa) {
             $body['organizations'] = [['name' => $contato->empresa]];
         }
@@ -206,17 +232,30 @@ class GoogleService
 
     /**
      * Atualiza campos de nome de um contato existente.
-     * Usado para enriquecer contatos já no Google com ID do banco + descriptor.
+     * Preserva givenName, middleName (ID) e familyName.
      */
     public function atualizarNomeContato(
         GoogleToken $token,
         string $resourceName,
         string $etag,
         string $givenName,
-        string $familyName
+        string $familyName = '',
+        ?string $middleName = null
     ): bool {
         $token = $this->tokenValido($token);
         if (! $token) return false;
+
+        $nameEntry = [
+            'givenName' => $givenName,
+        ];
+
+        if ($middleName !== null && $middleName !== '') {
+            $nameEntry['middleName'] = $middleName;
+        }
+
+        if ($familyName !== '') {
+            $nameEntry['familyName'] = $familyName;
+        }
 
         try {
             $res = Http::withToken($token->access_token)
@@ -224,7 +263,7 @@ class GoogleService
                     "https://people.googleapis.com/v1/{$resourceName}:updateContact?updatePersonFields=names",
                     [
                         'etag'  => $etag,
-                        'names' => [['givenName' => $givenName, 'familyName' => $familyName]],
+                        'names' => [$nameEntry],
                     ]
                 );
 
@@ -237,10 +276,7 @@ class GoogleService
 
     /**
      * Atualiza contato existente com dados enriquecidos do WhatsApp.
-     * Nome limpo · middleName=ID · familyName=descriptor · email se disponível.
-     * Retorna o etag NOVO (o Google invalida o etag antigo a cada PATCH) —
-     * quem chama precisa salvar esse valor de volta, senão a próxima
-     * atualização falha por etag desatualizado. Retorna null em caso de falha.
+     * givenName=Primeiro Nome · middleName=ID · familyName=Sobrenome/Descriptor · email/empresa.
      */
     public function enriquecerContato(
         GoogleToken $token,
@@ -252,15 +288,7 @@ class GoogleService
         $token = $this->tokenValido($token);
         if (! $token) return null;
 
-        $semNome     = ! $contato->nome || $contato->nome === $contato->telefone;
-        $nomeTratado = $semNome ? 'Sem Nome' : $this->limparNome($contato->nome);
-        $descriptor  = $contato->sobrenome
-            ?: ($pushName ? $this->extrairDescriptor($pushName) : null);
-
-        $nameEntry = ['givenName' => $nomeTratado, 'middleName' => (string) $contato->id];
-        if ($descriptor) {
-            $nameEntry['familyName'] = $this->limparNome($descriptor);
-        }
+        $nameEntry = $this->formatarNomeParaGoogle($contato, $pushName);
 
         $updateFields = 'names';
         $body = ['etag' => $etag, 'names' => [$nameEntry]];
@@ -270,10 +298,6 @@ class GoogleService
             $updateFields .= ',emailAddresses';
         }
 
-        // Pedido do Leonardo (2026-08-16): mesmo campo "Empresa" adicionado
-        // em criarContato() — falta o campo no updatePersonFields, o Google
-        // ignora silenciosamente qualquer coisa no body que não estiver
-        // listada ali.
         if ($contato->empresa) {
             $body['organizations'] = [['name' => $contato->empresa]];
             $updateFields .= ',organizations';
@@ -479,6 +503,32 @@ class GoogleService
     }
 
     // ── Contact Groups API ────────────────────────────────────────────────────
+
+    /**
+     * Lista todos os grupos de contatos (etiquetas) da conta do Google.
+     */
+    public function listarGruposContato(GoogleToken $token): array
+    {
+        $token = $this->tokenValido($token);
+        if (! $token) return [];
+
+        try {
+            $res = Http::withToken($token->access_token)
+                ->get('https://people.googleapis.com/v1/contactGroups', [
+                    'pageSize' => 200,
+                ]);
+
+            if ($res->successful()) {
+                return $res->json('contactGroups') ?? [];
+            }
+
+            Log::error('Google listarGruposContato falhou', ['status' => $res->status(), 'body' => $res->body()]);
+        } catch (\Exception $e) {
+            Log::error('Google listarGruposContato exception', ['erro' => $e->getMessage()]);
+        }
+
+        return [];
+    }
 
     /**
      * Cria um grupo de contatos (etiqueta) no Google.

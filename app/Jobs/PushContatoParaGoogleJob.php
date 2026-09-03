@@ -26,8 +26,12 @@ class PushContatoParaGoogleJob implements ShouldQueue
         private ?string $pushName = null
     ) {}
 
-    public function handle(GoogleService $google, ContatoSyncService $sync): void
-    {
+    public function handle(
+        GoogleService $google,
+        ContatoSyncService $sync,
+        ?\App\Services\GoogleEtiquetaService $etiquetaService = null
+    ): void {
+        $etiquetaService ??= app(\App\Services\GoogleEtiquetaService::class);
         $vinculo = VinculoContatoTenant::where('contato_id', $this->contatoId)
             ->where('tenant_id', $this->tenantId)
             ->first();
@@ -54,7 +58,7 @@ class PushContatoParaGoogleJob implements ShouldQueue
 
         $vinculo->update(['google_valores_enviados' => $this->linhaBaseEnviada($google, $sync, $contato)]);
 
-        $this->atribuirEtiquetas($google, $token, $vinculo, $contato, $resourceName);
+        $etiquetaService->atualizarMembrosContato($token, $contato, $vinculo);
     }
 
     /**
@@ -84,19 +88,13 @@ class PushContatoParaGoogleJob implements ShouldQueue
      */
     private function linhaBaseEnviada(GoogleService $google, ContatoSyncService $sync, Contato $contato): array
     {
+        $nameEntry = $google->formatarNomeParaGoogle($contato, $this->pushName);
         $linhaBase = [
-            'nome' => $contato->semNomeReal()
-                ? 'Sem Nome'
-                : $sync->limparNome($google->limparNome((string) $contato->nome)),
+            'nome' => $sync->limparNome($nameEntry['givenName']),
         ];
 
-        // Mesma resolução de descriptor de GoogleService::criarContato(): sem
-        // sobrenome local, o familyName enviado vem do pushName do WhatsApp.
-        $descriptor = $contato->sobrenome
-            ?: ($this->pushName ? $google->extrairDescriptor($this->pushName) : null);
-
-        if ($descriptor) {
-            $linhaBase['sobrenome'] = $google->limparNome($descriptor);
+        if (! empty($nameEntry['familyName'])) {
+            $linhaBase['sobrenome'] = $nameEntry['familyName'];
         }
 
         // empresa/email vão verbatim pro Google — nada a transformar.
