@@ -209,9 +209,14 @@ class GmbPostPublishService
             ->get('https://mybusinessaccountmanagement.googleapis.com/v1/accounts');
 
         if ($accountRes->status() === 403) {
+            $erroGoogle = $accountRes->json('error.message') ?? $accountRes->body();
+            $motivo = (str_contains($erroGoogle, 'SERVICE_DISABLED') || str_contains($erroGoogle, 'has not been used in project'))
+                ? 'A API "My Business Account Management API" precisa ser ativada no Google Cloud Console: https://console.developers.google.com/apis/api/mybusinessaccountmanagement.googleapis.com/overview?project=159179119828'
+                : 'Permissão do Google Meu Negócio pendente. Reconecte a conta Google em "Integrações". Detalhes: ' . $erroGoogle;
+
             $post->update([
                 'status'   => 'falha',
-                'log_erro' => 'Permissão do Google Meu Negócio pendente. Reconecte a conta Google em "Integrações" para conceder acesso às postagens do perfil.',
+                'log_erro' => $motivo,
             ]);
             return false;
         }
