@@ -54,4 +54,8 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::get('/formulario/{uuid}/campos',  [FormularioPublicoController::class, 'campos']);
 Route::post('/formulario/{uuid}/submit', [FormularioPublicoController::class, 'submit']);
 
+// Webhook Meta (Facebook & Instagram) — verificação e recepção em tempo real
+Route::get('/webhooks/meta', [\App\Http\Controllers\Webhooks\MetaWebhookController::class, 'verificar']);
+Route::post('/webhooks/meta', [\App\Http\Controllers\Webhooks\MetaWebhookController::class, 'receber']);
+
 // Painel — rotas movidas para routes/web.php (auth via sessão)

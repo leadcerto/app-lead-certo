@@ -55,4 +55,15 @@ return [
         'redirect_uri'  => env('GOOGLE_REDIRECT_URI', 'http://127.0.0.1:8000/google/callback'),
     ],
 
+    'gmb' => [
+        'webhook_post_url' => env('GMB_WEBHOOK_POST_URL'),
+    ],
+
+    'meta' => [
+        'app_id'               => env('META_APP_ID'),
+        'app_secret'           => env('META_APP_SECRET'),
+        'redirect_uri'         => env('META_REDIRECT_URI', 'https://app.leadcerto.app.br/meta/callback'),
+        'webhook_verify_token' => env('META_WEBHOOK_VERIFY_TOKEN', 'leadcerto_meta_secret_webhook_2026'),
+    ],
+
 ];

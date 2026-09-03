@@ -109,6 +109,34 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('google.desconectar')
         ->middleware('role:admin,dono,growth_manager');
 
+    // Integração Meta (Facebook & Instagram)
+    Route::get('/meta/autorizar', [IntegracoesController::class, 'metaAutorizar'])
+        ->name('meta.autorizar')
+        ->middleware('role:admin,dono,growth_manager');
+    Route::get('/meta/callback', [IntegracoesController::class, 'metaCallback'])
+        ->name('meta.callback')
+        ->middleware('role:admin,dono,growth_manager');
+    Route::post('/meta/sincronizar', [IntegracoesController::class, 'metaSincronizar'])
+        ->name('meta.sincronizar')
+        ->middleware('role:admin,dono,growth_manager');
+    Route::post('/meta/desconectar', [IntegracoesController::class, 'metaDesconectar'])
+        ->name('meta.desconectar')
+        ->middleware('role:admin,dono,growth_manager');
+
+    // Meta Comment-to-DM Gatilhos
+    Route::get('/meta/gatilhos', [\App\Http\Controllers\Painel\MetaCampanhasGatilhoController::class, 'index'])
+        ->name('meta.gatilhos.index')
+        ->middleware('role:admin,dono,growth_manager');
+    Route::post('/meta/gatilhos', [\App\Http\Controllers\Painel\MetaCampanhasGatilhoController::class, 'store'])
+        ->name('meta.gatilhos.store')
+        ->middleware('role:admin,dono,growth_manager');
+    Route::put('/meta/gatilhos/{gatilho}', [\App\Http\Controllers\Painel\MetaCampanhasGatilhoController::class, 'update'])
+        ->name('meta.gatilhos.update')
+        ->middleware('role:admin,dono,growth_manager');
+    Route::delete('/meta/gatilhos/{gatilho}', [\App\Http\Controllers\Painel\MetaCampanhasGatilhoController::class, 'destroy'])
+        ->name('meta.gatilhos.destroy')
+        ->middleware('role:admin,dono,growth_manager');
+
     // Configurações — apenas dono e admin
     Route::get('/configuracoes', [WhatsAppController::class, 'view'])
         ->name('configuracoes')
