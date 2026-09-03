@@ -3,15 +3,18 @@
 use Illuminate\Support\Facades\Schedule;
 
 // Sincroniza contatos do Google para todos os tenants a cada 15 minutos
-// Delta sync: só busca novos/alterados desde o último sync via SyncToken —
-// intervalo reduzido de 6h pra 15min (pedido do Leonardo, 2026-08-26: "time
-// é fundamental" pro lead inicial; o delta sync é barato o suficiente pra
-// rodar bem mais frequente sem pesar na cota da API do Google).
 Schedule::command('contatos:sincronizar-google')
     ->everyFifteenMinutes()
     ->withoutOverlapping()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/google-sync.log'));
+
+// A cada 10 min — Auditor de Contatos IA (Atlas): Estrutura nomes (ID no meio) e transita etiquetas dinâmicas no Google em lotes seguros
+Schedule::command('contatos:sincronizar-google-etiquetas --lote=20')
+    ->everyTenMinutes()
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/sincronizar-google-etiquetas.log'));
 
 // 00:01 — Atualiza lista de modelos gratuitos do OpenRouter
 // Detecta e loga quando modelos saem ou entram no plano gratuito

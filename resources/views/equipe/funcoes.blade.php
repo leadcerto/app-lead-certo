@@ -181,32 +181,41 @@
                 </div>
 
                 {{-- Escopo & Responsabilidades --}}
-                <template x-if="funcaoSelecionada.escopo_detalhado">
+                <template x-if="funcaoSelecionada.detalhes_escopo">
                     <div>
                         <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Escopo & Responsabilidades:</h3>
                         <div class="text-gray-700 leading-relaxed bg-gray-50 p-4 rounded-2xl border border-gray-100 whitespace-pre-line"
-                             x-text="funcaoSelecionada.escopo_detalhado"></div>
+                             x-text="funcaoSelecionada.detalhes_escopo"></div>
                     </div>
                 </template>
 
                 {{-- Ferramentas Utilizadas --}}
-                <template x-if="funcaoSelecionada.ferramentas && funcaoSelecionada.ferramentas.length">
+                <template x-if="funcaoSelecionada.ferramentas">
                     <div>
                         <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Ferramentas & Acessos:</h3>
                         <div class="flex flex-wrap gap-2">
-                            <template x-for="(ferr, i) in (Array.isArray(funcaoSelecionada.ferramentas) ? funcaoSelecionada.ferramentas : JSON.parse(funcaoSelecionada.ferramentas || '[]'))" :key="i">
+                            <template x-for="(ferr, i) in (funcaoSelecionada.ferramentas || '').split(',').map(s => s.trim()).filter(Boolean)" :key="i">
                                 <span class="bg-indigo-50 border border-indigo-100 text-indigo-700 px-3 py-1 rounded-xl text-xs font-medium" x-text="ferr"></span>
                             </template>
                         </div>
                     </div>
                 </template>
 
+                {{-- Diretrizes e Orientações da IA --}}
+                <template x-if="funcaoSelecionada.diretriz_ia">
+                    <div>
+                        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Diretrizes & Protocolo de IA:</h3>
+                        <div class="text-gray-700 leading-relaxed bg-amber-50/70 p-4 rounded-2xl border border-amber-200/80 whitespace-pre-line text-xs font-mono"
+                             x-text="funcaoSelecionada.diretriz_ia"></div>
+                    </div>
+                </template>
+
                 {{-- KPIs e Métricas de Sucesso --}}
-                <template x-if="funcaoSelecionada.kpis_sucesso && funcaoSelecionada.kpis_sucesso.length">
+                <template x-if="funcaoSelecionada.kpis">
                     <div>
                         <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Métricas & KPIs de Sucesso:</h3>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            <template x-for="(kpi, i) in (Array.isArray(funcaoSelecionada.kpis_sucesso) ? funcaoSelecionada.kpis_sucesso : JSON.parse(funcaoSelecionada.kpis_sucesso || '[]'))" :key="i">
+                            <template x-for="(kpi, i) in (funcaoSelecionada.kpis || '').split(',').map(s => s.trim()).filter(Boolean)" :key="i">
                                 <div class="bg-emerald-50 border border-emerald-100 text-emerald-800 p-2.5 rounded-xl text-xs flex items-center gap-2">
                                     <span class="text-emerald-500">🎯</span>
                                     <span x-text="kpi"></span>
@@ -280,7 +289,23 @@
 
                 <div class="space-y-1">
                     <label class="text-xs font-bold text-gray-700">Escopo Detalhado & Responsabilidades</label>
-                    <textarea name="escopo_detalhado" x-model="form.escopo_detalhado" rows="4" class="w-full text-xs border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-indigo-500" placeholder="Detalhamento das atribuições e rotinas deste cargo..."></textarea>
+                    <textarea name="detalhes_escopo" x-model="form.detalhes_escopo" rows="4" class="w-full text-xs border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-indigo-500" placeholder="Detalhamento das atribuições e rotinas deste cargo..."></textarea>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-gray-700">Ferramentas & Integrações (separadas por vírgula)</label>
+                        <input type="text" name="ferramentas" x-model="form.ferramentas" placeholder="Ex: Google People API, WhatsApp Webhook, ..." class="w-full text-xs border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-gray-700">KPIs e Métricas (separadas por vírgula)</label>
+                        <input type="text" name="kpis" x-model="form.kpis" placeholder="Ex: Taxa de acurácia 100%, Tempo resposta < 1s, ..." class="w-full text-xs border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-gray-700">Diretrizes & Orientações da IA</label>
+                    <textarea name="diretriz_ia" x-model="form.diretriz_ia" rows="3" class="w-full text-xs border border-gray-300 rounded-xl p-2.5 focus:ring-2 focus:ring-indigo-500" placeholder="Instruções de conduta e regras mandatórias para o agente IA..."></textarea>
                 </div>
 
                 <div class="pt-3 border-t border-gray-100 flex justify-end gap-2">
@@ -308,8 +333,10 @@ function funcoesModule() {
             tipo: 'marketing',
             cargo_pai_id: '',
             descricao: '',
-            escopo_detalhado: '',
-            diretrizes_ia: ''
+            detalhes_escopo: '',
+            ferramentas: '',
+            kpis: '',
+            diretriz_ia: ''
         },
         verDetalhes(cargo) {
             this.funcaoSelecionada = cargo;
@@ -323,8 +350,10 @@ function funcoesModule() {
                 tipo: 'marketing',
                 cargo_pai_id: '',
                 descricao: '',
-                escopo_detalhado: '',
-                diretrizes_ia: ''
+                detalhes_escopo: '',
+                ferramentas: '',
+                kpis: '',
+                diretriz_ia: ''
             };
             this.modalForm = true;
         },
@@ -336,8 +365,10 @@ function funcoesModule() {
                 tipo: cargo.tipo || 'marketing',
                 cargo_pai_id: cargo.cargo_pai_id || '',
                 descricao: cargo.descricao || '',
-                escopo_detalhado: cargo.escopo_detalhado || '',
-                diretrizes_ia: cargo.diretrizes_ia || ''
+                detalhes_escopo: cargo.detalhes_escopo || '',
+                ferramentas: cargo.ferramentas || '',
+                kpis: cargo.kpis || '',
+                diretriz_ia: cargo.diretriz_ia || ''
             };
             this.modalForm = true;
         }
