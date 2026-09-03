@@ -1589,7 +1589,7 @@ function kanbanConfig() {
         mensagensPor: {},
         modalAberto: false,
         editando: null,
-        form: { nome: '', descricao: '', coluna_kanban: '', horario_ativo: true, horario_inicio: '11:00', horario_fim: '13:00', sequencia_repouso_id: null },
+        form: { nome: '', descricao: '', coluna_kanban: '', horario_ativo: false, horario_inicio: '08:00', horario_fim: '18:00', sequencia_repouso_id: null },
 
         novoConteudo: {},
         novoDelay: {},
@@ -1855,14 +1855,13 @@ function kanbanConfig() {
 
         novaSequencia(colunaKey) {
             this.editando = null;
-            const ehAguardandoLead = (colunaKey === 'aguardando_lead');
             this.form = {
                 nome: '',
                 descricao: '',
                 coluna_kanban: colunaKey,
-                horario_ativo: ehAguardandoLead,
-                horario_inicio: ehAguardandoLead ? '11:00' : '08:00',
-                horario_fim: ehAguardandoLead ? '13:00' : '18:00',
+                horario_ativo: false,
+                horario_inicio: '08:00',
+                horario_fim: '18:00',
                 sequencia_repouso_id: null
             };
             this.modalAberto = true;
