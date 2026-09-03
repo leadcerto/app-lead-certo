@@ -94,38 +94,36 @@ class FollowupConversas extends Command
         $estagiosDisparados = ['1' => 0, '2' => 0, '3' => 0];
         $autoMovidos        = 0;
 
-        // Achado real (Leonardo, 2026-08-13): o auto-mover por silêncio está
-        // configurado e ativo (ex: 24h/48h/72h → encerrado) mas nunca disparava
-        // pra nenhum ticket assumido por um humano — o filtro `agente_responsavel
-        // = 'bot'' abaixo cortava TODOS eles fora da lista de candidatos antes de
-        // sequer chegar na checagem de tempo. Auto-mover é um "escape" pra ticket
-        // parado independente de quem devia responder (humano esqueceu, bot
-        // encerrou controle, etc.) — não faz sentido restringir só ao bot. Os
-        // Estágios de mensagem (nudge ao lead) continuam bot-only logo abaixo,
-        // porque não faz sentido o bot "cutucar" o lead enquanto um humano já
-        // assumiu a conversa.
-        // Achado real (Leonardo, 2026-08-16): tickets sem NENHUMA mensagem (ex:
-        // origem='ligacao' — chamada perdida que abre um ticket mas nunca gera
-        // uma mensagem de texto) ficavam de fora desta lista pra sempre, porque
-        // o INNER JOIN com a subquery de "última mensagem" simplesmente não
-        // encontrava nenhuma linha pra eles. Resultado: 23 tickets da coluna
-        // "Novo" (alguns com mais de 3 semanas parados) nunca eram avaliados
-        // nem pro nudge de estágio nem pro auto-mover — ficavam abertos pra
-        // sempre. Trocado pra LEFT JOIN + COALESCE(última mensagem, aberto_em)
-        // — sem mensagem nenhuma, a "última atividade" passa a ser a abertura
-        // do ticket, que é o marco correto de silêncio nesse caso.
-        $candidatos = $emHorarioComercial
-            ? DB::table('tickets_atendimento as t')
-                ->leftJoin(DB::raw('(
-                    SELECT m1.ticket_id, m1.enviado_em as ultima_em
-                    FROM mensagens m1
-                    INNER JOIN (SELECT ticket_id, MAX(id) as max_id FROM mensagens GROUP BY ticket_id) m2
-                    ON m1.id = m2.max_id
-                ) as ultima'), 'ultima.ticket_id', '=', 't.id')
-                ->where('t.status', 'aberto')
-                ->select('t.id', 't.tenant_id', 't.coluna_kanban', 't.followup_estagio_enviado', 't.agente_responsavel', 't.etapa_ia', DB::raw('COALESCE(ultima.ultima_em, t.aberto_em) as ultima_em'))
-                ->get()
-            : collect();
+        // Avaliação contínua (24 horas por dia) de todos os tickets abertos.
+        // Silêncio do lead é contado prioritariamente a partir da última mensagem enviada pelo LEAD
+        // (t.ultima_mensagem_lead_em ou u_lead.ultima_lead_em), garantindo que mensagens de sequências
+        // ou do bot não reiniciem indevidamente o contador de silêncio do cliente.
+        $candidatos = DB::table('tickets_atendimento as t')
+            ->leftJoin(DB::raw('(
+                SELECT m1.ticket_id, m1.enviado_em as ultima_em
+                FROM mensagens m1
+                INNER JOIN (SELECT ticket_id, MAX(id) as max_id FROM mensagens GROUP BY ticket_id) m2
+                ON m1.id = m2.max_id
+            ) as ultima'), 'ultima.ticket_id', '=', 't.id')
+            ->leftJoin(DB::raw('(
+                SELECT ml.ticket_id, MAX(ml.enviado_em) as ultima_lead_em
+                FROM mensagens ml
+                WHERE ml.remetente = "lead"
+                GROUP BY ml.ticket_id
+            ) as u_lead'), 'u_lead.ticket_id', '=', 't.id')
+            ->where('t.status', 'aberto')
+            ->select(
+                't.id',
+                't.tenant_id',
+                't.coluna_kanban',
+                't.followup_estagio_enviado',
+                't.agente_responsavel',
+                't.etapa_ia',
+                't.ultima_mensagem_lead_em',
+                DB::raw('COALESCE(t.ultima_mensagem_lead_em, u_lead.ultima_lead_em, ultima.ultima_em, t.aberto_em) as ultima_lead_ou_geral'),
+                DB::raw('COALESCE(ultima.ultima_em, t.aberto_em) as ultima_geral')
+            )
+            ->get();
 
         foreach ($candidatos as $row) {
             $chaveConfig = "{$row->tenant_id}:{$row->coluna_kanban}";
@@ -137,19 +135,14 @@ class FollowupConversas extends Command
             }
             $config = $configsPorColuna[$chaveConfig];
 
-            $silencioSegundos = now()->diffInSeconds(Carbon::parse($row->ultima_em), absolute: true);
+            // Silêncio real: prioriza a última interação do lead
+            $marcoSilencio = $row->ultima_lead_ou_geral ?? $row->ultima_geral;
+            $silencioSegundos = now()->diffInSeconds(Carbon::parse($marcoSilencio), absolute: true);
 
             $ticket = null; // carregado sob demanda, só se alguma ação for aplicável
 
             // ── Estágios de mensagem (1/2/3) — só pra ticket com o bot no controle ──
-            // etapa_ia='handoff' checado explicitamente (não só agente_responsavel)
-            // porque é o sinal real de "já passou pro humano" — não faz sentido o
-            // bot "cutucar" o lead nesse caso. Achado real (Leonardo, 2026-08-21,
-            // ticket #2241/Karla): esse filtro ANTES cortava esses tickets da
-            // consulta de candidatos inteira, o que também bloqueava o auto-mover
-            // (abaixo) — corrigido pra só valer aqui, no bloco que é realmente
-            // bot-only.
-            if ($row->agente_responsavel === 'bot' && $row->etapa_ia !== 'handoff' && $row->followup_estagio_enviado < 3) {
+            if ($emHorarioComercial && $row->agente_responsavel === 'bot' && $row->etapa_ia !== 'handoff' && $row->followup_estagio_enviado < 3) {
                 $limite1 = $config?->followup_estagio1_segundos ?? 3600;
                 $limite2 = $config?->followup_estagio2_segundos ?? 7200;
                 $limite3 = $config?->followup_estagio3_segundos ?? 21600;
@@ -167,9 +160,6 @@ class FollowupConversas extends Command
                         ->find($row->id);
 
                     if ($ticket) {
-                        // Bloco 5 — depois de 3 falhas seguidas de envio (canal
-                        // recusando, ex: janela expirada), para de chamar a IA
-                        // pra esse ticket nesse ciclo e alerta uma vez só.
                         if ($ticket->tentativas_envio_falhas >= 3) {
                             $this->line("  ⚠ [envio travado] #{$ticket->id} — {$ticket->contato?->nome}");
 
@@ -182,8 +172,6 @@ class FollowupConversas extends Command
                                         'O canal recusou o envio 3 vezes seguidas (ex: janela de conversa expirada). Parei de tentar automaticamente — confira o ticket.',
                                         $ticket->id,
                                     );
-                                    // Sobe pra 4 só pra não repetir o alerta no próximo ciclo
-                                    // sem mexer no contador real de falhas do envio em si.
                                     $ticket->increment('tentativas_envio_falhas');
                                 } catch (\Exception $e) {
                                     Log::warning('FollowupConversas: erro ao alertar envio travado', [
@@ -213,7 +201,7 @@ class FollowupConversas extends Command
                 }
             }
 
-            // ── Auto-mover de coluna por silêncio ─────────────────────────────
+            // ── Auto-mover de coluna por silêncio (24h/7d) ───────────────────
             if ($config?->auto_mover_ativo && $config->auto_mover_coluna_destino
                 && $config->auto_mover_coluna_destino !== $row->coluna_kanban
                 && $silencioSegundos >= ($config->auto_mover_segundos ?? PHP_INT_MAX)
@@ -223,7 +211,7 @@ class FollowupConversas extends Command
                     ->find($row->id);
 
                 if ($ticket && $ticket->coluna_kanban === $row->coluna_kanban) {
-                    $this->line("  → [auto-mover → {$config->auto_mover_coluna_destino}] #{$ticket->id} — {$ticket->contato?->nome}");
+                    $this->line("  → [auto-mover → {$config->auto_mover_coluna_destino}] #{$ticket->id} — {$ticket->contato?->nome} (silêncio: {$silencioSegundos}s / limite: {$config->auto_mover_segundos}s)");
 
                     if (! $dry) {
                         try {
@@ -240,10 +228,6 @@ class FollowupConversas extends Command
         }
 
         $this->info("Estágio 1: {$estagiosDisparados['1']} · Estágio 2: {$estagiosDisparados['2']} · Estágio 3: {$estagiosDisparados['3']} · Auto-movidos: {$autoMovidos}");
-        if (! $emHorarioComercial) {
-            $this->warn('Fora do horário comercial (8h-20h) — estágios de silêncio e auto-mover não disparam nesta execução.');
-        }
-
         $this->info("Total enviados: {$enviados}");
         if ($dry) $this->warn('DRY-RUN — nada foi enviado.');
 

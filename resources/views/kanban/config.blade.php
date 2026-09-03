@@ -1063,7 +1063,7 @@
                     <div class="mt-2 p-3 bg-red-50 border border-red-200 rounded-xl">
                         <p class="text-xs font-semibold text-red-800 mb-1">Como configurar</p>
                         <p class="text-xs text-red-700 leading-relaxed">
-                            Se o lead ficar em silêncio pelo tempo configurado acima (contado desde a última mensagem da conversa), o sistema move o atendimento sozinho pra coluna escolhida — independente dos Estágios de silêncio. Se o destino for <strong>Encerrado</strong>, o sistema também marca como encerrado automaticamente e gera os relatórios de IA (mesmo efeito do botão Encerrar); se o lead responder depois, o atendimento reabre normalmente. Se preencher a mensagem, ela é enviada ao lead exatamente antes de mover — use <code class="bg-white px-1 rounded">{nome}</code> pra personalizar. Roda junto com os Estágios de silêncio (5 em 5 minutos, horário comercial).
+                            Se o lead ficar em silêncio pelo tempo configurado acima (contado desde a última mensagem enviada pelo lead ou última interação), o sistema move o atendimento sozinho pra coluna escolhida — independente dos Estágios de silêncio. Se o destino for <strong>Encerrado</strong>, o sistema também marca como encerrado automaticamente e gera os relatórios de IA (mesmo efeito do botão Encerrar); se o lead responder depois, o atendimento reabre normalmente. Se preencher a mensagem, ela é enviada ao lead exatamente antes de mover — use <code class="bg-white px-1 rounded">{nome}</code> pra personalizar. Roda a cada 5 minutos de forma contínua (24 horas).
                         </p>
                     </div>
                     <div class="flex items-center justify-end mt-3">
