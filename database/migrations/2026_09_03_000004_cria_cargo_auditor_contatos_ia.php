@@ -41,7 +41,7 @@ return new class extends Migration
                 'perfil'           => 'admin',
                 'is_ia'            => true,
                 'provedor_ia'      => 'openrouter',
-                'openrouter_modelo'=> 'anthropic/claude-3.5-sonnet',
+                'openrouter_modelo'=> 'anthropic/claude-sonnet-5',
                 'gemini_email'     => 'atlas.contatos@leadcerto.com',
                 'gemini_instrucoes'=> $atlasInstrucoes,
                 'base_conhecimento'=> $atlasBase,

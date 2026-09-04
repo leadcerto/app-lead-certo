@@ -168,7 +168,7 @@ class EquipePainelController extends Controller
                 ['id' => 'anthropic/claude-3-haiku', 'nome' => 'Claude 3 Haiku', 'empresa' => 'Anthropic', 'preco' => '~$0.25/1M', 'desc' => 'Tom empático e altamente humanizado para retenção.', 'badge' => '~$0.25/1M'],
             ],
             'alto' => [
-                ['id' => 'anthropic/claude-3.5-sonnet', 'nome' => 'Claude 3.5 Sonnet', 'empresa' => 'Anthropic', 'preco' => '~$3.00/1M', 'desc' => 'Líder em precisão e análise crítica para o Orquestrador Geral.', 'badge' => 'Top Tier'],
+                ['id' => 'anthropic/claude-sonnet-5', 'nome' => 'Claude Sonnet 5', 'empresa' => 'Anthropic', 'preco' => '~$3.00/1M', 'desc' => 'Líder em precisão e análise crítica para o Orquestrador Geral.', 'badge' => 'Top Tier'],
                 ['id' => 'deepseek/deepseek-r1', 'nome' => 'DeepSeek R1', 'empresa' => 'DeepSeek', 'preco' => '~$0.55/1M', 'desc' => 'Raciocínio analítico avançado com 80% de economia.', 'badge' => '~$0.55/1M'],
                 ['id' => 'openai/gpt-4o', 'nome' => 'OpenAI GPT-4o', 'empresa' => 'OpenAI', 'preco' => '~$2.50/1M', 'desc' => 'Visão multimodal e resolução de problemas executivos complexos.', 'badge' => '~$2.50/1M'],
             ],
