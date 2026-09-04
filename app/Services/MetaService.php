@@ -101,9 +101,13 @@ class MetaService
     }
 
     /**
-     * Sincroniza todas as Páginas do Facebook e Contas de Instagram conectadas a este token.
+     * Lista (sem gravar nada) todas as Páginas do Facebook que este token pode
+     * administrar, via /me/accounts. Uma conta pessoal da Meta costuma
+     * administrar páginas de VÁRIOS negócios/tenants diferentes — por isso
+     * NUNCA gravamos aqui direto; o operador escolhe manualmente quais
+     * páginas pertencem a este tenant em vincularPaginasSelecionadas().
      */
-    public function sincronizarPaginasEInstagram(MetaToken $token): array
+    public function listarPaginasDisponiveis(MetaToken $token): array
     {
         try {
             $url = self::GRAPH_BASE_URL . '/me/accounts';
@@ -113,16 +117,41 @@ class MetaService
             ]);
 
             if (! $res->successful()) {
-                Log::error('MetaService::sincronizarPaginasEInstagram erro', ['body' => $res->body()]);
-                return ['sucesso' => false, 'erro' => $res->body()];
+                Log::error('MetaService::listarPaginasDisponiveis erro', ['body' => $res->body()]);
+                return ['sucesso' => false, 'erro' => $res->body(), 'paginas' => []];
             }
 
-            $paginasData = $res->json('data', []);
+            return ['sucesso' => true, 'paginas' => $res->json('data', [])];
+        } catch (\Exception $e) {
+            Log::error('MetaService::listarPaginasDisponiveis exceção', ['erro' => $e->getMessage()]);
+            return ['sucesso' => false, 'erro' => $e->getMessage(), 'paginas' => []];
+        }
+    }
+
+    /**
+     * Grava, para este tenant, SOMENTE as páginas cujo facebook_page_id está
+     * em $facebookPageIdsSelecionados — nunca a lista inteira de /me/accounts.
+     * Páginas do tenant que não foram selecionadas desta vez são desativadas
+     * (não apagadas), para o operador poder reativar sem reconectar tudo.
+     */
+    public function vincularPaginasSelecionadas(MetaToken $token, array $facebookPageIdsSelecionados): array
+    {
+        $listagem = $this->listarPaginasDisponiveis($token);
+        if (! $listagem['sucesso']) {
+            return $listagem;
+        }
+
+        try {
             $totalPaginas = 0;
             $totalInstagram = 0;
+            $idsVinculados = [];
 
-            foreach ($paginasData as $pData) {
+            foreach ($listagem['paginas'] as $pData) {
                 $pageId = $pData['id'];
+                if (! in_array($pageId, $facebookPageIdsSelecionados, true)) {
+                    continue;
+                }
+
                 $pageAccessToken = $pData['access_token'] ?? $token->access_token;
                 $fotoUrl = $pData['picture']['data']['url'] ?? null;
 
@@ -140,6 +169,7 @@ class MetaService
                         'ativo'             => true,
                     ]
                 );
+                $idsVinculados[] = $pagina->id;
                 $totalPaginas++;
 
                 // Sincroniza Instagram Business vinculado, se houver
@@ -162,13 +192,19 @@ class MetaService
                 }
             }
 
+            // Desativa (não apaga) páginas deste tenant que ficaram de fora da seleção atual
+            MetaPagina::withoutGlobalScopes()
+                ->where('tenant_id', $token->tenant_id)
+                ->whereNotIn('id', $idsVinculados)
+                ->update(['ativo' => false]);
+
             return [
                 'sucesso'         => true,
                 'total_paginas'   => $totalPaginas,
                 'total_instagram' => $totalInstagram,
             ];
         } catch (\Exception $e) {
-            Log::error('MetaService::sincronizarPaginasEInstagram excecao', ['erro' => $e->getMessage()]);
+            Log::error('MetaService::vincularPaginasSelecionadas exceção', ['erro' => $e->getMessage()]);
             return ['sucesso' => false, 'erro' => $e->getMessage()];
         }
     }

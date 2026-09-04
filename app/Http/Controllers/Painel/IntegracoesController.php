@@ -203,14 +203,11 @@ class IntegracoesController extends Controller
                 ]
             );
 
-            // 4. Sincroniza páginas e contas do Instagram
-            $syncRes = $this->meta->sincronizarPaginasEInstagram($metaToken);
-
-            $paginasTotal = $syncRes['total_paginas'] ?? 0;
-            $igTotal = $syncRes['total_instagram'] ?? 0;
-
-            return redirect()->route('integracoes')
-                ->with('sucesso', "Meta conectada com sucesso! {$paginasTotal} página(s) do Facebook e {$igTotal} conta(s) do Instagram sincronizadas.");
+            // 4. Não vincula páginas automaticamente — a mesma conta pessoal da
+            // Meta pode administrar páginas de VÁRIOS negócios diferentes.
+            // O operador escolhe manualmente quais pertencem a este tenant.
+            return redirect()->route('meta.selecionar-paginas')
+                ->with('sucesso', 'Meta conectada! Selecione abaixo qual(is) página(s) pertence(m) a esta empresa.');
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Erro no metaCallback', [
                 'erro'  => $e->getMessage(),
@@ -221,29 +218,76 @@ class IntegracoesController extends Controller
         }
     }
 
-    public function metaSincronizar(Request $request): RedirectResponse
+    public function metaSelecionarPaginas(Request $request): View|RedirectResponse
     {
-        try {
-            $tenantId  = $this->getTenantId($request);
-            $metaToken = \App\Models\MetaToken::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+        $tenantId  = $this->getTenantId($request);
+        $metaToken = \App\Models\MetaToken::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
 
-            if (! $metaToken) {
-                return redirect()->route('integracoes')
-                    ->with('erro', 'Nenhuma conta Meta conectada para esta empresa.');
+        if (! $metaToken) {
+            return redirect()->route('integracoes')
+                ->with('erro', 'Nenhuma conta Meta conectada para esta empresa.');
+        }
+
+        $listagem = $this->meta->listarPaginasDisponiveis($metaToken);
+        if (! $listagem['sucesso']) {
+            return redirect()->route('integracoes')
+                ->with('erro', 'Falha ao consultar páginas da Meta: ' . ($listagem['erro'] ?? 'erro desconhecido'));
+        }
+
+        $idsJaAtivos = \App\Models\MetaPagina::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('ativo', true)
+            ->pluck('facebook_page_id')
+            ->all();
+
+        return view('integracoes.meta-selecionar-paginas', [
+            'paginas'     => $listagem['paginas'],
+            'idsJaAtivos' => $idsJaAtivos,
+        ]);
+    }
+
+    public function metaVincularPaginas(Request $request): RedirectResponse
+    {
+        $tenantId  = $this->getTenantId($request);
+        $metaToken = \App\Models\MetaToken::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+
+        if (! $metaToken) {
+            return redirect()->route('integracoes')
+                ->with('erro', 'Nenhuma conta Meta conectada para esta empresa.');
+        }
+
+        $selecionadas = (array) $request->input('paginas', []);
+
+        if (empty($selecionadas)) {
+            return redirect()->route('meta.selecionar-paginas')
+                ->with('erro', 'Selecione ao menos uma página para vincular a esta empresa.');
+        }
+
+        try {
+            $res = $this->meta->vincularPaginasSelecionadas($metaToken, $selecionadas);
+
+            if (! ($res['sucesso'] ?? false)) {
+                return redirect()->route('meta.selecionar-paginas')
+                    ->with('erro', 'Erro ao vincular páginas: ' . ($res['erro'] ?? 'erro desconhecido'));
             }
 
-            $syncRes = $this->meta->sincronizarPaginasEInstagram($metaToken);
-
-            $paginasTotal = $syncRes['total_paginas'] ?? 0;
-            $igTotal = $syncRes['total_instagram'] ?? 0;
+            $paginasTotal = $res['total_paginas'] ?? 0;
+            $igTotal = $res['total_instagram'] ?? 0;
 
             return redirect()->route('integracoes')
-                ->with('sucesso', "Páginas e Instagram sincronizados com sucesso! ({$paginasTotal} página(s), {$igTotal} conta(s) do Instagram).");
+                ->with('sucesso', "{$paginasTotal} página(s) do Facebook e {$igTotal} conta(s) do Instagram vinculadas a esta empresa.");
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('Erro no metaSincronizar', ['erro' => $e->getMessage()]);
-            return redirect()->route('integracoes')
-                ->with('erro', 'Erro ao sincronizar páginas: ' . $e->getMessage());
+            \Illuminate\Support\Facades\Log::error('Erro no metaVincularPaginas', ['erro' => $e->getMessage()]);
+            return redirect()->route('meta.selecionar-paginas')
+                ->with('erro', 'Erro ao vincular páginas: ' . $e->getMessage());
         }
+    }
+
+    public function metaSincronizar(Request $request): RedirectResponse
+    {
+        // Re-sincronizar sempre passa pela tela de seleção — nunca gravamos
+        // de volta a lista inteira de páginas que a conta pessoal administra.
+        return redirect()->route('meta.selecionar-paginas');
     }
 
     public function metaDesconectar(Request $request): RedirectResponse

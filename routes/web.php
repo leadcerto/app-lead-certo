@@ -123,6 +123,12 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->middleware('role:admin,dono,growth_manager');
     Route::get('/meta/callback', [IntegracoesController::class, 'metaCallback'])
         ->name('meta.callback');
+    Route::get('/meta/selecionar-paginas', [IntegracoesController::class, 'metaSelecionarPaginas'])
+        ->name('meta.selecionar-paginas')
+        ->middleware('role:admin,dono,growth_manager');
+    Route::post('/meta/vincular-paginas', [IntegracoesController::class, 'metaVincularPaginas'])
+        ->name('meta.vincular-paginas')
+        ->middleware('role:admin,dono,growth_manager');
     Route::match(['get', 'post'], '/meta/sincronizar', [IntegracoesController::class, 'metaSincronizar'])
         ->name('meta.sincronizar')
         ->middleware('role:admin,dono,growth_manager');
