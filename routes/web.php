@@ -29,6 +29,11 @@ use App\Http\Controllers\Painel\GestorKanbanRelatorioController;
 use App\Http\Controllers\Painel\MotivoDesfechoController;
 use App\Http\Controllers\Painel\IaUsageController;
 
+// ── Páginas Legais Públicas (LGPD & Meta/Google Compliance) ─────────────────
+Route::get('/privacidade', fn () => view('legal.privacidade'))->name('privacidade');
+Route::get('/termos', fn () => view('legal.termos'))->name('termos');
+Route::get('/exclusao-dados', fn () => view('legal.exclusao-dados'))->name('exclusao-dados');
+
 // ── Formulário público (iframe) — sem auth ────────────────────────────────
 Route::get('/f/{uuid}', function (string $uuid) {
     $formulario = \App\Models\Formulario::with('campos')
@@ -107,6 +112,9 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->middleware('role:admin,dono,growth_manager');
     Route::post('/google/desconectar', [IntegracoesController::class, 'googleDesconectar'])
         ->name('google.desconectar')
+        ->middleware('role:admin,dono,growth_manager');
+    Route::post('/google/testar-gmb', [IntegracoesController::class, 'googleTestarGmb'])
+        ->name('google.testar-gmb')
         ->middleware('role:admin,dono,growth_manager');
 
     // Integração Meta (Facebook & Instagram)

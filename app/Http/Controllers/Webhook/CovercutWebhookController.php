@@ -301,8 +301,11 @@ class CovercutWebhookController extends Controller
         // de volta pro WhatsApp do cliente, sem função nenhuma. (Ver mesma
         // remoção espelhada em UazapiWebhookController.)
 
-        if ($ticket->followup_estagio_enviado !== 0) {
-            $ticket->update(['followup_estagio_enviado' => 0]);
+        if ($ticket->followup_estagio_enviado !== 0 || $ticket->followup_enviado) {
+            $ticket->update([
+                'followup_estagio_enviado' => 0,
+                'followup_enviado'         => false,
+            ]);
         }
 
         if ($ticketNovo) {

@@ -17,6 +17,7 @@ class VinculoContatoTenant extends Model
     protected $casts = [
         'created_at'                 => 'datetime',
         'bloqueado_em'               => 'datetime',
+        'google_sincronizado_em'     => 'datetime',
         'google_valores_enviados'    => 'array',
         'campos_editados_humano'     => 'array',
         'campos_pendentes_auditoria' => 'array',
@@ -27,6 +28,7 @@ class VinculoContatoTenant extends Model
         'tenant_id',
         'google_resource_name',
         'google_etag',
+        'google_sincronizado_em',
         'bloqueado_em',
         'google_valores_enviados',
         'campos_editados_humano',

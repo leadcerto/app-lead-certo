@@ -83,7 +83,11 @@ class ContatoAtualizarSincronizaGoogleTest extends TestCase
 
     public function test_nao_chama_google_quando_contato_nao_esta_vinculado_ao_google(): void
     {
-        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class, \App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
+        Bus::fake([
+            EnriquecerContatoNovoViaGoogleJob::class,
+            \App\Jobs\ProvisionarEtiquetasGoogleJob::class,
+            \App\Jobs\PushContatoParaGoogleJob::class,
+        ]);
         Http::fake();
 
         $tenant  = $this->criarTenantComGoogle();

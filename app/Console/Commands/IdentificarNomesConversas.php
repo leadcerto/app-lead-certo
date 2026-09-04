@@ -25,11 +25,14 @@ class IdentificarNomesConversas extends Command
         $apiKey = config('services.openrouter.key', '');
 
         // Contatos sem nome real: "Sem Nome" ou nome = telefone (número)
+        // Prioridade 1: Leads com tickets em 'novo' / 'em_atendimento' e mensagens mais recentes
         $contatos = DB::table('contatos as c')
             ->join('tickets_atendimento as t', 't.contato_id', '=', 'c.id')
             ->join('mensagens as m', 'm.ticket_id', '=', 't.id')
             ->where(function ($q) {
                 $q->where('c.nome', 'Sem Nome')
+                  ->orWhereNull('c.nome')
+                  ->orWhere('c.nome', '')
                   ->orWhereColumn('c.nome', 'c.telefone')
                   ->orWhere('c.nome', 'REGEXP', '^[0-9+]+$'); // nome é só dígitos/+
             })
@@ -37,8 +40,16 @@ class IdentificarNomesConversas extends Command
             ->where('m.remetente', 'lead')
             ->whereNotNull('m.conteudo')
             ->where('m.conteudo', '!=', '')
-            ->select('c.id', 'c.telefone', 'c.nome')
-            ->distinct()
+            ->select(
+                'c.id',
+                'c.telefone',
+                'c.nome',
+                DB::raw("MAX(CASE WHEN t.coluna_kanban IN ('novo', 'em_atendimento') THEN 1 ELSE 0 END) as prioridade_kanban"),
+                DB::raw('MAX(m.enviado_em) as ultima_msg_em')
+            )
+            ->groupBy('c.id', 'c.telefone', 'c.nome')
+            ->orderByDesc('prioridade_kanban')
+            ->orderByDesc('ultima_msg_em')
             ->limit($limit)
             ->get();
 
@@ -47,7 +58,7 @@ class IdentificarNomesConversas extends Command
             return Command::FAILURE;
         }
 
-        $this->info("Contatos sem nome com mensagens: {$contatos->count()}");
+        $this->info("Contatos sem nome com mensagens (Priorizando Leads Novos): {$contatos->count()}");
 
         $identificados = 0;
         $naoEncontrou  = 0;
@@ -74,7 +85,15 @@ class IdentificarNomesConversas extends Command
             if ($nome) {
                 $this->line("  ✓ #{$row->id} ({$row->telefone}) → {$nome}");
                 if (! $dry) {
-                    DB::table('contatos')->where('id', $row->id)->update(['nome' => $nome]);
+                    DB::table('contatos')->where('id', $row->id)->update([
+                        'nome'                => $nome,
+                        'nome_revisado_ia_em' => now(),
+                    ]);
+
+                    // Agenda sincronização imediata no Google no próximo ciclo do Atlas
+                    DB::table('vinculos_contato_tenant')
+                        ->where('contato_id', $row->id)
+                        ->update(['google_sincronizado_em' => null]);
                 }
                 $identificados++;
             } elseif ($erro) {
@@ -86,7 +105,7 @@ class IdentificarNomesConversas extends Command
             }
 
             // Aguarda entre chamadas para não estourar rate-limit dos modelos gratuitos
-            sleep(4);
+            sleep(3);
         }
 
         $this->info("Identificados: {$identificados} | Não encontrados: {$naoEncontrou}");
@@ -112,7 +131,8 @@ class IdentificarNomesConversas extends Command
                         'role'    => 'system',
                         'content' => "Você identifica nomes de pessoas em conversas de WhatsApp.\n"
                             . "Retorne APENAS o nome próprio da pessoa, sem mais nada.\n"
-                            . "Se a pessoa se apresentou (ex: 'Aqui é o João', 'Sou a Maria', 'Meu nome é Carlos'), retorne esse nome.\n"
+                            . "Se a pessoa se apresentou (ex: 'Aqui é o João', 'Sou a Maria', 'Meu nome é Carlos', 'Wallace'), retorne esse nome.\n"
+                            . "Se respondeu apenas com o próprio nome, retorne o nome.\n"
                             . "Se assinou a mensagem, retorne a assinatura.\n"
                             . "Se não há nome identificável, retorne exatamente: NAO_IDENTIFICADO\n"
                             . "Capitalize corretamente. Não invente nomes.",

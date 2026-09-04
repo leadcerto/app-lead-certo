@@ -92,6 +92,7 @@ class FollowupConversas extends Command
 
         $configsPorColuna   = [];
         $estagiosDisparados = ['1' => 0, '2' => 0, '3' => 0];
+        $janelaMetaDisparados = 0;
         $autoMovidos        = 0;
 
         // Avaliação contínua (24 horas por dia) de todos os tickets abertos.
@@ -117,6 +118,8 @@ class FollowupConversas extends Command
                 't.tenant_id',
                 't.coluna_kanban',
                 't.followup_estagio_enviado',
+                't.followup_enviado',
+                't.janela_expira_em',
                 't.agente_responsavel',
                 't.etapa_ia',
                 't.ultima_mensagem_lead_em',
@@ -201,6 +204,48 @@ class FollowupConversas extends Command
                 }
             }
 
+            // ── Gatilho de Janela Meta (< 6h) ──────────────────────────────
+            // Disparado no horário comercial quando a janela oficial da Meta
+            // está a menos de 6 horas de fechar e o lead está em silêncio (>= 1h).
+            // Envia um follow-up matinal/preventivo para reengajar o lead antes
+            // que a janela expire.
+            $janelaExpiraEm = $row->janela_expira_em ? Carbon::parse($row->janela_expira_em) : null;
+            $segundosAteExpirarJanela = $janelaExpiraEm ? now()->diffInSeconds($janelaExpiraEm, false) : null;
+
+            if ($emHorarioComercial
+                && $row->agente_responsavel === 'bot'
+                && $row->etapa_ia !== 'handoff'
+                && $config?->ia_ativo
+                && ! $row->followup_enviado
+                && $segundosAteExpirarJanela !== null
+                && $segundosAteExpirarJanela > 0
+                && $segundosAteExpirarJanela <= (6 * 3600)
+                && $silencioSegundos >= 3600
+            ) {
+                $ticket ??= TicketAtendimento::withoutGlobalScopes()
+                    ->with(['contato', 'mensagens', 'persona', 'tenant'])
+                    ->find($row->id);
+
+                if ($ticket && $ticket->tentativas_envio_falhas < 3 && ! $ticket->aguardando_orientacao_em) {
+                    $this->line("  ⏳ [janela meta < 6h] #{$ticket->id} — {$ticket->contato?->nome} (expira em: " . round($segundosAteExpirarJanela / 3600, 1) . "h)");
+
+                    if (! $dry) {
+                        try {
+                            $respostaEnviada = $sdr->responder($ticket, gatilho: 'janela_meta_6h');
+                            if ($respostaEnviada !== null) {
+                                $ticket->update(['followup_enviado' => true]);
+                                $janelaMetaDisparados++;
+                                $enviados++;
+                            }
+                        } catch (\Exception $e) {
+                            Log::warning('FollowupConversas: erro no follow-up de janela meta', [
+                                'ticket_id' => $row->id, 'erro' => $e->getMessage(),
+                            ]);
+                        }
+                    }
+                }
+            }
+
             // ── Auto-mover de coluna por silêncio (24h/7d) ───────────────────
             if ($config?->auto_mover_ativo && $config->auto_mover_coluna_destino
                 && $config->auto_mover_coluna_destino !== $row->coluna_kanban
@@ -227,7 +272,7 @@ class FollowupConversas extends Command
             }
         }
 
-        $this->info("Estágio 1: {$estagiosDisparados['1']} · Estágio 2: {$estagiosDisparados['2']} · Estágio 3: {$estagiosDisparados['3']} · Auto-movidos: {$autoMovidos}");
+        $this->info("Estágio 1: {$estagiosDisparados['1']} · Estágio 2: {$estagiosDisparados['2']} · Estágio 3: {$estagiosDisparados['3']} · Janela Meta (<6h): {$janelaMetaDisparados} · Auto-movidos: {$autoMovidos}");
         $this->info("Total enviados: {$enviados}");
         if ($dry) $this->warn('DRY-RUN — nada foi enviado.');
 
@@ -255,9 +300,14 @@ class FollowupConversas extends Command
             // assim. Roteando por $canal->servico()->enviarTexto(), o Covercut também
             // ganha de graça a checagem de janela de conversa (bloqueia se expirada).
             if ($telefone && $canal) {
-                $nomeContato = $ticket->contato?->nome;
-                $temNome     = $nomeContato && $nomeContato !== $telefone;
+                $contato     = $ticket->contato;
+                $nomeContato = $contato?->nome;
+                $temNome     = $contato && ! $contato->semNomeReal();
                 $texto       = str_replace('{nome}', $temNome ? $nomeContato : '', $mensagem);
+                if (! $temNome) {
+                    $texto = preg_replace('/\{nome\},?\s*/u', '', $texto);
+                    $texto = preg_replace('/(^|\s)Sem Nome,?\s*/iu', '$1', $texto);
+                }
 
                 $enviado = $canal->servico()->enviarTexto($canal, $telefone, $texto);
 

@@ -1012,8 +1012,6 @@ class ContatosController extends Controller
         ];
         $dados = $request->only($campos);
 
-        // Regra de governança: nome editado por parceiro/SDR vai para auditoria
-        // se o master já tiver um nome diferente. Dono e admin atualizam direto.
         $perfilPrivilegiado = in_array($request->user()->perfil ?? '', ['dono', 'admin']);
         $vinculo = VinculoContatoTenant::where('contato_id', $contato->id)
             ->where('tenant_id', $tenantId)
@@ -1023,6 +1021,7 @@ class ContatosController extends Controller
             ! $perfilPrivilegiado &&
             isset($dados['nome']) &&
             $contato->nome &&
+            ! $contato->semNomeReal() &&
             strtolower(trim($dados['nome'])) !== strtolower(trim($contato->nome))
         ) {
             if ($vinculo) {
@@ -1032,11 +1031,10 @@ class ContatosController extends Controller
             }
 
             $nomeLocal = $dados['nome'];
-            unset($dados['nome']); // master intacto
+            unset($dados['nome']);
 
             $camposMudaram = $this->marcarCamposEditadosHumano($vinculo, $dados, $contato);
-
-            $contato->update($dados); // aplica outros campos (email, profissao, etc.)
+            $contato->update($dados);
             $this->sincronizarComGoogle($contato, $tenantId, $camposMudaram);
 
             return response()->json([
@@ -1048,11 +1046,14 @@ class ContatosController extends Controller
         }
 
         $camposMudaram = $this->marcarCamposEditadosHumano($vinculo, $dados, $contato);
-
         $contato->update($dados);
+
         $this->sincronizarComGoogle($contato, $tenantId, $camposMudaram);
 
-        return response()->json(['ok' => true, 'auditoria' => false, 'contato' => $contato->fresh()]);
+        return response()->json([
+            'ok'      => true,
+            'contato' => $contato->fresh(),
+        ]);
     }
 
     /**
@@ -1129,6 +1130,7 @@ class ContatosController extends Controller
             ->first();
 
         if (! $vinculo || ! $vinculo->google_resource_name || ! $vinculo->google_etag) {
+            \App\Jobs\PushContatoParaGoogleJob::dispatch($contato->id, $tenantId);
             return;
         }
 

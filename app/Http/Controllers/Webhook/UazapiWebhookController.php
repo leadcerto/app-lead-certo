@@ -395,8 +395,11 @@ class UazapiWebhookController extends Controller
         // Lead deu sinal de vida — zera o relógio dos estágios de silêncio
         // (conversas:followup), senão um novo período de silêncio retomaria
         // do estágio em que parou antes, em vez de recomeçar do zero.
-        if ($ticket->followup_estagio_enviado !== 0) {
-            $ticket->update(['followup_estagio_enviado' => 0]);
+        if ($ticket->followup_estagio_enviado !== 0 || $ticket->followup_enviado) {
+            $ticket->update([
+                'followup_estagio_enviado' => 0,
+                'followup_enviado'         => false,
+            ]);
         }
 
         // Garante vínculo contato↔tenant e envia pro Google se for contato novo

@@ -56,17 +56,46 @@ class SincronizarGoogleEtiquetasCommand extends Command
                 $this->line("   [Etiqueta: {$slug}] => {$res}");
             }
 
-            // 2. Buscar vínculos com Google Resource Name
-            $vinculosQuery = VinculoContatoTenant::where('tenant_id', $token->tenant_id)
+            // 2. Priorização: Leads Novos/Ativos primeiro, seguido pelo Backlog antigo
+            $vinculosNovosQuery = VinculoContatoTenant::where('tenant_id', $token->tenant_id)
                 ->whereNotNull('google_resource_name')
+                ->where(function ($q) {
+                    $q->whereNull('google_sincronizado_em')
+                      ->orWhereExists(function ($sub) {
+                          $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                              ->from('tickets_atendimento')
+                              ->whereColumn('tickets_atendimento.contato_id', 'vinculos_contato_tenant.contato_id')
+                              ->whereIn('tickets_atendimento.coluna_kanban', ['novo', 'em_atendimento', 'aguardando_retorno'])
+                              ->whereNull('tickets_atendimento.deleted_at');
+                      })
+                      ->orWhere('vinculos_contato_tenant.created_at', '>=', now()->subDays(2));
+                })
+                ->orderByRaw('google_sincronizado_em IS NULL DESC, id DESC')
                 ->with('contato');
 
-            if ($limite > 0) {
-                $vinculosQuery->take($limite);
+            $vinculosNovos = $limite > 0 ? $vinculosNovosQuery->take($limite)->get() : $vinculosNovosQuery->get();
+            $vinculos = collect($vinculosNovos);
+
+            $this->info("--> [Prioridade 1] Leads novos / ativos identificados: {$vinculos->count()}");
+
+            // Prioridade 2: Backlog de contatos antigos (preenche o restante do lote se houver margem)
+            if ($limite === 0 || $vinculos->count() < $limite) {
+                $restante = $limite > 0 ? ($limite - $vinculos->count()) : 0;
+                $idsJaSelecionados = $vinculos->pluck('id')->toArray();
+
+                $vinculosAntigosQuery = VinculoContatoTenant::where('tenant_id', $token->tenant_id)
+                    ->whereNotNull('google_resource_name')
+                    ->when(! empty($idsJaSelecionados), fn($q) => $q->whereNotIn('id', $idsJaSelecionados))
+                    ->orderByRaw('google_sincronizado_em ASC, id ASC')
+                    ->with('contato');
+
+                $vinculosAntigos = $limite > 0 ? $vinculosAntigosQuery->take($restante)->get() : $vinculosAntigosQuery->get();
+                $this->info("--> [Prioridade 2] Contatos do backlog antigo adicionados: {$vinculosAntigos->count()}");
+                $vinculos = $vinculos->concat($vinculosAntigos);
             }
 
-            $total = $vinculosQuery->count();
-            $this->info("--> Total de contatos vinculados para sincronizar: {$total}");
+            $total = $vinculos->count();
+            $this->info("--> Total consolidado para este ciclo: {$total}");
 
             $bar = $this->output->createProgressBar($total);
             $bar->start();
@@ -74,47 +103,48 @@ class SincronizarGoogleEtiquetasCommand extends Command
             $sucessos = 0;
             $erros    = 0;
 
-            $vinculosQuery->chunk(50, function ($vinculos) use ($google, $etiquetaService, $tokenValido, $dryRun, &$sucessos, &$erros, $bar) {
-                foreach ($vinculos as $vinculo) {
-                    $contato = $vinculo->contato;
-                    if (! $contato || ! $vinculo->google_resource_name) {
-                        $bar->advance();
-                        continue;
-                    }
-
-                    if ($dryRun) {
-                        $nameEntry = $google->formatarNomeParaGoogle($contato);
-                        $this->line(" [DRY-RUN] Contato #{$contato->id}: {$nameEntry['givenName']} | Middle: {$nameEntry['middleName']} | Family: " . ($nameEntry['familyName'] ?? ''));
-                        $bar->advance();
-                        continue;
-                    }
-
-                    try {
-                        // 1. Atualizar estrutura de nomes no Google
-                        $nameEntry = $google->formatarNomeParaGoogle($contato);
-                        $google->atualizarNomeContato(
-                            $tokenValido,
-                            $vinculo->google_resource_name,
-                            $vinculo->google_etag ?? '*',
-                            $nameEntry['givenName'],
-                            $nameEntry['familyName'] ?? '',
-                            $nameEntry['middleName'] ?? (string) $contato->id
-                        );
-
-                        // 2. Atualizar marcadores (adiciona em LEAD CERTO, remove de NOVOS LEADS)
-                        $etiquetaService->atualizarMembrosContato($tokenValido, $contato, $vinculo);
-
-                        $sucessos++;
-                    } catch (\Exception $e) {
-                        $erros++;
-                        Log::error("Falha ao sincronizar contato #{$contato->id} no Google", ['erro' => $e->getMessage()]);
-                    }
-
+            foreach ($vinculos as $vinculo) {
+                $contato = $vinculo->contato;
+                if (! $contato || ! $vinculo->google_resource_name) {
                     $bar->advance();
-                    // Pequeno respiro para respeitar o rate limit da Google People API
-                    usleep(50000); // 50ms
+                    continue;
                 }
-            });
+
+                if ($dryRun) {
+                    $nameEntry = $google->formatarNomeParaGoogle($contato);
+                    $this->line(" [DRY-RUN] Contato #{$contato->id}: {$nameEntry['givenName']} | Middle: {$nameEntry['middleName']} | Family: " . ($nameEntry['familyName'] ?? ''));
+                    $bar->advance();
+                    continue;
+                }
+
+                try {
+                    // 1. Atualizar estrutura de nomes no Google
+                    $nameEntry = $google->formatarNomeParaGoogle($contato);
+                    $google->atualizarNomeContato(
+                        $tokenValido,
+                        $vinculo->google_resource_name,
+                        $vinculo->google_etag ?? '*',
+                        $nameEntry['givenName'],
+                        $nameEntry['familyName'] ?? '',
+                        $nameEntry['middleName'] ?? (string) $contato->id
+                    );
+
+                    // 2. Atualizar marcadores (adiciona em LEAD CERTO, remove de NOVOS LEADS)
+                    $etiquetaService->atualizarMembrosContato($tokenValido, $contato, $vinculo);
+
+                    // 3. Registrar carimbo de sincronização do Atlas
+                    $vinculo->update(['google_sincronizado_em' => now()]);
+
+                    $sucessos++;
+                } catch (\Exception $e) {
+                    $erros++;
+                    Log::error("Falha ao sincronizar contato #{$contato->id} no Google", ['erro' => $e->getMessage()]);
+                }
+
+                $bar->advance();
+                // Pequeno respiro para respeitar o rate limit da Google People API
+                usleep(50000); // 50ms
+            }
 
             $bar->finish();
             $this->newLine(2);

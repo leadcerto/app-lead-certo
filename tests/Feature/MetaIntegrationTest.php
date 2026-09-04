@@ -86,4 +86,35 @@ class MetaIntegrationTest extends TestCase
         $this->assertTrue($gatilho->satisfazGatilho('Gostaria de saber mais por favor'));
         $this->assertFalse($gatilho->satisfazGatilho('Apenas um elogio ao post'));
     }
+
+    public function test_publicar_post_instagram_usa_container_e_publish(): void
+    {
+        \Illuminate\Support\Facades\Http::fake([
+            'https://graph.facebook.com/v20.0/1784140001/media' => \Illuminate\Support\Facades\Http::response(['id' => 'container_123'], 200),
+            'https://graph.facebook.com/v20.0/1784140001/media_publish' => \Illuminate\Support\Facades\Http::response(['id' => 'post_ig_999'], 200),
+        ]);
+
+        $service = app(\App\Services\MetaService::class);
+        $postId = $service->publicarPostInstagram('1784140001', 'token_teste', [
+            'imagem_url' => 'https://exemplo.com/foto.jpg',
+            'legenda'    => 'Legenda de teste',
+        ]);
+
+        $this->assertSame('post_ig_999', $postId);
+    }
+
+    public function test_publicar_post_facebook_page(): void
+    {
+        \Illuminate\Support\Facades\Http::fake([
+            'https://graph.facebook.com/v20.0/page_123/photos' => \Illuminate\Support\Facades\Http::response(['id' => 'photo_post_888'], 200),
+        ]);
+
+        $service = app(\App\Services\MetaService::class);
+        $postId = $service->publicarPostFacebookPage('page_123', 'page_token_abc', [
+            'imagem_url' => 'https://exemplo.com/banner.jpg',
+            'legenda'    => 'Post de página no Facebook',
+        ]);
+
+        $this->assertSame('photo_post_888', $postId);
+    }
 }

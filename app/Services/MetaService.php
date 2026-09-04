@@ -297,4 +297,45 @@ class MetaService
             return null;
         }
     }
+
+    /**
+     * Publica post em uma Página do Facebook (Texto, Imagem ou Vídeo).
+     */
+    public function publicarPostFacebookPage(string $pageId, string $pageAccessToken, array $dados): ?string
+    {
+        try {
+            if (! empty($dados['imagem_url'])) {
+                $url = self::GRAPH_BASE_URL . "/{$pageId}/photos";
+                $res = Http::post($url, [
+                    'url'          => $dados['imagem_url'],
+                    'caption'      => $dados['legenda'] ?? $dados['texto'] ?? '',
+                    'access_token' => $pageAccessToken,
+                ]);
+            } elseif (! empty($dados['video_url'])) {
+                $url = self::GRAPH_BASE_URL . "/{$pageId}/videos";
+                $res = Http::post($url, [
+                    'file_url'     => $dados['video_url'],
+                    'description'  => $dados['legenda'] ?? $dados['texto'] ?? '',
+                    'access_token' => $pageAccessToken,
+                ]);
+            } else {
+                $url = self::GRAPH_BASE_URL . "/{$pageId}/feed";
+                $res = Http::post($url, [
+                    'message'      => $dados['legenda'] ?? $dados['texto'] ?? '',
+                    'link'         => $dados['link'] ?? null,
+                    'access_token' => $pageAccessToken,
+                ]);
+            }
+
+            if ($res->successful()) {
+                return $res->json('id') ?? $res->json('post_id');
+            }
+
+            Log::error('Facebook Page Publish falhou', ['body' => $res->body()]);
+            return null;
+        } catch (\Exception $e) {
+            Log::error('MetaService::publicarPostFacebookPage erro', ['erro' => $e->getMessage()]);
+            return null;
+        }
+    }
 }

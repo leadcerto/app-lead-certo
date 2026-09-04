@@ -279,8 +279,8 @@ class AuditorController extends Controller
         $itens = [];
         foreach ($vinculos as $v) {
             foreach ($v->campos_pendentes_auditoria ?? [] as $campo => $pendencia) {
-                $valorAtual    = $v->contato?->$campo;
-                $valorSugerido = $pendencia['sugerido'] ?? null;
+                $valorAtual    = ($campo === 'email' && $v->contato?->$campo) ? $this->mascarar($v->contato->$campo, 'email') : $v->contato?->$campo;
+                $valorSugerido = ($campo === 'email' && ! empty($pendencia['sugerido'])) ? $this->mascarar($pendencia['sugerido'], 'email') : ($pendencia['sugerido'] ?? null);
                 $infoPais      = \App\Services\PaisTelefoneService::identificarPais($v->contato?->telefone ?? '');
 
                 $itens[] = [

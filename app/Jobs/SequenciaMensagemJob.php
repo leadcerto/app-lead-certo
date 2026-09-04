@@ -125,8 +125,9 @@ class SequenciaMensagemJob implements ShouldQueue
         }
 
         // Resolve todas as variáveis
-        $nomeContato = $ticket->contato?->nome;
-        $temNome     = $nomeContato && $nomeContato !== $telefone;
+        $contato     = $ticket->contato;
+        $nomeContato = $contato?->nome;
+        $temNome     = $contato && ! $contato->semNomeReal();
         $now         = now()->timezone('America/Sao_Paulo');
 
         $vars = [
@@ -154,6 +155,7 @@ class SequenciaMensagemJob implements ShouldQueue
 
         if (! $temNome) {
             $texto = preg_replace('/\{nome\},?\s*/u', '', $texto);
+            $texto = preg_replace('/(^|\s)Sem Nome,?\s*/iu', '$1', $texto);
         }
 
         // Acesso via ?? por segurança: jobs serializados antes desta propriedade

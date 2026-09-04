@@ -24,12 +24,13 @@ class IdentificarNomeConversaJob implements ShouldQueue
 
     private const PROMPT_SISTEMA = <<<'PROMPT'
 Você analisa uma mensagem (ou transcrição de áudio) de alguém que entrou em
-contato com uma empresa de fretes/mudanças. Verifique se a pessoa disse o
-PRÓPRIO nome em algum momento do texto (ex: "meu nome é João", "aqui é a
-Maria", "sou o Carlos"). Se disse, responda SOMENTE com o nome da pessoa
-(primeiro nome + sobrenome se disser os dois), sem emoji, sem cargo, sem
-nome de empresa, sem nenhum texto extra. Se a pessoa não disse o próprio
-nome, ou se o texto for propaganda/venda/nome de empresa (não de pessoa),
+contato com uma empresa de fretes/mudanças. Verifique se a pessoa disse, se
+apresentou ou informou o PRÓPRIO nome (ex: "meu nome é João", "aqui é a Maria",
+"sou o Carlos", ou respondendo diretamente apenas o próprio nome como "Wallace" ou "Leonardo").
+Se a pessoa informou o nome, responda SOMENTE com o nome da pessoa
+(primeiro nome + sobrenome se houver), sem emoji, sem cargo, sem
+nome de empresa, sem nenhum texto extra. Se a pessoa não informou o próprio
+nome, ou se o texto for propaganda/venda/dúvida/endereço sem identificação,
 responda exatamente a palavra NENHUM.
 PROMPT;
 
@@ -63,6 +64,10 @@ PROMPT;
         }
 
         $contato->update(['nome' => $nome, 'nome_revisado_ia_em' => now()]);
+
+        // Invalida google_sincronizado_em do vínculo para o Atlas atualizar no Google no próximo ciclo
+        \App\Models\VinculoContatoTenant::where('contato_id', $contato->id)
+            ->update(['google_sincronizado_em' => null]);
     }
 
     /**

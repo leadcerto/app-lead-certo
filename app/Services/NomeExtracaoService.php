@@ -15,7 +15,7 @@ namespace App\Services;
  */
 class NomeExtracaoService
 {
-    // Verbos, saudações e termos de negócio que NUNCA são primeiros nomes
+    // Verbos, saudações, termos de negócio e frases/status que NUNCA são primeiros nomes
     private const NAO_NOMES = [
         'frete', 'mudança', 'mudanças', 'orçamento', 'aqui', 'favor',
         'boa', 'bom', 'tarde', 'manhã', 'noite', 'dia', 'tudo',
@@ -25,11 +25,15 @@ class NomeExtracaoService
         'solicito', 'solicitando', 'peço', 'pedindo', 'necessito',
         'seria', 'posso', 'poderia', 'podendo',
         'olá', 'oi', 'sim', 'não', 'ok',
-        // Expressões religiosas/interjeições que brasileiros costumam escrever
-        // com maiúscula por respeito — nunca são o nome de quem escreveu
+        // Expressões religiosas, lemas, frases e status
         'deus', 'jesus', 'cristo', 'senhor', 'senhora', 'graças', 'glória',
         'amém', 'aleluia', 'espírito', 'divino', 'pai', 'fiel', 'bendito',
-        'abençoado', 'abençoada', 'aleluya',
+        'abençoado', 'abençoada', 'aleluya', 'livrai', 'livra', 'inveja',
+        'invejas', 'toda', 'todo', 'todos', 'todas', 'mal', 'males', 'paz',
+        'amor', 'fé', 'esperança', 'gratidão', 'vida', 'coração', 'protege',
+        'protegido', 'protegida', 'guarda', 'abençoa', 'abençoe', 'nos',
+        'família', 'amigos', 'irmão', 'irmã', 'filho', 'filha', 'guerreiro',
+        'vencedor', 'foco', 'força', 'comando', 'sempre',
     ];
 
     /**
@@ -63,6 +67,22 @@ class NomeExtracaoService
             }
         }
 
+        // Resposta direta com apenas o nome próprio (1 ou 2 palavras alfabéticas, ex: "Wallace", "Wallace Silva")
+        $trim = trim($texto);
+        if (preg_match('/^[A-ZÀ-Úa-zà-ú]{2,}(?:\s[A-ZÀ-Úa-zà-ú]{2,})?$/u', $trim)) {
+            $palavras = explode(' ', $trim);
+            $ehValido = true;
+            foreach ($palavras as $p) {
+                if (in_array(mb_strtolower($p, 'UTF-8'), self::NAO_NOMES, true)) {
+                    $ehValido = false;
+                    break;
+                }
+            }
+            if ($ehValido && $this->pushNameValido($trim)) {
+                return $this->formatarNome($trim);
+            }
+        }
+
         return null;
     }
 
@@ -92,7 +112,12 @@ class NomeExtracaoService
         $nome = trim($nome);
 
         // WhatsApp coloca ~ antes de nomes de status — não é nome real
-        if (str_starts_with($nome, '~')) {
+        if (str_contains($nome, '~')) {
+            return false;
+        }
+
+        // Hífen conectando verbo/pronome (ex: "Livrai-nos", "Guarda-me")
+        if (preg_match('/[a-zà-ú]+-[a-zà-ú]+/iu', $nome)) {
             return false;
         }
 
@@ -109,13 +134,21 @@ class NomeExtracaoService
 
         // Nome de pessoa real dificilmente passa de 5 palavras — texto de
         // propaganda/descrição de negócio costuma ser mais longo.
-        if (str_word_count($nome) > 5) {
+        if (str_word_count($nome) > 4) {
             return false;
         }
 
         // Palavras que indicam nome de empresa/negócio, não de pessoa.
         if (preg_match('/\b(empresa|companhia|ltda|s\.?a\.?|mei|portal|equipe|consultor|consultora|corretor|corretora|proteção|seguro|seguros)\b/iu', $nome)) {
             return false;
+        }
+
+        // Nenhuma das palavras pode pertencer a NAO_NOMES (verbos, frases, status, termos religiosos)
+        $palavras = preg_split('/[\s\-_,\.\!\?]+/u', mb_strtolower($nome, 'UTF-8'), -1, PREG_SPLIT_NO_EMPTY);
+        foreach ($palavras as $palavra) {
+            if (in_array($palavra, self::NAO_NOMES, true)) {
+                return false;
+            }
         }
 
         return true;

@@ -85,7 +85,17 @@
                     </div>
                 </div>
 
-                <div class="flex gap-3">
+                <div class="flex flex-wrap gap-3">
+                    <form method="POST" action="{{ route('google.testar-gmb') }}" class="w-full">
+                        @csrf
+                        <button type="submit"
+                                class="w-full py-2.5 rounded-xl text-sm font-semibold bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors flex items-center justify-center gap-2">
+                            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Verificar / Testar se Google Meu Negócio está Liberado
+                        </button>
+                    </form>
                     <a href="{{ route('google.autorizar') }}"
                        class="flex-1 text-center py-2 rounded-xl text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors">
                         Reconectar

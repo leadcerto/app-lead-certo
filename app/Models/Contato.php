@@ -72,7 +72,11 @@ class Contato extends Model
     {
         $nome = trim((string) $this->nome);
 
-        return $nome === '' || $nome === $this->telefone || mb_strtolower($nome) === 'sem nome';
+        if ($nome === '' || $nome === $this->telefone || mb_strtolower($nome) === 'sem nome' || mb_strtolower($nome) === 'sem_nome') {
+            return true;
+        }
+
+        return ! app(\App\Services\NomeExtracaoService::class)->pushNameValido($nome);
     }
 
     /**

@@ -107,6 +107,38 @@ class IntegracoesController extends Controller
             ->with('sucesso', 'Google desconectado.');
     }
 
+    public function googleTestarGmb(Request $request): RedirectResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+        $token    = GoogleToken::where('tenant_id', $tenantId)->first();
+
+        if (! $token) {
+            return redirect()->route('integracoes')->with('erro', 'Nenhuma conta Google conectada para testar.');
+        }
+
+        if ($token->expires_at && $token->expires_at->isPast()) {
+            $this->google->renovarToken($token);
+            $token->refresh();
+        }
+
+        $res = \Illuminate\Support\Facades\Http::withToken($token->access_token)
+            ->timeout(15)
+            ->get('https://mybusinessaccountmanagement.googleapis.com/v1/accounts');
+
+        if ($res->successful()) {
+            $accounts = $res->json('accounts') ?? [];
+            $qtd = count($accounts);
+            return redirect()->route('integracoes')->with('sucesso', "✅ Google Meu Negócio LIBERADO! Acesso verificado com sucesso ({$qtd} conta(s) encontrada(s)).");
+        }
+
+        $erro = $res->json('error.message') ?? $res->body();
+        if (str_contains($erro, 'SERVICE_DISABLED') || str_contains($erro, 'has not been used in project')) {
+            return redirect()->route('integracoes')->with('erro', "⚠️ API precisa ser ativada no Google Cloud Console: 'My Business Account Management API'. Detalhes: {$erro}");
+        }
+
+        return redirect()->route('integracoes')->with('erro', "Google Meu Negócio retornou status {$res->status()}: {$erro}");
+    }
+
     // ── Integração Meta (Facebook & Instagram) ──────────────────────────
 
     public function metaAutorizar(Request $request): RedirectResponse

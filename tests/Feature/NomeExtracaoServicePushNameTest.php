@@ -57,4 +57,28 @@ class NomeExtracaoServicePushNameTest extends TestCase
         $this->assertSame('João Da Silva', $this->service()->formatarNome('joão da silva'));
         $this->assertSame('Ana', $this->service()->formatarNome('ANA'));
     }
+
+    public function test_extrai_nome_direto_de_mensagem_com_uma_ou_duas_palavras(): void
+    {
+        $this->assertSame('Wallace', $this->service()->extrairDaMensagem('Wallace'));
+        $this->assertSame('Wallace Silva', $this->service()->extrairDaMensagem('wallace silva'));
+        $this->assertSame('Leonardo', $this->service()->extrairDaMensagem('Leonardo'));
+    }
+
+    public function test_nao_extrai_nao_nomes_como_resposta_direta(): void
+    {
+        $this->assertNull($this->service()->extrairDaMensagem('sim'));
+        $this->assertNull($this->service()->extrairDaMensagem('não'));
+        $this->assertNull($this->service()->extrairDaMensagem('orçamento'));
+        $this->assertNull($this->service()->extrairDaMensagem('mudanças'));
+    }
+
+    public function test_rejeita_pushname_com_frases_religiosas_e_status(): void
+    {
+        $this->assertFalse($this->service()->pushNameValido('Livrai-nos De Toda Inveja'));
+        $this->assertFalse($this->service()->pushNameValido('~Livrai-nos de toda inveja'));
+        $this->assertFalse($this->service()->pushNameValido('Deus é Fiel'));
+        $this->assertFalse($this->service()->pushNameValido('Gratidão Sempre'));
+        $this->assertFalse($this->service()->pushNameValido('Foco Força e Fé'));
+    }
 }

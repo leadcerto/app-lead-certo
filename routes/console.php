@@ -23,9 +23,9 @@ Schedule::command('openrouter:atualizar-modelos')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/openrouter-modelos.log'));
 
-// 00:05 — Identifica nomes de contatos "Sem Nome" lendo conversas (usa modelos atualizados acima)
-Schedule::command('contatos:identificar-nomes --limit=20')
-    ->dailyAt('00:05')
+// A cada 15 min — Identifica nomes de contatos "Sem Nome" lendo conversas (priorizando novos leads)
+Schedule::command('contatos:identificar-nomes --limit=15')
+    ->everyFifteenMinutes()
     ->withoutOverlapping()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/identificar-nomes.log'));
