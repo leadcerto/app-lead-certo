@@ -15,18 +15,13 @@ class MetaService
     private const GRAPH_BASE_URL    = 'https://graph.facebook.com/' . self::GRAPH_API_VERSION;
     private const OAUTH_DIALOG_URL  = 'https://www.facebook.com/' . self::GRAPH_API_VERSION . '/dialog/oauth';
 
-    // Escopos homologados para Páginas do Facebook, Instagram Business, Comentários e Mensagens
+    // Escopos homologados para Páginas do Facebook, Instagram Business e Mensagens
     public const SCOPES = [
         'public_profile',
-        'email',
         'pages_show_list',
         'pages_read_engagement',
-        'pages_manage_posts',
         'pages_messaging',
         'instagram_basic',
-        'instagram_content_publish',
-        'instagram_manage_comments',
-        'instagram_manage_messages',
         'business_management',
     ];
 
