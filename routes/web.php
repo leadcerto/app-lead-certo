@@ -122,8 +122,7 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('meta.autorizar')
         ->middleware('role:admin,dono,growth_manager');
     Route::get('/meta/callback', [IntegracoesController::class, 'metaCallback'])
-        ->name('meta.callback')
-        ->middleware('role:admin,dono,growth_manager');
+        ->name('meta.callback');
     Route::match(['get', 'post'], '/meta/sincronizar', [IntegracoesController::class, 'metaSincronizar'])
         ->name('meta.sincronizar')
         ->middleware('role:admin,dono,growth_manager');

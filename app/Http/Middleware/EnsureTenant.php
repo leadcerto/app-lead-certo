@@ -20,7 +20,7 @@ class EnsureTenant
         // tem o mesmo alcance de tenant, mas ferramentas mais restritas via
         // podeAcessar() — ambos podem filtrar por ?tenant_id=X.
         if ($user->podeTrocarTenant()) {
-            $tenantId = $request->query('tenant_id');
+            $tenantId = $request->query('tenant_id') ?? session('tenant_id') ?? $user->tenant_id;
         } else {
             $tenantId = $user->tenant_id;
         }
