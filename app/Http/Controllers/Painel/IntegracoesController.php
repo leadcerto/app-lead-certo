@@ -27,11 +27,11 @@ class IntegracoesController extends Controller
     public function view(Request $request): View
     {
         $tenantId  = $this->getTenantId($request);
-        $token     = GoogleToken::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
-        $metaToken = \App\Models\MetaToken::withoutGlobalScopes()
-            ->where('tenant_id', $tenantId)
-            ->with(['paginas' => fn ($q) => $q->withoutGlobalScopes()->with(['contasInstagram' => fn ($iq) => $iq->withoutGlobalScopes()])])
-            ->first();
+        $token     = GoogleToken::where('tenant_id', $tenantId)->first();
+        $metaToken = \App\Models\MetaToken::where('tenant_id', $tenantId)->first();
+        $metaPaginas = $metaToken 
+            ? \App\Models\MetaPagina::where('meta_token_id', $metaToken->id)->with('contasInstagram')->get() 
+            : collect();
 
         return view('integracoes.index', [
             'google_conectado' => (bool) $token,
@@ -41,7 +41,7 @@ class IntegracoesController extends Controller
             'meta_conectado'   => (bool) $metaToken,
             'meta_usuario'     => $metaToken?->nome_usuario,
             'meta_expira'      => $metaToken?->expires_at?->format('d/m/Y H:i'),
-            'meta_paginas'     => $metaToken?->paginas ?? collect(),
+            'meta_paginas'     => $metaPaginas,
         ]);
     }
 
