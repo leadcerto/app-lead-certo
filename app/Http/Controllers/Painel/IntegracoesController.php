@@ -19,12 +19,18 @@ class IntegracoesController extends Controller
         private \App\Services\MetaService $meta
     ) {}
 
+    private function getTenantId(Request $request): int
+    {
+        return (int) (session('tenant_id') ?? $request->user()->tenant_id);
+    }
+
     public function view(Request $request): View
     {
-        $tenantId  = $request->user()->tenant_id;
-        $token     = GoogleToken::where('tenant_id', $tenantId)->first();
-        $metaToken = \App\Models\MetaToken::where('tenant_id', $tenantId)
-            ->with(['paginas.contasInstagram'])
+        $tenantId  = $this->getTenantId($request);
+        $token     = GoogleToken::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+        $metaToken = \App\Models\MetaToken::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->with(['paginas' => fn ($q) => $q->withoutGlobalScopes()->with(['contasInstagram' => fn ($iq) => $iq->withoutGlobalScopes()])])
             ->first();
 
         return view('integracoes.index', [
@@ -43,7 +49,7 @@ class IntegracoesController extends Controller
     {
         $state = Str::random(32);
         Session::put('google_oauth_state', $state);
-        Session::put('google_oauth_tenant', $request->user()->tenant_id);
+        Session::put('google_oauth_tenant', $this->getTenantId($request));
 
         return redirect($this->google->urlAutorizacao($state));
     }
@@ -64,7 +70,7 @@ class IntegracoesController extends Controller
                 ->with('erro', 'Estado OAuth inválido. Tente novamente.');
         }
 
-        $tenantId = Session::pull('google_oauth_tenant');
+        $tenantId = Session::pull('google_oauth_tenant') ?? $this->getTenantId($request);
 
         $tokens = $this->google->trocarCodigo($code);
 
@@ -75,7 +81,7 @@ class IntegracoesController extends Controller
 
         $email = $this->google->buscarEmail($tokens['access_token']);
 
-        GoogleToken::updateOrCreate(
+        GoogleToken::withoutGlobalScopes()->updateOrCreate(
             ['tenant_id' => $tenantId],
             [
                 'google_email'       => $email,
@@ -95,8 +101,8 @@ class IntegracoesController extends Controller
 
     public function googleDesconectar(Request $request): RedirectResponse
     {
-        $tenantId = $request->user()->tenant_id;
-        $token    = GoogleToken::where('tenant_id', $tenantId)->first();
+        $tenantId = $this->getTenantId($request);
+        $token    = GoogleToken::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
 
         if ($token) {
             $this->google->revogar($token->access_token);
@@ -109,8 +115,8 @@ class IntegracoesController extends Controller
 
     public function googleTestarGmb(Request $request): RedirectResponse
     {
-        $tenantId = $request->user()->tenant_id;
-        $token    = GoogleToken::where('tenant_id', $tenantId)->first();
+        $tenantId = $this->getTenantId($request);
+        $token    = GoogleToken::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
 
         if (! $token) {
             return redirect()->route('integracoes')->with('erro', 'Nenhuma conta Google conectada para testar.');
@@ -145,7 +151,7 @@ class IntegracoesController extends Controller
     {
         $state = Str::random(32);
         Session::put('meta_oauth_state', $state);
-        Session::put('meta_oauth_tenant', $request->user()->tenant_id);
+        Session::put('meta_oauth_tenant', $this->getTenantId($request));
 
         return redirect($this->meta->urlAutorizacao($state));
     }
@@ -168,7 +174,7 @@ class IntegracoesController extends Controller
                     ->with('erro', 'Estado OAuth da Meta inválido. Tente novamente.');
             }
 
-            $tenantId = Session::pull('meta_oauth_tenant') ?? $request->user()?->tenant_id;
+            $tenantId = Session::pull('meta_oauth_tenant') ?? $this->getTenantId($request);
 
             if (! $tenantId) {
                 return redirect()->route('integracoes')
@@ -218,12 +224,12 @@ class IntegracoesController extends Controller
     public function metaSincronizar(Request $request): RedirectResponse
     {
         try {
-            $tenantId  = $request->user()->tenant_id;
+            $tenantId  = $this->getTenantId($request);
             $metaToken = \App\Models\MetaToken::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
 
             if (! $metaToken) {
                 return redirect()->route('integracoes')
-                    ->with('erro', 'Nenhuma conta Meta conectada.');
+                    ->with('erro', 'Nenhuma conta Meta conectada para esta empresa.');
             }
 
             $syncRes = $this->meta->sincronizarPaginasEInstagram($metaToken);
@@ -243,7 +249,7 @@ class IntegracoesController extends Controller
     public function metaDesconectar(Request $request): RedirectResponse
     {
         try {
-            $tenantId  = $request->user()->tenant_id;
+            $tenantId  = $this->getTenantId($request);
             $metaToken = \App\Models\MetaToken::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
 
             if ($metaToken) {
