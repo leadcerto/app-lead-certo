@@ -126,7 +126,7 @@ class MetaService
                 $pageAccessToken = $pData['access_token'] ?? $token->access_token;
                 $fotoUrl = $pData['picture']['data']['url'] ?? null;
 
-                $pagina = MetaPagina::updateOrCreate(
+                $pagina = MetaPagina::withoutGlobalScopes()->updateOrCreate(
                     [
                         'tenant_id'        => $token->tenant_id,
                         'facebook_page_id' => $pageId,
@@ -145,7 +145,7 @@ class MetaService
                 // Sincroniza Instagram Business vinculado, se houver
                 if (! empty($pData['instagram_business_account']['id'])) {
                     $igData = $pData['instagram_business_account'];
-                    MetaContaInstagram::updateOrCreate(
+                    MetaContaInstagram::withoutGlobalScopes()->updateOrCreate(
                         [
                             'tenant_id'             => $token->tenant_id,
                             'instagram_business_id' => $igData['id'],

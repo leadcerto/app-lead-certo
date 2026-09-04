@@ -124,10 +124,10 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/meta/callback', [IntegracoesController::class, 'metaCallback'])
         ->name('meta.callback')
         ->middleware('role:admin,dono,growth_manager');
-    Route::post('/meta/sincronizar', [IntegracoesController::class, 'metaSincronizar'])
+    Route::match(['get', 'post'], '/meta/sincronizar', [IntegracoesController::class, 'metaSincronizar'])
         ->name('meta.sincronizar')
         ->middleware('role:admin,dono,growth_manager');
-    Route::post('/meta/desconectar', [IntegracoesController::class, 'metaDesconectar'])
+    Route::match(['get', 'post'], '/meta/desconectar', [IntegracoesController::class, 'metaDesconectar'])
         ->name('meta.desconectar')
         ->middleware('role:admin,dono,growth_manager');
 
