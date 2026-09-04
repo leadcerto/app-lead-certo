@@ -65,8 +65,7 @@ class SincronizarGoogleEtiquetasCommand extends Command
                           $sub->select(\Illuminate\Support\Facades\DB::raw(1))
                               ->from('tickets_atendimento')
                               ->whereColumn('tickets_atendimento.contato_id', 'vinculos_contato_tenant.contato_id')
-                              ->whereIn('tickets_atendimento.coluna_kanban', ['novo', 'em_atendimento', 'aguardando_retorno'])
-                              ->whereNull('tickets_atendimento.deleted_at');
+                              ->whereIn('tickets_atendimento.coluna_kanban', ['novo', 'em_atendimento', 'aguardando_retorno']);
                       })
                       ->orWhere('vinculos_contato_tenant.created_at', '>=', now()->subDays(2));
                 })
