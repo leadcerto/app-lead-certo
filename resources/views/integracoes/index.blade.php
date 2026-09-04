@@ -230,7 +230,7 @@ GOOGLE_REDIRECT_URI={{ config('app.url') }}/google/callback</pre>
                                                     </svg>
                                                 </div>
                                                 <div class="min-w-0 flex-1">
-                                                    <p class="text-xs font-medium text-gray-700">Instagram: <span class="text-pink-700">@{{ $ig->username }}</span></p>
+                                                    <p class="text-xs font-medium text-gray-700">Instagram: <span class="text-pink-700">{{ '@' . $ig->username }}</span></p>
                                                 </div>
                                                 <span class="flex items-center gap-1 text-[10px] text-green-600 font-medium bg-green-50 border border-green-200 px-2 py-0.5 rounded-md flex-shrink-0">
                                                     <span class="w-1 h-1 rounded-full bg-green-500"></span> Conectado
