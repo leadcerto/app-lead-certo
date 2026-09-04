@@ -152,80 +152,109 @@ class IntegracoesController extends Controller
 
     public function metaCallback(Request $request): RedirectResponse
     {
-        $state = $request->query('state');
-        $code  = $request->query('code');
-        $error = $request->query('error_description') ?: $request->query('error');
+        try {
+            $state = $request->query('state');
+            $code  = $request->query('code');
+            $error = $request->query('error_description') ?: $request->query('error');
 
-        if ($error || ! $code) {
+            if ($error || ! $code) {
+                return redirect()->route('integracoes')
+                    ->with('erro', 'Autorização da Meta negada: ' . ($error ?? 'sem código'));
+            }
+
+            $savedState = Session::pull('meta_oauth_state');
+            if ($state && $savedState && $state !== $savedState) {
+                return redirect()->route('integracoes')
+                    ->with('erro', 'Estado OAuth da Meta inválido. Tente novamente.');
+            }
+
+            $tenantId = Session::pull('meta_oauth_tenant') ?? $request->user()?->tenant_id;
+
+            if (! $tenantId) {
+                return redirect()->route('integracoes')
+                    ->with('erro', 'Tenant não identificado para vincular a Meta.');
+            }
+
+            // 1. Troca código por token de curta duração
+            $resToken = $this->meta->trocarCodigoPorToken($code);
+            if (! $resToken || empty($resToken['access_token'])) {
+                return redirect()->route('integracoes')
+                    ->with('erro', 'Falha ao obter token da Meta.');
+            }
+
+            // 2. Converte para token de longa duração (60 dias)
+            $tokenLongaDuracao = $this->meta->obterTokenLongaDuracao($resToken['access_token']);
+            $accessTokenFinal = $tokenLongaDuracao['access_token'] ?? $resToken['access_token'];
+            $expiresIn = $tokenLongaDuracao['expires_in'] ?? $resToken['expires_in'] ?? (60 * 86400);
+
+            // 3. Salva ou atualiza o MetaToken
+            $metaToken = \App\Models\MetaToken::withoutGlobalScopes()->updateOrCreate(
+                ['tenant_id' => $tenantId],
+                [
+                    'access_token' => $accessTokenFinal,
+                    'expires_at'   => Carbon::now()->addSeconds($expiresIn),
+                    'scopes'       => \App\Services\MetaService::SCOPES,
+                ]
+            );
+
+            // 4. Sincroniza páginas e contas do Instagram
+            $syncRes = $this->meta->sincronizarPaginasEInstagram($metaToken);
+
+            $paginasTotal = $syncRes['total_paginas'] ?? 0;
+            $igTotal = $syncRes['total_instagram'] ?? 0;
+
             return redirect()->route('integracoes')
-                ->with('erro', 'Autorização da Meta negada: ' . ($error ?? 'sem código'));
-        }
-
-        if ($state !== Session::pull('meta_oauth_state')) {
+                ->with('sucesso', "Meta conectada com sucesso! {$paginasTotal} página(s) do Facebook e {$igTotal} conta(s) do Instagram sincronizadas.");
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Erro no metaCallback', [
+                'erro'  => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return redirect()->route('integracoes')
-                ->with('erro', 'Estado OAuth da Meta inválido. Tente novamente.');
+                ->with('erro', 'Erro ao processar conexão com a Meta: ' . $e->getMessage());
         }
-
-        $tenantId = Session::pull('meta_oauth_tenant');
-
-        // 1. Troca código por token de curta duração
-        $resToken = $this->meta->trocarCodigoPorToken($code);
-        if (! $resToken || empty($resToken['access_token'])) {
-            return redirect()->route('integracoes')
-                ->with('erro', 'Falha ao obter token da Meta.');
-        }
-
-        // 2. Converte para token de longa duração (60 dias)
-        $tokenLongaDuracao = $this->meta->obterTokenLongaDuracao($resToken['access_token']);
-        $accessTokenFinal = $tokenLongaDuracao['access_token'] ?? $resToken['access_token'];
-        $expiresIn = $tokenLongaDuracao['expires_in'] ?? $resToken['expires_in'] ?? (60 * 86400);
-
-        // 3. Salva ou atualiza o MetaToken
-        $metaToken = \App\Models\MetaToken::updateOrCreate(
-            ['tenant_id' => $tenantId],
-            [
-                'access_token' => $accessTokenFinal,
-                'expires_at'   => Carbon::now()->addSeconds($expiresIn),
-                'scopes'       => \App\Services\MetaService::SCOPES,
-            ]
-        );
-
-        // 4. Sincroniza páginas e contas do Instagram
-        $syncRes = $this->meta->sincronizarPaginasEInstagram($metaToken);
-
-        $paginasTotal = $syncRes['total_paginas'] ?? 0;
-        $igTotal = $syncRes['total_instagram'] ?? 0;
-
-        return redirect()->route('integracoes')
-            ->with('sucesso', "Meta conectada com sucesso! {$paginasTotal} página(s) do Facebook e {$igTotal} conta(s) do Instagram sincronizadas.");
     }
 
     public function metaSincronizar(Request $request): RedirectResponse
     {
-        $tenantId  = $request->user()->tenant_id;
-        $metaToken = \App\Models\MetaToken::where('tenant_id', $tenantId)->first();
+        try {
+            $tenantId  = $request->user()->tenant_id;
+            $metaToken = \App\Models\MetaToken::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
 
-        if (! $metaToken) {
+            if (! $metaToken) {
+                return redirect()->route('integracoes')
+                    ->with('erro', 'Nenhuma conta Meta conectada.');
+            }
+
+            $syncRes = $this->meta->sincronizarPaginasEInstagram($metaToken);
+
+            $paginasTotal = $syncRes['total_paginas'] ?? 0;
+            $igTotal = $syncRes['total_instagram'] ?? 0;
+
             return redirect()->route('integracoes')
-                ->with('erro', 'Nenhuma conta Meta conectada.');
+                ->with('sucesso', "Páginas e Instagram sincronizados com sucesso! ({$paginasTotal} página(s), {$igTotal} conta(s) do Instagram).");
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Erro no metaSincronizar', ['erro' => $e->getMessage()]);
+            return redirect()->route('integracoes')
+                ->with('erro', 'Erro ao sincronizar páginas: ' . $e->getMessage());
         }
-
-        $syncRes = $this->meta->sincronizarPaginasEInstagram($metaToken);
-
-        return redirect()->route('integracoes')
-            ->with('sucesso', "Páginas e Instagram sincronizados com sucesso!");
     }
 
     public function metaDesconectar(Request $request): RedirectResponse
     {
-        $tenantId  = $request->user()->tenant_id;
-        $metaToken = \App\Models\MetaToken::where('tenant_id', $tenantId)->first();
+        try {
+            $tenantId  = $request->user()->tenant_id;
+            $metaToken = \App\Models\MetaToken::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
 
-        if ($metaToken) {
-            $metaToken->delete();
+            if ($metaToken) {
+                $metaToken->delete();
+            }
+
+            return redirect()->route('integracoes')
+                ->with('sucesso', 'Meta (Facebook & Instagram) desconectada.');
+        } catch (\Throwable $e) {
+            return redirect()->route('integracoes')
+                ->with('erro', 'Erro ao desconectar Meta: ' . $e->getMessage());
         }
-
-        return redirect()->route('integracoes')
-            ->with('sucesso', 'Meta (Facebook & Instagram) desconectada.');
     }
 }
