@@ -10,7 +10,7 @@
             <p class="text-sm text-gray-500 mt-1">Defina o alvo, ative os agentes e acompanhe a captação de contatos</p>
         </div>
         <button @click="abrirNova()"
-                class="bg-orange-600 hover:bg-orange-700 text-white text-sm px-4 py-2 rounded-lg flex items-center gap-2">
+                class="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded-lg flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
             </svg>
@@ -53,7 +53,7 @@
                             <span x-show="c.meta_contatos" x-text="'meta: ' + c.meta_contatos"></span>
                         </div>
                         <div class="w-full bg-gray-100 rounded-full h-1.5">
-                            <div class="bg-orange-500 h-1.5 rounded-full transition-all"
+                            <div class="bg-green-500 h-1.5 rounded-full transition-all"
                                  :style="'width: ' + (c.meta_contatos ? c.progresso + '%' : '100%')"></div>
                         </div>
                     </div>
@@ -69,7 +69,7 @@
                     {{-- Ações --}}
                     <div class="flex gap-2">
                         <button @click="gerenciar(c)"
-                                class="flex-1 text-sm text-center border border-gray-200 hover:border-orange-400 hover:text-orange-700 py-1.5 rounded-lg transition-colors">
+                                class="flex-1 text-sm text-center border border-gray-200 hover:border-green-400 hover:text-green-700 py-1.5 rounded-lg transition-colors">
                             Agentes & Chaves
                         </button>
                         <button @click="editar(c)"
@@ -105,7 +105,7 @@
                     <label class="block text-xs font-medium text-gray-600 mb-1">Nome da Campanha *</label>
                     <input x-model="formC.nome" type="text" required
                            placeholder="Ex: Clínicas de Estética SP — Junho 2026"
-                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400 outline-none">
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
@@ -113,13 +113,13 @@
                         <label class="block text-xs font-medium text-gray-600 mb-1">Nicho / Segmento</label>
                         <input x-model="formC.nicho" type="text"
                                placeholder="Ex: clínicas de estética"
-                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400 outline-none">
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Região Alvo</label>
                         <input x-model="formC.regiao_alvo" type="text"
                                placeholder="Ex: São Paulo, SP"
-                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400 outline-none">
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
                     </div>
                 </div>
 
@@ -127,14 +127,14 @@
                     <label class="block text-xs font-medium text-gray-600 mb-1">Palavras-chave para busca</label>
                     <textarea x-model="formC.palavras_chave" rows="2"
                               placeholder="Ex: clínica estética, salão de beleza, spa, dermato..."
-                              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400 outline-none resize-none"></textarea>
+                              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none resize-none"></textarea>
                 </div>
 
                 <div class="grid grid-cols-3 gap-4">
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Status</label>
                         <select x-model="formC.status"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400 outline-none">
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
                             <option value="rascunho">Rascunho</option>
                             <option value="ativa">Ativa</option>
                             <option value="pausada">Pausada</option>
@@ -144,12 +144,12 @@
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Data Início</label>
                         <input x-model="formC.data_inicio" type="date"
-                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400 outline-none">
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Data Fim</label>
                         <input x-model="formC.data_fim" type="date"
-                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400 outline-none">
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
                     </div>
                 </div>
 
@@ -157,7 +157,7 @@
                     <label class="block text-xs font-medium text-gray-600 mb-1">Meta de Contatos</label>
                     <input x-model="formC.meta_contatos" type="number" min="1"
                            placeholder="Ex: 500"
-                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400 outline-none">
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
                 </div>
 
                 <div x-show="erroC" class="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" x-text="erroC"></div>
@@ -166,7 +166,7 @@
                     <button type="button" @click="modalCampanha = false"
                             class="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg">Cancelar</button>
                     <button type="submit" :disabled="salvandoC"
-                            class="px-6 py-2 text-sm bg-orange-600 hover:bg-orange-700 text-white rounded-lg disabled:opacity-50">
+                            class="px-6 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50">
                         <span x-text="salvandoC ? 'Salvando...' : (editandoCampanha ? 'Salvar' : 'Criar Campanha')"></span>
                     </button>
                 </div>
@@ -238,9 +238,9 @@
                     <p class="text-sm font-medium text-gray-700 mb-3">Adicionar novo agente</p>
                     <div class="grid grid-cols-2 gap-3 mb-3">
                         <input x-model="formA.nome" type="text" placeholder="Nome do agente"
-                               class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400 outline-none">
+                               class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
                         <select x-model="formA.tipo"
-                                class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400 outline-none">
+                                class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
                             <option value="">Tipo...</option>
                             <option value="instagram">Instagram</option>
                             <option value="facebook">Facebook</option>
@@ -254,7 +254,7 @@
                     </div>
                     <button @click="criarAgente()"
                             :disabled="!formA.nome || !formA.tipo"
-                            class="w-full bg-orange-600 hover:bg-orange-700 text-white text-sm py-2 rounded-lg disabled:opacity-40">
+                            class="w-full bg-green-600 hover:bg-green-700 text-white text-sm py-2 rounded-lg disabled:opacity-40">
                         Criar Agente & Gerar Chave
                     </button>
                     <p class="text-xs text-gray-400 mt-2 text-center">
