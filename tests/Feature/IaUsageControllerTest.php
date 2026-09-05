@@ -43,6 +43,7 @@ class IaUsageControllerTest extends TestCase
         $response->assertOk();
         $response->assertJsonCount(2, 'data');
         $response->assertJsonFragment([
+            'membro_equipe'      => 'Sistema / Automático',
             'modelo'             => 'gpt-teste',
             'tier'               => 'simples',
             'chamadas'           => 2,
@@ -51,6 +52,34 @@ class IaUsageControllerTest extends TestCase
             'latencia_media_ms'  => 1000,
         ]);
         $response->assertJson(['total_hoje' => 3, 'total_7_dias' => 3]);
+    }
+
+    public function test_exibe_nome_do_membro_da_equipe_que_fez_o_uso(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $agente = User::factory()->create(['tenant_id' => $tenant->id, 'nome' => 'Atlas — Auditor', 'ativo' => true]);
+
+        IaUsage::create([
+            'tenant_id'    => $tenant->id,
+            'agente_id'    => $agente->id,
+            'modelo'       => 'claude-3-5-sonnet',
+            'tier'         => 'complexo',
+            'tokens_input' => 120,
+            'tokens_output'=> 80,
+            'latencia_ms'  => 950,
+            'created_at'   => now(),
+        ]);
+
+        $response = $this->actingAs($user)->getJson('/api/painel/ia-monitor');
+
+        $response->assertOk();
+        $response->assertJsonFragment([
+            'membro_equipe' => 'Atlas — Auditor',
+            'modelo'        => 'claude-3-5-sonnet',
+            'tier'          => 'complexo',
+            'chamadas'      => 1,
+        ]);
     }
 
     public function test_nao_conta_uso_fora_da_janela_de_dias(): void

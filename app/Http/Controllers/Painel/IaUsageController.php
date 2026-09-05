@@ -20,16 +20,21 @@ class IaUsageController extends Controller
         $dias = (int) $request->query('dias', 30);
 
         $porDia = IaUsage::selectRaw(
-                'DATE(created_at) as dia, modelo, tier, ' .
+                'DATE(ia_usages.created_at) as dia, ' .
+                'COALESCE(users.nome, "Sistema / Automático") as membro_equipe, ' .
+                'ia_usages.modelo, ' .
+                'ia_usages.tier, ' .
                 'COUNT(*) as chamadas, ' .
                 'SUM(tokens_input) as tokens_input, ' .
                 'SUM(tokens_output) as tokens_output, ' .
                 'ROUND(AVG(latencia_ms)) as latencia_media_ms'
             )
-            ->where('created_at', '>=', now()->subDays($dias)->startOfDay())
-            ->groupBy('dia', 'modelo', 'tier')
+            ->leftJoin('users', 'ia_usages.agente_id', '=', 'users.id')
+            ->where('ia_usages.created_at', '>=', now()->subDays($dias)->startOfDay())
+            ->groupBy('dia', 'membro_equipe', 'ia_usages.modelo', 'ia_usages.tier')
             ->orderByDesc('dia')
-            ->orderBy('modelo')
+            ->orderBy('membro_equipe')
+            ->orderBy('ia_usages.modelo')
             ->get();
 
         return response()->json([

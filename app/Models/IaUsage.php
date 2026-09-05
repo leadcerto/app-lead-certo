@@ -18,6 +18,8 @@ class IaUsage extends Model
 
     protected $fillable = [
         'tenant_id',
+        'agente_id',
+        'provedor',
         'modelo',
         'tier',
         'tokens_input',
@@ -26,6 +28,11 @@ class IaUsage extends Model
         'origem',
         'created_at',
     ];
+
+    public function agente()
+    {
+        return $this->belongsTo(User::class, 'agente_id');
+    }
 
     protected function casts(): array
     {

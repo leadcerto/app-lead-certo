@@ -1,11 +1,11 @@
 @extends('layouts.app')
 
-@section('title', 'Uso de IA')
+@section('title', 'Uso Geral da IA')
 
 @section('content')
 <div x-data="iaMonitor()" x-init="carregar()">
-    <h1 class="text-xl font-bold text-gray-800 mb-1">Uso de IA</h1>
-    <p class="text-sm text-gray-500 mb-5">Chamadas ao OpenRouter por modelo, tier e dia.</p>
+    <h1 class="text-xl font-bold text-gray-800 mb-1">Uso Geral da IA</h1>
+    <p class="text-sm text-gray-500 mb-5">Chamadas ao OpenRouter por membro da equipe, modelo, tier e dia.</p>
 
     <div class="grid grid-cols-2 gap-4 mb-6 max-w-md">
         <div class="bg-white rounded-xl border border-gray-200 p-4">
@@ -30,6 +30,7 @@
                 <thead>
                     <tr class="border-b border-gray-100 text-left text-xs text-gray-400 uppercase tracking-wide">
                         <th class="px-4 py-2">Dia</th>
+                        <th class="px-4 py-2">Membro da Equipe</th>
                         <th class="px-4 py-2">Modelo</th>
                         <th class="px-4 py-2">Tier</th>
                         <th class="px-4 py-2 text-right">Chamadas</th>
@@ -41,7 +42,13 @@
                 <tbody>
                     <template x-for="(linha, idx) in linhas" :key="idx">
                         <tr class="border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                            <td class="px-4 py-2 text-gray-600" x-text="formatarData(linha.dia)"></td>
+                            <td class="px-4 py-2 text-gray-600 whitespace-nowrap" x-text="formatarData(linha.dia)"></td>
+                            <td class="px-4 py-2 text-gray-800 font-medium">
+                                <span class="inline-flex items-center gap-1.5">
+                                    <span class="text-xs">👤</span>
+                                    <span x-text="linha.membro_equipe"></span>
+                                </span>
+                            </td>
                             <td class="px-4 py-2 text-gray-800 font-medium" x-text="linha.modelo"></td>
                             <td class="px-4 py-2">
                                 <span class="text-xs px-2 py-0.5 rounded-full"
