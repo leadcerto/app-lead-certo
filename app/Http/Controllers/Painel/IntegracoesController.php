@@ -142,6 +142,10 @@ class IntegracoesController extends Controller
             return redirect()->route('integracoes')->with('erro', "⚠️ API precisa ser ativada no Google Cloud Console: 'My Business Account Management API'. Detalhes: {$erro}");
         }
 
+        if ($res->status() === 429 || str_contains($erro, 'Quota exceeded')) {
+            return redirect()->route('integracoes')->with('aviso', "⏳ Acesso ao Google Meu Negócio em análise pelo Google (Cota = 0). O Google Cloud exige aprovação burocrática para a Google Business Profile API (Protocolo enviado: 9-4101000041625). Enquanto a cota não for liberada pela equipe do Google, as postagens diretas aguardam essa liberação ou contingência via Webhook n8n.");
+        }
+
         return redirect()->route('integracoes')->with('erro', "Google Meu Negócio retornou status {$res->status()}: {$erro}");
     }
 

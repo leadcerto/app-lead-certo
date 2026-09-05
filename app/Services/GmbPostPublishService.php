@@ -219,6 +219,14 @@ class GmbPostPublishService
             ->timeout(15)
             ->get('https://mybusinessaccountmanagement.googleapis.com/v1/accounts');
 
+        if ($accountRes->status() === 429 || str_contains($accountRes->body(), 'Quota exceeded')) {
+            $post->update([
+                'status'   => 'falha',
+                'log_erro' => 'Google retornou status 429 (Cota Zerada): O Google Cloud exige aprovação burocrática para liberar a cota da Google Business Profile API para o projeto 159179119828 (Protocolo enviado: 9-4101000041625). O acesso ainda está em análise pelo Google.',
+            ]);
+            return false;
+        }
+
         if ($accountRes->status() === 403) {
             $erroGoogle = $accountRes->json('error.message') ?? $accountRes->body();
             $motivo = (str_contains($erroGoogle, 'SERVICE_DISABLED') || str_contains($erroGoogle, 'has not been used in project'))
