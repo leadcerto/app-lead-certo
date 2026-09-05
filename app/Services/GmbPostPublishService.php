@@ -37,14 +37,25 @@ class GmbPostPublishService
             // 1. Monta o Payload do Google Local Post
             $payload = $this->montarPayloadGoogle($post);
 
-            // 2. Se houver token Google cadastrado para o tenant
-            $token = GoogleToken::where('tenant_id', $post->tenant_id)->first();
+            // 2. Busca token Google cadastrado para o tenant (ou token central compartilhado)
+            $token = GoogleToken::withoutGlobalScopes()->where('tenant_id', $post->tenant_id)->first()
+                ?? GoogleToken::withoutGlobalScopes()->first();
 
             if ($token && $locationId) {
                 $sucesso = $this->enviarParaGoogleApi($token, $locationId, $payload, $post);
                 if ($sucesso) {
                     return true;
                 }
+            } elseif (!$token) {
+                $post->update([
+                    'status'   => 'falha',
+                    'log_erro' => 'Nenhuma conta Google conectada encontrada. Acesse o menu "Integrações" e conecte a conta Google que gerencia os perfis GMB.',
+                ]);
+            } elseif (!$locationId) {
+                $post->update([
+                    'status'   => 'falha',
+                    'log_erro' => "O perfil GMB '{$perfil?->nome}' não possui o 'ID do Perfil no Google' cadastrado. Acesse GMB → Perfis GMB, edite este perfil e preencha o ID da empresa no Google.",
+                ]);
             }
 
             // 3. Fallback / Webhook de automação n8n se configurado
@@ -227,12 +238,16 @@ class GmbPostPublishService
         if (!$accountName) {
             $post->update([
                 'status'   => 'falha',
-                'log_erro' => 'Nenhuma conta do Google Meu Negócio encontrada vinculada a este e-mail Google.',
+                'log_erro' => 'Nenhuma conta do Google Meu Negócio encontrada vinculada ao e-mail ' . ($token->google_email ?? 'Google') . '. Verifique se este e-mail é Administrador ou Proprietário do perfil.',
             ]);
             return false;
         }
 
-        $url = "https://mybusiness.googleapis.com/v4/{$accountName}/locations/{$locationId}/localPosts";
+        // Limpa qualquer prefixo duplicado (ex: "locations/")
+        $cleanLocationId = preg_replace('#^locations/#', '', trim($locationId));
+        $accName = str_starts_with($accountName, 'accounts/') ? $accountName : "accounts/{$accountName}";
+
+        $url = "https://mybusiness.googleapis.com/v4/{$accName}/locations/{$cleanLocationId}/localPosts";
 
         $res = Http::withToken($accessToken)
             ->timeout(20)
@@ -250,15 +265,24 @@ class GmbPostPublishService
             return true;
         }
 
+        $status = $res->status();
         $erroGoogle = $res->json('error.message') ?? $res->body();
         Log::warning('Google LocalPost API falhou', [
-            'status'   => $res->status(),
+            'status'   => $status,
             'response' => $res->body(),
+            'url'      => $url,
         ]);
+
+        $explicacao = match ($status) {
+            403 => "Google retornou 403: A API de Postagens do Google Business Profile ainda aguarda liberação para o projeto Google Cloud (Protocolo 9-4101000041625) ou permissão insuficiente neste local. Detalhes: {$erroGoogle}",
+            404 => "Google retornou 404: Localização não encontrada no Google para o ID '{$cleanLocationId}'. Verifique se o ID do Perfil da Empresa está correto em GMB → Perfis GMB. Detalhes: {$erroGoogle}",
+            400 => "Google retornou 400 (Dado inválido): {$erroGoogle}",
+            default => "Erro Google ({$status}): {$erroGoogle}",
+        };
 
         $post->update([
             'status'   => 'falha',
-            'log_erro' => 'Erro Google (' . $res->status() . '): ' . $erroGoogle,
+            'log_erro' => $explicacao,
         ]);
 
         return false;

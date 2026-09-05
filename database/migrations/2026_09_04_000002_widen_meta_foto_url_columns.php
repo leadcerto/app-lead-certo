@@ -15,12 +15,18 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
         DB::statement('ALTER TABLE meta_paginas MODIFY foto_url TEXT NULL');
         DB::statement('ALTER TABLE meta_contas_instagram MODIFY foto_perfil_url TEXT NULL');
     }
 
     public function down(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
         DB::statement('ALTER TABLE meta_paginas MODIFY foto_url VARCHAR(500) NULL');
         DB::statement('ALTER TABLE meta_contas_instagram MODIFY foto_perfil_url VARCHAR(500) NULL');
     }

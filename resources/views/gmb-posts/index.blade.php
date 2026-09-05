@@ -61,6 +61,15 @@
             <span>{{ session('aviso') }}</span>
         </div>
     @endif
+    @if(session('erro'))
+        <div class="p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl text-sm flex items-start gap-3 shadow-sm">
+            <span class="text-xl leading-none">❌</span>
+            <div>
+                <p class="font-bold text-red-900">Atenção ao publicar no Google:</p>
+                <p class="mt-1 text-xs text-red-700 leading-relaxed">{{ session('erro') }}</p>
+            </div>
+        </div>
+    @endif
 
     {{-- Estatísticas Rápidas da Semana --}}
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -136,6 +145,12 @@
                                             <span>🔘 Botão: <strong class="text-gray-700">{{ $post->cta_tipo }}</strong></span>
                                         @endif
                                     </div>
+
+                                    @if($post->status === 'falha' && $post->log_erro)
+                                        <div class="mt-2.5 p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 leading-relaxed">
+                                            <span class="font-bold text-red-900">⚠️ Erro:</span> {{ $post->log_erro }}
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
 
@@ -157,7 +172,7 @@
 
                                 <div class="flex items-center gap-2 pt-1">
                                     @if($post->status !== 'publicado')
-                                        <form method="POST" action="{{ route('admin.gmb-posts.publicar-agora', $post) }}">
+                                        <form method="POST" action="{{ route('admin.gmb-posts.publicar-agora', $post) }}" onsubmit="const btn = this.querySelector('button'); btn.disabled = true; btn.innerHTML = 'Publicando...'; btn.classList.add('opacity-75', 'cursor-not-allowed');">
                                             @csrf
                                             <button type="submit" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold transition" title="Publicar no Google agora">
                                                 Publicar Agora
