@@ -150,6 +150,23 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('meta.gatilhos.destroy')
         ->middleware('role:admin,dono,growth_manager');
 
+    // Agendamento de Postagens Meta (Facebook & Instagram)
+    Route::get('/meta-posts', [\App\Http\Controllers\MetaPostController::class, 'index'])
+        ->name('meta-posts.index')
+        ->middleware('role:admin,dono,diretor,diretor_marketing,growth_manager');
+    Route::get('/meta-posts/criar', [\App\Http\Controllers\MetaPostController::class, 'create'])
+        ->name('meta-posts.create')
+        ->middleware('role:admin,dono,diretor,diretor_marketing,growth_manager');
+    Route::post('/meta-posts', [\App\Http\Controllers\MetaPostController::class, 'store'])
+        ->name('meta-posts.store')
+        ->middleware('role:admin,dono,diretor,diretor_marketing,growth_manager');
+    Route::post('/meta-posts/{post}/publicar-agora', [\App\Http\Controllers\MetaPostController::class, 'publicarAgora'])
+        ->name('meta-posts.publicar-agora')
+        ->middleware('role:admin,dono,diretor,diretor_marketing,growth_manager');
+    Route::delete('/meta-posts/{post}', [\App\Http\Controllers\MetaPostController::class, 'destroy'])
+        ->name('meta-posts.destroy')
+        ->middleware('role:admin,dono,diretor,diretor_marketing,growth_manager');
+
     // Configurações — apenas dono e admin
     Route::get('/configuracoes', [WhatsAppController::class, 'view'])
         ->name('configuracoes')

@@ -17,6 +17,7 @@ class MetaCampanhaGatilho extends Model
 
     protected $fillable = [
         'tenant_id',
+        'meta_post_id',
         'nome',
         'canal_alvo',
         'instagram_conta_id',
@@ -35,6 +36,11 @@ class MetaCampanhaGatilho extends Model
             'palavras_chave' => 'array',
             'ativo'          => 'boolean',
         ];
+    }
+
+    public function metaPost(): BelongsTo
+    {
+        return $this->belongsTo(MetaPost::class, 'meta_post_id');
     }
 
     public function tenant(): BelongsTo

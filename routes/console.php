@@ -100,3 +100,10 @@ Schedule::command('gmb:publicar-posts')
     ->withoutOverlapping()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/gmb-publicar-posts.log'));
+
+// A cada 1 minuto - Publica posts agendados do Facebook/Instagram cujo horário já chegou
+Schedule::command('meta:publicar-posts')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/meta-publicar-posts.log'));
