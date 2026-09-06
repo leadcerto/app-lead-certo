@@ -160,6 +160,9 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::post('/meta-posts', [\App\Http\Controllers\MetaPostController::class, 'store'])
         ->name('meta-posts.store')
         ->middleware('role:admin,dono,diretor,diretor_marketing,growth_manager');
+    Route::post('/meta-posts/gerar-ia', [\App\Http\Controllers\MetaPostController::class, 'gerarIa'])
+        ->name('meta-posts.gerar-ia')
+        ->middleware('role:admin,dono,diretor,diretor_marketing,growth_manager');
     Route::post('/meta-posts/{post}/publicar-agora', [\App\Http\Controllers\MetaPostController::class, 'publicarAgora'])
         ->name('meta-posts.publicar-agora')
         ->middleware('role:admin,dono,diretor,diretor_marketing,growth_manager');
