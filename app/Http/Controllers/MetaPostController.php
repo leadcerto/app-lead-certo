@@ -58,13 +58,28 @@ class MetaPostController extends Controller
         $tenantId = $this->getTenantId($request);
         $paginas = MetaPagina::where('tenant_id', $tenantId)->where('ativo', true)->get();
         $contasInstagram = MetaContaInstagram::where('tenant_id', $tenantId)->where('ativo', true)->get();
+        $imagensGaleria = \App\Models\GmbPostImagem::where('tenant_id', $tenantId)->orderByDesc('id')->get();
+        $templatesTexto = \App\Models\GmbPostTemplate::where('tenant_id', $tenantId)->where('ativo', true)->get();
 
-        return view('meta-posts.create', compact('paginas', 'contasInstagram'));
+        return view('meta-posts.create', compact('paginas', 'contasInstagram', 'imagensGaleria', 'templatesTexto'));
     }
 
     public function store(Request $request, MetaPostPublishService $publishService): RedirectResponse
     {
         $tenantId = $this->getTenantId($request);
+
+        if (in_array($request->canal_alvo, ['instagram', 'ambos']) && ! $request->filled('meta_conta_instagram_id')) {
+            $unicaConta = MetaContaInstagram::where('tenant_id', $tenantId)->where('ativo', true)->first();
+            if ($unicaConta) {
+                $request->merge(['meta_conta_instagram_id' => $unicaConta->id]);
+            }
+        }
+        if (in_array($request->canal_alvo, ['facebook', 'ambos']) && ! $request->filled('meta_pagina_id')) {
+            $unicaPagina = MetaPagina::where('tenant_id', $tenantId)->where('ativo', true)->first();
+            if ($unicaPagina) {
+                $request->merge(['meta_pagina_id' => $unicaPagina->id]);
+            }
+        }
 
         $validated = $request->validate([
             'canal_alvo'                  => 'required|in:facebook,instagram,ambos',
@@ -81,6 +96,11 @@ class MetaPostController extends Controller
             'mensagem_direct'             => 'nullable|string|max:1000',
             'data_agendada'               => 'nullable|date',
             'publicar_imediato'           => 'nullable|boolean',
+        ], [
+            'meta_pagina_id.required_if'          => 'Selecione a Página do Facebook para publicar.',
+            'meta_conta_instagram_id.required_if' => 'Selecione a Conta do Instagram para publicar.',
+            'texto.required'                      => 'O texto / legenda da publicação é obrigatório.',
+            'cta_url.url'                         => 'O link do botão WhatsApp / CTA precisa ser uma URL válida (ex: https://...).',
         ]);
 
         $imagemUrl = $validated['imagem_url'] ?? null;

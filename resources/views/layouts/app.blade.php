@@ -90,6 +90,8 @@
                 || request()->routeIs('admin.perfis-gmb.*')
             ) {
                 $menuAtivoPadrao = 'gmb';
+            } elseif (request()->routeIs('meta-posts.*')) {
+                $menuAtivoPadrao = 'meta';
             }
         @endphp
 
@@ -465,14 +467,41 @@
                 Integrações
             </a>
 
-            {{-- Postagens Meta (Facebook & Instagram) --}}
-            <a href="{{ route('meta-posts.index') }}"
-               class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('meta-posts.*') ? 'bg-green-600 text-white' : 'text-gray-300 hover:bg-gray-700' }}">
-                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                </svg>
-                Postagens Meta
-            </a>
+            {{-- Postagens Meta (Facebook & Instagram) com Submenus --}}
+            @php
+                $metaAtivo = request()->routeIs('meta-posts.*');
+            @endphp
+            <div>
+                <button @click="menuAberto = (menuAberto === 'meta' ? '' : 'meta')"
+                        class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm w-full transition"
+                        :class="menuAberto === 'meta' || {{ $metaAtivo ? 'true' : 'false' }} ? 'bg-green-600 text-white font-semibold' : 'text-gray-300 hover:bg-gray-700'">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    <span class="flex-1 text-left">Postagens Meta</span>
+                    <svg class="w-3 h-3 transition-transform duration-200 flex-shrink-0" :class="menuAberto === 'meta' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="menuAberto === 'meta'" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="ml-6 mt-1 space-y-0.5">
+                    <a href="{{ route('meta-posts.index') }}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('meta-posts.index') ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:text-white hover:bg-gray-700' }}">
+                        <span>📅</span> Calendário & Posts
+                    </a>
+                    <a href="{{ route('meta-posts.create') }}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('meta-posts.create') ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:text-white hover:bg-gray-700' }}">
+                        <span>✍️</span> Nova Publicação
+                    </a>
+                    <a href="{{ route('admin.gmb-posts.imagens') }}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('admin.gmb-posts.imagens') ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:text-white hover:bg-gray-700' }}">
+                        <span>🖼️</span> Banco de Imagens
+                    </a>
+                    <a href="{{ route('admin.gmb-posts.templates') }}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('admin.gmb-posts.templates') ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:text-white hover:bg-gray-700' }}">
+                        <span>📝</span> Banco de Textos
+                    </a>
+                </div>
+            </div>
             @endif
 
             {{-- Configurações --}}
