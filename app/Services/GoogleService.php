@@ -150,7 +150,7 @@ class GoogleService
     /**
      * Formata os campos de nome para o padrão oficial do Google Contatos:
      * - givenName: Primeiro Nome (ex: "Adalberto")
-     * - middleName: ID do banco de dados da Lead Certo (ex: "14380")
+     * - middleName: Nome do Meio (ex: "Silva")
      * - familyName: Sobrenome (ex: "Martins" ou "Martins Silva")
      */
     public function formatarNomeParaGoogle(Contato $contato, ?string $pushName = null): array
@@ -161,19 +161,33 @@ class GoogleService
             $givenName = 'Sem Nome';
             $descriptor = $contato->sobrenome ?: ($pushName ? $this->extrairDescriptor($pushName) : null);
             $familyName = $descriptor ? $this->limparNome($descriptor) : null;
+            $middleName = $contato->nome_do_meio ? $this->limparNome($contato->nome_do_meio) : null;
         } else {
-            $nomeLimpo = $this->limparNome($contato->nome);
-            $partes = explode(' ', $nomeLimpo);
-            $givenName = array_shift($partes);
-            $sobrenomeExtraido = ! empty($partes) ? implode(' ', $partes) : null;
-            $familyName = $contato->sobrenome
-                ?: ($sobrenomeExtraido ?: ($pushName ? $this->extrairDescriptor($pushName) : null));
+            $givenName = $this->limparNome($contato->nome);
+            
+            // Se o usuário não preencheu o sobrenome separadamente, tentamos extrair do 'nome'
+            // apenas para manter compatibilidade com contatos antigos onde tudo ficava no campo 'nome'
+            $familyName = $contato->sobrenome;
+            if (empty($familyName) && str_contains($givenName, ' ')) {
+                $partes = explode(' ', $givenName);
+                $givenName = array_shift($partes);
+                $familyName = implode(' ', $partes);
+            }
+            
+            if (empty($familyName) && $pushName) {
+                $familyName = $this->extrairDescriptor($pushName);
+            }
+            
+            $middleName = $contato->nome_do_meio ? $this->limparNome($contato->nome_do_meio) : null;
         }
 
         $nameEntry = [
             'givenName'  => $givenName,
-            'middleName' => (string) $contato->id,
         ];
+        
+        if (! empty($middleName)) {
+            $nameEntry['middleName'] = $middleName;
+        }
 
         if (! empty($familyName)) {
             $nameEntry['familyName'] = $this->limparNome($familyName);

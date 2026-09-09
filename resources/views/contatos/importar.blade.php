@@ -353,18 +353,29 @@
             <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Identificação</h3>
             <div class="grid grid-cols-2 gap-3">
                 <div class="col-span-2">
-                    <label class="label-field">Nome completo</label>
-                    <div class="view-field" data-field="nome"></div>
-                    <input class="edit-field" data-field="nome" type="text" maxlength="200" placeholder="Nome completo">
+                    <label class="label-field">ID do Contato</label>
+                    <div class="view-field font-mono text-gray-500 bg-gray-50 rounded px-3" data-field="id"></div>
+                    <input class="edit-field font-mono text-gray-500 bg-gray-50 cursor-not-allowed" data-field="id" type="text" readonly>
                 </div>
                 <div class="col-span-2">
-                    <label class="label-field">Complemento (sobrenome, apelido ou o que ajuda a lembrar quem é)</label>
+                    <label class="label-field">Nome</label>
+                    <div class="view-field" data-field="nome"></div>
+                    <input class="edit-field" data-field="nome" type="text" maxlength="200" placeholder="Nome">
+                </div>
+                <div>
+                    <label class="label-field">Nome do meio</label>
+                    <div class="view-field" data-field="nome_do_meio"></div>
+                    <input class="edit-field" data-field="nome_do_meio" type="text" maxlength="200" placeholder="Nome do meio">
+                </div>
+                <div>
+                    <label class="label-field">Sobrenome</label>
                     <div class="view-field" data-field="sobrenome"></div>
-                    <input class="edit-field" data-field="sobrenome" type="text" maxlength="200" placeholder="Ex: profissão, empresa, como você conhece essa pessoa...">
+                    <input class="edit-field" data-field="sobrenome" type="text" maxlength="200" placeholder="Sobrenome">
                 </div>
                 <div>
                     <label class="label-field">Telefone (WhatsApp)</label>
                     <div class="view-field font-mono" data-field="telefone"></div>
+                    <input class="edit-field font-mono" data-field="telefone" type="text" maxlength="20" placeholder="5511999999999">
                 </div>
                 <div>
                     <label class="label-field">E-mail</label>
@@ -756,7 +767,7 @@ async function salvarFicha() {
     const payload = {};
     document.querySelectorAll('.edit-field[data-field]').forEach(el => {
         const f = el.dataset.field;
-        if (f === 'telefone') return;
+        if (f === 'id') return;
         payload[f] = el.value !== '' ? el.value : null;
     });
 

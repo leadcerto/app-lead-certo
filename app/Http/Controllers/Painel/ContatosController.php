@@ -974,7 +974,9 @@ class ContatosController extends Controller
     {
         $request->validate([
             'nome'           => 'sometimes|string|max:200',
+            'nome_do_meio'   => 'sometimes|nullable|string|max:200',
             'sobrenome'      => 'sometimes|nullable|string|max:200',
+            'telefone'       => 'sometimes|nullable|string|max:20',
             'email'          => 'sometimes|nullable|email|max:200',
             'email_2'        => 'sometimes|nullable|email|max:200',
             'telefone_2'     => 'sometimes|nullable|string|max:20',
@@ -1005,12 +1007,39 @@ class ContatosController extends Controller
 
         $tenantId = $request->user()->tenant_id;
         $campos   = [
-            'nome','sobrenome','email','email_2','telefone_2','profissao','empresa','departamento',
+            'nome','nome_do_meio','sobrenome','telefone','email','email_2','telefone_2','profissao','empresa','departamento',
             'observacoes','endereco','cidade','estado','cep','pais','tipo','tipo_contato',
             'score','genero','estado_civil','aniversario','cpf','rg',
             'instagram','facebook','linkedin','twitter','website','opt_out',
         ];
         $dados = $request->only($campos);
+
+        if (array_key_exists('telefone', $dados)) {
+            $telefoneReq = trim((string) $dados['telefone']);
+            if ($telefoneReq === '') {
+                return response()->json(['erro' => 'O telefone não pode ficar vazio.'], 422);
+            }
+            if ($telefoneReq !== $contato->telefone) {
+                $telefoneLimpo = $this->limparTelefone($telefoneReq);
+                if (! $telefoneLimpo) {
+                    return response()->json(['erro' => 'Telefone inválido.'], 422);
+                }
+                if ($telefoneLimpo !== $contato->telefone) {
+                    $existente = Contato::where('telefone', $telefoneLimpo)->first();
+                    if ($existente) {
+                        $nomeExistente = trim($existente->nome . ' ' . $existente->sobrenome) ?: 'Sem Nome';
+                        return response()->json([
+                            'erro' => "Este número de telefone já pertence ao contato: {$nomeExistente}."
+                        ], 422);
+                    }
+                    $dados['telefone'] = $telefoneLimpo;
+                } else {
+                    unset($dados['telefone']);
+                }
+            } else {
+                unset($dados['telefone']);
+            }
+        }
 
         $perfilPrivilegiado = in_array($request->user()->perfil ?? '', ['dono', 'admin']);
         $vinculo = VinculoContatoTenant::where('contato_id', $contato->id)
@@ -1084,7 +1113,7 @@ class ContatosController extends Controller
     {
         $mudaram = [];
 
-        foreach (['nome', 'sobrenome', 'empresa', 'email'] as $campo) {
+        foreach (['nome', 'nome_do_meio', 'sobrenome', 'empresa', 'email'] as $campo) {
             if (! array_key_exists($campo, $dados)) {
                 continue;
             }
@@ -1113,7 +1142,7 @@ class ContatosController extends Controller
      */
     private function sincronizarComGoogle(Contato $contato, int $tenantId, array $camposMudaram): void
     {
-        $camposSincronizados = array_intersect(['nome', 'sobrenome', 'empresa', 'email'], $camposMudaram);
+        $camposSincronizados = array_intersect(['nome', 'nome_do_meio', 'sobrenome', 'empresa', 'email'], $camposMudaram);
         if (! $camposSincronizados) {
             return;
         }
