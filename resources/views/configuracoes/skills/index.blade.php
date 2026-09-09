@@ -5,25 +5,7 @@
 @section('content')
 <div class="max-w-6xl mx-auto" x-data="skillsData()">
 
-    {{-- Tab bar (simplificada) --}}
-    <div class="flex items-center gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
-        <a href="{{ route('configuracoes') }}"
-           class="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-600">
-            WhatsApp
-        </a>
-        <a href="{{ route('configuracoes.respostas-prontas') }}"
-           class="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-600">
-            Respostas Prontas
-        </a>
-        <a href="{{ route('configuracoes.agentes') }}"
-           class="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-600">
-            Agentes
-        </a>
-        <a href="{{ route('configuracoes.skills.index') }}"
-           class="px-4 py-2.5 text-sm font-medium border-b-2 border-green-600 text-green-700">
-            Central de Skills
-        </a>
-    </div>
+
 
     <div class="flex justify-between items-center mb-6">
         <div>
@@ -158,7 +140,7 @@
                             </button>
                             
                             <template x-if="currentSkill.origem !== 'autoral'">
-                                <form :action="'{{ url('configuracoes/skills') }}/' + currentSkill.id + '/duplicate'" method="POST" class="inline">
+                                <form :action="'{{ url('admin/skills') }}/' + currentSkill.id + '/duplicate'" method="POST" class="inline">
                                     @csrf
                                     <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:w-auto sm:text-sm">
                                         <i class="fas fa-copy mr-2"></i> Usar como Base
@@ -174,7 +156,7 @@
                         </div>
                         
                         <template x-if="currentSkill.origem === 'autoral'">
-                            <form :action="'{{ url('configuracoes/skills') }}/' + currentSkill.id" method="POST" class="inline" onsubmit="return confirm('Tem certeza que deseja excluir esta skill?');">
+                            <form :action="'{{ url('admin/skills') }}/' + currentSkill.id" method="POST" class="inline" onsubmit="return confirm('Tem certeza que deseja excluir esta skill?');">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="text-red-600 hover:text-red-800 text-sm font-medium px-4 py-2">
@@ -208,7 +190,7 @@
             
             openCreateModal() {
                 this.formData = { nome: '', titulo: '', descricao_curta: '', descricao_completa: '', instrucoes_base: '' };
-                this.formAction = '{{ route("configuracoes.skills.store") }}';
+                this.formAction = '{{ route("admin.skills.store") }}';
                 this.formMethod = 'POST';
                 this.mode = 'create';
                 this.isModalOpen = true;
@@ -222,7 +204,7 @@
                     descricao_completa: this.currentSkill.descricao_completa, 
                     instrucoes_base: this.currentSkill.instrucoes_base 
                 };
-                this.formAction = '{{ url("configuracoes/skills") }}/' + this.currentSkill.id;
+                this.formAction = '{{ url("admin/skills") }}/' + this.currentSkill.id;
                 this.formMethod = 'PUT';
                 this.mode = 'edit';
             },
