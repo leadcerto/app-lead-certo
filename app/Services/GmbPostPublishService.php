@@ -222,7 +222,7 @@ class GmbPostPublishService
         if ($accountRes->status() === 429 || str_contains($accountRes->body(), 'Quota exceeded')) {
             $post->update([
                 'status'   => 'falha',
-                'log_erro' => 'Google retornou status 429 (Cota Zerada): O Google Cloud exige aprovação burocrática para liberar a cota da Google Business Profile API para o projeto 159179119828 (Protocolo enviado: 9-4101000041625). O acesso ainda está em análise pelo Google.',
+                'log_erro' => 'Google retornou 429 (Quota excedida). Verifique os limites de uso em console.cloud.google.com e tente novamente em alguns instantes.',
             ]);
             return false;
         }
@@ -282,7 +282,7 @@ class GmbPostPublishService
         ]);
 
         $explicacao = match ($status) {
-            403 => "Google retornou 403: A API de Postagens do Google Business Profile ainda aguarda liberação para o projeto Google Cloud (Protocolo 9-4101000041625) ou permissão insuficiente neste local. Detalhes: {$erroGoogle}",
+            403 => "Google retornou 403 (Acesso negado): Verifique se as APIs 'My Business Account Management' e 'Google My Business' estão ativadas no Google Cloud Console e se a conta possui permissão de Administrador/Proprietário no perfil. Detalhes: {$erroGoogle}",
             404 => "Google retornou 404: Localização não encontrada no Google para o ID '{$cleanLocationId}'. Verifique se o ID do Perfil da Empresa está correto em GMB → Perfis GMB. Detalhes: {$erroGoogle}",
             400 => "Google retornou 400 (Dado inválido): {$erroGoogle}",
             default => "Erro Google ({$status}): {$erroGoogle}",
