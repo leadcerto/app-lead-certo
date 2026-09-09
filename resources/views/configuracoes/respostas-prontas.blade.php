@@ -5,7 +5,7 @@
 @section('content')
 <div class="max-w-3xl">
 
-    <div class="flex items-center gap-1 mb-6 border-b border-gray-200">
+    <div class="flex items-center gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
         <a href="{{ route('configuracoes') }}"
            class="px-4 py-2.5 text-sm font-medium border-b-2 {{ request()->routeIs('configuracoes') ? 'border-green-600 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600' }}">
             WhatsApp
@@ -17,6 +17,10 @@
         <a href="{{ route('configuracoes.agentes') }}"
            class="px-4 py-2.5 text-sm font-medium border-b-2 {{ request()->routeIs('configuracoes.agentes') ? 'border-green-600 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600' }}">
             Agentes
+        </a>
+        <a href="{{ route('configuracoes.skills.index') }}"
+           class="px-4 py-2.5 text-sm font-medium border-b-2 {{ request()->routeIs('configuracoes.skills.*') ? 'border-green-600 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600' }}">
+            Central de Skills
         </a>
     </div>
 

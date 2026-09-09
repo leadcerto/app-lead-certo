@@ -183,6 +183,15 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('configuracoes.agentes')
         ->middleware('role:admin,dono');
 
+    // Central de Skills
+    Route::middleware('role:admin,dono')->prefix('configuracoes/skills')->name('configuracoes.skills.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Painel\AgentSkillController::class, 'index'])->name('index');
+        Route::post('/', [\App\Http\Controllers\Painel\AgentSkillController::class, 'store'])->name('store');
+        Route::put('/{id}', [\App\Http\Controllers\Painel\AgentSkillController::class, 'update'])->name('update');
+        Route::post('/{id}/duplicate', [\App\Http\Controllers\Painel\AgentSkillController::class, 'duplicate'])->name('duplicate');
+        Route::delete('/{id}', [\App\Http\Controllers\Painel\AgentSkillController::class, 'destroy'])->name('destroy');
+    });
+
     // Auditor — auditor, diretor, dono, admin
     Route::get('/auditor', [AuditorController::class, 'view'])
         ->name('auditor')
