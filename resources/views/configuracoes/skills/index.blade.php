@@ -30,31 +30,46 @@
         </div>
     @endif
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        @foreach($skills as $skill)
-            <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition flex flex-col">
-                <div class="p-5 flex-1">
-                    <div class="flex justify-between items-start mb-3">
-                        <h3 class="font-bold text-lg text-gray-800 leading-tight">{{ $skill->titulo }}</h3>
-                        @if($skill->origem === 'lead_certo')
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Lead Certo</span>
-                        @elseif($skill->origem === 'comprada')
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">Comprada</span>
-                        @else
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Autoral</span>
-                        @endif
+    @php
+        // Agrupa as skills por categoria (ou "Sem Categoria" se vazio)
+        $groupedSkills = $skills->groupBy(function($skill) {
+            if ($skill->origem === 'autoral' && empty($skill->categoria)) {
+                return 'Suas Skills Autorais';
+            }
+            return $skill->categoria ?: 'Outros';
+        })->sortKeys();
+    @endphp
+
+    @foreach($groupedSkills as $categoria => $skillsGroup)
+        <div class="mb-8">
+            <h2 class="text-lg font-bold text-gray-700 mb-4 border-b border-gray-200 pb-2">{{ $categoria }}</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                @foreach($skillsGroup as $skill)
+                    <div class="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition flex flex-col">
+                        <div class="p-5 flex-1">
+                            <div class="flex justify-between items-start mb-3">
+                                <h3 class="font-bold text-lg text-gray-800 leading-tight">{{ $skill->titulo }}</h3>
+                                @if($skill->origem === 'lead_certo')
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Lead Certo</span>
+                                @elseif($skill->origem === 'comprada')
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">Comprada</span>
+                                @else
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Autoral</span>
+                                @endif
+                            </div>
+                            <p class="text-xs text-gray-500 font-mono mb-3">{{ $skill->nome }}</p>
+                            <p class="text-sm text-gray-600">{{ $skill->descricao_curta }}</p>
+                        </div>
+                        <div class="bg-gray-50 px-5 py-3 border-t border-gray-100 flex justify-between items-center rounded-b-lg">
+                            <button @click="viewSkill({{ $skill }})" class="text-sm font-medium text-blue-600 hover:text-blue-800">
+                                Ver Detalhes
+                            </button>
+                        </div>
                     </div>
-                    <p class="text-xs text-gray-500 font-mono mb-3">{{ $skill->nome }}</p>
-                    <p class="text-sm text-gray-600">{{ $skill->descricao_curta }}</p>
-                </div>
-                <div class="bg-gray-50 px-5 py-3 border-t border-gray-100 flex justify-between items-center rounded-b-lg">
-                    <button @click="viewSkill({{ $skill }})" class="text-sm font-medium text-blue-600 hover:text-blue-800">
-                        Ver Detalhes
-                    </button>
-                </div>
+                @endforeach
             </div>
-        @endforeach
-    </div>
+        </div>
+    @endforeach
 
     {{-- Modal View/Edit --}}
     <div x-show="isModalOpen" style="display: none;" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">

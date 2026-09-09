@@ -9,6 +9,7 @@ class AgentSkill extends Model
     protected $fillable = [
         'tenant_id',
         'origem',
+        'categoria',
         'nome',
         'titulo',
         'descricao_curta',
