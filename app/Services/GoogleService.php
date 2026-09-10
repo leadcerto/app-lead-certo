@@ -189,9 +189,9 @@ class GoogleService
             $nameEntry['middleName'] = $middleName;
         }
 
-        if (! empty($familyName)) {
-            $nameEntry['familyName'] = $this->limparNome($familyName);
-        }
+        // Adiciona o ID do sistema no sobrenome
+        $familyName = ! empty($familyName) ? $this->limparNome($familyName) : '';
+        $nameEntry['familyName'] = $familyName ? "{$familyName} [{$contato->id}]" : "[{$contato->id}]";
 
         return $nameEntry;
     }

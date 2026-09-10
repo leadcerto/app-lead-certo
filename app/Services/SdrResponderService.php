@@ -219,6 +219,13 @@ class SdrResponderService
         $tenantId = $ticket->tenant_id;
         $chaves   = \App\Models\KanbanColuna::chavesDoTenant($tenantId);
 
+        // Normaliza alucinações comuns do modelo (caso use uma variação em vez do token exato)
+        $resposta = str_replace(
+            ['[ATENDIMENTO]', '[NOVO_LEAD]'],
+            ['[EM_ATENDIMENTO]', '[LEAD_NOVO]'],
+            $resposta
+        );
+
         $moveu = false;
         foreach ($chaves as $chave) {
             $token = '[' . mb_strtoupper($chave) . ']';
@@ -240,6 +247,17 @@ class SdrResponderService
                     ->value('etapa_ia_ao_mover') ?? 'etapa_1';
 
                 $papel   = \App\Models\KanbanColuna::papelDe($tenantId, $chave);
+
+                // Regra Anti-Alucinação: se o lead NUNCA respondeu neste ticket, a IA
+                // não pode decidir mover a coluna para frente (ex: [EM_ATENDIMENTO]).
+                // Exceção: encerramento (ex: [ENCERRADO] por limite de silêncio atingido).
+                $jaRespondeu = $ticket->mensagens->contains(fn ($m) => in_array($m->remetente, ['lead', 'contato']));
+                
+                if (! $jaRespondeu && $papel !== \App\Enums\PapelColunaKanban::Encerramento) {
+                    Log::info("SdrResponder: bloqueado movimento IA para {$chave} porque o lead ainda não interagiu", ['ticket_id' => $ticket->id]);
+                    continue; // Pula o movimento, mas depois o regex limpa o token gerado pela IA.
+                }
+
                 $updates = $papel === \App\Enums\PapelColunaKanban::Encerramento
                     ? $ticket->dadosParaEncerrar(['etapa_ia' => $etapa], $chave)
                     : ['coluna_kanban' => $chave, 'etapa_ia' => $etapa];
@@ -260,6 +278,10 @@ class SdrResponderService
         }
         $tokens   = array_map(fn (string $chave) => '[' . mb_strtoupper($chave) . ']', $chaves);
         $resposta = trim(str_replace($tokens, '', $resposta));
+        
+        // Remove qualquer outro token solto que a IA possa ter inventado (ex: [ENCERRAMENTO])
+        // para garantir que NENHUMA tag estrutural vaze para o lead
+        $resposta = trim(preg_replace('/\[[A-Z_]+\]/', '', $resposta));
 
         // ── 4.5. Detectar tokens de objetivo cumprido e aplicar ─────────────
         // Mesmo padrão dos tokens de movimento acima — o agente reporta na
@@ -530,6 +552,16 @@ class SdrResponderService
             . "Use apenas quando tiver certeza do estado do lead. Se a conversa não mudou de estado, NÃO inclua nenhum token."
             . "\n===";
 
+        // Regra global de engajamento (Janela Meta 24h)
+        if (! isset($kanban->forcar_engajamento_meta) || $kanban->forcar_engajamento_meta) {
+            $iaContexto .= "\n\n=== DIRETRIZ GLOBAL DE ENGAJAMENTO (JANELA DO WHATSAPP) ===\n"
+                . "O WhatsApp possui uma janela de atendimento de 24 horas que se renova APENAS quando o lead nos envia uma mensagem. "
+                . "Por isso, independentemente da etapa em que você esteja (a não ser que vá usar [ENCERRADO]), o seu MAIOR OBJETIVO é manter o lead engajado. "
+                . "SEMPRE termine suas mensagens instigando o lead a continuar conversando: faça uma pergunta, peça a opinião dele ou sugira um próximo passo claro. "
+                . "Nunca envie mensagens passivas ou fechadas (ex: 'ok, obrigado', 'certo') que esfriem o assunto e façam o lead parar de responder."
+                . "\n===";
+        }
+
         // Explica o marcador "[Atendente humano respondeu]" que aparece no
         // histórico abaixo — sem isso o modelo não teria como saber que aquele
         // turno específico não foi ele mesmo quem escreveu.
@@ -557,13 +589,15 @@ class SdrResponderService
             . "\n===";
 
         // Regra de Ouro da Janela de Atendimento (Meta 24h)
-        $iaContexto .= "\n\n=== REGRA DE OURO: MANTER O LEAD RESPONDENDO (RENOVAÇÃO DA JANELA 24H) ===\n"
-            . "Para manter o atendimento ativo e renovar a janela de atendimento do WhatsApp continuamente, "
-            . "toda resposta sua deve OBRIGATORIAMENTE terminar com uma pergunta curta, clara e fácil de responder "
-            . "(ex: opções de horário, confirmação de detalhe, preferência do cliente). "
-            . "NUNCA termine uma mensagem com declaração passiva que encerre a conversa (como 'estou à disposição' ou 'qualquer dúvida me avise'). "
-            . "Sempre convide o cliente a interagir para que ele continue respondendo e a conversa progrida."
-            . "\n===";
+        if (! isset($kanban->forcar_engajamento_meta) || $kanban->forcar_engajamento_meta) {
+            $iaContexto .= "\n\n=== REGRA DE OURO: MANTER O LEAD RESPONDENDO (RENOVAÇÃO DA JANELA 24H) ===\n"
+                . "Para manter o atendimento ativo e renovar a janela de atendimento do WhatsApp continuamente, "
+                . "toda resposta sua deve OBRIGATORIAMENTE terminar com uma pergunta curta, clara e fácil de responder "
+                . "(ex: opções de horário, confirmação de detalhe, preferência do cliente). "
+                . "NUNCA termine uma mensagem com declaração passiva que encerre a conversa (como 'estou à disposição' ou 'qualquer dúvida me avise'). "
+                . "Sempre convide o cliente a interagir para que ele continue respondendo e a conversa progrida."
+                . "\n===";
+        }
 
         // Regra 7 — autovalidação antes de responder (1 chamada só, sem chamada
         // dupla — decisão fechada). Regra 2 é o efeito prático desta validação:

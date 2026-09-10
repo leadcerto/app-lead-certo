@@ -127,6 +127,37 @@
         </div>
     </div>
 
+    {{-- Configuração: Forçar Engajamento na Janela Meta --}}
+    <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-6">
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <div class="flex items-center gap-2 mb-2">
+                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span class="text-sm font-semibold text-gray-700">Regra de Engajamento: Janela Meta (24h)</span>
+                </div>
+                <p class="text-xs text-gray-500 max-w-2xl leading-relaxed">
+                    Quando ativado, a Inteligência Artificial é instruída a <strong>sempre terminar suas respostas com uma pergunta ou incentivo à interação</strong>.
+                    Isso garante que o lead continue respondendo, o que renova a janela de 24 horas de atendimento oficial do WhatsApp.
+                </p>
+            </div>
+            <label class="flex items-center gap-2 cursor-pointer pt-1 flex-shrink-0">
+                <span class="text-xs text-gray-400 font-medium select-none" x-text="forcarEngajamentoMeta ? 'Ativado' : 'Desativado'"></span>
+                <div class="relative">
+                    <input type="checkbox"
+                           :checked="forcarEngajamentoMeta"
+                           @change="toggleForcarEngajamento()"
+                           class="sr-only">
+                    <div class="block w-10 h-6 rounded-full transition-colors duration-200 ease-in-out"
+                         :class="forcarEngajamentoMeta ? 'bg-green-500' : 'bg-gray-300'"></div>
+                    <div class="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out"
+                         :class="forcarEngajamentoMeta ? 'transform translate-x-4' : ''"></div>
+                </div>
+            </label>
+        </div>
+    </div>
+
     {{-- Base de conhecimento geral do Kanban --}}
     <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-6">
         <div class="flex items-center gap-2 mb-2">
@@ -1637,6 +1668,8 @@ function kanbanConfig() {
         conhecimentoGeralSalvando: false,
         conhecimentoGeralSalvo: false,
 
+        forcarEngajamentoMeta: true,
+
         // Objetivo da coluna
         objetivo: {},
         objetivoAlterado: {},
@@ -1753,6 +1786,7 @@ function kanbanConfig() {
                 const json = await res.json();
                 this.nomeKanban = json.nome || 'Novo Kanban';
                 this.conhecimentoGeral = json.conhecimento_geral ?? '';
+                this.forcarEngajamentoMeta = json.forcar_engajamento_meta ?? true;
             }
         },
 
@@ -1780,6 +1814,20 @@ function kanbanConfig() {
             } else {
                 const erro = await res.json().catch(() => null);
                 this.mostrarToast(erro?.message || 'Não foi possível salvar a base de conhecimento.', 'erro');
+            }
+        },
+
+        async toggleForcarEngajamento() {
+            this.forcarEngajamentoMeta = !this.forcarEngajamentoMeta;
+            const res = await this.api('/api/painel/kanban/info', 'PUT', {
+                forcar_engajamento_meta: this.forcarEngajamentoMeta,
+            });
+            if (!res.ok) {
+                // reverte se falhar
+                this.forcarEngajamentoMeta = !this.forcarEngajamentoMeta;
+                this.mostrarToast('Erro ao alterar a configuração da janela Meta.', 'erro');
+            } else {
+                this.mostrarToast('Configuração salva com sucesso.', 'sucesso');
             }
         },
 

@@ -1066,6 +1066,15 @@ class ContatosController extends Controller
             $contato->update($dados);
             $this->sincronizarComGoogle($contato, $tenantId, $camposMudaram);
 
+            // Ao ser atualizado manualmente, promove a "Lead Certo"
+            if ($vinculo) {
+                $token = GoogleToken::where('tenant_id', $tenantId)->first();
+                if ($token) {
+                    app(\App\Services\GoogleEtiquetaService::class)
+                        ->atualizarMembrosContato($token, $contato, $vinculo, true);
+                }
+            }
+
             return response()->json([
                 'ok'         => true,
                 'auditoria'  => true,
@@ -1078,6 +1087,15 @@ class ContatosController extends Controller
         $contato->update($dados);
 
         $this->sincronizarComGoogle($contato, $tenantId, $camposMudaram);
+
+        // Ao ser atualizado manualmente por um humano, promove a "Lead Certo" no Google
+        if ($vinculo) {
+            $token = GoogleToken::where('tenant_id', $tenantId)->first();
+            if ($token) {
+                app(\App\Services\GoogleEtiquetaService::class)
+                    ->atualizarMembrosContato($token, $contato, $vinculo, true);
+            }
+        }
 
         return response()->json([
             'ok'      => true,

@@ -22,10 +22,12 @@ class Kanban extends Model
         'nome',
         'ordem',
         'conhecimento_geral',
+        'forcar_engajamento_meta',
     ];
 
     protected $casts = [
         'ordem' => 'integer',
+        'forcar_engajamento_meta' => 'boolean',
     ];
 
     public function colunas(): HasMany

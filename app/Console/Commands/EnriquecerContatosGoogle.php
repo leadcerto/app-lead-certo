@@ -37,12 +37,14 @@ class EnriquecerContatosGoogle extends Command
             $this->info("Tenant #{$token->tenant_id}");
 
             // Garante que o marcador "Lead Certo" existe no Google
-            $grupoResourceName = $this->obterOuCriarGrupo($google, $token);
+            $grupoResourceName = $this->obterOuCriarGrupo($google, $token, '🚩 LEAD CERTO');
             if ($grupoResourceName) {
-                $this->line("  Marcador Google: {$grupoResourceName}");
+                $this->line("  Marcador Google Lead Certo: {$grupoResourceName}");
             } else {
                 $this->warn('  Não foi possível criar/encontrar o marcador "Lead Certo" — contatos serão atualizados sem ele.');
             }
+            
+            $grupoNovosLeadsResourceName = $this->obterOuCriarGrupo($google, $token, '🚩 NOVOS LEADS');
 
             $query = VinculoContatoTenant::with('contato')
                 ->where('tenant_id', $token->tenant_id)
@@ -56,8 +58,10 @@ class EnriquecerContatosGoogle extends Command
             $falhas      = 0;
             $etagStale   = 0;
 
-            // Buffer de resourceNames para adicionar ao grupo em lotes
+            // Buffer de resourceNames para adicionar ao grupo Lead Certo em lotes
             $buffer = [];
+            // Buffer de resourceNames para remover do grupo Novos Leads em lotes
+            $bufferRemove = [];
 
             $this->line("  {$total} contatos para enriquecer no Google");
 
@@ -86,12 +90,15 @@ class EnriquecerContatosGoogle extends Command
                     // Usa contato.nome limpo como fonte canônica — NÃO usa google_given_name
                     // (o google_given_name é do sistema antigo e pode estar sujo)
                     $givenName  = $semNome ? 'Sem Nome' : $google->limparNome($nomeDB);
-                    $familyName = $contato->sobrenome ?: null; // descritor legado salvo pelo limpar-nomes
-                    $middleName = (string) $contato->id;
+                    $familyName = $contato->sobrenome ?: ''; // descritor legado salvo pelo limpar-nomes
+                    $middleName = $contato->nome_do_meio ?: null; // Preserva nome do meio real
 
-                    $nameEntry = ['givenName' => $givenName, 'middleName' => $middleName];
-                    if ($familyName) {
-                        $nameEntry['familyName'] = $familyName;
+                    // Injeta o ID no final do sobrenome
+                    $familyName = $familyName ? "{$familyName} [{$contato->id}]" : "[{$contato->id}]";
+
+                    $nameEntry = ['givenName' => $givenName, 'familyName' => $familyName];
+                    if ($middleName) {
+                        $nameEntry['middleName'] = $middleName;
                     }
 
                     $updateFields = 'names';
@@ -153,7 +160,18 @@ class EnriquecerContatosGoogle extends Command
                                 if (count($buffer) >= 50) {
                                     $google->modificarMembrosGrupo($validToken, $grupoResourceName, $buffer);
                                     $buffer = [];
-                                    usleep(200_000); // 200ms após adição em lote
+                                    usleep(100_000); // 100ms após adição em lote
+                                }
+                            }
+                            
+                            // Acumula para remover do marcador "Novos Leads"
+                            if ($grupoNovosLeadsResourceName) {
+                                $bufferRemove[] = $vinculo->google_resource_name;
+                                
+                                if (count($bufferRemove) >= 50) {
+                                    $google->modificarMembrosGrupo($validToken, $grupoNovosLeadsResourceName, [], $bufferRemove);
+                                    $bufferRemove = [];
+                                    usleep(100_000);
                                 }
                             }
                         } elseif ($res->status() === 404) {
@@ -184,6 +202,12 @@ class EnriquecerContatosGoogle extends Command
                 $validToken = $google->tokenValido($token);
                 if ($validToken) {
                     $google->modificarMembrosGrupo($validToken, $grupoResourceName, $buffer);
+                }
+            }
+            if ($grupoNovosLeadsResourceName && ! empty($bufferRemove)) {
+                $validToken = $google->tokenValido($token);
+                if ($validToken) {
+                    $google->modificarMembrosGrupo($validToken, $grupoNovosLeadsResourceName, [], $bufferRemove);
                 }
             }
 
@@ -250,7 +274,7 @@ class EnriquecerContatosGoogle extends Command
      * Busca o grupo "Lead Certo" no Google ou cria se não existir.
      * Retorna o resourceName do grupo ou null em caso de erro.
      */
-    private function obterOuCriarGrupo(GoogleService $google, GoogleToken $token): ?string
+    private function obterOuCriarGrupo(GoogleService $google, GoogleToken $token, string $nomeGrupo = 'Lead Certo'): ?string
     {
         $validToken = $google->tokenValido($token);
         if (! $validToken) return null;
@@ -264,7 +288,8 @@ class EnriquecerContatosGoogle extends Command
 
             if ($res->successful()) {
                 foreach ($res->json('contactGroups') ?? [] as $grupo) {
-                    if (($grupo['name'] ?? '') === 'Lead Certo') {
+                    $nomeG = $grupo['name'] ?? $grupo['formattedName'] ?? '';
+                    if ($nomeG === $nomeGrupo || $nomeG === "🚩 $nomeGrupo" || mb_strtoupper($nomeG) === mb_strtoupper($nomeGrupo)) {
                         return $grupo['resourceName'];
                     }
                 }
@@ -274,6 +299,6 @@ class EnriquecerContatosGoogle extends Command
         }
 
         // Não encontrou — cria
-        return $google->criarGrupoContato($validToken, 'Lead Certo');
+        return $google->criarGrupoContato($validToken, $nomeGrupo);
     }
 }

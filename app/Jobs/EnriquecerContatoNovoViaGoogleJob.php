@@ -62,12 +62,13 @@ class EnriquecerContatoNovoViaGoogleJob implements ShouldQueue
         $nomeRaw = trim((string) ($pessoa['names'][0]['givenName'] ?? ''))
             ?: ($pessoa['names'][0]['displayName'] ?? null);
 
-        // Mesma guarda de ContatoSyncService::extrairDados(): o endpoint legado
-        // atualizarGoogleSobrenome() ainda grava o ID do banco no familyName
-        // (convenção antiga) — sem essa guarda, esse ID vazaria pro campo
-        // sobrenome também por este caminho de busca em tempo real.
+        // Mesma guarda de ContatoSyncService::extrairDados(): limpar a tag do ID no final
+        // do sobrenome (" [12345]") e o legado que gravava apenas o ID lá.
         $sobrenomeRaw = trim((string) ($pessoa['names'][0]['familyName'] ?? ''));
-        $sobrenome    = $sobrenomeRaw !== '' && ctype_digit($sobrenomeRaw) ? '' : $sobrenomeRaw;
+        if (preg_match('/\[(\d+)\]$/', $sobrenomeRaw, $matches)) {
+            $sobrenomeRaw = trim(preg_replace('/\[\d+\]$/', '', $sobrenomeRaw));
+        }
+        $sobrenome = $sobrenomeRaw !== '' && ctype_digit($sobrenomeRaw) ? '' : $sobrenomeRaw;
 
         $valores = [
             'nome'      => $nomeRaw ? $sync->limparNome($nomeRaw) : null,

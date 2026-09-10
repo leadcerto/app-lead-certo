@@ -338,15 +338,18 @@ class ContatoSyncService
 
         $tel2 = ! empty($fones[1]) ? $this->limparTelefone($fones[1]['value'] ?? '') : null;
 
-        // Campo de nome só-dígitos é o ID do banco que NÓS gravamos lá, não
-        // nome de ninguém — importar de volta escreveria o próprio ID interno
-        // no cadastro do contato. Acontece nos dois campos: criarContato()/
-        // enriquecerContato() usam o middleName como marcador de vínculo, e o
-        // endpoint legado atualizarGoogleSobrenome() ainda grava o ID no
-        // familyName (convenção antiga).
+        // Extrai o ID do banco que colocamos como sufixo no sobrenome, ex: "Silva [12345]"
+        $familyNameRaw = trim($nomeData['familyName'] ?? '');
+        if (preg_match('/\[(\d+)\]$/', $familyNameRaw, $matches)) {
+            // Remove a tag do ID para não salvar " [12345]" no banco local
+            $familyNameRaw = trim(preg_replace('/\[\d+\]$/', '', $familyNameRaw));
+        }
+
+        // Campo de nome só-dígitos é o ID do banco que gravávamos (legado).
+        // Limpamos para não salvar o ID como se fosse o nome da pessoa.
         $soDigitos  = fn (string $v) => $v !== '' && ctype_digit($v) ? '' : $v;
         $nomeDoMeio = $soDigitos(trim($nomeData['middleName'] ?? ''));
-        $sobrenome  = $soDigitos(trim($nomeData['familyName'] ?? ''));
+        $sobrenome  = $soDigitos($familyNameRaw);
 
         return array_filter([
             'nome'           => $nome,

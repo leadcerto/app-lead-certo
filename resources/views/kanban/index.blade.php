@@ -527,7 +527,14 @@
                                     <div>
                                         <audio controls class="w-[280px] h-10" :src="msg.midia_url"></audio>
                                         <template x-if="msg.conteudo">
-                                            <p class="text-xs mt-1 opacity-80 whitespace-pre-wrap break-words" x-text="msg.conteudo"></p>
+                                            <div class="mt-1 relative group">
+                                                <p class="text-xs opacity-80 whitespace-pre-wrap break-words pr-6" x-text="msg.conteudo"></p>
+                                                <button @click.stop="copiarTranscricao($event, msg.conteudo)"
+                                                        class="absolute top-0 right-0 p-1 bg-black/5 hover:bg-black/10 rounded transition-colors text-[10px] text-gray-600 cursor-pointer"
+                                                        title="Copiar transcrição">
+                                                    <span class="icon">📋</span>
+                                                </button>
+                                            </div>
                                         </template>
                                     </div>
                                 </template>
@@ -1458,6 +1465,45 @@ function kanban() {
 
         destroy() {
             clearInterval(this.intervalo);
+        },
+        /**
+         * Copia a transcrição de um áudio para a área de transferência com fallback
+         */
+        async copiarTranscricao(event, texto) {
+            if (!texto) return;
+            
+            const btn = event.currentTarget;
+            const icon = btn.querySelector('.icon');
+            const originalIcon = icon.textContent;
+
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(texto);
+                } else {
+                    const textArea = document.createElement('textarea');
+                    textArea.value = texto;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    textArea.style.top = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    document.execCommand('copy');
+                    textArea.remove();
+                }
+
+                // Feedback visual de sucesso
+                icon.textContent = '✓';
+                icon.classList.add('text-green-600');
+                
+                setTimeout(() => {
+                    icon.textContent = originalIcon;
+                    icon.classList.remove('text-green-600');
+                }, 2000);
+            } catch (err) {
+                console.error('Falha ao copiar texto: ', err);
+                this.mostrarToast('Não foi possível copiar o texto.', 'erro');
+            }
         }
     };
 }

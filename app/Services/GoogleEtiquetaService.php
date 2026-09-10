@@ -94,7 +94,8 @@ class GoogleEtiquetaService
     public function atualizarMembrosContato(
         GoogleToken $token,
         Contato $contato,
-        VinculoContatoTenant $vinculo
+        VinculoContatoTenant $vinculo,
+        bool $promoverLeadCerto = false
     ): bool {
         if (! $vinculo->google_resource_name) {
             return false;
@@ -138,14 +139,16 @@ class GoogleEtiquetaService
         }
 
         // Transição: sai de NOVOS LEADS / LEADS EM ANÁLISE e entra em LEAD CERTO
-        if ($grupoLeadCerto) {
-            $this->google->modificarMembrosGrupo($token, $grupoLeadCerto, [$resourceName]);
-        }
-        if ($grupoNovosLeads) {
-            $this->google->modificarMembrosGrupo($token, $grupoNovosLeads, [], [$resourceName]);
-        }
-        if ($grupoEmAnalise) {
-            $this->google->modificarMembrosGrupo($token, $grupoEmAnalise, [], [$resourceName]);
+        if ($promoverLeadCerto) {
+            if ($grupoLeadCerto) {
+                $this->google->modificarMembrosGrupo($token, $grupoLeadCerto, [$resourceName]);
+            }
+            if ($grupoNovosLeads) {
+                $this->google->modificarMembrosGrupo($token, $grupoNovosLeads, [], [$resourceName]);
+            }
+            if ($grupoEmAnalise) {
+                $this->google->modificarMembrosGrupo($token, $grupoEmAnalise, [], [$resourceName]);
+            }
         }
 
         // Sem Nome

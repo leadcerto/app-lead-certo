@@ -111,7 +111,7 @@ class SincronizarGoogleEtiquetasCommand extends Command
 
                 if ($dryRun) {
                     $nameEntry = $google->formatarNomeParaGoogle($contato);
-                    $this->line(" [DRY-RUN] Contato #{$contato->id}: {$nameEntry['givenName']} | Middle: {$nameEntry['middleName']} | Family: " . ($nameEntry['familyName'] ?? ''));
+                    $this->line(" [DRY-RUN] Contato #{$contato->id}: {$nameEntry['givenName']} | Middle: " . ($nameEntry['middleName'] ?? '') . " | Family: " . ($nameEntry['familyName'] ?? ''));
                     $bar->advance();
                     continue;
                 }
@@ -125,7 +125,7 @@ class SincronizarGoogleEtiquetasCommand extends Command
                         $vinculo->google_etag ?? '*',
                         $nameEntry['givenName'],
                         $nameEntry['familyName'] ?? '',
-                        $nameEntry['middleName'] ?? (string) $contato->id
+                        $nameEntry['middleName'] ?? null
                     );
 
                     // 2. Atualizar marcadores (adiciona em LEAD CERTO, remove de NOVOS LEADS)

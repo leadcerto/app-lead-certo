@@ -16,8 +16,9 @@ class KanbanInfoController extends Controller
             ->first();
 
         return response()->json([
-            'nome'               => $kanban?->nome ?? '',
-            'conhecimento_geral' => $kanban?->conhecimento_geral ?? '',
+            'nome'                    => $kanban?->nome ?? '',
+            'conhecimento_geral'      => $kanban?->conhecimento_geral ?? '',
+            'forcar_engajamento_meta' => $kanban?->forcar_engajamento_meta ?? true,
         ]);
     }
 
@@ -30,8 +31,9 @@ class KanbanInfoController extends Controller
         // apagar o outro (mesmo bug que já foi corrigido nessa tela antes, quando
         // virou 8 cards independentes).
         $validated = $request->validate([
-            'nome'               => 'sometimes|required|string|max:100',
-            'conhecimento_geral' => 'nullable|string|max:20000',
+            'nome'                    => 'sometimes|required|string|max:100',
+            'conhecimento_geral'      => 'nullable|string|max:20000',
+            'forcar_engajamento_meta' => 'sometimes|boolean',
         ]);
 
         $kanban = Kanban::where('tenant_id', $request->user()->tenant_id)
@@ -43,6 +45,9 @@ class KanbanInfoController extends Controller
         }
         if ($request->has('conhecimento_geral')) {
             $kanban->conhecimento_geral = $validated['conhecimento_geral'] ?? null;
+        }
+        if (array_key_exists('forcar_engajamento_meta', $validated)) {
+            $kanban->forcar_engajamento_meta = $validated['forcar_engajamento_meta'];
         }
         $kanban->save();
 
