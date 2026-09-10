@@ -517,7 +517,14 @@
                                             <img :src="msg.midia_url" class="rounded-lg max-w-full max-h-48 object-cover" loading="lazy">
                                         </a>
                                         <template x-if="msg.conteudo && msg.conteudo !== '[Imagem]'">
-                                            <p class="text-xs mt-1 opacity-80" x-text="msg.conteudo"></p>
+                                            <div class="mt-1 relative group">
+                                                <p class="text-xs opacity-80 whitespace-pre-wrap break-words pr-6" x-text="msg.conteudo"></p>
+                                                <button @click.stop="copiarTranscricao($event, msg.conteudo)"
+                                                        class="absolute top-0 right-0 p-1 bg-black/5 hover:bg-black/10 rounded transition-colors text-[10px] text-gray-600 cursor-pointer"
+                                                        title="Copiar descrição">
+                                                    <span class="icon">📋</span>
+                                                </button>
+                                            </div>
                                         </template>
                                     </div>
                                 </template>

@@ -321,11 +321,10 @@ class MetaService
                 return $publishRes->json('id');
             }
 
-            Log::error('Instagram Publish Container falhou', ['body' => $publishRes->body()]);
-            return null;
+            $errorMsg = $publishRes->json('error.message') ?? $publishRes->body();
+            throw new \Exception("IG Publish falhou: " . $errorMsg);
         } catch (\Exception $e) {
-            Log::error('MetaService::publicarPostInstagram erro', ['erro' => $e->getMessage()]);
-            return null;
+            throw new \Exception($e->getMessage());
         }
     }
 
@@ -362,11 +361,10 @@ class MetaService
                 return $res->json('id') ?? $res->json('post_id');
             }
 
-            Log::error('Facebook Page Publish falhou', ['body' => $res->body()]);
-            return null;
+            $errorMsg = $res->json('error.message') ?? $res->body();
+            throw new \Exception("FB falhou: " . $errorMsg);
         } catch (\Exception $e) {
-            Log::error('MetaService::publicarPostFacebookPage erro', ['erro' => $e->getMessage()]);
-            return null;
+            throw new \Exception($e->getMessage());
         }
     }
 }
