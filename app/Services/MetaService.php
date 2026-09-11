@@ -27,10 +27,7 @@ class MetaService
         'pages_messaging',
         'pages_manage_ads',
         'pages_manage_metadata',
-        'pages_user_gender',
-        'pages_user_locale',
-        'pages_user_timezone',
-        'pages_utility_messaging',
+        // Messenger / Instagram Direct
         'instagram_basic',
         'instagram_content_publish',
         'instagram_branded_content_ads_brand',
@@ -43,29 +40,26 @@ class MetaService
         'instagram_business_manage_messages',
         'instagram_creator_marketplace_discovery',
         'instagram_manage_comments',
-        'instagram_manage_contents',
         'instagram_manage_engagement',
         'instagram_manage_insights',
         'instagram_manage_messages',
         'instagram_manage_upcoming_events',
         'instagram_shopping_tag_products',
+        // Negócios / Anúncios
         'business_management',
         'ads_management',
         'ads_read',
-        'ads_mcp_management',
         'catalog_management',
         'leads_retrieval',
         'read_insights',
         'facebook_branded_content_ads_brand',
         'facebook_creator_marketplace_discovery',
         'oembed_read',
-        'marketing_messages_messenger',
-        'paid_marketing_messages',
+        // Threads
         'threads_basic',
         'threads_business_basic',
         'threads_content_publish',
         'threads_manage_replies',
-        'threads_oembed',
     ];
 
     private string $appId;
