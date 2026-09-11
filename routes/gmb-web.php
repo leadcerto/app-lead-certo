@@ -26,6 +26,9 @@ Route::middleware(['auth', 'tenant', 'role:admin,dono,diretor,diretor_marketing'
     Route::resource('perfis-gmb', PerfilGmbController::class)
         ->except(['show']);
 
+    // ── Apostila (Manual Técnico e Boas Práticas) ─────────────────────────
+    Route::view('apostila', 'gmb-apostila.index')->name('gmb-apostila.index');
+
     // ── Lista de telefones (clientes reais pra ligar) por Perfil GMB ──────
     Route::get('perfis-gmb/{perfil}/contatos', [ContatoAvaliacaoController::class, 'index'])
         ->name('perfis-gmb.contatos.index');
