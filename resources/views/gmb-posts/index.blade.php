@@ -10,8 +10,8 @@
         <div>
             <h1 class="text-2xl font-bold text-gray-800">📅 Agendamentos de Postagens (GMB)</h1>
             <p class="text-sm text-gray-500 mt-1">
-                Semana de {{ $semana->copy()->startOfWeek(\Carbon\Carbon::MONDAY)->format('d/m') }}
-                a {{ $semana->copy()->endOfWeek(\Carbon\Carbon::SUNDAY)->format('d/m/Y') }}
+                Semana de {{ $semana->copy()->startOfWeek(\Carbon\Carbon::SUNDAY)->format('d/m') }}
+                a {{ $semana->copy()->endOfWeek(\Carbon\Carbon::SATURDAY)->format('d/m/Y') }}
             </p>
         </div>
         <div class="flex gap-2 flex-wrap justify-end">

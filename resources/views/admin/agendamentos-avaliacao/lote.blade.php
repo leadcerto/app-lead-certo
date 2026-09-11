@@ -2,8 +2,8 @@
 @section('title', 'Gerador em Lote — Lead Certo')
 
 @php
-    $inicioSemana = $semana->copy()->startOfWeek(\Carbon\Carbon::MONDAY);
-    $diasSemana = collect(['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'])
+    $inicioSemana = $semana->copy()->startOfWeek(\Carbon\Carbon::SUNDAY);
+    $diasSemana = collect(['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'])
         ->values()
         ->mapWithKeys(fn ($dia, $i) => [$dia => $inicioSemana->copy()->addDays($i)]);
 @endphp
@@ -16,7 +16,7 @@
             <h1 class="text-2xl font-bold text-gray-800">📊 Gerador em Lote (Matriz)</h1>
             <p class="text-sm text-gray-500 mt-1">
                 Defina quantas avaliações por perfil/dia da semana —
-                {{ $inicioSemana->format('d/m') }} a {{ $inicioSemana->copy()->endOfWeek(\Carbon\Carbon::SUNDAY)->format('d/m') }}.
+                {{ $inicioSemana->format('d/m') }} a {{ $inicioSemana->copy()->endOfWeek(\Carbon\Carbon::SATURDAY)->format('d/m') }}.
             </p>
         </div>
         <a href="{{ route('admin.agendamentos-avaliacao.index') }}" class="text-sm text-gray-500 hover:text-gray-700">← Voltar</a>
@@ -37,7 +37,7 @@
                 <thead class="bg-gray-50 text-gray-600">
                     <tr>
                         <th class="px-4 py-3 text-left">Perfil</th>
-                        @foreach(['segunda' => 'Segunda', 'terca' => 'Terça', 'quarta' => 'Quarta', 'quinta' => 'Quinta', 'sexta' => 'Sexta', 'sabado' => 'Sábado', 'domingo' => 'Domingo'] as $dia => $label)
+                        @foreach(['domingo' => 'Domingo', 'segunda' => 'Segunda', 'terca' => 'Terça', 'quarta' => 'Quarta', 'quinta' => 'Quinta', 'sexta' => 'Sexta', 'sabado' => 'Sábado'] as $dia => $label)
                         <th class="px-3 py-3 text-center">
                             <div>{{ $label }}</div>
                             <div class="text-xs font-normal text-gray-400">{{ $diasSemana[$dia]->format('d/m') }}</div>
@@ -52,7 +52,7 @@
                             <div class="font-medium text-gray-800">{{ $perfil->nome }}</div>
                             <div class="text-xs text-gray-400">{{ $perfil->city }}/{{ $perfil->state }}</div>
                         </td>
-                        @foreach(['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'] as $dia)
+                        @foreach(['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as $dia)
                         <td class="px-1 py-3 text-center">
                             <input type="number" name="matriz[{{ $perfil->id }}][{{ $dia }}]"
                                    value="0" min="0" max="5"

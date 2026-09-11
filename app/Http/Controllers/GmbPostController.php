@@ -24,8 +24,8 @@ class GmbPostController extends Controller
             ? Carbon::parse($request->semana)
             : now();
 
-        $inicioSemana = $semana->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
-        $fimSemana    = $semana->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay();
+        $inicioSemana = $semana->copy()->startOfWeek(Carbon::SUNDAY)->startOfDay();
+        $fimSemana    = $semana->copy()->endOfWeek(Carbon::SATURDAY)->endOfDay();
 
         $query = GmbPost::with(['perfil', 'autor'])
             ->where('tenant_id', $tenantId)
@@ -211,7 +211,6 @@ class GmbPostController extends Controller
             'semana_referencia' => 'required|date',
             'modo_conteudo'     => 'required|in:template_rotativo,template_especifico,ia',
             'template_id'       => 'nullable|exists:gmb_post_templates,id',
-            'horario_padrao'    => 'required|string',
             'modo_imagem'       => 'nullable|in:galeria_rotativa,galeria_especifica,upload,nenhuma',
             'imagem_galeria_id' => 'nullable|exists:gmb_post_imagens,id',
             'imagem_padrao'     => 'nullable|image|max:10240',
@@ -219,8 +218,8 @@ class GmbPostController extends Controller
         ]);
 
         $semana = Carbon::parse($validated['semana_referencia']);
-        $inicioSemana = $semana->copy()->startOfWeek(Carbon::MONDAY);
-        $diasMap = ['segunda' => 0, 'terca' => 1, 'quarta' => 2, 'quinta' => 3, 'sexta' => 4, 'sabado' => 5, 'domingo' => 6];
+        $inicioSemana = $semana->copy()->startOfWeek(Carbon::SUNDAY);
+        $diasMap = ['domingo' => 0, 'segunda' => 1, 'terca' => 2, 'quarta' => 3, 'quinta' => 4, 'sexta' => 5, 'sabado' => 6];
 
         $templates = GmbPostTemplate::where('tenant_id', $tenantId)->where('ativo', true)->get();
         $imagensSalvas = \App\Models\GmbPostImagem::where('tenant_id', $tenantId)->get();
@@ -236,17 +235,19 @@ class GmbPostController extends Controller
             if (!$perfil) continue;
 
             foreach ($dias as $dia => $valor) {
-                if (empty($valor) || $valor != '1') continue;
+                $quantidade = (int) $valor;
+                if ($quantidade <= 0) continue;
                 if (!isset($diasMap[$dia])) continue;
 
-                $dataPost = $inicioSemana->copy()
-                    ->addDays($diasMap[$dia])
-                    ->setTimeFromTimeString($validated['horario_padrao'] ?? '10:00');
+                $dataBase = $inicioSemana->copy()->addDays($diasMap[$dia])->startOfDay();
 
-                // Não reagendar no passado se a semana for a atual e o dia já passou
-                if ($dataPost->isPast() && $dataPost->diffInDays(now()) > 0) {
+                // Não reagendar dias que já passaram inteiramente nesta semana
+                if ($dataBase->copy()->endOfDay()->isPast()) {
                     continue;
                 }
+
+                foreach ($this->calcularHorariosEspalhados($quantidade) as $minutosDesdeMeiaNoite) {
+                $dataPost = $dataBase->copy()->addMinutes($minutosDesdeMeiaNoite);
 
                 $titulo = null;
                 $texto = '';
@@ -336,11 +337,40 @@ class GmbPostController extends Controller
                 }
 
                 $criados++;
+                }
             }
         }
 
         return redirect()->route('admin.gmb-posts.index', ['semana' => $inicioSemana->toDateString()])
             ->with('sucesso', "{$criados} postagens agendadas com sucesso para a semana!");
+    }
+
+    /**
+     * Calcula os horários (em minutos desde 00:00) para distribuir N posts do
+     * mesmo perfil no mesmo dia dentro da janela 08:00–18:00, respeitando um
+     * intervalo mínimo de 10 minutos entre publicações.
+     *
+     * @return int[] minutos desde a meia-noite, um por post
+     */
+    private function calcularHorariosEspalhados(int $quantidade): array
+    {
+        $inicioMin = 8 * 60;  // 08:00
+        $fimMin    = 18 * 60; // 18:00
+        $janela    = $fimMin - $inicioMin;
+        $intervaloMinimo = 10;
+
+        if ($quantidade <= 1) {
+            return [$inicioMin + intdiv($janela, 2)]; // ~13:00
+        }
+
+        $intervalo = max($intervaloMinimo, intdiv($janela, $quantidade - 1));
+
+        $horarios = [];
+        for ($i = 0; $i < $quantidade; $i++) {
+            $horarios[] = min($inicioMin + ($i * $intervalo), $fimMin);
+        }
+
+        return $horarios;
     }
 
     // ── Gestão de Templates de Postagens ──────────────────────────────────

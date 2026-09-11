@@ -3,8 +3,8 @@
 @section('title', 'Gerador de Postagens em Lote — Lead Certo')
 
 @php
-    $inicioSemana = $semana->copy()->startOfWeek(\Carbon\Carbon::MONDAY);
-    $diasSemana = collect(['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'])
+    $inicioSemana = $semana->copy()->startOfWeek(\Carbon\Carbon::SUNDAY);
+    $diasSemana = collect(['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'])
         ->values()
         ->mapWithKeys(fn ($dia, $i) => [$dia => $inicioSemana->copy()->addDays($i)]);
 @endphp
@@ -21,7 +21,7 @@
             </div>
             <p class="text-sm text-gray-500 mt-1">
                 Defina a grade de postagens semanais no Google Meu Negócio para cada perfil —
-                <span class="font-bold text-gray-700">{{ $inicioSemana->format('d/m') }} a {{ $inicioSemana->copy()->endOfWeek(\Carbon\Carbon::SUNDAY)->format('d/m/Y') }}</span>.
+                <span class="font-bold text-gray-700">{{ $inicioSemana->format('d/m') }} a {{ $inicioSemana->copy()->endOfWeek(\Carbon\Carbon::SATURDAY)->format('d/m/Y') }}</span>.
             </p>
         </div>
         <div class="flex items-center gap-2">
@@ -98,11 +98,13 @@
                 <p class="text-[10px] text-green-700 font-medium mt-1">✨ Nome SEO com palavras-chave e data/hora.</p>
             </div>
 
-            {{-- 4. Horário Padrão de Publicação --}}
+            {{-- 4. Janela de Publicação (fixa, calculada automaticamente pelo sistema) --}}
             <div>
-                <label class="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">3. Horário do Post</label>
-                <input type="time" name="horario_padrao" value="10:00" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-800 focus:ring-2 focus:ring-green-500 focus:bg-white transition">
-                <p class="text-[10px] text-gray-400 mt-1">Horário de publicação no Google Maps.</p>
+                <label class="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">3. Horários</label>
+                <div class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-600">
+                    ⏰ 08:00 às 18:00
+                </div>
+                <p class="text-[10px] text-gray-400 mt-1">Quando o perfil tiver mais de 1 post no mesmo dia, o sistema espalha os horários automaticamente dentro dessa janela (mínimo 10 min entre eles).</p>
             </div>
 
             {{-- 5. Botões de Ação Rápida --}}
@@ -132,7 +134,7 @@
                     <thead class="bg-gray-50 border-b border-gray-100 text-gray-600">
                         <tr>
                             <th class="px-5 py-3.5 text-left font-bold text-gray-700 min-w-[200px]">Perfil GMB (Ficha)</th>
-                            @foreach(['segunda' => 'Segunda', 'terca' => 'Terça', 'quarta' => 'Quarta', 'quinta' => 'Quinta', 'sexta' => 'Sexta', 'sabado' => 'Sábado', 'domingo' => 'Domingo'] as $dia => $label)
+                            @foreach(['domingo' => 'Domingo', 'segunda' => 'Segunda', 'terca' => 'Terça', 'quarta' => 'Quarta', 'quinta' => 'Quinta', 'sexta' => 'Sexta', 'sabado' => 'Sábado'] as $dia => $label)
                             <th class="px-3 py-3.5 text-center min-w-[90px]">
                                 <div class="font-bold text-gray-800">{{ $label }}</div>
                                 <div class="text-[11px] font-normal text-gray-400">{{ $diasSemana[$dia]->format('d/m') }}</div>
@@ -151,16 +153,15 @@
                                 </div>
                                 <div class="text-xs text-gray-400 mt-0.5">{{ $perfil->city }}/{{ $perfil->state }}</div>
                             </td>
-                            @foreach(['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'] as $dia)
+                            @foreach(['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'] as $dia)
                             <td class="px-3 py-4 text-center">
-                                <label class="inline-flex items-center justify-center cursor-pointer">
-                                    <input type="checkbox" 
-                                           name="matriz[{{ $perfil->id }}][{{ $dia }}]"
-                                           value="1"
-                                           data-dia="{{ $dia }}"
-                                           onchange="calcularTotais()"
-                                           class="w-5 h-5 rounded-lg border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer transition">
-                                </label>
+                                <input type="number"
+                                       name="matriz[{{ $perfil->id }}][{{ $dia }}]"
+                                       value="0"
+                                       min="0"
+                                       data-dia="{{ $dia }}"
+                                       oninput="calcularTotais()"
+                                       class="w-14 text-center border border-gray-300 rounded-lg px-1 py-1.5 text-sm focus:ring-2 focus:ring-green-500">
                             </td>
                             @endforeach
                             <td class="px-4 py-4 text-center font-bold text-gray-700 total-perfil">
@@ -188,7 +189,7 @@
                         Total de postagens selecionadas: <span id="totalGeral" class="text-green-400 text-xl font-mono">0</span>
                     </div>
                     <p class="text-xs text-gray-400 mt-0.5">
-                        Os posts serão distribuídos e publicados automaticamente na semana de {{ $inicioSemana->format('d/m') }} a {{ $inicioSemana->copy()->endOfWeek(\Carbon\Carbon::SUNDAY)->format('d/m/Y') }}.
+                        Os posts serão distribuídos e publicados automaticamente na semana de {{ $inicioSemana->format('d/m') }} a {{ $inicioSemana->copy()->endOfWeek(\Carbon\Carbon::SATURDAY)->format('d/m/Y') }}.
                     </p>
                 </div>
             </div>
@@ -235,17 +236,17 @@ function alternarModoImagem() {
 }
 
 function marcarPadrao(tipo) {
-    const checkboxes = document.querySelectorAll('input[type="checkbox"][data-dia]');
-    checkboxes.forEach(cb => {
-        const dia = cb.getAttribute('data-dia');
+    const campos = document.querySelectorAll('input[type="number"][data-dia]');
+    campos.forEach(campo => {
+        const dia = campo.getAttribute('data-dia');
         if (tipo === 'todos') {
-            cb.checked = true;
+            campo.value = 1;
         } else if (tipo === 'limpar') {
-            cb.checked = false;
+            campo.value = 0;
         } else if (tipo === 'seg-qua-sex') {
-            cb.checked = ['segunda', 'quarta', 'sexta'].includes(dia);
+            campo.value = ['segunda', 'quarta', 'sexta'].includes(dia) ? 1 : 0;
         } else if (tipo === 'ter-qui-sab') {
-            cb.checked = ['terca', 'quinta', 'sabado'].includes(dia);
+            campo.value = ['terca', 'quinta', 'sabado'].includes(dia) ? 1 : 0;
         }
     });
     calcularTotais();
@@ -254,8 +255,10 @@ function marcarPadrao(tipo) {
 function calcularTotais() {
     let totalGeral = 0;
     document.querySelectorAll('tr[data-perfil-row]').forEach(row => {
-        const cbs = row.querySelectorAll('input[type="checkbox"]:checked');
-        const totalPerfil = cbs.length;
+        let totalPerfil = 0;
+        row.querySelectorAll('input[type="number"]').forEach(campo => {
+            totalPerfil += parseInt(campo.value, 10) || 0;
+        });
         row.querySelector('.total-perfil').textContent = totalPerfil;
         totalGeral += totalPerfil;
     });

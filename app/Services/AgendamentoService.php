@@ -96,7 +96,7 @@ class AgendamentoService
             'domingo' => Carbon::SUNDAY,
         ];
 
-        $inicioSemana = $semanaReferencia->copy()->startOfWeek(Carbon::MONDAY);
+        $inicioSemana = $semanaReferencia->copy()->startOfWeek(Carbon::SUNDAY);
 
         $criados = 0;
         $avisos = [];
@@ -115,7 +115,7 @@ class AgendamentoService
                     }
 
                     $dataAlvo = $inicioSemana->copy()->next($diaOffset);
-                    if ($diaOffset === Carbon::MONDAY) {
+                    if ($diaOffset === Carbon::SUNDAY) {
                         $dataAlvo = $inicioSemana->copy();
                     }
 
