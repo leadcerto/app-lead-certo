@@ -20,6 +20,18 @@
         </a>
     </div>
 
+    {{-- Erros de validação (antes silenciosos — o post não era criado e ninguém via o motivo) --}}
+    @if ($errors->any())
+        <div class="p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl text-sm">
+            <p class="font-bold text-red-900">Não foi possível salvar a publicação:</p>
+            <ul class="mt-1 list-disc list-inside space-y-0.5">
+                @foreach ($errors->all() as $erro)
+                    <li>{{ $erro }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     {{-- Caixa Mágica: Gerador com IA --}}
     <div class="bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border border-purple-200 rounded-2xl p-6 shadow-sm">
         <div class="flex items-start justify-between">
