@@ -17,8 +17,10 @@ class MetaService
 
     // Escopos homologados para Páginas do Facebook, Instagram Business e Mensagens
     public const SCOPES = [
+        // Perfil e e-mail básicos
         'public_profile',
         'email',
+        // Páginas do Facebook
         'pages_show_list',
         'pages_read_engagement',
         'pages_manage_posts',
@@ -27,24 +29,17 @@ class MetaService
         'pages_messaging',
         'pages_manage_ads',
         'pages_manage_metadata',
-        // Messenger / Instagram Direct
+        // Instagram Business
         'instagram_basic',
         'instagram_content_publish',
-        'instagram_branded_content_ads_brand',
-        'instagram_branded_content_brand',
-        'instagram_branded_content_creator',
         'instagram_business_basic',
         'instagram_business_content_publish',
         'instagram_business_manage_comments',
         'instagram_business_manage_insights',
         'instagram_business_manage_messages',
-        'instagram_creator_marketplace_discovery',
         'instagram_manage_comments',
-        'instagram_manage_engagement',
         'instagram_manage_insights',
         'instagram_manage_messages',
-        'instagram_manage_upcoming_events',
-        'instagram_shopping_tag_products',
         // Negócios / Anúncios
         'business_management',
         'ads_management',
@@ -52,12 +47,8 @@ class MetaService
         'catalog_management',
         'leads_retrieval',
         'read_insights',
-        'facebook_branded_content_ads_brand',
-        'facebook_creator_marketplace_discovery',
-        'oembed_read',
         // Threads
         'threads_basic',
-        'threads_business_basic',
         'threads_content_publish',
         'threads_manage_replies',
     ];
