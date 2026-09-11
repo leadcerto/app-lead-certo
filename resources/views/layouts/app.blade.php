@@ -421,8 +421,16 @@
                         </button>
                         <div x-show="postagensAberta" class="ml-4 mt-0.5 space-y-0.5 border-l border-gray-700 pl-2">
                             <a href="{{ route('admin.gmb-posts.index') }}"
-                               class="flex items-center gap-2 px-2.5 py-1 rounded text-[11px] {{ request()->routeIs('admin.gmb-posts.index') || request()->routeIs('admin.gmb-posts.create') || request()->routeIs('admin.gmb-posts.lote*') ? 'text-green-400 font-bold' : 'text-gray-400 hover:text-gray-200' }}">
+                               class="flex items-center gap-2 px-2.5 py-1 rounded text-[11px] {{ request()->routeIs('admin.gmb-posts.index') ? 'text-green-400 font-bold' : 'text-gray-400 hover:text-gray-200' }}">
                                 • Agendamentos
+                            </a>
+                            <a href="{{ route('admin.gmb-posts.create') }}"
+                               class="flex items-center gap-2 px-2.5 py-1 rounded text-[11px] {{ request()->routeIs('admin.gmb-posts.create') ? 'text-green-400 font-bold' : 'text-gray-400 hover:text-gray-200' }}">
+                                • Nova Publicação
+                            </a>
+                            <a href="{{ route('admin.gmb-posts.lote') }}"
+                               class="flex items-center gap-2 px-2.5 py-1 rounded text-[11px] {{ request()->routeIs('admin.gmb-posts.lote*') ? 'text-green-400 font-bold' : 'text-gray-400 hover:text-gray-200' }}">
+                                • Gerador em Lote
                             </a>
                             <a href="{{ route('admin.gmb-posts.templates') }}"
                                class="flex items-center gap-2 px-2.5 py-1 rounded text-[11px] {{ request()->routeIs('admin.gmb-posts.templates*') ? 'text-green-400 font-bold' : 'text-gray-400 hover:text-gray-200' }}">

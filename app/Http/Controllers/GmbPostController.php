@@ -74,7 +74,8 @@ class GmbPostController extends Controller
         $tenant = auth()->user()->tenant;
 
         $validated = $request->validate([
-            'perfil_gmb_id'     => 'required|exists:perfis_gmb,id',
+            'perfil_gmb_id'     => 'required|array|min:1',
+            'perfil_gmb_id.*'   => 'exists:perfis_gmb,id',
             'tipo'              => 'required|in:novidade,oferta,evento',
             'titulo'            => 'nullable|string|max:100',
             'texto'             => 'required|string|max:1500',
@@ -89,54 +90,85 @@ class GmbPostController extends Controller
             'gerado_por_ia'     => 'nullable|boolean',
         ]);
 
-        $perfil = PerfilGmb::where('tenant_id', $tenantId)->find($validated['perfil_gmb_id']);
+        $perfis = PerfilGmb::where('tenant_id', $tenantId)
+            ->whereIn('id', $validated['perfil_gmb_id'])
+            ->get();
 
         $dataAgendada = !empty($validated['publicar_imediato'])
             ? now()
             : ($validated['data_agendada'] ? Carbon::parse($validated['data_agendada']) : now());
 
-        $imagemUrl = $validated['imagem_url'] ?? null;
-        if ($request->hasFile('imagem')) {
-            $imagemUrl = $seoService->salvarImagemSeo(
-                $request->file('imagem'),
-                $tenant,
-                $perfil,
-                $dataAgendada,
-                $validated['titulo'] ?? null
-            );
+        $imagemUrlFixa = $validated['imagem_url'] ?? null;
+        $arquivoImagem = $request->hasFile('imagem') ? $request->file('imagem') : null;
+        $publicarImediato = !empty($validated['publicar_imediato']);
+
+        $criados = 0;
+        $publicados = 0;
+        $falhas = [];
+
+        foreach ($perfis as $perfil) {
+            // Cada perfil recebe sua própria cópia da imagem, renomeada com o
+            // bairro/keywords específicos dele (mesmo padrão do Gerador em Lote).
+            $imagemUrl = $imagemUrlFixa;
+            if ($arquivoImagem) {
+                $imagemUrl = $seoService->salvarImagemSeo(
+                    $arquivoImagem,
+                    $tenant,
+                    $perfil,
+                    $dataAgendada,
+                    $validated['titulo'] ?? null
+                );
+            }
+
+            $post = GmbPost::create([
+                'tenant_id'     => $tenantId,
+                'perfil_gmb_id' => $perfil->id,
+                'autor_user_id' => auth()->id(),
+                'tipo'          => $validated['tipo'],
+                'titulo'        => $validated['titulo'] ?? null,
+                'texto'         => $validated['texto'],
+                'imagem_url'    => $imagemUrl,
+                'cta_tipo'      => $validated['cta_tipo'],
+                'cta_url'       => $validated['cta_url'] ?? null,
+                'codigo_cupom'  => $validated['codigo_cupom'] ?? null,
+                'link_resgate'  => $validated['link_resgate'] ?? null,
+                'data_agendada' => $dataAgendada,
+                'status'        => $publicarImediato ? 'processando' : 'agendado',
+                'gerado_por_ia' => !empty($validated['gerado_por_ia']),
+            ]);
+            $criados++;
+
+            if ($publicarImediato) {
+                $sucesso = $publishService->publicar($post);
+                if ($sucesso) {
+                    $publicados++;
+                } else {
+                    $falhas[] = $perfil->nome . ': ' . ($post->fresh()->log_erro ?: 'erro desconhecido');
+                }
+            }
         }
 
-        $post = GmbPost::create([
-            'tenant_id'     => $tenantId,
-            'perfil_gmb_id' => $validated['perfil_gmb_id'],
-            'autor_user_id' => auth()->id(),
-            'tipo'          => $validated['tipo'],
-            'titulo'        => $validated['titulo'] ?? null,
-            'texto'         => $validated['texto'],
-            'imagem_url'    => $imagemUrl,
-            'cta_tipo'      => $validated['cta_tipo'],
-            'cta_url'       => $validated['cta_url'] ?? null,
-            'codigo_cupom'  => $validated['codigo_cupom'] ?? null,
-            'link_resgate'  => $validated['link_resgate'] ?? null,
-            'data_agendada' => $dataAgendada,
-            'status'        => !empty($validated['publicar_imediato']) ? 'processando' : 'agendado',
-            'gerado_por_ia' => !empty($validated['gerado_por_ia']),
-        ]);
-
-        if (!empty($validated['publicar_imediato'])) {
-            $sucesso = $publishService->publicar($post);
-
-            if ($sucesso) {
+        if ($publicarImediato) {
+            if ($publicados === $criados) {
                 return redirect()->route('admin.gmb-posts.index', ['semana' => $dataAgendada->toDateString()])
-                    ->with('sucesso', 'Publicação enviada com sucesso para o Google Meu Negócio!');
+                    ->with('sucesso', $criados === 1
+                        ? 'Publicação enviada com sucesso para o Google Meu Negócio!'
+                        : "Publicação enviada com sucesso para os {$publicados} perfis selecionados!");
+            }
+
+            if ($publicados > 0) {
+                return redirect()->route('admin.gmb-posts.index', ['semana' => $dataAgendada->toDateString()])
+                    ->with('aviso', "{$publicados} de {$criados} publicados. Falhas: " . implode(' | ', $falhas));
             }
 
             return redirect()->route('admin.gmb-posts.index', ['semana' => $dataAgendada->toDateString()])
-                ->with('aviso', 'Post criado, mas a publicação imediata falhou. Verifique os logs.');
+                ->with('erro', 'Falha ao publicar em todos os perfis selecionados: ' . implode(' | ', $falhas));
         }
 
         return redirect()->route('admin.gmb-posts.index', ['semana' => $dataAgendada->toDateString()])
-            ->with('sucesso', "Post agendado para {$post->data_agendada->format('d/m/Y H:i')}!");
+            ->with('sucesso', $criados === 1
+                ? "Post agendado para {$dataAgendada->format('d/m/Y H:i')}!"
+                : "{$criados} posts agendados para {$dataAgendada->format('d/m/Y H:i')} (1 por perfil selecionado)!");
     }
 
     // ── Gerador em Lote (Matriz Semanal) ──────────────────────────────────

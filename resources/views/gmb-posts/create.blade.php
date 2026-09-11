@@ -97,15 +97,29 @@
                 <input type="hidden" name="gerado_por_ia" :value="geradoPorIa ? 1 : 0">
 
                 <div class="space-y-4">
-                    {{-- Seleção do Perfil --}}
+                    {{-- Seleção dos Perfis (múltiplos) --}}
                     <div>
-                        <label class="block text-sm font-semibold text-gray-800 mb-1">Perfil no Google Meu Negócio *</label>
-                        <select name="perfil_gmb_id" x-model="perfilId" required class="w-full text-sm border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500">
-                            <option value="">Selecione a Empresa / Unidade</option>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-sm font-semibold text-gray-800">Perfis no Google Meu Negócio *</label>
+                            <label class="flex items-center gap-1.5 text-xs font-medium text-gray-600 cursor-pointer">
+                                <input type="checkbox"
+                                       :checked="perfilIds.length === {{ $perfis->count() }}"
+                                       @change="perfilIds = $event.target.checked ? {{ $perfis->pluck('id')->map(fn($id) => (string) $id)->toJson() }} : []"
+                                       class="rounded text-green-600 focus:ring-green-500">
+                                Selecionar todos
+                            </label>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 border border-gray-300 rounded-lg max-h-40 overflow-y-auto">
                             @foreach($perfis as $p)
-                                <option value="{{ $p->id }}" data-nome="{{ $p->nome }}">{{ $p->nome }} — {{ $p->city }}/{{ $p->state }}</option>
+                                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                    <input type="checkbox" name="perfil_gmb_id[]" value="{{ $p->id }}" data-nome="{{ $p->nome }}" x-model="perfilIds" class="rounded text-green-600 focus:ring-green-500">
+                                    <span>{{ $p->nome }} <span class="text-gray-400">— {{ $p->city }}/{{ $p->state }}</span></span>
+                                </label>
                             @endforeach
-                        </select>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1" x-show="perfilIds.length > 1">
+                            A mesma publicação será criada e enviada para os <span x-text="perfilIds.length"></span> perfis marcados.
+                        </p>
                     </div>
 
                     {{-- Formato do Post --}}
@@ -222,8 +236,10 @@
                         <a href="{{ route('admin.gmb-posts.index') }}" class="px-5 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-800">
                             Cancelar
                         </a>
-                        <button type="submit" class="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-xl shadow-md transition">
-                            <span x-text="publicarImediato ? '🚀 Publicar Agora no Google' : '📅 Confirmar Agendamento'"></span>
+                        <button type="submit" :disabled="perfilIds.length === 0" class="px-6 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl shadow-md transition">
+                            <span x-text="publicarImediato
+                                ? (perfilIds.length > 1 ? `🚀 Publicar Agora em ${perfilIds.length} Perfis` : '🚀 Publicar Agora no Google')
+                                : (perfilIds.length > 1 ? `📅 Confirmar Agendamento (${perfilIds.length} Perfis)` : '📅 Confirmar Agendamento')"></span>
                         </button>
                     </div>
                 </div>
@@ -296,7 +312,7 @@
 <script>
 function gmbPostForm() {
     return {
-        perfilId: '',
+        perfilIds: [],
         tipo: 'novidade',
         titulo: '',
         texto: '',
@@ -317,8 +333,12 @@ function gmbPostForm() {
         dicaSeo: '',
 
         get nomePerfilSelecionado() {
-            const el = document.querySelector(`select[name="perfil_gmb_id"] option[value="${this.perfilId}"]`);
-            return el ? el.textContent.split('—')[0].trim() : '';
+            if (this.perfilIds.length === 0) return '';
+            if (this.perfilIds.length === 1) {
+                const el = document.querySelector(`input[name="perfil_gmb_id[]"][value="${this.perfilIds[0]}"]`);
+                return el ? el.dataset.nome : '';
+            }
+            return `${this.perfilIds.length} perfis selecionados`;
         },
 
         labelCta(tipo) {
@@ -358,7 +378,9 @@ function gmbPostForm() {
                 const json = await res.json();
 
                 if (json.success && json.data) {
-                    this.perfilId = this.iaPerfilId;
+                    if (this.iaPerfilId && !this.perfilIds.includes(this.iaPerfilId)) {
+                        this.perfilIds.push(this.iaPerfilId);
+                    }
                     this.texto = json.data.texto || '';
                     if (json.data.titulo) this.titulo = json.data.titulo;
                     if (json.data.cta_tipo) this.ctaTipo = json.data.cta_tipo;
