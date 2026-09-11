@@ -8,7 +8,7 @@ cd /d "c:\Users\PICHAU\Desktop\- LEAD CERTO\Antigravity\leadcerto\core\app-paine
 
 echo [1/3] Salvando alteracoes no Git...
 git add .
-git commit -m "feat: configuracao de janela meta, botoes de transcricao e ajuste de google contacts"
+git commit -m "feat: adiciona pacote completo de escopos Meta (Facebook, Instagram, Messenger, Ads, Catalog, Threads) e registra permissoes na interface de integracoes"
 git push
 
 echo.
