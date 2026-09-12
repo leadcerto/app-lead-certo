@@ -416,4 +416,44 @@ class GmbQualidadeServiceTest extends TestCase
         $this->assertStringContainsString('Schema.org', $score->categorias['presenca_externa']['diagnosticos'][1]['mensagem']);
         $this->assertNotNull($score->categorias['presenca_externa']['diagnosticos'][1]['acao_url']);
     }
+
+    public function test_saude_risco_com_horario_cadastrado_da_nota_maxima(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response([
+                'regularHours' => ['periods' => [
+                    ['openDay' => 'MONDAY', 'openTime' => '09:00', 'closeDay' => 'MONDAY', 'closeTime' => '18:00'],
+                ]],
+            ], 200),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame(100, $score->categorias['saude_risco']['nota']);
+        $this->assertSame('ok', $score->categorias['saude_risco']['diagnosticos'][0]['tipo']);
+        $this->assertSame('info', $score->categorias['saude_risco']['diagnosticos'][1]['tipo']);
+    }
+
+    public function test_saude_risco_sem_horario_cadastrado_fica_zerada(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response([], 200),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame(0, $score->categorias['saude_risco']['nota']);
+        $this->assertSame('erro', $score->categorias['saude_risco']['diagnosticos'][0]['tipo']);
+        $this->assertCount(2, $score->categorias['saude_risco']['diagnosticos']);
+    }
 }

@@ -33,15 +33,18 @@ class GmbQualidadeService
 
         foreach (self::CATEGORIAS_LABELS as $chave => $label) {
             $categorias[$chave] = match ($chave) {
-                'atividade'  => $this->avaliarAtividade($perfil),
-                'identidade' => $location['sucesso']
+                'atividade'        => $this->avaliarAtividade($perfil),
+                'identidade'       => $location['sucesso']
                     ? $this->avaliarIdentidade($location['dados'])
                     : $this->categoriaErro($label, $location['motivo']),
-                'localizacao' => $location['sucesso']
+                'localizacao'      => $location['sucesso']
                     ? $this->avaliarLocalizacao($location['dados'])
                     : $this->categoriaErro($label, $location['motivo']),
                 'presenca_externa' => $location['sucesso']
                     ? $this->avaliarPresencaExterna($location['dados'])
+                    : $this->categoriaErro($label, $location['motivo']),
+                'saude_risco'      => $location['sucesso']
+                    ? $this->avaliarSaudeRisco($location['dados'])
                     : $this->categoriaErro($label, $location['motivo']),
                 default => $this->categoriaPendente($label),
             };
@@ -409,6 +412,39 @@ class GmbQualidadeService
             'nota'         => $nota,
             'status'       => 'calculado',
             'label'        => self::CATEGORIAS_LABELS['presenca_externa'],
+            'diagnosticos' => $diagnosticos,
+        ];
+    }
+
+    private function avaliarSaudeRisco(array $dados): array
+    {
+        $periods = $dados['regularHours']['periods'] ?? [];
+        $diagnosticos = [];
+
+        if (! empty($periods)) {
+            $nota = 100;
+            $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => 'Horário de funcionamento cadastrado.', 'acao_label' => null, 'acao_url' => null];
+        } else {
+            $nota = 0;
+            $diagnosticos[] = [
+                'tipo'       => 'erro',
+                'mensagem'   => 'Horário de funcionamento não cadastrado na ficha.',
+                'acao_label' => 'Abrir Google Business Profile Manager',
+                'acao_url'   => 'https://business.google.com/',
+            ];
+        }
+
+        $diagnosticos[] = [
+            'tipo'       => 'info',
+            'mensagem'   => 'Verifique periodicamente se há edições sugeridas por terceiros pendentes de revisão no Google Business Profile Manager.',
+            'acao_label' => 'Abrir Google Business Profile Manager',
+            'acao_url'   => 'https://business.google.com/',
+        ];
+
+        return [
+            'nota'         => $nota,
+            'status'       => 'calculado',
+            'label'        => self::CATEGORIAS_LABELS['saude_risco'],
             'diagnosticos' => $diagnosticos,
         ];
     }
