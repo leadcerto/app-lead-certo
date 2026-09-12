@@ -85,8 +85,10 @@ class GmbQualidadeService
                 'status' => 'calculado',
                 'label'  => self::CATEGORIAS_LABELS['atividade'],
                 'diagnosticos' => [[
-                    'tipo'     => 'ok',
-                    'mensagem' => "Último post publicado há {$diasSemPost} dia(s) — dentro do ritmo recomendado (ao menos 1x por semana).",
+                    'tipo'        => 'ok',
+                    'mensagem'    => "Último post publicado há {$diasSemPost} dia(s) — dentro do ritmo recomendado (ao menos 1x por semana).",
+                    'acao_label'  => null,
+                    'acao_url'    => null,
                 ]],
             ];
         }
@@ -121,8 +123,10 @@ class GmbQualidadeService
             'status' => 'pendente',
             'label'  => $label,
             'diagnosticos' => [[
-                'tipo'     => 'pendente',
-                'mensagem' => 'Essa categoria ainda não está disponível — chega em uma próxima atualização.',
+                'tipo'        => 'pendente',
+                'mensagem'    => 'Essa categoria ainda não está disponível — chega em uma próxima atualização.',
+                'acao_label'  => null,
+                'acao_url'    => null,
             ]],
         ];
     }
