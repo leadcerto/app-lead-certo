@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class PerfilGmb extends Model
 {
@@ -48,6 +49,11 @@ class PerfilGmb extends Model
     public function posts(): HasMany
     {
         return $this->hasMany(GmbPost::class, 'perfil_gmb_id');
+    }
+
+    public function qualidadeScore(): HasOne
+    {
+        return $this->hasOne(GmbQualidadeScore::class, 'perfil_gmb_id');
     }
 
     // ── Métodos Auxiliares ─────────────────────────────────────────────────────

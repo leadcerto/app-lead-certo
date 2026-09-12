@@ -14,6 +14,7 @@ class PerfilGmbController extends Controller
     {
         $perfis = PerfilGmb::where('tenant_id', $request->user()->tenantAtual())
             ->withCount(['contatos as contatos_pendentes_count' => fn ($q) => $q->naoContatados()])
+            ->with(['qualidadeScore' => fn ($q) => $q])
             ->orderBy('nome')
             ->paginate(20);
 

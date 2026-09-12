@@ -168,4 +168,37 @@ class PerfilGmbControllerTest extends TestCase
 
         $response->assertForbidden();
     }
+
+    public function test_listagem_mostra_nota_de_qualidade_quando_ja_avaliado(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $dono   = $this->usuarioDono($tenant);
+        $perfil = $this->criarPerfil($tenant);
+
+        \App\Models\GmbQualidadeScore::create([
+            'tenant_id'     => $tenant->id,
+            'perfil_gmb_id' => $perfil->id,
+            'nota_geral'    => 75,
+            'categorias'    => [],
+            'avaliado_em'   => now(),
+        ]);
+
+        $response = $this->actingAs($dono)->get('/admin/gmb/perfis-gmb');
+
+        $response->assertOk();
+        $response->assertSee('75');
+        $response->assertSee(route('admin.gmb-qualidade.show', $perfil));
+    }
+
+    public function test_listagem_mostra_ainda_nao_avaliado_quando_nao_ha_score(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $dono   = $this->usuarioDono($tenant);
+        $this->criarPerfil($tenant);
+
+        $response = $this->actingAs($dono)->get('/admin/gmb/perfis-gmb');
+
+        $response->assertOk();
+        $response->assertSee('Ainda não avaliado');
+    }
 }

@@ -31,6 +31,7 @@
                     <th class="px-4 py-3 text-left">UF</th>
                     <th class="px-4 py-3 text-left">Link GMB</th>
                     <th class="px-4 py-3 text-center">Status</th>
+                    <th class="px-4 py-3 text-center">Qualidade</th>
                     <th class="px-4 py-3 text-center">Ações</th>
                 </tr>
             </thead>
@@ -57,6 +58,21 @@
                             <span class="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">Inativo</span>
                         @endif
                     </td>
+                    <td class="px-4 py-3 text-center">
+                        @if($perfil->qualidadeScore)
+                            @php
+                                $nota = $perfil->qualidadeScore->nota_geral;
+                                $corBadge = is_null($nota) ? 'bg-gray-100 text-gray-500' : ($nota >= 90 ? 'bg-green-100 text-green-700' : ($nota >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'));
+                            @endphp
+                            <a href="{{ route('admin.gmb-qualidade.show', $perfil) }}" class="inline-flex items-center gap-1.5 px-2.5 py-1 {{ $corBadge }} rounded-full text-xs font-bold hover:opacity-80 transition">
+                                {{ $nota ?? '—' }}
+                            </a>
+                        @else
+                            <a href="{{ route('admin.gmb-qualidade.show', $perfil) }}" class="text-xs text-gray-400 hover:text-gray-600 hover:underline">
+                                Ainda não avaliado
+                            </a>
+                        @endif
+                    </td>
                     <td class="px-4 py-3 text-center space-x-2">
                         <a href="{{ route('admin.perfis-gmb.contatos.index', $perfil) }}"
                            class="text-purple-600 hover:underline text-xs">
@@ -76,7 +92,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="6" class="px-4 py-8 text-center text-gray-400">Nenhum perfil cadastrado.</td>
+                    <td colspan="7" class="px-4 py-8 text-center text-gray-400">Nenhum perfil cadastrado.</td>
                 </tr>
                 @endforelse
             </tbody>
