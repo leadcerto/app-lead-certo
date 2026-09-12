@@ -66,6 +66,7 @@
                         'ok' => 'border-green-400 text-gray-700',
                         'aviso' => 'border-amber-400 text-gray-700',
                         'erro' => 'border-red-400 text-gray-700',
+                        'info' => 'border-blue-400 text-gray-700',
                         default => 'border-gray-300 text-gray-500',
                     };
                 @endphp

@@ -40,6 +40,9 @@ class GmbQualidadeService
                 'localizacao' => $location['sucesso']
                     ? $this->avaliarLocalizacao($location['dados'])
                     : $this->categoriaErro($label, $location['motivo']),
+                'presenca_externa' => $location['sucesso']
+                    ? $this->avaliarPresencaExterna($location['dados'])
+                    : $this->categoriaErro($label, $location['motivo']),
                 default => $this->categoriaPendente($label),
             };
         }
@@ -374,6 +377,39 @@ class GmbQualidadeService
                 'tipo'     => 'aviso',
                 'mensagem' => 'Área de atendimento incompleta — faltam: ' . implode(', ', $faltando) . '.',
             ], $acaoManual)],
+        ];
+    }
+
+    private function avaliarPresencaExterna(array $dados): array
+    {
+        $website = $dados['websiteUri'] ?? '';
+        $diagnosticos = [];
+
+        if (! empty($website)) {
+            $nota = 100;
+            $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => 'Site vinculado à ficha.', 'acao_label' => null, 'acao_url' => null];
+        } else {
+            $nota = 0;
+            $diagnosticos[] = [
+                'tipo'       => 'erro',
+                'mensagem'   => 'Nenhum site cadastrado na ficha.',
+                'acao_label' => 'Adicionar site no Google Business Profile Manager',
+                'acao_url'   => 'https://business.google.com/',
+            ];
+        }
+
+        $diagnosticos[] = [
+            'tipo'       => 'info',
+            'mensagem'   => 'Lembrete: adicione o Schema.org (LocalBusiness) no site vinculado para reforçar a ficha para o Google.',
+            'acao_label' => 'Ver exemplo na Apostila',
+            'acao_url'   => route('admin.gmb-apostila.index'),
+        ];
+
+        return [
+            'nota'         => $nota,
+            'status'       => 'calculado',
+            'label'        => self::CATEGORIAS_LABELS['presenca_externa'],
+            'diagnosticos' => $diagnosticos,
         ];
     }
 

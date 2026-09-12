@@ -379,4 +379,41 @@ class GmbQualidadeServiceTest extends TestCase
         $this->assertSame(0, $score->categorias['localizacao']['nota']);
         $this->assertSame('erro', $score->categorias['localizacao']['diagnosticos'][0]['tipo']);
     }
+
+    public function test_presenca_externa_com_site_cadastrado_da_nota_maxima(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response(['websiteUri' => 'https://freterio.com.br'], 200),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame(100, $score->categorias['presenca_externa']['nota']);
+        $this->assertSame('ok', $score->categorias['presenca_externa']['diagnosticos'][0]['tipo']);
+        $this->assertSame('info', $score->categorias['presenca_externa']['diagnosticos'][1]['tipo']);
+    }
+
+    public function test_presenca_externa_sem_site_fica_zerada_mas_sempre_lembra_do_schema_org(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response([], 200),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame(0, $score->categorias['presenca_externa']['nota']);
+        $this->assertCount(2, $score->categorias['presenca_externa']['diagnosticos']);
+        $this->assertStringContainsString('Schema.org', $score->categorias['presenca_externa']['diagnosticos'][1]['mensagem']);
+        $this->assertNotNull($score->categorias['presenca_externa']['diagnosticos'][1]['acao_url']);
+    }
 }
