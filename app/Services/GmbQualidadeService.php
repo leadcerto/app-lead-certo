@@ -152,7 +152,7 @@ class GmbQualidadeService
 
         $res = Http::withToken($token->access_token)
             ->timeout(15)
-            ->get("https://mybusinessbusinessinformation.googleapis.com/v1/locations/{$locationId}", [
+            ->get("https://mybusinessbusinessinformation.googleapis.com/v1/locations/" . rawurlencode($locationId), [
                 'readMask' => 'categories,title,profile,storefrontAddress,serviceArea,websiteUri,regularHours,specialHours,phoneNumbers',
             ]);
 
@@ -254,7 +254,7 @@ class GmbQualidadeService
         }
 
         $descricao = $dados['profile']['description'] ?? '';
-        $tamanhoDescricao = strlen($descricao);
+        $tamanhoDescricao = mb_strlen($descricao);
         if ($tamanhoDescricao >= 150) {
             $pontos += 20;
         } elseif ($tamanhoDescricao >= 1) {
