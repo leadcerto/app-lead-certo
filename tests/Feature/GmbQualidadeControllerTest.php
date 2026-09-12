@@ -42,6 +42,7 @@ class GmbQualidadeControllerTest extends TestCase
         $response->assertViewIs('gmb-qualidade.show');
         $response->assertViewHas('score', fn ($score) => $score->nota_geral === 0);
         $this->assertDatabaseHas('gmb_qualidade_scores', ['perfil_gmb_id' => $perfil->id]);
+        $response->assertSee('Em breve');
     }
 
     public function test_nao_acessa_diagnostico_de_perfil_de_outro_tenant(): void
