@@ -37,6 +37,9 @@ class GmbQualidadeService
                 'identidade' => $location['sucesso']
                     ? $this->avaliarIdentidade($location['dados'])
                     : $this->categoriaErro($label, $location['motivo']),
+                'localizacao' => $location['sucesso']
+                    ? $this->avaliarLocalizacao($location['dados'])
+                    : $this->categoriaErro($label, $location['motivo']),
                 default => $this->categoriaPendente($label),
             };
         }
@@ -279,6 +282,98 @@ class GmbQualidadeService
             'status'       => 'calculado',
             'label'        => self::CATEGORIAS_LABELS['identidade'],
             'diagnosticos' => $diagnosticos,
+        ];
+    }
+
+    private function avaliarLocalizacao(array $dados): array
+    {
+        $storefront = $dados['storefrontAddress'] ?? [];
+        $serviceArea = $dados['serviceArea'] ?? [];
+        $acaoManual = ['acao_label' => 'Abrir Google Business Profile Manager', 'acao_url' => 'https://business.google.com/'];
+
+        $temStorefront = ! empty($storefront['addressLines']) || ! empty($storefront['locality']);
+        $temServiceArea = ! empty($serviceArea);
+
+        if (! $temStorefront && ! $temServiceArea) {
+            return [
+                'nota'   => 0,
+                'status' => 'calculado',
+                'label'  => self::CATEGORIAS_LABELS['localizacao'],
+                'diagnosticos' => [array_merge([
+                    'tipo'     => 'erro',
+                    'mensagem' => 'Nenhum endereço público nem área de atendimento configurados nesta ficha.',
+                ], $acaoManual)],
+            ];
+        }
+
+        if ($temStorefront) {
+            $campos = [
+                'addressLines'       => 'linhas de endereço',
+                'locality'           => 'cidade',
+                'administrativeArea' => 'estado',
+                'postalCode'         => 'CEP',
+                'regionCode'         => 'país',
+            ];
+            $pontos = 0;
+            $faltando = [];
+            foreach ($campos as $chave => $rotulo) {
+                if (! empty($storefront[$chave])) {
+                    $pontos += 20;
+                } else {
+                    $faltando[] = $rotulo;
+                }
+            }
+
+            if (empty($faltando)) {
+                return [
+                    'nota'   => 100,
+                    'status' => 'calculado',
+                    'label'  => self::CATEGORIAS_LABELS['localizacao'],
+                    'diagnosticos' => [['tipo' => 'ok', 'mensagem' => 'Endereço completo.', 'acao_label' => null, 'acao_url' => null]],
+                ];
+            }
+
+            return [
+                'nota'   => $pontos,
+                'status' => 'calculado',
+                'label'  => self::CATEGORIAS_LABELS['localizacao'],
+                'diagnosticos' => [array_merge([
+                    'tipo'     => 'aviso',
+                    'mensagem' => 'Endereço incompleto — faltam: ' . implode(', ', $faltando) . '.',
+                ], $acaoManual)],
+            ];
+        }
+
+        $pontos = 0;
+        $faltando = [];
+        if (! empty($serviceArea['businessType'])) {
+            $pontos += 50;
+        } else {
+            $faltando[] = 'tipo de negócio';
+        }
+        if (! empty($serviceArea['places']['placeInfos'])) {
+            $pontos += 50;
+        } else {
+            $faltando[] = 'lista de áreas atendidas';
+        }
+
+        if (empty($faltando)) {
+            return [
+                'nota'   => 100,
+                'status' => 'calculado',
+                'label'  => self::CATEGORIAS_LABELS['localizacao'],
+                'diagnosticos' => [['tipo' => 'ok', 'mensagem' => 'Área de atendimento completa.', 'acao_label' => null, 'acao_url' => null]],
+            ];
+        }
+
+        return [
+            'nota'   => $pontos,
+            'status' => 'calculado',
+            'label'  => self::CATEGORIAS_LABELS['localizacao'],
+            'diagnosticos' => [array_merge([
+                'tipo'     => 'aviso',
+                'mensagem' => 'Área de atendimento incompleta — faltam: ' . implode(', ', $faltando) . '.',
+            ], $acaoManual)],
         ];
     }
 

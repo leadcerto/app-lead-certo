@@ -294,4 +294,89 @@ class GmbQualidadeServiceTest extends TestCase
 
         $this->assertSame(1, \App\Models\GmbQualidadeScore::count());
     }
+
+    public function test_localizacao_com_endereco_completo_da_nota_maxima(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response([
+                'storefrontAddress' => [
+                    'addressLines'       => ['Rua das Flores, 123'],
+                    'locality'           => 'Rio de Janeiro',
+                    'administrativeArea' => 'RJ',
+                    'postalCode'         => '22000-000',
+                    'regionCode'         => 'BR',
+                ],
+            ], 200),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame(100, $score->categorias['localizacao']['nota']);
+        $this->assertSame('ok', $score->categorias['localizacao']['diagnosticos'][0]['tipo']);
+    }
+
+    public function test_localizacao_com_endereco_incompleto_lista_campos_faltantes(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response([
+                'storefrontAddress' => [
+                    'addressLines' => ['Rua das Flores, 123'],
+                    'locality'     => 'Rio de Janeiro',
+                ],
+            ], 200),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame(40, $score->categorias['localizacao']['nota']);
+        $this->assertStringContainsString('CEP', $score->categorias['localizacao']['diagnosticos'][0]['mensagem']);
+    }
+
+    public function test_localizacao_com_area_de_atendimento_completa_da_nota_maxima(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response([
+                'serviceArea' => [
+                    'businessType' => 'CUSTOMER_LOCATION_ONLY',
+                    'places'       => ['placeInfos' => [['placeName' => 'Rio de Janeiro, RJ']]],
+                ],
+            ], 200),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame(100, $score->categorias['localizacao']['nota']);
+    }
+
+    public function test_localizacao_sem_endereco_nem_area_de_atendimento_fica_zerada(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response([], 200),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame(0, $score->categorias['localizacao']['nota']);
+        $this->assertSame('erro', $score->categorias['localizacao']['diagnosticos'][0]['tipo']);
+    }
 }
