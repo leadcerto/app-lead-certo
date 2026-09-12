@@ -29,6 +29,12 @@ Route::middleware(['auth', 'tenant', 'role:admin,dono,diretor,diretor_marketing'
     // ── Apostila (Manual Técnico e Boas Práticas) ─────────────────────────
     Route::view('apostila', 'gmb-apostila.index')->name('gmb-apostila.index');
 
+    // ── Análise de Qualidade da Ficha ──────────────────────────────────────
+    Route::get('perfis-gmb/{perfil}/qualidade', [\App\Http\Controllers\GmbQualidadeController::class, 'show'])
+        ->name('gmb-qualidade.show');
+    Route::post('perfis-gmb/{perfil}/qualidade/reavaliar', [\App\Http\Controllers\GmbQualidadeController::class, 'reavaliar'])
+        ->name('gmb-qualidade.reavaliar');
+
     // ── Lista de telefones (clientes reais pra ligar) por Perfil GMB ──────
     Route::get('perfis-gmb/{perfil}/contatos', [ContatoAvaliacaoController::class, 'index'])
         ->name('perfis-gmb.contatos.index');
