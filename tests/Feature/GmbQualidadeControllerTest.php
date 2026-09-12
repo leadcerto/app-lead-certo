@@ -94,4 +94,17 @@ class GmbQualidadeControllerTest extends TestCase
         $response->assertRedirect("/admin/gmb/perfis-gmb/{$perfil->id}/qualidade");
         $this->assertDatabaseHas('gmb_qualidade_scores', ['perfil_gmb_id' => $perfil->id, 'nota_geral' => 100]);
     }
+
+    public function test_view_mostra_indisponivel_quando_categoria_fica_em_erro(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $dono   = $this->usuarioDono($tenant);
+        $perfil = $this->criarPerfil($tenant); // sem google_location_id -> identidade/localizacao/etc ficam 'erro'
+
+        $response = $this->actingAs($dono)->get("/admin/gmb/perfis-gmb/{$perfil->id}/qualidade");
+
+        $response->assertOk();
+        $response->assertSee('Indisponível');
+        $response->assertSee('Em breve'); // conteudo/reputacao continuam pendentes
+    }
 }

@@ -456,4 +456,62 @@ class GmbQualidadeServiceTest extends TestCase
         $this->assertSame('erro', $score->categorias['saude_risco']['diagnosticos'][0]['tipo']);
         $this->assertCount(2, $score->categorias['saude_risco']['diagnosticos']);
     }
+
+    public function test_perfil_bom_com_todos_os_dados_ideais_calcula_5_categorias_com_nota_alta(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+        $this->criarPost($perfil, 'publicado', now()->subDay());
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response([
+                'categories' => [
+                    'primaryCategory'      => ['displayName' => 'Transportadora'],
+                    'additionalCategories' => [['displayName' => 'Mudanças'], ['displayName' => 'Fretes'], ['displayName' => 'Logística']],
+                ],
+                'title'   => 'Frete Rio Transportes',
+                'profile' => ['description' => str_repeat('Somos especialistas em fretes e mudanças. ', 6)],
+                'storefrontAddress' => [
+                    'addressLines' => ['Rua das Flores, 123'], 'locality' => 'Rio de Janeiro',
+                    'administrativeArea' => 'RJ', 'postalCode' => '22000-000', 'regionCode' => 'BR',
+                ],
+                'websiteUri'   => 'https://freterio.com.br',
+                'regularHours' => ['periods' => [['openDay' => 'MONDAY', 'openTime' => '09:00', 'closeDay' => 'MONDAY', 'closeTime' => '18:00']]],
+            ], 200),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame(100, $score->categorias['atividade']['nota']);
+        $this->assertSame(100, $score->categorias['identidade']['nota']);
+        $this->assertSame(100, $score->categorias['localizacao']['nota']);
+        $this->assertSame(100, $score->categorias['presenca_externa']['nota']);
+        $this->assertSame(100, $score->categorias['saude_risco']['nota']);
+        $this->assertSame('pendente', $score->categorias['conteudo']['status']);
+        $this->assertSame('pendente', $score->categorias['reputacao']['status']);
+        $this->assertSame(100, $score->nota_geral);
+    }
+
+    public function test_perfil_incompleto_calcula_notas_baixas_nas_5_categorias_e_erro_se_api_falhar(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response(['error' => ['message' => 'internal error']], 500),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        foreach (['identidade', 'localizacao', 'presenca_externa', 'saude_risco'] as $chave) {
+            $this->assertSame('erro', $score->categorias[$chave]['status'], "categoria {$chave} deveria estar 'erro'");
+            $this->assertNull($score->categorias[$chave]['nota']);
+        }
+        // atividade eh 0 (sem post), o resto ('erro'/'pendente') fica fora da media
+        $this->assertSame(0, $score->nota_geral);
+    }
 }
