@@ -324,15 +324,15 @@
         <div class="overflow-x-auto rounded-xl bg-gray-900 p-4">
             <pre class="text-xs text-gray-200 font-mono leading-relaxed">&lt;script type="application/ld+json"&gt;
 {
-  "@context": "https://schema.org",
-  "@type": "LocalBusiness",
+  "@@context": "https://schema.org",
+  "@@type": "LocalBusiness",
   "name": "Nome Fantasia da Sua Empresa",
   "image": "https://seusite.com.br/foto-fachada.jpg",
-  "@id": "https://seusite.com.br",
+  "@@id": "https://seusite.com.br",
   "url": "https://seusite.com.br",
   "telephone": "+55-21-99999-9999",
   "address": {
-    "@type": "PostalAddress",
+    "@@type": "PostalAddress",
     "streetAddress": "Rua Exemplo, 123, Sala 401",
     "addressLocality": "Rio de Janeiro",
     "addressRegion": "RJ",
@@ -340,12 +340,12 @@
     "addressCountry": "BR"
   },
   "geo": {
-    "@type": "GeoCoordinates",
+    "@@type": "GeoCoordinates",
     "latitude": -22.906847,
     "longitude": -43.172896
   },
   "openingHoursSpecification": [{
-    "@type": "OpeningHoursSpecification",
+    "@@type": "OpeningHoursSpecification",
     "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday"],
     "opens": "08:00",
     "closes": "18:00"
