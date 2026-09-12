@@ -41,7 +41,7 @@ class GmbQualidadeService
             ? (int) round($notasCalculadas->avg())
             : null;
 
-        return GmbQualidadeScore::updateOrCreate(
+        return GmbQualidadeScore::withoutGlobalScopes()->updateOrCreate(
             ['perfil_gmb_id' => $perfil->id],
             [
                 'tenant_id'   => $perfil->tenant_id,

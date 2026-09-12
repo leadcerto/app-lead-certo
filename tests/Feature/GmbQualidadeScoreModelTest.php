@@ -32,6 +32,7 @@ class GmbQualidadeScoreModelTest extends TestCase
             'id', 'tenant_id', 'perfil_gmb_id', 'nota_geral', 'categorias', 'avaliado_em',
             'created_at', 'updated_at',
         ]));
+        $this->assertTrue(Schema::hasIndex('gmb_qualidade_scores', ['perfil_gmb_id'], 'unique'));
     }
 
     public function test_cria_score_vinculado_ao_perfil_e_so_do_proprio_tenant(): void

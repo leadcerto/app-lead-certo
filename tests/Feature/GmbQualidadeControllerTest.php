@@ -60,6 +60,21 @@ class GmbQualidadeControllerTest extends TestCase
         $response->assertForbidden();
     }
 
+    public function test_nao_reavalia_diagnostico_de_perfil_de_outro_tenant(): void
+    {
+        $tenant      = Tenant::factory()->create();
+        $outroTenant = Tenant::factory()->create();
+        $dono        = $this->usuarioDono($tenant);
+        $perfilAlheio = \App\Models\PerfilGmb::withoutGlobalScopes()->create([
+            'tenant_id' => $outroTenant->id, 'nome' => 'x', 'city' => 'x', 'state' => 'RJ',
+            'link_gmb' => 'https://maps.google.com/?cid=1', 'ativo' => true,
+        ]);
+
+        $response = $this->actingAs($dono)->post("/admin/gmb/perfis-gmb/{$perfilAlheio->id}/qualidade/reavaliar");
+
+        $response->assertForbidden();
+    }
+
     public function test_reavaliar_recalcula_a_nota_apos_novo_post(): void
     {
         $tenant = Tenant::factory()->create();

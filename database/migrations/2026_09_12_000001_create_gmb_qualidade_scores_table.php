@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('gmb_qualidade_scores', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
-            $table->foreignId('perfil_gmb_id')->constrained('perfis_gmb')->cascadeOnDelete()->unique();
+            $table->foreignId('perfil_gmb_id')->unique()->constrained('perfis_gmb')->cascadeOnDelete();
 
             $table->unsignedTinyInteger('nota_geral')->nullable();
             $table->json('categorias');
