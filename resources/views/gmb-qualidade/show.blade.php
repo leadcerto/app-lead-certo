@@ -50,8 +50,8 @@
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-bold text-gray-900">{{ $categoria['label'] }}</h3>
-                @if($categoria['status'] === 'pendente')
-                    <span class="px-2 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-semibold">Em breve</span>
+                @if($categoria['status'] !== 'calculado')
+                    <span class="px-2 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-semibold">{{ $categoria['status'] === 'erro' ? 'Indisponível' : 'Em breve' }}</span>
                 @else
                     @php
                         $corCategoria = $categoria['nota'] >= 90 ? 'bg-green-100 text-green-700' : ($categoria['nota'] >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700');
