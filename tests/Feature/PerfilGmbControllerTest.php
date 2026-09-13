@@ -190,7 +190,7 @@ class PerfilGmbControllerTest extends TestCase
         $response->assertSee(route('admin.gmb-qualidade.show', $perfil));
     }
 
-    public function test_listagem_mostra_ainda_nao_avaliado_quando_nao_ha_score(): void
+    public function test_listagem_mostra_avaliar_perfil_quando_nao_ha_score(): void
     {
         $tenant = Tenant::factory()->create();
         $dono   = $this->usuarioDono($tenant);
@@ -199,6 +199,6 @@ class PerfilGmbControllerTest extends TestCase
         $response = $this->actingAs($dono)->get('/admin/gmb/perfis-gmb');
 
         $response->assertOk();
-        $response->assertSee('Ainda não avaliado');
+        $response->assertSee('Avaliar perfil');
     }
 }

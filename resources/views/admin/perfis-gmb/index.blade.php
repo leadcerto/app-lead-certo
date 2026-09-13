@@ -69,7 +69,7 @@
                             </a>
                         @else
                             <a href="{{ route('admin.gmb-qualidade.show', $perfil) }}" class="text-xs text-gray-400 hover:text-gray-600 hover:underline">
-                                Ainda não avaliado
+                                Avaliar perfil
                             </a>
                         @endif
                     </td>
