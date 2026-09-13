@@ -65,7 +65,7 @@
                                 $corBadge = is_null($nota) ? 'bg-gray-100 text-gray-500' : ($nota >= 90 ? 'bg-green-100 text-green-700' : ($nota >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'));
                             @endphp
                             <a href="{{ route('admin.gmb-qualidade.show', $perfil) }}" class="inline-flex items-center gap-1.5 px-2.5 py-1 {{ $corBadge }} rounded-full text-xs font-bold hover:opacity-80 transition">
-                                {{ $nota ?? '—' }}
+                                {{ is_null($nota) ? '— - Atualizar' : "{$nota}% - Atualizar" }}
                             </a>
                         @else
                             <a href="{{ route('admin.gmb-qualidade.show', $perfil) }}" class="text-xs text-gray-400 hover:text-gray-600 hover:underline">
