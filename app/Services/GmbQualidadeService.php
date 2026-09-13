@@ -241,6 +241,7 @@ class GmbQualidadeService
         $categoriaPrimaria = $dados['categories']['primaryCategory']['displayName'] ?? null;
         if (! empty($categoriaPrimaria)) {
             $pontos += 40;
+            $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => "Categoria principal definida: {$categoriaPrimaria}.", 'acao_label' => null, 'acao_url' => null];
         } else {
             $diagnosticos[] = array_merge([
                 'tipo'     => 'erro',
@@ -251,6 +252,7 @@ class GmbQualidadeService
         $secundarias = count($dados['categories']['additionalCategories'] ?? []);
         if ($secundarias >= 3 && $secundarias <= 5) {
             $pontos += 20;
+            $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => "{$secundarias} categorias secundárias cadastradas (ideal: 3 a 5).", 'acao_label' => null, 'acao_url' => null];
         } elseif ($secundarias >= 1 && $secundarias <= 2) {
             $pontos += 10;
             $diagnosticos[] = array_merge([
@@ -275,6 +277,7 @@ class GmbQualidadeService
             || str_contains($titulo, ':') || str_contains($titulo, ' - ');
         if (! $temSeparadorSuspeito) {
             $pontos += 20;
+            $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => 'Nome da ficha sem termos extras além do nome do negócio.', 'acao_label' => null, 'acao_url' => null];
         } else {
             $diagnosticos[] = array_merge([
                 'tipo'     => 'aviso',
@@ -286,6 +289,7 @@ class GmbQualidadeService
         $tamanhoDescricao = mb_strlen($descricao);
         if ($tamanhoDescricao >= 150) {
             $pontos += 20;
+            $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => "Descrição com {$tamanhoDescricao} caracteres (ideal: 150+).", 'acao_label' => null, 'acao_url' => null];
         } elseif ($tamanhoDescricao >= 1) {
             $pontos += 10;
             $diagnosticos[] = array_merge([
@@ -297,10 +301,6 @@ class GmbQualidadeService
                 'tipo'     => 'erro',
                 'mensagem' => 'Descrição ausente. Escreva uma descrição de pelo menos 150 caracteres direto no Google Business Profile Manager.',
             ], $acaoManual);
-        }
-
-        if (empty($diagnosticos)) {
-            $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => 'Categoria, categorias secundárias, nome e descrição bem preenchidos.', 'acao_label' => null, 'acao_url' => null];
         }
 
         return [
@@ -334,39 +334,28 @@ class GmbQualidadeService
 
         if ($temStorefront) {
             $campos = [
-                'addressLines'       => 'linhas de endereço',
-                'locality'           => 'cidade',
-                'administrativeArea' => 'estado',
-                'postalCode'         => 'CEP',
-                'regionCode'         => 'país',
+                'addressLines'       => ['Linhas de endereço cadastradas.', 'Linhas de endereço não cadastradas.'],
+                'locality'           => ['Cidade cadastrada.', 'Cidade não cadastrada.'],
+                'administrativeArea' => ['Estado cadastrado.', 'Estado não cadastrado.'],
+                'postalCode'         => ['CEP cadastrado.', 'CEP não cadastrado.'],
+                'regionCode'         => ['País cadastrado.', 'País não cadastrado.'],
             ];
             $pontos = 0;
-            $faltando = [];
-            foreach ($campos as $chave => $rotulo) {
+            $diagnosticos = [];
+            foreach ($campos as $chave => [$mensagemOk, $mensagemFaltando]) {
                 if (! empty($storefront[$chave])) {
                     $pontos += 20;
+                    $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => $mensagemOk, 'acao_label' => null, 'acao_url' => null];
                 } else {
-                    $faltando[] = $rotulo;
+                    $diagnosticos[] = array_merge(['tipo' => 'aviso', 'mensagem' => $mensagemFaltando], $acaoManual);
                 }
             }
 
-            if (empty($faltando)) {
-                return [
-                    'nota'   => 100,
-                    'status' => 'calculado',
-                    'label'  => self::CATEGORIAS_LABELS['localizacao'],
-                    'diagnosticos' => [['tipo' => 'ok', 'mensagem' => 'Endereço completo.', 'acao_label' => null, 'acao_url' => null]],
-                ];
-            }
-
             return [
-                'nota'   => $pontos,
-                'status' => 'calculado',
-                'label'  => self::CATEGORIAS_LABELS['localizacao'],
-                'diagnosticos' => [array_merge([
-                    'tipo'     => 'aviso',
-                    'mensagem' => 'Endereço incompleto — faltam: ' . implode(', ', $faltando) . '.',
-                ], $acaoManual)],
+                'nota'         => $pontos,
+                'status'       => 'calculado',
+                'label'        => self::CATEGORIAS_LABELS['localizacao'],
+                'diagnosticos' => $diagnosticos,
             ];
         }
 

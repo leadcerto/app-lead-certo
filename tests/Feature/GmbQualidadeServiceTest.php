@@ -179,6 +179,42 @@ class GmbQualidadeServiceTest extends TestCase
         $this->assertSame(100, $score->categorias['identidade']['nota']);
         $this->assertSame('calculado', $score->categorias['identidade']['status']);
         $this->assertSame('ok', $score->categorias['identidade']['diagnosticos'][0]['tipo']);
+        // Os 4 sub-criterios aparecem sempre, mesmo quando todos passam (formato PageSpeed:
+        // auditorias aprovadas ficam visiveis, nao so as reprovadas).
+        $this->assertCount(4, $score->categorias['identidade']['diagnosticos']);
+        $this->assertSame(4, collect($score->categorias['identidade']['diagnosticos'])->where('tipo', 'ok')->count());
+    }
+
+    public function test_identidade_parcial_mostra_diagnostico_por_subcriterio_inclusive_os_que_passaram(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response([
+                'categories' => [
+                    'primaryCategory'      => ['displayName' => 'Transportadora'],
+                    'additionalCategories' => [
+                        ['displayName' => 'Mudanças'],
+                        ['displayName' => 'Fretes'],
+                        ['displayName' => 'Logística'],
+                    ],
+                ],
+                // separador " - " no nome -> so este subcriterio falha
+                'title'   => 'Frete Rio - Transportes',
+                'profile' => ['description' => str_repeat('Somos especialistas em fretes e mudanças. ', 6)],
+            ], 200),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame(80, $score->categorias['identidade']['nota']);
+        $diagnosticos = collect($score->categorias['identidade']['diagnosticos']);
+        $this->assertCount(4, $diagnosticos);
+        $this->assertSame(3, $diagnosticos->where('tipo', 'ok')->count());
+        $this->assertSame(1, $diagnosticos->where('tipo', 'aviso')->count());
     }
 
     public function test_identidade_sem_categoria_secundaria_nome_com_separador_e_sem_descricao_da_nota_baixa(): void
@@ -320,7 +356,7 @@ class GmbQualidadeServiceTest extends TestCase
         $this->assertSame('ok', $score->categorias['localizacao']['diagnosticos'][0]['tipo']);
     }
 
-    public function test_localizacao_com_endereco_incompleto_lista_campos_faltantes(): void
+    public function test_localizacao_com_endereco_incompleto_lista_um_diagnostico_por_campo(): void
     {
         $tenant = Tenant::factory()->create();
         $perfil = $this->criarPerfilComGoogle($tenant);
@@ -339,7 +375,15 @@ class GmbQualidadeServiceTest extends TestCase
         $score = app(GmbQualidadeService::class)->avaliar($perfil);
 
         $this->assertSame(40, $score->categorias['localizacao']['nota']);
-        $this->assertStringContainsString('CEP', $score->categorias['localizacao']['diagnosticos'][0]['mensagem']);
+        $diagnosticos = collect($score->categorias['localizacao']['diagnosticos']);
+        // 5 campos (addressLines, locality, administrativeArea, postalCode, regionCode), um
+        // diagnostico cada — formato PageSpeed: os 2 que passaram tambem ficam visiveis.
+        $this->assertCount(5, $diagnosticos);
+        $this->assertSame(2, $diagnosticos->where('tipo', 'ok')->count());
+        $this->assertSame(3, $diagnosticos->where('tipo', 'aviso')->count());
+        $cep = $diagnosticos->first(fn ($d) => str_contains($d['mensagem'], 'CEP'));
+        $this->assertNotNull($cep);
+        $this->assertSame('aviso', $cep['tipo']);
     }
 
     public function test_localizacao_com_area_de_atendimento_completa_da_nota_maxima(): void
