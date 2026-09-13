@@ -40,7 +40,7 @@
         </div>
         <div>
             <div class="text-sm font-bold text-gray-800">Nota geral</div>
-            <p class="text-xs text-gray-500 mt-1">Média das categorias já calculadas. Categorias ainda pendentes não entram nessa conta.</p>
+            <p class="text-xs text-gray-500 mt-1">Média das categorias já calculadas. Categorias pendentes ou indisponíveis não entram nessa conta.</p>
         </div>
     </div>
 

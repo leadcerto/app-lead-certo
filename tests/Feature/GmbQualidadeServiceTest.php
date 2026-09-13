@@ -492,6 +492,12 @@ class GmbQualidadeServiceTest extends TestCase
         $this->assertSame('pendente', $score->categorias['conteudo']['status']);
         $this->assertSame('pendente', $score->categorias['reputacao']['status']);
         $this->assertSame(100, $score->nota_geral);
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($req) =>
+            str_contains($req->url(), '/v1/locations/999888777')
+            && str_contains($req->url(), 'readMask=')
+        );
     }
 
     public function test_perfil_incompleto_calcula_notas_baixas_nas_5_categorias_e_erro_se_api_falhar(): void

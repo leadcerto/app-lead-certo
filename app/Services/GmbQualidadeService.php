@@ -142,8 +142,19 @@ class GmbQualidadeService
             ];
         }
 
-        $token = GoogleToken::withoutGlobalScopes()->where('tenant_id', $perfil->tenant_id)->first()
-            ?? GoogleToken::withoutGlobalScopes()->first();
+        $token = GoogleToken::withoutGlobalScopes()->where('tenant_id', $perfil->tenant_id)->first();
+
+        if (! $token) {
+            $token = GoogleToken::withoutGlobalScopes()->orderBy('id')->first();
+
+            if ($token) {
+                Log::warning('GmbQualidadeService: usando token Google de outro tenant (fallback)', [
+                    'perfil_id'        => $perfil->id,
+                    'perfil_tenant_id' => $perfil->tenant_id,
+                    'token_tenant_id'  => $token->tenant_id,
+                ]);
+            }
+        }
 
         if (! $token) {
             return [
@@ -153,7 +164,12 @@ class GmbQualidadeService
         }
 
         if ($token->expires_at && $token->expires_at->isPast()) {
-            app(GoogleService::class)->renovarToken($token);
+            if (! app(GoogleService::class)->renovarToken($token)) {
+                return [
+                    'sucesso' => false,
+                    'motivo'  => 'Não foi possível renovar o acesso à conta Google (autorização expirada ou revogada). Reconecte a conta Google em "Integrações".',
+                ];
+            }
             $token->refresh();
         }
 
@@ -185,6 +201,13 @@ class GmbQualidadeService
             ];
         }
 
+        if ($status === 429 || str_contains($erroGoogle, 'Quota exceeded') || str_contains($erroGoogle, 'rateLimitExceeded') || str_contains($erroGoogle, 'RESOURCE_EXHAUSTED')) {
+            return [
+                'sucesso' => false,
+                'motivo'  => 'Google retornou 429 (Quota excedida). Tente novamente em alguns instantes.',
+            ];
+        }
+
         if ($status === 403) {
             return [
                 'sucesso' => false,
@@ -196,13 +219,6 @@ class GmbQualidadeService
             return [
                 'sucesso' => false,
                 'motivo'  => "Google retornou 404: Localização não encontrada para o ID '{$locationId}'. Verifique o ID do Perfil da Empresa em GMB → Perfis GMB.",
-            ];
-        }
-
-        if ($status === 429 || str_contains($erroGoogle, 'Quota exceeded')) {
-            return [
-                'sucesso' => false,
-                'motivo'  => 'Google retornou 429 (Quota excedida). Tente novamente em alguns instantes.',
             ];
         }
 
@@ -377,7 +393,7 @@ class GmbQualidadeService
             'status' => 'calculado',
             'label'  => self::CATEGORIAS_LABELS['localizacao'],
             'diagnosticos' => [array_merge([
-                'tipo'     => 'aviso',
+                'tipo'     => $pontos === 0 ? 'erro' : 'aviso',
                 'mensagem' => 'Área de atendimento incompleta — faltam: ' . implode(', ', $faltando) . '.',
             ], $acaoManual)],
         ];

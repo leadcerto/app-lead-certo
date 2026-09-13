@@ -33,7 +33,8 @@ Route::middleware(['auth', 'tenant', 'role:admin,dono,diretor,diretor_marketing'
     Route::get('perfis-gmb/{perfil}/qualidade', [\App\Http\Controllers\GmbQualidadeController::class, 'show'])
         ->name('gmb-qualidade.show');
     Route::post('perfis-gmb/{perfil}/qualidade/reavaliar', [\App\Http\Controllers\GmbQualidadeController::class, 'reavaliar'])
-        ->name('gmb-qualidade.reavaliar');
+        ->name('gmb-qualidade.reavaliar')
+        ->middleware('throttle:10,1');
 
     // ── Lista de telefones (clientes reais pra ligar) por Perfil GMB ──────
     Route::get('perfis-gmb/{perfil}/contatos', [ContatoAvaliacaoController::class, 'index'])
