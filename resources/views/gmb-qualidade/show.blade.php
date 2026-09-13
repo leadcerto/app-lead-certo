@@ -61,7 +61,7 @@
             @endforeach
 
             @if($diagAprovados->isNotEmpty())
-                <details class="mt-1">
+                <details class="mt-1" open>
                     <summary class="cursor-pointer text-xs font-semibold text-green-700 select-none">
                         ✅ Auditorias aprovadas ({{ $diagAprovados->count() }})
                     </summary>
