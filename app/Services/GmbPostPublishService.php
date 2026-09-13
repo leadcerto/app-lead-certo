@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\GmbPost;
 use App\Models\GoogleToken;
+use App\Models\Tenant;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -37,9 +38,22 @@ class GmbPostPublishService
             // 1. Monta o Payload do Google Local Post
             $payload = $this->montarPayloadGoogle($post);
 
-            // 2. Busca token Google cadastrado para o tenant (ou token central compartilhado)
-            $token = GoogleToken::withoutGlobalScopes()->where('tenant_id', $post->tenant_id)->first()
-                ?? GoogleToken::withoutGlobalScopes()->first();
+            // 2. Busca token Google cadastrado para o tenant; se não houver,
+            //    usa a conta central da Lead Certo (Tenant::CENTRAL_ID) — não
+            //    "qualquer token que exista na tabela". Ver Tenant::CENTRAL_ID.
+            $token = GoogleToken::withoutGlobalScopes()->where('tenant_id', $post->tenant_id)->first();
+
+            if (! $token) {
+                $token = GoogleToken::withoutGlobalScopes()->where('tenant_id', Tenant::CENTRAL_ID)->first();
+
+                if ($token) {
+                    Log::warning('GmbPostPublishService: usando token Google da conta central (fallback)', [
+                        'post_id'          => $post->id,
+                        'post_tenant_id'   => $post->tenant_id,
+                        'token_tenant_id'  => $token->tenant_id,
+                    ]);
+                }
+            }
 
             if ($token && $locationId) {
                 $sucesso = $this->enviarParaGoogleApi($token, $locationId, $payload, $post);

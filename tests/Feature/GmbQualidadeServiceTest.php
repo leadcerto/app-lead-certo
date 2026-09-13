@@ -520,4 +520,31 @@ class GmbQualidadeServiceTest extends TestCase
         // atividade eh 0 (sem post), o resto ('erro'/'pendente') fica fora da media
         $this->assertSame(0, $score->nota_geral);
     }
+
+    public function test_fallback_de_token_usa_especificamente_a_conta_central_lead_certo(): void
+    {
+        // Ordem deliberada: o token de "outro" tenant eh criado (e portanto
+        // recebe id mais baixo) ANTES do token central — se o codigo caisse
+        // de volta pra "pega o token mais antigo" isso escolheria o token
+        // errado. So um lookup por Tenant::CENTRAL_ID passa neste teste.
+        $tenantOutro = Tenant::factory()->create();
+        $this->criarTokenGoogle($tenantOutro);
+        GoogleToken::where('tenant_id', $tenantOutro->id)->update(['access_token' => 'token-de-outro-tenant-nao-deveria-ser-usado']);
+
+        $tenantCentral = Tenant::factory()->create(['id' => Tenant::CENTRAL_ID]);
+        $this->criarTokenGoogle($tenantCentral);
+        GoogleToken::where('tenant_id', $tenantCentral->id)->update(['access_token' => 'token-central-correto']);
+
+        $tenantSemToken = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenantSemToken);
+        session(['tenant_id' => $tenantSemToken->id]);
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response(['title' => 'Frete Rio'], 200),
+        ]);
+
+        app(GmbQualidadeService::class)->avaliar($perfil);
+
+        Http::assertSent(fn ($req) => $req->hasHeader('Authorization', 'Bearer token-central-correto'));
+    }
 }

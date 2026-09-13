@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Painel;
 use App\Http\Controllers\Controller;
 use App\Models\Cargo;
 use App\Models\FeedbackAgente;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\MediaProcessorService;
 use Illuminate\Contracts\View\View;
@@ -299,14 +300,14 @@ class EquipePainelController extends Controller
     {
         $tenantId = $request->user()->tenant_id;
 
-        // Lista usuários humanos (is_ia = false e não são agentes do tenant 2 da Lead Certo)
+        // Lista usuários humanos (is_ia = false e não são agentes do tenant da Lead Certo)
         $query = User::where('is_ia', false);
 
         // Se não for admin global, restringe ao tenant atual
         if (! $request->user()->isDono()) {
             $query->where('tenant_id', $tenantId);
         } else {
-            $query->where('tenant_id', '!=', 2);
+            $query->where('tenant_id', '!=', Tenant::CENTRAL_ID);
         }
 
         $usuarios = $query->with('cargos')->orderBy('nome')->get();

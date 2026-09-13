@@ -6,6 +6,7 @@ use App\Models\GmbPost;
 use App\Models\GmbQualidadeScore;
 use App\Models\GoogleToken;
 use App\Models\PerfilGmb;
+use App\Models\Tenant;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -145,10 +146,13 @@ class GmbQualidadeService
         $token = GoogleToken::withoutGlobalScopes()->where('tenant_id', $perfil->tenant_id)->first();
 
         if (! $token) {
-            $token = GoogleToken::withoutGlobalScopes()->orderBy('id')->first();
+            // Fallback: a Lead Certo gerencia o GMB de vários clientes com uma
+            // única conta central (Tenant::CENTRAL_ID) — não "qualquer token
+            // que exista na tabela". Ver Tenant::CENTRAL_ID para o porquê.
+            $token = GoogleToken::withoutGlobalScopes()->where('tenant_id', Tenant::CENTRAL_ID)->first();
 
             if ($token) {
-                Log::warning('GmbQualidadeService: usando token Google de outro tenant (fallback)', [
+                Log::warning('GmbQualidadeService: usando token Google da conta central (fallback)', [
                     'perfil_id'        => $perfil->id,
                     'perfil_tenant_id' => $perfil->tenant_id,
                     'token_tenant_id'  => $token->tenant_id,

@@ -10,6 +10,18 @@ class Tenant extends Model
 {
     use HasFactory;
 
+    /**
+     * Tenant da própria Lead Certo — a "conta central" usada como fallback
+     * quando um tenant cliente ainda não conectou a própria conta Google
+     * (ex.: GmbQualidadeService, GmbPostPublishService). Modelo confirmado
+     * com o dono do produto em 2026-09-13: a Lead Certo gerencia o Google
+     * Business Profile de vários clientes com uma única conta técnica, que
+     * recebe acesso de gerente na ficha de cada cliente — não é um atalho
+     * temporário. Também usado para excluir a equipe interna da Lead Certo
+     * de listagens de "clientes" (ex.: EquipePainelController).
+     */
+    public const CENTRAL_ID = 2;
+
     protected $fillable = [
         'nome',
         'razao_social',
