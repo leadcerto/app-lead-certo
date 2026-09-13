@@ -31,13 +31,7 @@
 
     {{-- Nota geral --}}
     <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex items-center gap-6">
-        @php
-            $nota = $score->nota_geral;
-            $corNota = is_null($nota) ? 'text-gray-400 border-gray-300' : ($nota >= 90 ? 'text-green-600 border-green-500' : ($nota >= 50 ? 'text-amber-500 border-amber-400' : 'text-red-600 border-red-500'));
-        @endphp
-        <div class="w-24 h-24 rounded-full border-4 {{ $corNota }} flex items-center justify-center flex-shrink-0">
-            <span class="text-3xl font-bold {{ $corNota }}">{{ $nota ?? '—' }}</span>
-        </div>
+        @include('gmb-qualidade.partials.gauge', ['nota' => $score->nota_geral, 'size' => 96])
         <div>
             <div class="text-sm font-bold text-gray-800">Nota geral</div>
             <p class="text-xs text-gray-500 mt-1">Média das categorias já calculadas. Categorias pendentes ou indisponíveis não entram nessa conta.</p>
@@ -53,30 +47,31 @@
                 @if($categoria['status'] !== 'calculado')
                     <span class="px-2 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-semibold">{{ $categoria['status'] === 'erro' ? 'Indisponível' : 'Em breve' }}</span>
                 @else
-                    @php
-                        $corCategoria = $categoria['nota'] >= 90 ? 'bg-green-100 text-green-700' : ($categoria['nota'] >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700');
-                    @endphp
-                    <span class="px-2 py-1 {{ $corCategoria }} rounded-full text-xs font-bold">{{ $categoria['nota'] }}</span>
+                    @include('gmb-qualidade.partials.gauge', ['nota' => $categoria['nota'], 'size' => 48, 'strokeWidth' => 5])
                 @endif
             </div>
 
-            @foreach($categoria['diagnosticos'] as $diag)
-                @php
-                    $corDiag = match($diag['tipo']) {
-                        'ok' => 'border-green-400 text-gray-700',
-                        'aviso' => 'border-amber-400 text-gray-700',
-                        'erro' => 'border-red-400 text-gray-700',
-                        'info' => 'border-blue-400 text-gray-700',
-                        default => 'border-gray-300 text-gray-500',
-                    };
-                @endphp
-                <div class="pl-3 border-l-2 {{ $corDiag }} text-sm mb-2">
-                    <p>{{ $diag['mensagem'] }}</p>
-                    @if(!empty($diag['acao_url']))
-                        <a href="{{ $diag['acao_url'] }}" class="inline-block mt-1 text-xs font-semibold text-green-700 hover:underline">{{ $diag['acao_label'] }} →</a>
-                    @endif
-                </div>
+            @php
+                $diagAtencao = collect($categoria['diagnosticos'])->reject(fn ($d) => $d['tipo'] === 'ok')->values();
+                $diagAprovados = collect($categoria['diagnosticos'])->filter(fn ($d) => $d['tipo'] === 'ok')->values();
+            @endphp
+
+            @foreach($diagAtencao as $diag)
+                @include('gmb-qualidade.partials.diagnostico', ['diag' => $diag])
             @endforeach
+
+            @if($diagAprovados->isNotEmpty())
+                <details class="mt-1">
+                    <summary class="cursor-pointer text-xs font-semibold text-green-700 select-none">
+                        ✅ Auditorias aprovadas ({{ $diagAprovados->count() }})
+                    </summary>
+                    <div class="mt-2">
+                        @foreach($diagAprovados as $diag)
+                            @include('gmb-qualidade.partials.diagnostico', ['diag' => $diag])
+                        @endforeach
+                    </div>
+                </details>
+            @endif
         </div>
         @endforeach
     </div>
