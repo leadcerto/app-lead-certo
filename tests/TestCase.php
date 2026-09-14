@@ -4,6 +4,7 @@ namespace Tests;
 
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -24,6 +25,7 @@ abstract class TestCase extends BaseTestCase
     {
         parent::setUp();
         Carbon::setTestNow(Carbon::parse('2026-08-18 14:00:00', 'America/Sao_Paulo'));
+        Http::preventStrayRequests();
     }
 
     protected function tearDown(): void

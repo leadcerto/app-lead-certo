@@ -322,6 +322,25 @@ class GmbQualidadeServiceTest extends TestCase
         $this->assertStringContainsString('Quota excedida', $score->categorias['identidade']['diagnosticos'][0]['mensagem']);
     }
 
+    public function test_categorias_dependentes_de_location_ficam_em_erro_quando_falha_de_conexao(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => fn () => throw new \Illuminate\Http\Client\ConnectionException('simulated'),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame('erro', $score->categorias['identidade']['status']);
+        $this->assertStringContainsString('falha de conexão', $score->categorias['identidade']['diagnosticos'][0]['mensagem']);
+        $this->assertSame('erro', $score->categorias['reputacao']['status']);
+        $this->assertNotEmpty($score->categorias['reputacao']['diagnosticos'][0]['mensagem']);
+    }
+
     public function test_avaliar_de_novo_atualiza_o_mesmo_registro_em_vez_de_duplicar(): void
     {
         $tenant = Tenant::factory()->create();
@@ -773,6 +792,51 @@ class GmbQualidadeServiceTest extends TestCase
         $this->assertSame('calculado', $score->categorias['identidade']['status']);
     }
 
+    public function test_reputacao_fica_erro_quando_falha_de_conexao_ao_buscar_a_conta(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response([
+                'title' => 'Frete Rio Transportes',
+            ], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => fn () => throw new \Illuminate\Http\Client\ConnectionException('simulated'),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame('erro', $score->categorias['reputacao']['status']);
+        $this->assertStringContainsString('falha de conexão', $score->categorias['reputacao']['diagnosticos'][0]['mensagem']);
+        // As outras categorias que so dependem de buscarDadosLocation() continuam calculadas normalmente:
+        $this->assertSame('calculado', $score->categorias['identidade']['status']);
+    }
+
+    public function test_reputacao_fica_erro_quando_falha_de_conexao_ao_buscar_as_avaliacoes(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response([
+                'title' => 'Frete Rio Transportes',
+            ], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => [['name' => 'accounts/123']]], 200),
+            'mybusiness.googleapis.com/v4/*/reviews*' => fn () => throw new \Illuminate\Http\Client\ConnectionException('simulated'),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame('erro', $score->categorias['reputacao']['status']);
+        $this->assertStringContainsString('falha de conexão', $score->categorias['reputacao']['diagnosticos'][0]['mensagem']);
+        // As outras categorias que so dependem de buscarDadosLocation() continuam calculadas normalmente:
+        $this->assertSame('calculado', $score->categorias['identidade']['status']);
+    }
+
     public function test_reputacao_calcula_prazo_medio_so_com_as_respondidas(): void
     {
         $tenant = Tenant::factory()->create();
@@ -868,6 +932,7 @@ class GmbQualidadeServiceTest extends TestCase
 
         Http::fake([
             'mybusinessbusinessinformation.googleapis.com/*' => Http::response(['websiteUri' => 'https://frete.rio.br/barra-da-tijuca'], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
         $score = app(GmbQualidadeService::class)->avaliar($perfil);
@@ -885,6 +950,7 @@ class GmbQualidadeServiceTest extends TestCase
 
             Http::fake([
                 'mybusinessbusinessinformation.googleapis.com/*' => Http::response(['websiteUri' => $url], 200),
+                'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
             ]);
 
             $score = app(GmbQualidadeService::class)->avaliar($perfil);
@@ -902,6 +968,7 @@ class GmbQualidadeServiceTest extends TestCase
 
         Http::fake([
             'mybusinessbusinessinformation.googleapis.com/*' => Http::response(['websiteUri' => 'https://frete.rio.br/barra-da-tijuca'], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
         $score = app(GmbQualidadeService::class)->avaliar($perfil);
@@ -917,6 +984,7 @@ class GmbQualidadeServiceTest extends TestCase
 
         Http::fake([
             'mybusinessbusinessinformation.googleapis.com/*' => Http::response([], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
         $score = app(GmbQualidadeService::class)->avaliar($perfil);

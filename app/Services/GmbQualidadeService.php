@@ -8,6 +8,7 @@ use App\Models\GoogleToken;
 use App\Models\PerfilGmb;
 use App\Models\Tenant;
 use Carbon\Carbon;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -183,11 +184,19 @@ class GmbQualidadeService
 
         $locationId = preg_replace('#^locations/#', '', trim($perfil->google_location_id));
 
-        $res = Http::withToken($token->access_token)
-            ->timeout(15)
-            ->get("https://mybusinessbusinessinformation.googleapis.com/v1/locations/" . rawurlencode($locationId), [
-                'readMask' => 'categories,title,profile,storefrontAddress,serviceArea,websiteUri,regularHours,specialHours,phoneNumbers',
-            ]);
+        try {
+            $res = Http::withToken($token->access_token)
+                ->timeout(15)
+                ->get("https://mybusinessbusinessinformation.googleapis.com/v1/locations/" . rawurlencode($locationId), [
+                    'readMask' => 'categories,title,profile,storefrontAddress,serviceArea,websiteUri,regularHours,specialHours,phoneNumbers',
+                ]);
+        } catch (ConnectionException $e) {
+            Log::warning('Business Information API falhou (conexão)', ['perfil_id' => $perfil->id, 'erro' => $e->getMessage()]);
+            return [
+                'sucesso' => false,
+                'motivo'  => 'Não foi possível contatar o Google (falha de conexão). Tente novamente em alguns instantes.',
+            ];
+        }
 
         if ($res->successful()) {
             return ['sucesso' => true, 'dados' => $res->json(), 'token' => $token, 'location_id' => $locationId];
@@ -238,9 +247,14 @@ class GmbQualidadeService
 
     private function buscarDadosReviews(GoogleToken $token, string $locationId): array
     {
-        $accountRes = Http::withToken($token->access_token)
-            ->timeout(15)
-            ->get('https://mybusinessaccountmanagement.googleapis.com/v1/accounts');
+        try {
+            $accountRes = Http::withToken($token->access_token)
+                ->timeout(15)
+                ->get('https://mybusinessaccountmanagement.googleapis.com/v1/accounts');
+        } catch (ConnectionException $e) {
+            Log::warning('Reviews API falhou (contas, conexão)', ['erro' => $e->getMessage()]);
+            return ['sucesso' => false, 'motivo' => 'Não foi possível contatar o Google para buscar a conta (falha de conexão). Tente novamente em alguns instantes.'];
+        }
 
         if ($accountRes->status() === 429 || str_contains($accountRes->body(), 'Quota exceeded')) {
             Log::warning('Reviews API falhou (contas)', ['status' => 429, 'response' => $accountRes->body()]);
@@ -267,12 +281,17 @@ class GmbQualidadeService
             return ['sucesso' => false, 'motivo' => 'Nenhuma conta do Google Meu Negócio encontrada para buscar as avaliações.'];
         }
 
-        $res = Http::withToken($token->access_token)
-            ->timeout(15)
-            ->get("https://mybusiness.googleapis.com/v4/{$accountName}/locations/{$locationId}/reviews", [
-                'pageSize' => 20,
-                'orderBy'  => 'updateTime desc',
-            ]);
+        try {
+            $res = Http::withToken($token->access_token)
+                ->timeout(15)
+                ->get("https://mybusiness.googleapis.com/v4/{$accountName}/locations/{$locationId}/reviews", [
+                    'pageSize' => 20,
+                    'orderBy'  => 'updateTime desc',
+                ]);
+        } catch (ConnectionException $e) {
+            Log::warning('Reviews API falhou (conexão)', ['erro' => $e->getMessage()]);
+            return ['sucesso' => false, 'motivo' => 'Não foi possível contatar o Google para buscar as avaliações (falha de conexão). Tente novamente em alguns instantes.'];
+        }
 
         if ($res->successful()) {
             return ['sucesso' => true, 'dados' => $res->json()];
@@ -357,7 +376,7 @@ class GmbQualidadeService
             $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => "Avaliação mais recente há {$diasDesdeUltima} dia(s) — dentro do ideal (a cada 7 dias).", 'acao_label' => null, 'acao_url' => null];
         } else {
             $textoData = $diasDesdeUltima !== null ? "{$diasDesdeUltima} dias" : 'muito tempo';
-            $diagnosticos[] = ['tipo' => 'aviso', 'mensagem' => "Avaliação mais recente há {$textoData}. O Google valoriza recência mais que volume total — priorize pedir novas avaliações.", 'acao_label' => null, 'acao_url' => null];
+            $diagnosticos[] = array_merge(['tipo' => 'aviso', 'mensagem' => "Avaliação mais recente há {$textoData}. O Google valoriza recência mais que volume total — priorize pedir novas avaliações."], $acaoManual);
         }
 
         // 3a. Nota média
@@ -368,9 +387,9 @@ class GmbQualidadeService
             $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => "Nota média {$notaMediaFormatada} — acima de 4.5.", 'acao_label' => null, 'acao_url' => null];
         } elseif ($notaMedia >= 4.0) {
             $pontos += 10;
-            $diagnosticos[] = ['tipo' => 'aviso', 'mensagem' => "Nota média {$notaMediaFormatada}; o ideal é 4.5 ou mais.", 'acao_label' => null, 'acao_url' => null];
+            $diagnosticos[] = array_merge(['tipo' => 'aviso', 'mensagem' => "Nota média {$notaMediaFormatada}; o ideal é 4.5 ou mais."], $acaoManual);
         } else {
-            $diagnosticos[] = ['tipo' => 'erro', 'mensagem' => "Nota média {$notaMediaFormatada} — abaixo de 4.0. Revise o atendimento antes de acelerar o volume de avaliações.", 'acao_label' => null, 'acao_url' => null];
+            $diagnosticos[] = array_merge(['tipo' => 'erro', 'mensagem' => "Nota média {$notaMediaFormatada} — abaixo de 4.0. Revise o atendimento antes de acelerar o volume de avaliações."], $acaoManual);
         }
 
         // Palavras-chave: categoria principal + secundarias + cidade do perfil
@@ -413,9 +432,9 @@ class GmbQualidadeService
             $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => "{$percentualRespondido}% das avaliações recentes têm resposta do dono.", 'acao_label' => null, 'acao_url' => null];
         } elseif ($percentualRespondido >= 1) {
             $pontos += 5;
-            $diagnosticos[] = ['tipo' => 'aviso', 'mensagem' => "Só {$percentualRespondido}% das avaliações recentes foram respondidas; o ideal é responder 100%.", 'acao_label' => null, 'acao_url' => null];
+            $diagnosticos[] = array_merge(['tipo' => 'aviso', 'mensagem' => "Só {$percentualRespondido}% das avaliações recentes foram respondidas; o ideal é responder 100%."], $acaoManual);
         } else {
-            $diagnosticos[] = ['tipo' => 'erro', 'mensagem' => '0% das avaliações recentes foram respondidas; o ideal é responder 100%.', 'acao_label' => null, 'acao_url' => null];
+            $diagnosticos[] = array_merge(['tipo' => 'erro', 'mensagem' => '0% das avaliações recentes foram respondidas; o ideal é responder 100%.'], $acaoManual);
         }
 
         // 4b. Prazo médio de resposta — só entre as respondidas
