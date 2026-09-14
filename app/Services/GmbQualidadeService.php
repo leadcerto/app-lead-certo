@@ -7,6 +7,7 @@ use App\Models\GmbQualidadeScore;
 use App\Models\GoogleToken;
 use App\Models\PerfilGmb;
 use App\Models\Tenant;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -46,6 +47,9 @@ class GmbQualidadeService
                     : $this->categoriaErro($label, $location['motivo']),
                 'saude_risco'      => $location['sucesso']
                     ? $this->avaliarSaudeRisco($location['dados'])
+                    : $this->categoriaErro($label, $location['motivo']),
+                'reputacao'        => $location['sucesso']
+                    ? $this->avaliarReputacaoComReviews($perfil, $location)
                     : $this->categoriaErro($label, $location['motivo']),
                 default => $this->categoriaPendente($label),
             };
@@ -186,7 +190,7 @@ class GmbQualidadeService
             ]);
 
         if ($res->successful()) {
-            return ['sucesso' => true, 'dados' => $res->json()];
+            return ['sucesso' => true, 'dados' => $res->json(), 'token' => $token, 'location_id' => $locationId];
         }
 
         $status = $res->status();
@@ -229,6 +233,225 @@ class GmbQualidadeService
         return [
             'sucesso' => false,
             'motivo'  => "Erro Google ({$status}): {$erroGoogle}",
+        ];
+    }
+
+    private function buscarDadosReviews(GoogleToken $token, string $locationId): array
+    {
+        $accountRes = Http::withToken($token->access_token)
+            ->timeout(15)
+            ->get('https://mybusinessaccountmanagement.googleapis.com/v1/accounts');
+
+        if ($accountRes->status() === 429 || str_contains($accountRes->body(), 'Quota exceeded')) {
+            Log::warning('Reviews API falhou (contas)', ['status' => 429, 'response' => $accountRes->body()]);
+            return ['sucesso' => false, 'motivo' => 'Google retornou 429 (Quota excedida) ao buscar a conta para as avaliações. Tente novamente em alguns instantes.'];
+        }
+
+        if ($accountRes->status() === 403) {
+            $erroGoogle = $accountRes->json('error.message') ?? $accountRes->body();
+            $motivo = (str_contains($erroGoogle, 'SERVICE_DISABLED') || str_contains($erroGoogle, 'has not been used in project'))
+                ? 'A API "My Business Account Management API" precisa ser ativada no Google Cloud Console: https://console.developers.google.com/apis/api/mybusinessaccountmanagement.googleapis.com/overview?project=159179119828'
+                : 'Permissão do Google Meu Negócio pendente para ler as avaliações. Reconecte a conta Google em "Integrações". Detalhes: ' . $erroGoogle;
+
+            Log::warning('Reviews API falhou (contas)', ['status' => 403, 'response' => $accountRes->body()]);
+            return ['sucesso' => false, 'motivo' => $motivo];
+        }
+
+        if (! $accountRes->successful()) {
+            Log::warning('Reviews API falhou (contas)', ['status' => $accountRes->status(), 'response' => $accountRes->body()]);
+            return ['sucesso' => false, 'motivo' => "Erro Google ({$accountRes->status()}) ao buscar a conta para as avaliações: " . ($accountRes->json('error.message') ?? $accountRes->body())];
+        }
+
+        $accountName = $accountRes->json('accounts.0.name');
+        if (! $accountName) {
+            return ['sucesso' => false, 'motivo' => 'Nenhuma conta do Google Meu Negócio encontrada para buscar as avaliações.'];
+        }
+
+        $res = Http::withToken($token->access_token)
+            ->timeout(15)
+            ->get("https://mybusiness.googleapis.com/v4/{$accountName}/locations/{$locationId}/reviews", [
+                'pageSize' => 20,
+                'orderBy'  => 'updateTime desc',
+            ]);
+
+        if ($res->successful()) {
+            return ['sucesso' => true, 'dados' => $res->json()];
+        }
+
+        $status = $res->status();
+        $erroGoogle = $res->json('error.message') ?? $res->body();
+
+        Log::warning('Reviews API falhou', ['status' => $status, 'response' => $res->body()]);
+
+        if ($status === 403 && (str_contains($erroGoogle, 'SERVICE_DISABLED') || str_contains($erroGoogle, 'has not been used in project'))) {
+            return ['sucesso' => false, 'motivo' => 'A API "Google My Business API" precisa ser ativada no Google Cloud Console para ler as avaliações: https://console.developers.google.com/apis/api/mybusiness.googleapis.com/overview?project=159179119828'];
+        }
+
+        if ($status === 403) {
+            return ['sucesso' => false, 'motivo' => 'Permissão do Google Meu Negócio pendente para ler as avaliações. Reconecte a conta Google em "Integrações". Detalhes: ' . $erroGoogle];
+        }
+
+        if ($status === 404) {
+            return ['sucesso' => false, 'motivo' => "Google retornou 404 ao buscar avaliações: localização não encontrada para o ID '{$locationId}'."];
+        }
+
+        if ($status === 429 || str_contains($erroGoogle, 'Quota exceeded')) {
+            return ['sucesso' => false, 'motivo' => 'Google retornou 429 (Quota excedida) ao buscar as avaliações. Tente novamente em alguns instantes.'];
+        }
+
+        return ['sucesso' => false, 'motivo' => "Erro Google ({$status}) ao buscar avaliações: {$erroGoogle}"];
+    }
+
+    private function avaliarReputacaoComReviews(PerfilGmb $perfil, array $location): array
+    {
+        $reviews = $this->buscarDadosReviews($location['token'], $location['location_id']);
+
+        return $reviews['sucesso']
+            ? $this->avaliarReputacao($reviews['dados'], $location['dados'], $perfil)
+            : $this->categoriaErro(self::CATEGORIAS_LABELS['reputacao'], $reviews['motivo']);
+    }
+
+    private function avaliarReputacao(array $dadosReviews, array $dadosLocation, PerfilGmb $perfil): array
+    {
+        $totalReviews = $dadosReviews['totalReviewCount'] ?? 0;
+
+        if ($totalReviews === 0) {
+            return [
+                'nota'   => 0,
+                'status' => 'calculado',
+                'label'  => self::CATEGORIAS_LABELS['reputacao'],
+                'diagnosticos' => [[
+                    'tipo'       => 'erro',
+                    'mensagem'   => 'Nenhuma avaliação registrada nesta ficha ainda. Comece a coletar avaliações de clientes reais.',
+                    'acao_label' => 'Ver na Apostila',
+                    'acao_url'   => route('admin.gmb-apostila.index') . '#pilares',
+                ]],
+            ];
+        }
+
+        $reviews = $dadosReviews['reviews'] ?? [];
+        $acaoManual = ['acao_label' => 'Abrir Google Business Profile Manager', 'acao_url' => 'https://business.google.com/'];
+        $pontos = 0;
+        $diagnosticos = [];
+
+        // 1. Volume
+        if ($totalReviews >= 50) {
+            $pontos += 25;
+            $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => "{$totalReviews} avaliações no total.", 'acao_label' => null, 'acao_url' => null];
+        } elseif ($totalReviews >= 10) {
+            $pontos += 15;
+            $diagnosticos[] = array_merge(['tipo' => 'aviso', 'mensagem' => "{$totalReviews} avaliações no total; o ideal é pelo menos 50."], $acaoManual);
+        } else {
+            $pontos += 5;
+            $diagnosticos[] = array_merge(['tipo' => 'aviso', 'mensagem' => "Só {$totalReviews} avaliação(ões); o ideal é pelo menos 50."], $acaoManual);
+        }
+
+        // 2. Recorrência — max(createTime) entre os reviews retornados (pagina ordenada por updateTime desc,
+        // ver spec pra por que nao confiamos em reviews[0] diretamente)
+        $datasCriacao = array_filter(array_map(fn ($r) => $r['createTime'] ?? null, $reviews));
+        $maisRecente = ! empty($datasCriacao) ? Carbon::parse(max($datasCriacao)) : null;
+        $diasDesdeUltima = $maisRecente ? (int) $maisRecente->diffInDays(now()) : null;
+
+        if ($diasDesdeUltima !== null && $diasDesdeUltima <= 7) {
+            $pontos += 25;
+            $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => "Avaliação mais recente há {$diasDesdeUltima} dia(s) — dentro do ideal (a cada 7 dias).", 'acao_label' => null, 'acao_url' => null];
+        } else {
+            $textoData = $diasDesdeUltima !== null ? "{$diasDesdeUltima} dias" : 'muito tempo';
+            $diagnosticos[] = ['tipo' => 'aviso', 'mensagem' => "Avaliação mais recente há {$textoData}. O Google valoriza recência mais que volume total — priorize pedir novas avaliações.", 'acao_label' => null, 'acao_url' => null];
+        }
+
+        // 3a. Nota média
+        $notaMedia = (float) ($dadosReviews['averageRating'] ?? 0);
+        $notaMediaFormatada = number_format($notaMedia, 1, ',', '');
+        if ($notaMedia >= 4.5) {
+            $pontos += 15;
+            $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => "Nota média {$notaMediaFormatada} — acima de 4.5.", 'acao_label' => null, 'acao_url' => null];
+        } elseif ($notaMedia >= 4.0) {
+            $pontos += 10;
+            $diagnosticos[] = ['tipo' => 'aviso', 'mensagem' => "Nota média {$notaMediaFormatada}; o ideal é 4.5 ou mais.", 'acao_label' => null, 'acao_url' => null];
+        } else {
+            $diagnosticos[] = ['tipo' => 'erro', 'mensagem' => "Nota média {$notaMediaFormatada} — abaixo de 4.0. Revise o atendimento antes de acelerar o volume de avaliações.", 'acao_label' => null, 'acao_url' => null];
+        }
+
+        // Palavras-chave: categoria principal + secundarias + cidade do perfil
+        $palavrasChave = array_values(array_filter(array_merge(
+            [$dadosLocation['categories']['primaryCategory']['displayName'] ?? null],
+            array_column($dadosLocation['categories']['additionalCategories'] ?? [], 'displayName'),
+            [$perfil->city]
+        )));
+
+        $contemPalavraChave = function (?string $texto) use ($palavrasChave): bool {
+            if (empty($texto)) {
+                return false;
+            }
+            foreach ($palavrasChave as $palavra) {
+                if (mb_stripos($texto, $palavra) !== false) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // 3b. Menção a categoria/cidade nos comentários
+        $totalAmostra = count($reviews);
+        $comMencao = collect($reviews)->filter(fn ($r) => $contemPalavraChave($r['comment'] ?? null))->count();
+        $percentualMencao = $totalAmostra > 0 ? (int) round(($comMencao / $totalAmostra) * 100) : 0;
+
+        if ($percentualMencao >= 50) {
+            $pontos += 10;
+            $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => "{$percentualMencao}% das avaliações recentes citam o serviço ou a cidade.", 'acao_label' => null, 'acao_url' => null];
+        } else {
+            $diagnosticos[] = ['tipo' => 'aviso', 'mensagem' => "Só {$percentualMencao}% das avaliações recentes citam o serviço ou a cidade; estimule o cliente a mencionar o que foi feito e onde.", 'acao_label' => null, 'acao_url' => null];
+        }
+
+        // 4a. Taxa de resposta
+        $respondidas = collect($reviews)->filter(fn ($r) => ! empty($r['reviewReply']))->values();
+        $percentualRespondido = $totalAmostra > 0 ? (int) round(($respondidas->count() / $totalAmostra) * 100) : 0;
+
+        if ($percentualRespondido >= 80) {
+            $pontos += 10;
+            $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => "{$percentualRespondido}% das avaliações recentes têm resposta do dono.", 'acao_label' => null, 'acao_url' => null];
+        } elseif ($percentualRespondido >= 1) {
+            $pontos += 5;
+            $diagnosticos[] = ['tipo' => 'aviso', 'mensagem' => "Só {$percentualRespondido}% das avaliações recentes foram respondidas; o ideal é responder 100%.", 'acao_label' => null, 'acao_url' => null];
+        } else {
+            $diagnosticos[] = ['tipo' => 'erro', 'mensagem' => '0% das avaliações recentes foram respondidas; o ideal é responder 100%.', 'acao_label' => null, 'acao_url' => null];
+        }
+
+        // 4b. Prazo médio de resposta — só entre as respondidas
+        if ($respondidas->isNotEmpty()) {
+            $horasSoma = $respondidas->sum(function ($r) {
+                $criada = Carbon::parse($r['createTime']);
+                $respondida = Carbon::parse($r['reviewReply']['updateTime']);
+                return $criada->diffInHours($respondida);
+            });
+            $horasMedia = (int) round($horasSoma / $respondidas->count());
+
+            if ($horasMedia <= 48) {
+                $pontos += 10;
+                $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => "Tempo médio de resposta: {$horasMedia}h — dentro do ideal (até 48h).", 'acao_label' => null, 'acao_url' => null];
+            } else {
+                $diagnosticos[] = ['tipo' => 'aviso', 'mensagem' => "Tempo médio de resposta: {$horasMedia}h; o ideal é até 48h.", 'acao_label' => null, 'acao_url' => null];
+            }
+        } else {
+            $diagnosticos[] = ['tipo' => 'erro', 'mensagem' => 'Nenhuma avaliação recente foi respondida. Responda o quanto antes — o ideal é em até 48h.', 'acao_label' => null, 'acao_url' => null];
+        }
+
+        // 4c. Termos nas respostas
+        $respostaComTermo = $respondidas->contains(fn ($r) => $contemPalavraChave($r['reviewReply']['comment'] ?? null));
+
+        if ($respostaComTermo) {
+            $pontos += 5;
+            $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => 'Pelo menos uma resposta recente cita o serviço ou a cidade.', 'acao_label' => null, 'acao_url' => null];
+        } else {
+            $diagnosticos[] = ['tipo' => 'aviso', 'mensagem' => 'Nenhuma resposta recente cita o serviço ou a cidade — respostas genéricas perdem força. Cite o serviço e o nome do cliente quando possível.', 'acao_label' => null, 'acao_url' => null];
+        }
+
+        return [
+            'nota'         => $pontos,
+            'status'       => 'calculado',
+            'label'        => self::CATEGORIAS_LABELS['reputacao'],
+            'diagnosticos' => $diagnosticos,
         ];
     }
 

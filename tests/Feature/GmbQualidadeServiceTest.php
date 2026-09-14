@@ -8,6 +8,7 @@ use App\Models\PerfilGmb;
 use App\Models\Tenant;
 use App\Services\GmbQualidadeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -172,6 +173,7 @@ class GmbQualidadeServiceTest extends TestCase
                 'title'   => 'Frete Rio Transportes',
                 'profile' => ['description' => str_repeat('Somos especialistas em fretes e mudanças. ', 6)],
             ], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
         $score = app(GmbQualidadeService::class)->avaliar($perfil);
@@ -206,6 +208,7 @@ class GmbQualidadeServiceTest extends TestCase
                 'title'   => 'Frete Rio - Transportes',
                 'profile' => ['description' => str_repeat('Somos especialistas em fretes e mudanças. ', 6)],
             ], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
         $score = app(GmbQualidadeService::class)->avaliar($perfil);
@@ -230,6 +233,7 @@ class GmbQualidadeServiceTest extends TestCase
                 'title'      => 'Frete Rio - Melhor Transportadora do Rio',
                 'profile'    => ['description' => ''],
             ], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
         $score = app(GmbQualidadeService::class)->avaliar($perfil);
@@ -348,6 +352,7 @@ class GmbQualidadeServiceTest extends TestCase
                     'regionCode'         => 'BR',
                 ],
             ], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
         $score = app(GmbQualidadeService::class)->avaliar($perfil);
@@ -370,6 +375,7 @@ class GmbQualidadeServiceTest extends TestCase
                     'locality'     => 'Rio de Janeiro',
                 ],
             ], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
         $score = app(GmbQualidadeService::class)->avaliar($perfil);
@@ -400,6 +406,7 @@ class GmbQualidadeServiceTest extends TestCase
                     'places'       => ['placeInfos' => [['placeName' => 'Rio de Janeiro, RJ']]],
                 ],
             ], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
         $score = app(GmbQualidadeService::class)->avaliar($perfil);
@@ -416,6 +423,7 @@ class GmbQualidadeServiceTest extends TestCase
 
         Http::fake([
             'mybusinessbusinessinformation.googleapis.com/*' => Http::response([], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
         $score = app(GmbQualidadeService::class)->avaliar($perfil);
@@ -433,6 +441,7 @@ class GmbQualidadeServiceTest extends TestCase
 
         Http::fake([
             'mybusinessbusinessinformation.googleapis.com/*' => Http::response(['websiteUri' => 'https://freterio.com.br'], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
         $score = app(GmbQualidadeService::class)->avaliar($perfil);
@@ -451,6 +460,7 @@ class GmbQualidadeServiceTest extends TestCase
 
         Http::fake([
             'mybusinessbusinessinformation.googleapis.com/*' => Http::response([], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
         $score = app(GmbQualidadeService::class)->avaliar($perfil);
@@ -474,6 +484,7 @@ class GmbQualidadeServiceTest extends TestCase
                     ['openDay' => 'MONDAY', 'openTime' => '09:00', 'closeDay' => 'MONDAY', 'closeTime' => '18:00'],
                 ]],
             ], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
         $score = app(GmbQualidadeService::class)->avaliar($perfil);
@@ -492,6 +503,7 @@ class GmbQualidadeServiceTest extends TestCase
 
         Http::fake([
             'mybusinessbusinessinformation.googleapis.com/*' => Http::response([], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
         $score = app(GmbQualidadeService::class)->avaliar($perfil);
@@ -524,6 +536,7 @@ class GmbQualidadeServiceTest extends TestCase
                 'websiteUri'   => 'https://freterio.com.br',
                 'regularHours' => ['periods' => [['openDay' => 'MONDAY', 'openTime' => '09:00', 'closeDay' => 'MONDAY', 'closeTime' => '18:00']]],
             ], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
         $score = app(GmbQualidadeService::class)->avaliar($perfil);
@@ -534,10 +547,14 @@ class GmbQualidadeServiceTest extends TestCase
         $this->assertSame(100, $score->categorias['presenca_externa']['nota']);
         $this->assertSame(100, $score->categorias['saude_risco']['nota']);
         $this->assertSame('pendente', $score->categorias['conteudo']['status']);
-        $this->assertSame('pendente', $score->categorias['reputacao']['status']);
+        // Sem contas do Google Meu Negócio configuradas neste fake -> reputacao fica em erro
+        // (cascata da API de reviews), fora da media, igual as outras categorias em erro.
+        $this->assertSame('erro', $score->categorias['reputacao']['status']);
         $this->assertSame(100, $score->nota_geral);
 
-        Http::assertSentCount(1);
+        // 1 chamada de localizacao (compartilhada entre as 5 categorias) + 1 chamada de
+        // reputacao pra resolver a conta do Google Meu Negocio antes das reviews.
+        Http::assertSentCount(2);
         Http::assertSent(fn ($req) =>
             str_contains($req->url(), '/v1/locations/999888777')
             && str_contains($req->url(), 'readMask=')
@@ -585,10 +602,252 @@ class GmbQualidadeServiceTest extends TestCase
 
         Http::fake([
             'mybusinessbusinessinformation.googleapis.com/*' => Http::response(['title' => 'Frete Rio'], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
         app(GmbQualidadeService::class)->avaliar($perfil);
 
         Http::assertSent(fn ($req) => $req->hasHeader('Authorization', 'Bearer token-central-correto'));
+    }
+
+    private function fakeReviews(array $overrides = []): void
+    {
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response([
+                'categories' => [
+                    'primaryCategory'      => ['displayName' => 'Transportadora'],
+                    'additionalCategories' => [['displayName' => 'Mudanças'], ['displayName' => 'Fretes']],
+                ],
+                'title'   => 'Frete Rio Transportes',
+                'profile' => ['description' => str_repeat('Somos especialistas. ', 20)],
+            ], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => [['name' => 'accounts/123']]], 200),
+            'mybusiness.googleapis.com/v4/*/reviews*' => Http::response(array_merge([
+                'reviews'          => [],
+                'averageRating'    => 0,
+                'totalReviewCount' => 0,
+            ], $overrides), 200),
+        ]);
+    }
+
+    public function test_reputacao_perfil_bom_com_avaliacoes_ideais_da_nota_maxima(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        $criadaHaUmDia = now()->subDay()->toIso8601String();
+        $respondidaMeioDiaDepois = now()->subDay()->addHours(12)->toIso8601String();
+
+        $reviews = [];
+        for ($i = 0; $i < 20; $i++) {
+            $reviews[] = [
+                'reviewId'    => "r{$i}",
+                'comment'     => 'Serviço de transportadora excelente em Rio de Janeiro, super rápido.',
+                'createTime'  => $criadaHaUmDia,
+                'updateTime'  => $criadaHaUmDia,
+                'reviewReply' => [
+                    'comment'    => 'Obrigado pela confiança na nossa transportadora em Rio de Janeiro!',
+                    'updateTime' => $respondidaMeioDiaDepois,
+                ],
+            ];
+        }
+
+        $this->fakeReviews([
+            'reviews'          => $reviews,
+            'averageRating'    => 4.9,
+            'totalReviewCount' => 60,
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame(100, $score->categorias['reputacao']['nota']);
+        $this->assertSame('calculado', $score->categorias['reputacao']['status']);
+        $diagnosticos = collect($score->categorias['reputacao']['diagnosticos']);
+        $this->assertCount(7, $diagnosticos);
+        $this->assertSame(7, $diagnosticos->where('tipo', 'ok')->count());
+    }
+
+    public function test_reputacao_perfil_incompleto_da_notas_baixas_com_7_diagnosticos(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        $reviews = [];
+        for ($i = 0; $i < 5; $i++) {
+            $reviews[] = [
+                'reviewId'   => "r{$i}",
+                'comment'    => 'Atendimento ok, nada de mais.',
+                'createTime' => now()->subDays(30)->toIso8601String(),
+                'updateTime' => now()->subDays(30)->toIso8601String(),
+                // sem reviewReply — nenhuma respondida
+            ];
+        }
+
+        $this->fakeReviews([
+            'reviews'          => $reviews,
+            'averageRating'    => 3.5,
+            'totalReviewCount' => 5,
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame('calculado', $score->categorias['reputacao']['status']);
+        $diagnosticos = collect($score->categorias['reputacao']['diagnosticos']);
+        $this->assertCount(7, $diagnosticos);
+
+        // Volume: 5 avaliacoes -> +5
+        $this->assertStringContainsString('Só 5 avaliação', $diagnosticos[0]['mensagem']);
+        // Recorrencia: 30 dias -> aviso
+        $this->assertSame('aviso', $diagnosticos[1]['tipo']);
+        // Nota media 3.5 -> erro
+        $this->assertSame('erro', $diagnosticos[2]['tipo']);
+        $this->assertStringContainsString('abaixo de 4.0', $diagnosticos[2]['mensagem']);
+        // Mencao: comentarios nao citam categoria/cidade -> aviso
+        $this->assertSame('aviso', $diagnosticos[3]['tipo']);
+        // Taxa de resposta 0% -> erro
+        $this->assertSame('erro', $diagnosticos[4]['tipo']);
+        // Prazo: nenhuma respondida -> erro
+        $this->assertSame('erro', $diagnosticos[5]['tipo']);
+        $this->assertStringContainsString('Nenhuma avaliação recente foi respondida', $diagnosticos[5]['mensagem']);
+        // Termos na resposta: nenhuma respondida -> aviso
+        $this->assertSame('aviso', $diagnosticos[6]['tipo']);
+
+        $this->assertSame(5, $score->categorias['reputacao']['nota']); // so o sub-criterio de volume pontuou
+    }
+
+    public function test_reputacao_sem_nenhuma_avaliacao_fica_com_um_diagnostico_so(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        $this->fakeReviews(['reviews' => [], 'averageRating' => 0, 'totalReviewCount' => 0]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame(0, $score->categorias['reputacao']['nota']);
+        $this->assertSame('calculado', $score->categorias['reputacao']['status']);
+        $this->assertCount(1, $score->categorias['reputacao']['diagnosticos']);
+        $this->assertStringContainsString('Nenhuma avaliação registrada', $score->categorias['reputacao']['diagnosticos'][0]['mensagem']);
+        $this->assertNotNull($score->categorias['reputacao']['diagnosticos'][0]['acao_url']);
+    }
+
+    public function test_reputacao_fica_erro_em_cascata_quando_location_falha(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfil($tenant); // sem google_location_id
+        session(['tenant_id' => $tenant->id]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame('erro', $score->categorias['reputacao']['status']);
+        $this->assertStringContainsString('ID do Perfil no Google', $score->categorias['reputacao']['diagnosticos'][0]['mensagem']);
+    }
+
+    public function test_reputacao_fica_erro_quando_so_a_chamada_de_reviews_falha(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response([
+                'title' => 'Frete Rio Transportes',
+            ], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['error' => ['message' => 'Quota exceeded']], 429),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame('erro', $score->categorias['reputacao']['status']);
+        $this->assertStringContainsString('429', $score->categorias['reputacao']['diagnosticos'][0]['mensagem']);
+        // As outras categorias que so dependem de buscarDadosLocation() continuam calculadas normalmente:
+        $this->assertSame('calculado', $score->categorias['identidade']['status']);
+    }
+
+    public function test_reputacao_calcula_prazo_medio_so_com_as_respondidas(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        $criada = now()->subDays(2)->toIso8601String();
+
+        $this->fakeReviews([
+            'reviews' => [
+                [
+                    'reviewId'    => 'r1',
+                    'comment'     => 'Bom.',
+                    'createTime'  => $criada,
+                    'updateTime'  => $criada,
+                    'reviewReply' => ['comment' => 'Obrigado!', 'updateTime' => now()->subDays(2)->addHours(10)->toIso8601String()],
+                ],
+                [
+                    'reviewId'    => 'r2',
+                    'comment'     => 'Bom tambem.',
+                    'createTime'  => $criada,
+                    'updateTime'  => $criada,
+                    'reviewReply' => ['comment' => 'Valeu!', 'updateTime' => now()->subDays(2)->addHours(30)->toIso8601String()],
+                ],
+                [
+                    // sem resposta - nao entra na media de prazo
+                    'reviewId'   => 'r3',
+                    'comment'    => 'Ok.',
+                    'createTime' => $criada,
+                    'updateTime' => $criada,
+                ],
+            ],
+            'averageRating'    => 4.0,
+            'totalReviewCount' => 3,
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        // Media (10h + 30h) / 2 = 20h, dentro de 48h -> ok
+        $diagnosticoPrazo = collect($score->categorias['reputacao']['diagnosticos'])
+            ->first(fn ($d) => str_contains($d['mensagem'], 'Tempo médio de resposta'));
+        $this->assertNotNull($diagnosticoPrazo);
+        $this->assertSame('ok', $diagnosticoPrazo['tipo']);
+        $this->assertStringContainsString('20h', $diagnosticoPrazo['mensagem']);
+    }
+
+    public function test_reputacao_mencao_a_categoria_nao_reconhece_texto_sem_acento(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        // Categoria da ficha e "Logística" (com acento), mas o cliente escreveu sem acento.
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response([
+                'categories' => ['primaryCategory' => ['displayName' => 'Logística']],
+            ], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => [['name' => 'accounts/123']]], 200),
+            'mybusiness.googleapis.com/v4/*/reviews*' => Http::response([
+                'reviews' => [[
+                    'reviewId'   => 'r1',
+                    'comment'    => 'Otimo servico de logistica, recomendo.', // sem acentos
+                    'createTime' => now()->subDay()->toIso8601String(),
+                    'updateTime' => now()->subDay()->toIso8601String(),
+                ]],
+                'averageRating'    => 5,
+                'totalReviewCount' => 1,
+            ], 200),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        // v1 nao normaliza acento -> "logistica" (sem acento) nao bate com "Logística" (com acento) -> 0%
+        $diagnosticoMencao = collect($score->categorias['reputacao']['diagnosticos'])
+            ->first(fn ($d) => str_contains($d['mensagem'], 'citam o serviço ou a cidade'));
+        $this->assertStringContainsString('Só 0%', $diagnosticoMencao['mensagem']);
     }
 }
