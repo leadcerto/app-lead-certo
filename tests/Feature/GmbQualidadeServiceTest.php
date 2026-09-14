@@ -932,4 +932,62 @@ class GmbQualidadeServiceTest extends TestCase
         $this->assertSame('aviso', $redeSocial['tipo']);
         $this->assertNull($redeSocial['acao_url']);
     }
+
+    public function test_perfil_bom_com_7_categorias_ideais_calcula_nota_geral_alta(): void
+    {
+        $tenant = Tenant::factory()->create(['whatsapp_phone' => '21999998888', 'instagram_url' => 'https://instagram.com/freterio']);
+        $perfil = $this->criarPerfilComGoogle($tenant);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+        $this->criarPost($perfil, 'publicado', now()->subDay());
+
+        $criadaHaUmDia = now()->subDay()->toIso8601String();
+
+        $reviews = [];
+        for ($i = 0; $i < 20; $i++) {
+            $reviews[] = [
+                'reviewId'    => "r{$i}",
+                'comment'     => 'Transportadora excelente em Rio de Janeiro.',
+                'createTime'  => $criadaHaUmDia,
+                'updateTime'  => $criadaHaUmDia,
+                'reviewReply' => ['comment' => 'Obrigado pela confiança na nossa transportadora!', 'updateTime' => now()->subDay()->addHours(5)->toIso8601String()],
+            ];
+        }
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response([
+                'categories' => [
+                    'primaryCategory'      => ['displayName' => 'Transportadora'],
+                    'additionalCategories' => [['displayName' => 'Mudanças'], ['displayName' => 'Fretes'], ['displayName' => 'Logística']],
+                ],
+                'title'   => 'Frete Rio Transportes',
+                'profile' => ['description' => str_repeat('Somos especialistas em fretes e mudanças. ', 6)],
+                'storefrontAddress' => [
+                    'addressLines' => ['Rua das Flores, 123'], 'locality' => 'Rio de Janeiro',
+                    'administrativeArea' => 'RJ', 'postalCode' => '22000-000', 'regionCode' => 'BR',
+                ],
+                'websiteUri'   => 'https://freterio.com.br/barra-da-tijuca',
+                'regularHours' => ['periods' => [['openDay' => 'MONDAY', 'openTime' => '09:00', 'closeDay' => 'MONDAY', 'closeTime' => '18:00']]],
+            ], 200),
+            'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => [['name' => 'accounts/123']]], 200),
+            'mybusiness.googleapis.com/v4/*/reviews*' => Http::response([
+                'reviews'          => $reviews,
+                'averageRating'    => 4.9,
+                'totalReviewCount' => 60,
+            ], 200),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame(100, $score->categorias['atividade']['nota']);
+        $this->assertSame(100, $score->categorias['identidade']['nota']);
+        $this->assertSame(100, $score->categorias['localizacao']['nota']);
+        $this->assertSame(100, $score->categorias['presenca_externa']['nota']);
+        $this->assertSame(100, $score->categorias['saude_risco']['nota']);
+        $this->assertSame(100, $score->categorias['reputacao']['nota']);
+        $this->assertSame('pendente', $score->categorias['conteudo']['status']);
+        $this->assertSame(100, $score->nota_geral);
+
+        Http::assertSentCount(3); // 1 location + 1 accounts + 1 reviews
+    }
 }
