@@ -434,13 +434,13 @@ class GmbQualidadeServiceTest extends TestCase
 
     public function test_presenca_externa_com_site_cadastrado_da_nota_maxima(): void
     {
-        $tenant = Tenant::factory()->create();
+        $tenant = Tenant::factory()->create(['whatsapp_phone' => '21999998888', 'instagram_url' => 'https://instagram.com/freterio']);
         $perfil = $this->criarPerfilComGoogle($tenant);
         $this->criarTokenGoogle($tenant);
         session(['tenant_id' => $tenant->id]);
 
         Http::fake([
-            'mybusinessbusinessinformation.googleapis.com/*' => Http::response(['websiteUri' => 'https://freterio.com.br'], 200),
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response(['websiteUri' => 'https://freterio.com.br/barra-da-tijuca'], 200),
             'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
         ]);
 
@@ -448,7 +448,9 @@ class GmbQualidadeServiceTest extends TestCase
 
         $this->assertSame(100, $score->categorias['presenca_externa']['nota']);
         $this->assertSame('ok', $score->categorias['presenca_externa']['diagnosticos'][0]['tipo']);
-        $this->assertSame('info', $score->categorias['presenca_externa']['diagnosticos'][1]['tipo']);
+        $this->assertSame('ok', $score->categorias['presenca_externa']['diagnosticos'][1]['tipo']);
+        $this->assertSame('ok', $score->categorias['presenca_externa']['diagnosticos'][2]['tipo']);
+        $this->assertSame('info', $score->categorias['presenca_externa']['diagnosticos'][3]['tipo']);
     }
 
     public function test_presenca_externa_sem_site_fica_zerada_mas_sempre_lembra_do_schema_org(): void
@@ -466,9 +468,9 @@ class GmbQualidadeServiceTest extends TestCase
         $score = app(GmbQualidadeService::class)->avaliar($perfil);
 
         $this->assertSame(0, $score->categorias['presenca_externa']['nota']);
-        $this->assertCount(2, $score->categorias['presenca_externa']['diagnosticos']);
-        $this->assertStringContainsString('Schema.org', $score->categorias['presenca_externa']['diagnosticos'][1]['mensagem']);
-        $this->assertNotNull($score->categorias['presenca_externa']['diagnosticos'][1]['acao_url']);
+        $this->assertCount(4, $score->categorias['presenca_externa']['diagnosticos']);
+        $this->assertStringContainsString('Schema.org', $score->categorias['presenca_externa']['diagnosticos'][3]['mensagem']);
+        $this->assertNotNull($score->categorias['presenca_externa']['diagnosticos'][3]['acao_url']);
     }
 
     public function test_saude_risco_com_horario_cadastrado_da_nota_maxima(): void
@@ -515,7 +517,7 @@ class GmbQualidadeServiceTest extends TestCase
 
     public function test_perfil_bom_com_todos_os_dados_ideais_calcula_5_categorias_com_nota_alta(): void
     {
-        $tenant = Tenant::factory()->create();
+        $tenant = Tenant::factory()->create(['whatsapp_phone' => '21999998888', 'instagram_url' => 'https://instagram.com/freterio']);
         $perfil = $this->criarPerfilComGoogle($tenant);
         $this->criarTokenGoogle($tenant);
         session(['tenant_id' => $tenant->id]);
@@ -533,7 +535,7 @@ class GmbQualidadeServiceTest extends TestCase
                     'addressLines' => ['Rua das Flores, 123'], 'locality' => 'Rio de Janeiro',
                     'administrativeArea' => 'RJ', 'postalCode' => '22000-000', 'regionCode' => 'BR',
                 ],
-                'websiteUri'   => 'https://freterio.com.br',
+                'websiteUri'   => 'https://freterio.com.br/barra-da-tijuca',
                 'regularHours' => ['periods' => [['openDay' => 'MONDAY', 'openTime' => '09:00', 'closeDay' => 'MONDAY', 'closeTime' => '18:00']]],
             ], 200),
             'mybusinessaccountmanagement.googleapis.com/*' => Http::response(['accounts' => []], 200),
@@ -849,5 +851,85 @@ class GmbQualidadeServiceTest extends TestCase
         $diagnosticoMencao = collect($score->categorias['reputacao']['diagnosticos'])
             ->first(fn ($d) => str_contains($d['mensagem'], 'citam o serviço ou a cidade'));
         $this->assertStringContainsString('Só 0%', $diagnosticoMencao['mensagem']);
+    }
+
+    private function criarPerfilComTenant(array $extraTenant = [], array $extraPerfil = []): PerfilGmb
+    {
+        $tenant = Tenant::factory()->create($extraTenant);
+        $perfil = $this->criarPerfilComGoogle($tenant, $extraPerfil);
+        $this->criarTokenGoogle($tenant);
+        session(['tenant_id' => $tenant->id]);
+        return $perfil;
+    }
+
+    public function test_presenca_externa_com_pagina_propria_no_site_da_40_pontos(): void
+    {
+        $perfil = $this->criarPerfilComTenant();
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response(['websiteUri' => 'https://frete.rio.br/barra-da-tijuca'], 200),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame(40, $score->categorias['presenca_externa']['nota']);
+        $diagnostico = collect($score->categorias['presenca_externa']['diagnosticos'])->first();
+        $this->assertSame('ok', $diagnostico['tipo']);
+        $this->assertStringContainsString('página própria', $diagnostico['mensagem']);
+    }
+
+    public function test_presenca_externa_com_site_so_a_raiz_da_25_pontos(): void
+    {
+        foreach (['https://frete.rio.br/', 'https://frete.rio.br'] as $url) {
+            $perfil = $this->criarPerfilComTenant();
+
+            Http::fake([
+                'mybusinessbusinessinformation.googleapis.com/*' => Http::response(['websiteUri' => $url], 200),
+            ]);
+
+            $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+            $this->assertSame(25, $score->categorias['presenca_externa']['nota'], "falhou para a URL {$url}");
+            $diagnostico = collect($score->categorias['presenca_externa']['diagnosticos'])->first();
+            $this->assertSame('aviso', $diagnostico['tipo']);
+            $this->assertStringContainsString('página inicial', $diagnostico['mensagem']);
+        }
+    }
+
+    public function test_presenca_externa_soma_whatsapp_e_rede_social_do_tenant(): void
+    {
+        $perfil = $this->criarPerfilComTenant(['whatsapp_phone' => '21999998888', 'instagram_url' => 'https://instagram.com/freterio']);
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response(['websiteUri' => 'https://frete.rio.br/barra-da-tijuca'], 200),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame(100, $score->categorias['presenca_externa']['nota']); // 40 + 30 + 30
+        $diagnosticos = collect($score->categorias['presenca_externa']['diagnosticos']);
+        $this->assertSame(3, $diagnosticos->where('tipo', 'ok')->count()); // site + whatsapp + rede social (info nao conta)
+    }
+
+    public function test_presenca_externa_sem_whatsapp_nem_rede_social_avisa_os_dois(): void
+    {
+        $perfil = $this->criarPerfilComTenant();
+
+        Http::fake([
+            'mybusinessbusinessinformation.googleapis.com/*' => Http::response([], 200),
+        ]);
+
+        $score = app(GmbQualidadeService::class)->avaliar($perfil);
+
+        $this->assertSame(0, $score->categorias['presenca_externa']['nota']);
+        $diagnosticos = collect($score->categorias['presenca_externa']['diagnosticos']);
+
+        $whatsapp = $diagnosticos->first(fn ($d) => str_contains($d['mensagem'], 'WhatsApp'));
+        $this->assertSame('aviso', $whatsapp['tipo']);
+        $this->assertNull($whatsapp['acao_url']); // sem link de acao, ver Global Constraints
+
+        $redeSocial = $diagnosticos->first(fn ($d) => str_contains($d['mensagem'], 'rede social'));
+        $this->assertSame('aviso', $redeSocial['tipo']);
+        $this->assertNull($redeSocial['acao_url']);
     }
 }

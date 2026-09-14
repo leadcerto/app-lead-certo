@@ -43,7 +43,7 @@ class GmbQualidadeService
                     ? $this->avaliarLocalizacao($location['dados'])
                     : $this->categoriaErro($label, $location['motivo']),
                 'presenca_externa' => $location['sucesso']
-                    ? $this->avaliarPresencaExterna($location['dados'])
+                    ? $this->avaliarPresencaExterna($location['dados'], $perfil)
                     : $this->categoriaErro($label, $location['motivo']),
                 'saude_risco'      => $location['sucesso']
                     ? $this->avaliarSaudeRisco($location['dados'])
@@ -615,22 +615,51 @@ class GmbQualidadeService
         ];
     }
 
-    private function avaliarPresencaExterna(array $dados): array
+    private function avaliarPresencaExterna(array $dados, PerfilGmb $perfil): array
     {
         $website = $dados['websiteUri'] ?? '';
+        $acaoManual = ['acao_label' => 'Abrir Google Business Profile Manager', 'acao_url' => 'https://business.google.com/'];
         $diagnosticos = [];
+        $pontos = 0;
 
         if (! empty($website)) {
-            $nota = 100;
-            $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => 'Site vinculado à ficha.', 'acao_label' => null, 'acao_url' => null];
+            $path = parse_url($website, PHP_URL_PATH);
+            $paginaPropria = ! empty($path) && $path !== '/';
+
+            if ($paginaPropria) {
+                $pontos += 40;
+                $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => 'Site vinculado aponta para uma página própria (não a home genérica).', 'acao_label' => null, 'acao_url' => null];
+            } else {
+                $pontos += 25;
+                $diagnosticos[] = array_merge([
+                    'tipo'     => 'aviso',
+                    'mensagem' => 'O site vinculado aponta para a página inicial, não para uma página própria desta localização. Uma página dedicada (com endereço, telefone e serviços desta unidade) vale mais para o Google e para o cliente.',
+                ], $acaoManual);
+            }
         } else {
-            $nota = 0;
             $diagnosticos[] = [
                 'tipo'       => 'erro',
                 'mensagem'   => 'Nenhum site cadastrado na ficha.',
                 'acao_label' => 'Adicionar site no Google Business Profile Manager',
                 'acao_url'   => 'https://business.google.com/',
             ];
+        }
+
+        if (! empty($perfil->tenant->whatsapp_phone)) {
+            $pontos += 30;
+            $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => 'WhatsApp cadastrado no sistema.', 'acao_label' => null, 'acao_url' => null];
+        } else {
+            $diagnosticos[] = ['tipo' => 'aviso', 'mensagem' => 'WhatsApp não cadastrado no sistema.', 'acao_label' => null, 'acao_url' => null];
+        }
+
+        $temRedeSocial = ! empty($perfil->tenant->instagram_url) || ! empty($perfil->tenant->facebook_url)
+            || ! empty($perfil->tenant->youtube_url) || ! empty($perfil->tenant->linkedin_url);
+
+        if ($temRedeSocial) {
+            $pontos += 30;
+            $diagnosticos[] = ['tipo' => 'ok', 'mensagem' => 'Pelo menos uma rede social cadastrada no sistema.', 'acao_label' => null, 'acao_url' => null];
+        } else {
+            $diagnosticos[] = ['tipo' => 'aviso', 'mensagem' => 'Nenhuma rede social cadastrada no sistema.', 'acao_label' => null, 'acao_url' => null];
         }
 
         $diagnosticos[] = [
@@ -641,7 +670,7 @@ class GmbQualidadeService
         ];
 
         return [
-            'nota'         => $nota,
+            'nota'         => $pontos,
             'status'       => 'calculado',
             'label'        => self::CATEGORIAS_LABELS['presenca_externa'],
             'diagnosticos' => $diagnosticos,
