@@ -150,8 +150,15 @@ class GoogleService
     /**
      * Formata os campos de nome para o padrão oficial do Google Contatos:
      * - givenName: Primeiro Nome (ex: "Adalberto")
-     * - middleName: Nome do Meio (ex: "Silva")
-     * - familyName: Sobrenome (ex: "Martins" ou "Martins Silva")
+     * - middleName: ID do banco de dados da Lead Certo (ex: "14380") — SEMPRE, é o
+     *   identificador que permite achar o registro na plataforma a partir do Google.
+     *   Não usa a coluna nome_do_meio (essa é só pro sentido inverso — Google -> nosso
+     *   banco — ver ContatoSyncService::mapearDadosPessoa()); usar nome_do_meio aqui
+     *   seria pisar no ID, que é o dado obrigatório desse campo. Achado real
+     *   2026-09-15: dois commits (2e822b4, d9f9dc2) regrediram isso sem querer entre
+     *   03/09 e 10/09, restaurado pra bater com o design original (400b725) e com o
+     *   pedido do Leonardo (ID sempre no nome do meio, nunca colado no sobrenome).
+     * - familyName: Sobrenome (ex: "Martins" ou "Martins Silva") — nunca leva o ID junto.
      */
     public function formatarNomeParaGoogle(Contato $contato, ?string $pushName = null): array
     {
@@ -161,10 +168,9 @@ class GoogleService
             $givenName = 'Sem Nome';
             $descriptor = $contato->sobrenome ?: ($pushName ? $this->extrairDescriptor($pushName) : null);
             $familyName = $descriptor ? $this->limparNome($descriptor) : null;
-            $middleName = $contato->nome_do_meio ? $this->limparNome($contato->nome_do_meio) : null;
         } else {
             $givenName = $this->limparNome($contato->nome);
-            
+
             // Se o usuário não preencheu o sobrenome separadamente, tentamos extrair do 'nome'
             // apenas para manter compatibilidade com contatos antigos onde tudo ficava no campo 'nome'
             $familyName = $contato->sobrenome;
@@ -173,25 +179,20 @@ class GoogleService
                 $givenName = array_shift($partes);
                 $familyName = implode(' ', $partes);
             }
-            
+
             if (empty($familyName) && $pushName) {
                 $familyName = $this->extrairDescriptor($pushName);
             }
-            
-            $middleName = $contato->nome_do_meio ? $this->limparNome($contato->nome_do_meio) : null;
         }
 
         $nameEntry = [
             'givenName'  => $givenName,
+            'middleName' => (string) $contato->id,
         ];
-        
-        if (! empty($middleName)) {
-            $nameEntry['middleName'] = $middleName;
-        }
 
-        // Adiciona o ID do sistema no sobrenome
-        $familyName = ! empty($familyName) ? $this->limparNome($familyName) : '';
-        $nameEntry['familyName'] = $familyName ? "{$familyName} [{$contato->id}]" : "[{$contato->id}]";
+        if (! empty($familyName)) {
+            $nameEntry['familyName'] = $this->limparNome($familyName);
+        }
 
         return $nameEntry;
     }
