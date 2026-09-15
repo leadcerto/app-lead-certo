@@ -180,8 +180,8 @@ class EquipePainelController extends Controller
 
     public function agentesIaStore(Request $request): RedirectResponse
     {
-        if (! $request->user()->isDono()) {
-            abort(403, 'Apenas o Super Administrador / Dono pode cadastrar Agentes de IA.');
+        if (! $request->user()->isSuperAdmin()) {
+            abort(403, 'Apenas o Super Administrador pode cadastrar Agentes de IA.');
         }
 
         $validated = $request->validate([
@@ -238,8 +238,8 @@ class EquipePainelController extends Controller
 
     public function agentesIaUpdate(Request $request, int $id): RedirectResponse
     {
-        if (! $request->user()->isDono()) {
-            abort(403, 'Apenas o Super Administrador / Dono pode editar Agentes de IA.');
+        if (! $request->user()->isSuperAdmin()) {
+            abort(403, 'Apenas o Super Administrador pode editar Agentes de IA.');
         }
 
         $agente = User::findOrFail($id);
