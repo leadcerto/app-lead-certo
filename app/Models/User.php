@@ -122,7 +122,7 @@ class User extends Authenticatable
 
     public function isSuperAdmin(): bool
     {
-        return in_array($this->perfil, ['admin', 'dono'], true);
+        return $this->perfil === 'admin';
     }
 
     public function isGerente(): bool

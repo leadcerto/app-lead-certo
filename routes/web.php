@@ -312,8 +312,8 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::match(['post', 'put', 'patch'], '/funcoes/{id}', [\App\Http\Controllers\Painel\EquipePainelController::class, 'funcoesUpdate'])->name('funcoes.update')->middleware('role:admin,dono');
 
         Route::get('/agentes-ia', [\App\Http\Controllers\Painel\EquipePainelController::class, 'agentesIa'])->name('agentes-ia');
-        Route::post('/agentes-ia', [\App\Http\Controllers\Painel\EquipePainelController::class, 'agentesIaStore'])->name('agentes-ia.store')->middleware('role:admin,dono');
-        Route::match(['post', 'put', 'patch'], '/agentes-ia/{id}', [\App\Http\Controllers\Painel\EquipePainelController::class, 'agentesIaUpdate'])->name('agentes-ia.update')->middleware('role:admin,dono');
+        Route::post('/agentes-ia', [\App\Http\Controllers\Painel\EquipePainelController::class, 'agentesIaStore'])->name('agentes-ia.store')->middleware('role:admin');
+        Route::match(['post', 'put', 'patch'], '/agentes-ia/{id}', [\App\Http\Controllers\Painel\EquipePainelController::class, 'agentesIaUpdate'])->name('agentes-ia.update')->middleware('role:admin');
 
         Route::get('/humanos', [\App\Http\Controllers\Painel\EquipePainelController::class, 'humanos'])->name('humanos');
         Route::get('/relatorio-ia', [\App\Http\Controllers\Painel\EquipePainelController::class, 'relatorioIa'])->name('relatorio-ia');
