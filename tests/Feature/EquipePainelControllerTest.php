@@ -85,6 +85,35 @@ class EquipePainelControllerTest extends TestCase
         $response->assertDontSee('Novo Agente IA'); // Botão restrito ao admin
     }
 
+    public function test_dono_ve_agentes_ia_mas_sem_botao_de_editar(): void
+    {
+        // Pedido do Leonardo (2026-09-15): editar Agentes IA fica restrito a
+        // perfil 'admin' — nem 'dono' (dono de um tenant cliente) deve ver a
+        // opção de criar/editar, só "Ver Detalhes".
+        $tenant = Tenant::factory()->create();
+        $dono   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono']);
+
+        $response = $this->actingAs($dono)->get(route('equipe.agentes-ia'));
+
+        $response->assertOk();
+        $response->assertDontSee('Novo Agente IA');
+        $response->assertDontSee('Editar Agente IA');
+    }
+
+    public function test_dono_bloqueado_de_criar_agente_ia(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $dono   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono']);
+
+        $response = $this->actingAs($dono)->post(route('equipe.agentes-ia.store'), [
+            'nome'  => 'Agente Não Autorizado',
+            'email' => 'nao-autorizado@leadcerto.com',
+        ]);
+
+        $response->assertForbidden();
+        $this->assertDatabaseMissing('users', ['email' => 'nao-autorizado@leadcerto.com']);
+    }
+
     public function test_admin_cria_agente_ia_com_multiplas_funcoes(): void
     {
         $tenant = Tenant::factory()->create();
