@@ -87,6 +87,39 @@ class SequenciaMensagemJob implements ShouldQueue
             return;
         }
 
+        // Achado real 2026-09-16 (ticket #4788): os passos de uma sequência são
+        // enfileirados de uma vez com delay fixo desde que o lead entrou na coluna —
+        // se ele já respondeu à própria pergunta que o próximo passo ia fazer (ex.:
+        // deu o nome antes do "fico esperando as informações" dele disparar), o
+        // roteiro seguia de qualquer jeito, mandando uma mensagem redundante e com
+        // variável ainda vazia ({nome}), porque a IA não tinha processado a resposta
+        // a tempo. Só checa a partir da ÚLTIMA mensagem NOSSA — a primeira mensagem
+        // da sequência (nenhum "bot" anterior no ticket) sempre sai normalmente,
+        // mesmo respondendo a uma mensagem do lead.
+        if (! $obrigatorio) {
+            $ultimaMensagemBot = Mensagem::withoutGlobalScopes()
+                ->where('ticket_id', $ticket->id)
+                ->where('remetente', 'bot')
+                ->orderByDesc('enviado_em')
+                ->value('enviado_em');
+
+            if ($ultimaMensagemBot) {
+                $leadRespondeuDepois = Mensagem::withoutGlobalScopes()
+                    ->where('ticket_id', $ticket->id)
+                    ->where('remetente', 'lead')
+                    ->where('enviado_em', '>', $ultimaMensagemBot)
+                    ->exists();
+
+                if ($leadRespondeuDepois) {
+                    Log::info('SequenciaMensagemJob: lead já respondeu desde a última mensagem do bot, envio cancelado', [
+                        'ticket_id' => $this->ticketId,
+                    ]);
+                    $this->registrarResultadoChamadaPerdida(false);
+                    return;
+                }
+            }
+        }
+
         $telefone = $ticket->contato?->telefone;
         $tenant   = $ticket->tenant;
         $canal    = $ticket->canal;
