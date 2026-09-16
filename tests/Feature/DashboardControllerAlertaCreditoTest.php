@@ -42,6 +42,22 @@ class DashboardControllerAlertaCreditoTest extends TestCase
         $response->assertJsonPath('alertas.openrouter_sem_credito', null);
     }
 
+    public function test_dashboard_expoe_alerta_quando_modelo_de_reserva_esta_indisponivel(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono']);
+
+        Cache::put('openrouter:reserva_indisponivel', [
+            'modelo' => 'openai/gpt-4o-mini',
+            'quando' => '2026-09-16T12:00:00+00:00',
+        ], now()->addDay());
+
+        $response = $this->actingAs($user)->getJson('/api/painel/dashboard');
+
+        $response->assertOk();
+        $response->assertJsonPath('alertas.openrouter_reserva_indisponivel.modelo', 'openai/gpt-4o-mini');
+    }
+
     public function test_pagina_do_dashboard_renderiza_com_o_bloco_de_alerta_de_credito(): void
     {
         $tenant = Tenant::factory()->create();

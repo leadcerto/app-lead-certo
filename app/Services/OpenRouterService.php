@@ -14,6 +14,16 @@ class OpenRouterService
     /** Chave de cache do alerta de crédito esgotado, lida por DashboardController::dados(). */
     public const CACHE_KEY_SEM_CREDITO = 'openrouter:sem_credito';
 
+    /**
+     * Modelo de reserva enviado junto com todo pedido (route: fallback) — se o modelo
+     * escolhido do agente sair do ar (descontinuado, sem endpoint grátis etc.), a própria
+     * OpenRouter já tenta este na mesma chamada, sem esperar um job noturno detectar.
+     * Achado real 2026-09-16: o agente Atlas ficou ~2h sem responder porque o modelo
+     * configurado (`meta-llama/llama-3.3-70b-instruct:free`) saiu do plano grátis da
+     * OpenRouter e nada pegava isso em tempo real.
+     */
+    public const MODELO_RESERVA = 'openai/gpt-4o-mini';
+
     private string $key;
     private string $modeloSimples;
     private string $modeloComplexo;
@@ -58,6 +68,8 @@ class OpenRouterService
             $modelo = $tier === 'complexo' ? $this->modeloComplexo : $this->modeloSimples;
         }
 
+        $modelos = array_values(array_unique([$modelo, self::MODELO_RESERVA]));
+
         $inicio = now();
 
         try {
@@ -66,7 +78,8 @@ class OpenRouterService
                 'HTTP-Referer'  => config('app.url'),
                 'X-Title'       => 'Lead Certo',
             ])->post(self::URL, [
-                'model'       => $modelo,
+                'models'      => $modelos,
+                'route'       => 'fallback',
                 'temperature' => 0.4,
                 'max_tokens'  => $maxTokens,
                 'messages'    => $messages,
@@ -75,7 +88,7 @@ class OpenRouterService
             $latencia = (int) $inicio->diffInMilliseconds(now());
 
             if ($response->failed()) {
-                Log::error('OpenRouter falhou', ['status' => $response->status(), 'body' => $response->body()]);
+                Log::error('OpenRouter falhou', ['status' => $response->status(), 'body' => $response->body(), 'modelos_tentados' => $modelos]);
 
                 if ($response->status() === 402) {
                     $this->marcarSemCredito($response->json('error.message') ?? 'Créditos insuficientes na OpenRouter.');
@@ -86,8 +99,13 @@ class OpenRouterService
 
             Cache::forget(self::CACHE_KEY_SEM_CREDITO);
 
+            // A OpenRouter devolve qual modelo da lista realmente respondeu (route: fallback
+            // pode ter pulado pro reserva) — logar esse, não o que pedimos, senão o uso fica
+            // atribuído ao modelo errado.
+            $modeloUsado = $response->json('model') ?: $modelo;
+
             $usage = $response->json('usage', []);
-            $this->logUsage($modelo, $tier, $usage, $latencia, $origem, $tenantId, $agenteId);
+            $this->logUsage($modeloUsado, $tier, $usage, $latencia, $origem, $tenantId, $agenteId);
 
             return $response->json('choices.0.message.content');
         } catch (\Exception $e) {
