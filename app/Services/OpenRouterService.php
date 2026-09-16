@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -9,6 +10,9 @@ use Illuminate\Support\Facades\Log;
 class OpenRouterService
 {
     private const URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+    /** Chave de cache do alerta de crédito esgotado, lida por DashboardController::dados(). */
+    public const CACHE_KEY_SEM_CREDITO = 'openrouter:sem_credito';
 
     private string $key;
     private string $modeloSimples;
@@ -72,8 +76,15 @@ class OpenRouterService
 
             if ($response->failed()) {
                 Log::error('OpenRouter falhou', ['status' => $response->status(), 'body' => $response->body()]);
+
+                if ($response->status() === 402) {
+                    $this->marcarSemCredito($response->json('error.message') ?? 'Créditos insuficientes na OpenRouter.');
+                }
+
                 return null;
             }
+
+            Cache::forget(self::CACHE_KEY_SEM_CREDITO);
 
             $usage = $response->json('usage', []);
             $this->logUsage($modelo, $tier, $usage, $latencia, $origem, $tenantId, $agenteId);
@@ -83,6 +94,17 @@ class OpenRouterService
             Log::error('OpenRouter exception', ['erro' => $e->getMessage()]);
             return null;
         }
+    }
+
+    private function marcarSemCredito(string $mensagem): void
+    {
+        $existente = Cache::get(self::CACHE_KEY_SEM_CREDITO);
+
+        Cache::put(self::CACHE_KEY_SEM_CREDITO, [
+            'desde'        => $existente['desde'] ?? now()->toIso8601String(),
+            'ultima_falha' => now()->toIso8601String(),
+            'mensagem'     => $mensagem,
+        ], now()->addDay());
     }
 
     private function logUsage(string $modelo, string $tier, array $usage, int $latencia, ?string $origem, ?int $tenantId, ?int $agenteId): void
