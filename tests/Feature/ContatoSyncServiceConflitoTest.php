@@ -378,16 +378,18 @@ class ContatoSyncServiceConflitoTest extends TestCase
 
     /**
      * O middleName dos contatos que NÓS empurramos carrega o ID do banco
-     * (GoogleService::criarContato) — importar isso de volta escreveria o
-     * próprio ID interno no campo "nome do meio" do cadastro.
+     * (GoogleService::criarContato) — importar isso de volta não pode deixar
+     * escrever um valor arbitrário no campo "nome do meio" do cadastro local.
+     * `Contato::nome_do_meio` é um accessor (2026-09-16, Contato::getNomeDoMeioAttribute)
+     * que sempre devolve o próprio ID do contato, nunca lê/grava a coluna —
+     * então mesmo que o sync tente escrever algo ali, o valor efetivo nunca muda.
      */
     public function test_id_do_banco_no_middle_name_nao_vira_nome_do_meio(): void
     {
         $tenant  = Tenant::factory()->create();
         $contato = Contato::factory()->create([
-            'telefone'     => '5521999990202',
-            'nome'         => 'Marcos Souza',
-            'nome_do_meio' => null,
+            'telefone' => '5521999990202',
+            'nome'     => 'Marcos Souza',
         ]);
 
         $this->fakePessoaComposta('5521999990202', 'Marcos 5000 Souza', 'Marcos Souza', 'Souza');
@@ -395,7 +397,7 @@ class ContatoSyncServiceConflitoTest extends TestCase
         $token = $this->criarToken($tenant);
         app(ContatoSyncService::class)->sincronizar($token, $tenant->id);
 
-        $this->assertNull($contato->fresh()->nome_do_meio);
+        $this->assertSame((string) $contato->id, $contato->fresh()->nome_do_meio);
     }
 
     /**

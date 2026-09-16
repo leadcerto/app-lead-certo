@@ -18,8 +18,8 @@ class Contato extends Model
         // Identificação
         'telefone', 'telefone_2', 'tipo_telefone', 'tipo_telefone_2',
         'email', 'email_2',
-        // Nome
-        'nome', 'nome_do_meio', 'sobrenome', 'prefixo', 'sufixo', 'apelido', 'nome_revisado_ia_em',
+        // Nome — nome_do_meio NÃO entra aqui de propósito, ver getNomeDoMeioAttribute()
+        'nome', 'sobrenome', 'prefixo', 'sufixo', 'apelido', 'nome_revisado_ia_em',
         // Documentos
         'cpf', 'rg', 'passaporte',
         // Pessoal
@@ -45,6 +45,18 @@ class Contato extends Model
         // Pessoa Jurídica
         'cnpj', 'razao_social', 'nome_fantasia', 'inscricao_estadual', 'inscricao_municipal',
     ];
+
+    /**
+     * Protocolo de nomes do Lead Certo (migration cria_cargo_auditor_contatos_ia,
+     * confirmado com o Leonardo 2026-09-16): Nome do meio é sempre o ID do próprio
+     * contato, nunca um dado editável — ignora completamente o que estiver gravado
+     * na coluna (lixo histórico de sync/import) e nunca aceita sobrescrita via
+     * mass assignment (removido de $fillable).
+     */
+    public function getNomeDoMeioAttribute(): string
+    {
+        return (string) $this->id;
+    }
 
     protected function casts(): array
     {
