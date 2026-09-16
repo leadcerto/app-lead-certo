@@ -7,9 +7,11 @@ use App\Models\AuditoriaContato;
 use App\Models\MotivoDesfecho;
 use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
+use App\Services\OpenRouterService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class DashboardController extends Controller
 {
@@ -91,7 +93,10 @@ class DashboardController extends Controller
             'kanban'             => $kanban,
             'motivos_perda'      => $motivosPerda,
             'auditoria_pendentes' => $auditoriaPendentes,
-            'alertas'            => ['sem_resposta_2h' => $semResposta2h],
+            'alertas'            => [
+                'sem_resposta_2h'         => $semResposta2h,
+                'openrouter_sem_credito'  => Cache::get(OpenRouterService::CACHE_KEY_SEM_CREDITO),
+            ],
         ]);
     }
 

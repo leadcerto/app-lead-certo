@@ -5,6 +5,23 @@
 @section('content')
 <div x-data="dashboard()" x-init="carregar()" class="space-y-6">
 
+    {{-- Alerta: OpenRouter sem crédito --}}
+    <template x-if="dados.alertas && dados.alertas.openrouter_sem_credito">
+        <div class="flex items-start gap-3 px-5 py-4 rounded-xl shadow-sm" style="background:#fef2f2;border:1px solid #fecaca">
+            <svg class="w-5 h-5 flex-shrink-0 mt-0.5" style="color:#b91c1c" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+            </svg>
+            <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold" style="color:#b91c1c">Sem crédito na OpenRouter — os agentes de IA podem parar de responder</p>
+                <p class="text-xs mt-0.5" style="color:#991b1b" x-text="dados.alertas.openrouter_sem_credito.mensagem"></p>
+                <p class="text-xs mt-1" style="color:#991b1b">
+                    Desde <span x-text="new Date(dados.alertas.openrouter_sem_credito.desde).toLocaleString('pt-BR')"></span> —
+                    <a href="https://openrouter.ai/settings/credits" target="_blank" rel="noopener" class="underline font-medium">adicionar crédito</a>
+                </p>
+            </div>
+        </div>
+    </template>
+
     {{-- Cabeçalho --}}
     <div class="flex items-center justify-between">
         <h1 class="text-xl font-bold text-gray-800">Dashboard</h1>
