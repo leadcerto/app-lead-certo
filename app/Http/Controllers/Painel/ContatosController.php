@@ -974,7 +974,6 @@ class ContatosController extends Controller
     {
         $request->validate([
             'nome'           => 'sometimes|string|max:200',
-            'nome_do_meio'   => 'sometimes|nullable|string|max:200',
             'sobrenome'      => 'sometimes|nullable|string|max:200',
             'telefone'       => 'sometimes|nullable|string|max:20',
             'email'          => 'sometimes|nullable|email|max:200',
@@ -1007,7 +1006,7 @@ class ContatosController extends Controller
 
         $tenantId = $request->user()->tenant_id;
         $campos   = [
-            'nome','nome_do_meio','sobrenome','telefone','email','email_2','telefone_2','profissao','empresa','departamento',
+            'nome','sobrenome','telefone','email','email_2','telefone_2','profissao','empresa','departamento',
             'observacoes','endereco','cidade','estado','cep','pais','tipo','tipo_contato',
             'score','genero','estado_civil','aniversario','cpf','rg',
             'instagram','facebook','linkedin','twitter','website','opt_out',

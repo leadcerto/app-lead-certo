@@ -353,7 +353,7 @@
             <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Identificação</h3>
             <div class="grid grid-cols-2 gap-3">
                 <div class="col-span-2">
-                    <label class="label-field">ID do Contato</label>
+                    <label class="label-field">ID do Contato / Nome do meio</label>
                     <div class="view-field font-mono text-gray-500 bg-gray-50 rounded px-3" data-field="id"></div>
                     <input class="edit-field font-mono text-gray-500 bg-gray-50 cursor-not-allowed" data-field="id" type="text" readonly>
                 </div>
@@ -362,12 +362,7 @@
                     <div class="view-field" data-field="nome"></div>
                     <input class="edit-field" data-field="nome" type="text" maxlength="200" placeholder="Nome">
                 </div>
-                <div>
-                    <label class="label-field">Nome do meio</label>
-                    <div class="view-field" data-field="nome_do_meio"></div>
-                    <input class="edit-field" data-field="nome_do_meio" type="text" maxlength="200" placeholder="Nome do meio">
-                </div>
-                <div>
+                <div class="col-span-2">
                     <label class="label-field">Sobrenome</label>
                     <div class="view-field" data-field="sobrenome"></div>
                     <input class="edit-field" data-field="sobrenome" type="text" maxlength="200" placeholder="Sobrenome">
