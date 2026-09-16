@@ -2,7 +2,10 @@
 
 namespace App\Console\Commands;
 
+use App\Models\User;
+use App\Services\OpenRouterService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -127,7 +130,60 @@ class AtualizarModelosOpenRouter extends Command
             Log::info('AtualizarModelosOpenRouter: sem mudanças', ['updated_at' => $dados['updated_at']]);
         }
 
+        $this->corrigirAgentesComModeloDescontinuado(array_column($todos, 'id'));
+
         return Command::SUCCESS;
+    }
+
+    /**
+     * Garante que nenhum Agente IA fique preso apontando pra um modelo que a OpenRouter
+     * já não serve mais — troca pro modelo de reserva e registra o achado. O
+     * OpenRouterService::chat() já tem fallback em tempo real (route: fallback), então
+     * isso não afeta o atendimento no ato; é só pra manter o campo salvo (e a tela de
+     * Agentes IA) refletindo a realidade, em vez de ficar preso num valor morto pra sempre.
+     */
+    private function corrigirAgentesComModeloDescontinuado(array $idsValidos): void
+    {
+        $catalogo = array_flip($idsValidos);
+
+        $agentes = User::where('is_ia', true)
+            ->where('ativo', true)
+            ->where('provedor_ia', 'openrouter')
+            ->whereNotNull('openrouter_modelo')
+            ->get();
+
+        foreach ($agentes as $agente) {
+            if (isset($catalogo[$agente->openrouter_modelo])) {
+                continue;
+            }
+
+            if ($agente->openrouter_modelo === OpenRouterService::MODELO_RESERVA) {
+                // O próprio modelo de reserva sumiu do catálogo — não dá pra trocar pra
+                // ele mesmo. Alerta pra decisão humana em vez de tentar adivinhar outro.
+                Cache::put('openrouter:reserva_indisponivel', [
+                    'modelo' => OpenRouterService::MODELO_RESERVA,
+                    'quando' => now()->toIso8601String(),
+                ], now()->addDay());
+
+                Log::critical('AtualizarModelosOpenRouter: modelo de reserva também sumiu do catálogo', [
+                    'modelo' => OpenRouterService::MODELO_RESERVA,
+                ]);
+
+                continue;
+            }
+
+            $modeloAntigo = $agente->openrouter_modelo;
+            $agente->update(['openrouter_modelo' => OpenRouterService::MODELO_RESERVA]);
+
+            Log::warning('AtualizarModelosOpenRouter: modelo do agente descontinuado, trocado pro reserva', [
+                'agente_id'     => $agente->id,
+                'agente_nome'   => $agente->nome,
+                'modelo_antigo' => $modeloAntigo,
+                'modelo_novo'   => OpenRouterService::MODELO_RESERVA,
+            ]);
+
+            $this->warn("Agente #{$agente->id} ({$agente->nome}): {$modeloAntigo} descontinuado -> " . OpenRouterService::MODELO_RESERVA);
+        }
     }
 
     private function reportarMudancas(string $tipo, array $antes, array $depois): bool

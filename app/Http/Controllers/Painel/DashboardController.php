@@ -94,8 +94,9 @@ class DashboardController extends Controller
             'motivos_perda'      => $motivosPerda,
             'auditoria_pendentes' => $auditoriaPendentes,
             'alertas'            => [
-                'sem_resposta_2h'         => $semResposta2h,
-                'openrouter_sem_credito'  => Cache::get(OpenRouterService::CACHE_KEY_SEM_CREDITO),
+                'sem_resposta_2h'            => $semResposta2h,
+                'openrouter_sem_credito'     => Cache::get(OpenRouterService::CACHE_KEY_SEM_CREDITO),
+                'openrouter_reserva_indisponivel' => Cache::get('openrouter:reserva_indisponivel'),
             ],
         ]);
     }
