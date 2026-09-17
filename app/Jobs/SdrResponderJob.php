@@ -19,6 +19,11 @@ class SdrResponderJob implements ShouldQueue
 
     const DEBOUNCE_SEGUNDOS = 45; // padrão quando não há config no banco
 
+    // Teto de reagendamentos por debounce — nunca deve ser atingido em produção
+    // de verdade (cada reagendamento já mira depois da janela da mensagem mais
+    // recente), só protege contra uma corrida esquisita virar loop infinito.
+    private const MAX_TENTATIVAS_DEBOUNCE = 5;
+
     public function __construct(
         private int     $ticketId,
         private string  $ultimaMensagem  = '',
@@ -26,6 +31,7 @@ class SdrResponderJob implements ShouldQueue
         private bool    $imediato        = false,
         private int     $debounceSegundos = self::DEBOUNCE_SEGUNDOS,
         private ?string $orientacaoHumana = null,
+        private int     $tentativaDebounce = 0,
     ) {}
 
     public function handle(SdrResponderService $service): void
@@ -47,8 +53,37 @@ class SdrResponderJob implements ShouldQueue
                 ->orderByDesc('enviado_em')
                 ->value('enviado_em');
 
-            if ($ultimaMensagemEm && now()->diffInSeconds($ultimaMensagemEm) < $this->debounceSegundos) {
+            // Achado real 2026-09-17 (ticket #4791): Carbon 3.x mudou o padrão de
+            // diffInSeconds() pra devolver diferença COM SINAL (não mais absoluta) —
+            // now()->diffInSeconds($passado) agora vem NEGATIVO. Sem abs() aqui, a
+            // condição "< debounceSegundos" ficava sempre verdadeira pra qualquer
+            // mensagem no passado (não só as recentes), fazendo o job se auto-cancelar
+            // SEMPRE que já havia mensagem do lead — silenciosamente, sem nunca chamar
+            // a IA de verdade. Isso explica as execuções "suspeitosamente rápidas" (ms)
+            // vistas nos logs em vários tickets ao longo do dia.
+            $segundosDesde = $ultimaMensagemEm ? abs(now()->diffInSeconds($ultimaMensagemEm)) : null;
+            if ($segundosDesde !== null && $segundosDesde < $this->debounceSegundos) {
                 Log::info("SdrResponderJob: debounce — lead digitando, job cancelado. ticket #{$this->ticketId}");
+
+                // Achado real 2026-09-17 (ticket #4791): sem isso, um job cancelado por
+                // debounce nunca era reavaliado se o lead simplesmente parasse de
+                // escrever (ex.: mandou o nome e ficou esperando) — a resposta nunca
+                // saía, silenciosamente, até um humano notar e assumir na mão. Reagenda
+                // pra reavaliar depois que a janela de debounce da última mensagem dele
+                // fechar de verdade.
+                if ($this->tentativaDebounce < self::MAX_TENTATIVAS_DEBOUNCE) {
+                    $restante = max(5, $this->debounceSegundos - (int) $segundosDesde) + 2;
+                    self::dispatch(
+                        $this->ticketId,
+                        $this->ultimaMensagem,
+                        $this->origemLigacao,
+                        false,
+                        $this->debounceSegundos,
+                        $this->orientacaoHumana,
+                        $this->tentativaDebounce + 1,
+                    )->delay(now()->addSeconds($restante));
+                }
+
                 return;
             }
         }

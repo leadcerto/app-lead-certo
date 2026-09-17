@@ -420,7 +420,9 @@ class SdrResponderService
         }
 
         $ultimo   = $anteriores->first();
-        $diasAtras = $ultimo->aberto_em ? now()->diffInDays($ultimo->aberto_em) : null;
+        // Achado 2026-09-17: Carbon 3.x diffInDays() com sinal por padrão — sem abs(),
+        // isso ia parar como "-5 dia(s)" dentro do próprio prompt da IA.
+        $diasAtras = $ultimo->aberto_em ? abs(now()->diffInDays($ultimo->aberto_em)) : null;
         $periodo   = $diasAtras !== null ? " há {$diasAtras} dia(s)" : '';
 
         return "[HISTÓRICO DO CLIENTE: Retorno de orçamento — este contato já conversou com a empresa{$periodo} mas não fechou serviço. Pode mencionar sutilmente que já conversaram antes: \"Vi aqui que a gente já teve contato antes...\"]";
