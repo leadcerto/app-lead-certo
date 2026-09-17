@@ -182,6 +182,9 @@ class UazapiWebhookController extends Controller
         // Atualiza nome se o contato ainda não tem nome real
         if ($nomeValido && $this->semNomeReal($contato)) {
             $contato->update(['nome' => $nomeValido]);
+        } elseif ($nomeValido) {
+            app(\App\Services\ContatoSyncService::class)
+                ->flagrarSeNumeroPossivelmenteReciclado($contato, $tenant->id, $nomeValido, $telefone);
         }
 
         // Clique em botão interativo (buttonsResponseMessage) — trata antes do fluxo de texto normal
@@ -453,6 +456,9 @@ class UazapiWebhookController extends Controller
 
         if ($nomeValido && $this->semNomeReal($contato)) {
             $contato->update(['nome' => $nomeValido]);
+        } elseif ($nomeValido) {
+            app(\App\Services\ContatoSyncService::class)
+                ->flagrarSeNumeroPossivelmenteReciclado($contato, $tenant->id, $nomeValido, $telefone);
         }
 
         VinculoContatoTenant::firstOrCreate([

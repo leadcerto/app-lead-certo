@@ -305,6 +305,49 @@ class ContatoSyncService
         }
     }
 
+    /**
+     * Achado real 2026-09-16/17 (ticket #4788, contato #93802 "Daniela"/Rodrigo):
+     * o sync periódico do Google (processarPessoa, acima) já protege contra
+     * número reciclado — mas o caminho de mensagem NOVA do WhatsApp
+     * (CovercutWebhookController/UazapiWebhookController, que resolvem contato
+     * só por telefone) nunca tinha essa checagem. Mesma regra de similaridade,
+     * chamada pelos dois webhooks quando o telefone já tem um contato com nome
+     * real cadastrado. Não bloqueia nada — só registra em contatos_pendentes
+     * pra revisão, o ticket/conversa segue normal.
+     */
+    public function flagrarSeNumeroPossivelmenteReciclado(
+        Contato $contatoExistente,
+        int $tenantId,
+        ?string $nomeNovo,
+        string $telefone
+    ): void {
+        if (! $nomeNovo || $contatoExistente->semNomeReal()) {
+            return;
+        }
+
+        $similaridade = $this->similaridadeNome($nomeNovo, $contatoExistente->nome);
+        if ($similaridade >= self::LIMIAR_SIMILARIDADE) {
+            return;
+        }
+
+        ContatoPendente::firstOrCreate(
+            [
+                'tenant_id'            => $tenantId,
+                'telefone'             => $telefone,
+                'contato_existente_id' => $contatoExistente->id,
+                'status'               => 'aguardando',
+            ],
+            [
+                'nome'              => $nomeNovo,
+                'dados_brutos'      => ['nome' => $nomeNovo, 'origem' => 'whatsapp_webhook'],
+                'tipo_conflito'     => 'numero_possivelmente_reciclado',
+                'nome_existente'    => $contatoExistente->nome,
+                'similaridade_nome' => $similaridade,
+                'criado_em'         => now(),
+            ]
+        );
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private function extrairDados(array $pessoa, string $nome): array

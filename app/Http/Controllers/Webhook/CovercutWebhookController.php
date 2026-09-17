@@ -148,6 +148,9 @@ class CovercutWebhookController extends Controller
 
         if ($nomeValido && $contato->semNomeReal()) {
             $contato->update(['nome' => $nomeValido]);
+        } elseif ($nomeValido) {
+            app(\App\Services\ContatoSyncService::class)
+                ->flagrarSeNumeroPossivelmenteReciclado($contato, $tenant->id, $nomeValido, $telefone);
         }
 
         VinculoContatoTenant::firstOrCreate(['contato_id' => $contato->id, 'tenant_id' => $tenant->id]);
