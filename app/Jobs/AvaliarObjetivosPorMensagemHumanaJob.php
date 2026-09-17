@@ -22,7 +22,15 @@ class AvaliarObjetivosPorMensagemHumanaJob implements ShouldQueue
 {
     use Queueable;
 
-    public function __construct(public int $ticketId) {}
+    // Teto de redespachos em cascata — nunca deve ser atingido de verdade
+    // (o funil de colunas é finito), só protege contra uma config circular
+    // virar loop infinito.
+    private const MAX_PROFUNDIDADE_CASCATA = 5;
+
+    public function __construct(
+        public int $ticketId,
+        private int $profundidadeCascata = 0,
+    ) {}
 
     public function handle(OpenRouterService $openRouter, AvancoAutomaticoKanbanService $avanco): void
     {
@@ -80,5 +88,21 @@ class AvaliarObjetivosPorMensagemHumanaJob implements ShouldQueue
         }
 
         $avanco->marcarObjetivos($ticket, $ids);
+
+        // Achado real 2026-09-17 (ticket #4791): quando a mesma mensagem
+        // humana cumpre o objetivo da coluna atual E o avanço automático
+        // move o ticket pra próxima coluna, o objetivo da coluna NOVA pode
+        // já estar cumprido pelo mesmo histórico (ex.: o próprio orçamento
+        // que avançou o ticket pra "aguardando_orcamento" já cumpre o
+        // objetivo dessa coluna: "orçamento já foi postado"). Mas se nenhuma
+        // mensagem humana NOVA chegar depois, nada reavalia — o ticket fica
+        // preso na coluna nova até alguém mover manualmente. Redespacha pra
+        // reavaliar a checklist da coluna nova contra o mesmo histórico.
+        if ($this->profundidadeCascata < self::MAX_PROFUNDIDADE_CASCATA) {
+            $atual = TicketAtendimento::withoutGlobalScopes()->find($ticket->id);
+            if ($atual && $atual->coluna_kanban !== $ticket->coluna_kanban) {
+                static::dispatch($this->ticketId, $this->profundidadeCascata + 1);
+            }
+        }
     }
 }
