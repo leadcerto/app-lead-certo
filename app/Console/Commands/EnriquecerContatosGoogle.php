@@ -81,25 +81,14 @@ class EnriquecerContatosGoogle extends Command
                         continue;
                     }
 
-                    // Detecta contatos sem nome real (já limpados pelo contatos:limpar-nomes)
-                    $nomeDB  = $contato->nome ?? '';
-                    $semNome = ! $nomeDB
-                        || $nomeDB === 'Sem Nome'
-                        || $nomeDB === $contato->telefone;
-
-                    // Usa contato.nome limpo como fonte canônica — NÃO usa google_given_name
-                    // (o google_given_name é do sistema antigo e pode estar sujo)
-                    $givenName  = $semNome ? 'Sem Nome' : $google->limparNome($nomeDB);
-                    $familyName = $contato->sobrenome ?: ''; // descritor legado salvo pelo limpar-nomes
-                    $middleName = $contato->nome_do_meio ?: null; // Preserva nome do meio real
-
-                    // Injeta o ID no final do sobrenome
-                    $familyName = $familyName ? "{$familyName} [{$contato->id}]" : "[{$contato->id}]";
-
-                    $nameEntry = ['givenName' => $givenName, 'familyName' => $familyName];
-                    if ($middleName) {
-                        $nameEntry['middleName'] = $middleName;
-                    }
+                    // Achado real 2026-09-17: este comando tinha sua PRÓPRIA lógica de
+                    // montagem do nome (colchetes em volta do ID, colado no sobrenome),
+                    // divergente da usada em GoogleService::formatarNomeParaGoogle() (sem
+                    // colchetes, ID puro no meio) — cada rodada deste comando sobrescrevia
+                    // contatos já corretos com o formato errado, e vice-versa, dependendo
+                    // de qual caminho tocou o contato por último. Reusa a mesma fonte única
+                    // de verdade em vez de duplicar a regra.
+                    $nameEntry = $google->formatarNomeParaGoogle($contato);
 
                     $updateFields = 'names';
                     $body = ['etag' => $vinculo->google_etag, 'names' => [$nameEntry]];
