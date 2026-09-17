@@ -16,19 +16,22 @@ use Tests\TestCase;
  * formatos diferentes ("Nina 98277 Cardoso" vs "Wagner Nascimento [21] BAU
  * 0300"). Investigação achou DUAS implementações divergentes do mesmo nome
  * pro Google no código: GoogleService::formatarNomeParaGoogle() (usada na
- * criação/edição individual de contato) NÃO usa colchetes — middleName é só
- * o ID puro. Mas o comando em lote EnriquecerContatosGoogle injetava
- * "[{$contato->id}]" colado no sobrenome, um formato diferente e
- * conflitante. Rodar esse comando em lote sobrescrevia contatos já corretos
- * com o formato errado. Fix: o comando passa a reusar
- * GoogleService::formatarNomeParaGoogle() como fonte única de verdade, em
- * vez de duplicar a lógica de montagem do nome.
+ * criação/edição individual de contato) e o comando em lote
+ * EnriquecerContatosGoogle, que injetava "[{$contato->id}]" colado no
+ * SOBRENOME (formato diferente, e no campo errado). Rodar esse comando em
+ * lote sobrescrevia contatos já corretos com o formato errado. Fix: o
+ * comando passa a reusar GoogleService::formatarNomeParaGoogle() como fonte
+ * única de verdade, em vez de duplicar a lógica de montagem do nome.
+ *
+ * Padrão final confirmado com o Leonardo direto no Google Contacts
+ * (2026-09-17): ID do banco entre colchetes no NOME DO MEIO, ex: "[4]" —
+ * não no sobrenome, e sem duplicar o ID em outro campo.
  */
 class EnriquecerContatosGoogleFormatoNomeTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_comando_em_lote_usa_mesmo_formato_sem_colchetes_da_criacao_individual(): void
+    public function test_comando_em_lote_usa_mesmo_formato_com_id_entre_colchetes_da_criacao_individual(): void
     {
         Bus::fake();
         Http::fake([
@@ -65,7 +68,7 @@ class EnriquecerContatosGoogleFormatoNomeTest extends TestCase
             $nome = $request->data()['names'][0] ?? [];
 
             return ($nome['givenName'] ?? null) === 'Wagner Nascimento'
-                && ($nome['middleName'] ?? null) === (string) $contato->id
+                && ($nome['middleName'] ?? null) === "[{$contato->id}]"
                 && ! str_contains($nome['familyName'] ?? '', '[')
                 && ! str_contains($nome['familyName'] ?? '', ']');
         });

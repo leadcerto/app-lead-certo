@@ -187,7 +187,12 @@ class GoogleService
 
         $nameEntry = [
             'givenName'  => $givenName,
-            'middleName' => (string) $contato->id,
+            // Achado real 2026-09-17 (Leonardo): padrão final confirmado com
+            // exemplos reais no Google Contacts — ID do banco entre colchetes
+            // no nome do meio, ex: "[4]". Sem colchetes ficava ambíguo com
+            // outros números que aparecem no nome (índice de agenda, CPF,
+            // pedaço de telefone digitado à mão).
+            'middleName' => "[{$contato->id}]",
         ];
 
         if (! empty($familyName)) {

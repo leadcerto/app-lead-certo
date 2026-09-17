@@ -31,7 +31,7 @@ class GoogleEtiquetaServiceTest extends TestCase
         $entry  = $google->formatarNomeParaGoogle($contato);
 
         $this->assertSame('Adalberto', $entry['givenName']);
-        $this->assertSame('14380', $entry['middleName']);
+        $this->assertSame('[14380]', $entry['middleName']);
         $this->assertSame('Martins', $entry['familyName']);
     }
 
@@ -47,7 +47,7 @@ class GoogleEtiquetaServiceTest extends TestCase
         $entry  = $google->formatarNomeParaGoogle($contato);
 
         $this->assertSame('Maria', $entry['givenName']);
-        $this->assertSame('5500', $entry['middleName']);
+        $this->assertSame('[5500]', $entry['middleName']);
         $this->assertSame('Clara Dos Santos', $entry['familyName']);
     }
 
