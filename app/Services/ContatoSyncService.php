@@ -388,11 +388,14 @@ class ContatoSyncService
             $familyNameRaw = trim(preg_replace('/\[\d+\]$/', '', $familyNameRaw));
         }
 
-        // Campo de nome só-dígitos é o ID do banco que gravávamos (legado).
-        // Limpamos para não salvar o ID como se fosse o nome da pessoa.
-        $soDigitos  = fn (string $v) => $v !== '' && ctype_digit($v) ? '' : $v;
-        $nomeDoMeio = $soDigitos(trim($nomeData['middleName'] ?? ''));
-        $sobrenome  = $soDigitos($familyNameRaw);
+        // Campo de nome só-dígitos ("4") ou dígitos entre colchetes ("[4]",
+        // padrão atual — achado real 2026-09-17) é o ID do banco que nós
+        // mesmos gravamos lá. Limpamos para não salvar o ID como se fosse o
+        // nome da pessoa.
+        $ehEcoDoNossoId = fn (string $v) => $v !== '' && preg_match('/^\[?\d+\]?$/', $v) === 1;
+        $soDigitos      = fn (string $v) => $ehEcoDoNossoId($v) ? '' : $v;
+        $nomeDoMeio     = $soDigitos(trim($nomeData['middleName'] ?? ''));
+        $sobrenome      = $soDigitos($familyNameRaw);
 
         return array_filter([
             'nome'           => $nome,
