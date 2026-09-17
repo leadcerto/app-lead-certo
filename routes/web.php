@@ -170,6 +170,21 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('meta-posts.destroy')
         ->middleware('role:admin,dono,diretor,diretor_marketing,growth_manager');
 
+    // Achado real 2026-09-17: o submenu "Postagens Meta" linkava direto pras
+    // rotas admin.gmb-posts.imagens/templates — mesma URL usada pelo menu do
+    // GMB. Como o destaque do menu ativo (layouts/app.blade.php) decide pelo
+    // NOME da rota, entrar nessas páginas por "Postagens Meta" acendia o menu
+    // do GMB (errado) e apagava o destaque de "Postagens Meta". O banco de
+    // imagens/textos é genuinamente compartilhado entre GMB e Meta (mesmo
+    // acervo de fotos da empresa) — só precisa de um NOME de rota próprio pro
+    // menu acender a seção certa. Reaproveita o mesmo controller/view do GMB.
+    Route::get('/meta-posts/imagens', [\App\Http\Controllers\GmbPostController::class, 'imagens'])
+        ->name('meta-posts.imagens')
+        ->middleware('role:admin,dono,diretor,diretor_marketing');
+    Route::get('/meta-posts/templates', [\App\Http\Controllers\GmbPostController::class, 'templates'])
+        ->name('meta-posts.templates')
+        ->middleware('role:admin,dono,diretor,diretor_marketing');
+
     // Configurações — apenas dono e admin
     Route::get('/configuracoes', [WhatsAppController::class, 'view'])
         ->name('configuracoes')
