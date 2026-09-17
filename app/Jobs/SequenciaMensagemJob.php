@@ -385,11 +385,15 @@ class SequenciaMensagemJob implements ShouldQueue
 
         if (! $ultimaMensagemBot) return 'recentemente';
 
-        $diffMin = now()->diffInMinutes($ultimaMensagemBot);
+        // Achado 2026-09-17 (mesma causa do bug de debounce em SdrResponderJob):
+        // Carbon 3.x devolve diffInX() com sinal por padrão — now()->diffInMinutes(passado)
+        // vem negativo, e "< 60" era sempre verdadeiro, fazendo {tempo_passado} dizer
+        // sempre "mais cedo" mesmo depois de dias.
+        $diffMin = abs(now()->diffInMinutes($ultimaMensagemBot));
         if ($diffMin < 60) return 'mais cedo';
         $diffH = (int) ($diffMin / 60);
         if ($diffH < 24) return $diffH === 1 ? 'há uma hora' : "há {$diffH} horas";
-        $diffD = now()->diffInDays($ultimaMensagemBot);
+        $diffD = abs(now()->diffInDays($ultimaMensagemBot));
         if ($diffD === 1) return 'ontem';
         if ($diffD < 7) return "há {$diffD} dias";
         if ($diffD < 14) return 'na semana passada';
