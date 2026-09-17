@@ -518,12 +518,12 @@
                        class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('meta-posts.create') ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:text-white hover:bg-gray-700' }}">
                         <span>✍️</span> Nova Publicação
                     </a>
-                    <a href="{{ route('admin.gmb-posts.imagens') }}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('admin.gmb-posts.imagens') ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:text-white hover:bg-gray-700' }}">
+                    <a href="{{ route('meta-posts.imagens') }}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('meta-posts.imagens') ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:text-white hover:bg-gray-700' }}">
                         <span>🖼️</span> Banco de Imagens
                     </a>
-                    <a href="{{ route('admin.gmb-posts.templates') }}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('admin.gmb-posts.templates') ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:text-white hover:bg-gray-700' }}">
+                    <a href="{{ route('meta-posts.templates') }}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('meta-posts.templates') ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:text-white hover:bg-gray-700' }}">
                         <span>📝</span> Banco de Textos
                     </a>
                 </div>
