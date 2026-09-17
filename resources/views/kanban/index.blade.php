@@ -1427,16 +1427,34 @@ function kanban() {
             }
         },
 
+        async atualizarTudo() {
+            await this.carregar();
+
+            if (this.ticketAtivo) {
+                await this.sincronizarTicketAtivo();
+                this.carregarMensagens(this.ticketAtivo.id, true);
+            }
+        },
+
+        // Achado real (2026-09-17, relato do Leonardo "o card fica parado em
+        // Novo", 4ª vez que acontece): o board já tinha polling de 5s, mas
+        // navegadores desaceleram (throttle) o setInterval de uma aba fora de
+        // foco — muito comum aqui, já que o WhatsApp Web fica na aba ativa
+        // enquanto o Kanban roda em segundo plano. O card já tinha mudado de
+        // coluna no servidor havia bastante tempo; só a aba em segundo plano
+        // não tinha rodado o próximo poll ainda. Força uma atualização
+        // imediata assim que a aba volta a ficar visível/em foco, em vez de
+        // esperar o próximo tick do interval (que pode estar atrasado por
+        // minutos nesse cenário).
         init() {
             this.carregarMotivosDesfecho();
-            this.intervalo = setInterval(async () => {
-                await this.carregar();
+            this.intervalo = setInterval(() => this.atualizarTudo(), 5000);
 
-                if (this.ticketAtivo) {
-                    await this.sincronizarTicketAtivo();
-                    this.carregarMensagens(this.ticketAtivo.id, true);
-                }
-            }, 5000);
+            this.aoFicarVisivel = () => {
+                if (document.visibilityState === 'visible') this.atualizarTudo();
+            };
+            document.addEventListener('visibilitychange', this.aoFicarVisivel);
+            window.addEventListener('focus', this.aoFicarVisivel);
         },
 
         // Ressincroniza o ticket aberto no modal buscando ele direto pelo ID
@@ -1472,6 +1490,8 @@ function kanban() {
 
         destroy() {
             clearInterval(this.intervalo);
+            document.removeEventListener('visibilitychange', this.aoFicarVisivel);
+            window.removeEventListener('focus', this.aoFicarVisivel);
         },
         /**
          * Copia a transcrição de um áudio para a área de transferência com fallback
