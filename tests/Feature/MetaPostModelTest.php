@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\MetaPagina;
 use App\Models\MetaPost;
+use App\Models\MetaPostConteudo;
 use App\Models\MetaToken;
 use App\Models\Tenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -99,5 +100,76 @@ class MetaPostModelTest extends TestCase
 
         $this->assertTrue($agendado->podeCancelar());
         $this->assertFalse($publicado->podeCancelar());
+    }
+
+    /**
+     * Passo 2 do Banco de Conteúdos (2026-09-17): meta_post_conteudo_id é
+     * nullable — todo MetaPost criado sem essa referência (o fluxo de hoje,
+     * 100% dos posts existentes) precisa continuar funcionando exatamente
+     * igual.
+     */
+    public function test_post_sem_referencia_de_conteudo_continua_funcionando_normal(): void
+    {
+        $tenant = Tenant::factory()->create();
+        session(['tenant_id' => $tenant->id]);
+
+        $post = MetaPost::create([
+            'tenant_id' => $tenant->id, 'canal_alvo' => 'facebook',
+            'texto' => 'Post avulso, sem vir de um conteúdo salvo',
+            'data_agendada' => now()->addHour(), 'status' => 'agendado',
+        ]);
+
+        $this->assertNull($post->fresh()->meta_post_conteudo_id);
+        $this->assertNull($post->fresh()->conteudoOrigem);
+    }
+
+    public function test_post_criado_a_partir_de_um_conteudo_salvo_guarda_a_referencia(): void
+    {
+        $tenant = Tenant::factory()->create();
+        session(['tenant_id' => $tenant->id]);
+
+        $conteudo = MetaPostConteudo::create([
+            'tenant_id' => $tenant->id, 'titulo' => 'Promo fim de semana', 'texto' => 'x',
+        ]);
+
+        $post = MetaPost::create([
+            'tenant_id' => $tenant->id, 'canal_alvo' => 'facebook',
+            'meta_post_conteudo_id' => $conteudo->id,
+            'texto' => 'x', 'data_agendada' => now()->addHour(), 'status' => 'agendado',
+        ]);
+
+        $this->assertSame($conteudo->id, $post->fresh()->meta_post_conteudo_id);
+        $this->assertSame($conteudo->id, $post->fresh()->conteudoOrigem->id);
+    }
+
+    /**
+     * Guarda de regressão: a query que o comando meta:publicar-posts usa
+     * (status agendado + data vencida) e o scope prontosParaPublicar não
+     * podem se importar com a coluna nova — ela é só metadado de origem.
+     */
+    public function test_coluna_de_origem_do_conteudo_nao_afeta_prontos_para_publicar(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $pagina = $this->criarPagina($tenant);
+        session(['tenant_id' => $tenant->id]);
+
+        $conteudo = MetaPostConteudo::create([
+            'tenant_id' => $tenant->id, 'titulo' => 'x', 'texto' => 'x',
+        ]);
+
+        $comOrigem = MetaPost::create([
+            'tenant_id' => $tenant->id, 'canal_alvo' => 'facebook', 'meta_pagina_id' => $pagina->id,
+            'meta_post_conteudo_id' => $conteudo->id,
+            'texto' => 'Com origem', 'data_agendada' => now()->subMinute(), 'status' => 'agendado',
+        ]);
+        $semOrigem = MetaPost::create([
+            'tenant_id' => $tenant->id, 'canal_alvo' => 'facebook', 'meta_pagina_id' => $pagina->id,
+            'texto' => 'Sem origem', 'data_agendada' => now()->subMinute(), 'status' => 'agendado',
+        ]);
+
+        $prontos = MetaPost::prontosParaPublicar()->pluck('id')->all();
+
+        $this->assertContains($comOrigem->id, $prontos);
+        $this->assertContains($semOrigem->id, $prontos);
     }
 }
