@@ -19,6 +19,7 @@ class MetaPost extends Model
     protected $fillable = [
         'tenant_id',
         'user_id',
+        'meta_post_conteudo_id',
         'canal_alvo',
         'meta_pagina_id',
         'meta_conta_instagram_id',
@@ -69,6 +70,11 @@ class MetaPost extends Model
     public function autor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function conteudoOrigem(): BelongsTo
+    {
+        return $this->belongsTo(MetaPostConteudo::class, 'meta_post_conteudo_id');
     }
 
     // ── Scopes ──

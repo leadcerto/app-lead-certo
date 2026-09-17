@@ -14,7 +14,7 @@ class MetaPostMigrationTest extends TestCase
     {
         $this->assertTrue(Schema::hasTable('meta_posts'));
         $this->assertTrue(Schema::hasColumns('meta_posts', [
-            'id', 'tenant_id', 'user_id', 'canal_alvo', 'meta_pagina_id',
+            'id', 'tenant_id', 'user_id', 'meta_post_conteudo_id', 'canal_alvo', 'meta_pagina_id',
             'meta_conta_instagram_id', 'texto', 'imagem_url', 'cta_tipo', 'cta_url',
             'modo_gatilho', 'palavras_chave', 'resposta_publica_comentario', 'mensagem_direct',
             'data_agendada', 'publicado_em', 'status', 'facebook_post_id',
