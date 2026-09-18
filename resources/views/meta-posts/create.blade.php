@@ -114,6 +114,12 @@
 
                 <div class="space-y-6">
 
+                    @if($postOrigem)
+                    <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
+                        <span class="font-bold">🔁 Duplicando postagem anterior</span> — os campos abaixo já vieram preenchidos, só escolha a nova data.
+                    </div>
+                    @endif
+
                     @if($conteudosSalvos->isNotEmpty())
                     <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between gap-3">
                         <p class="text-xs text-indigo-900">
@@ -712,24 +718,24 @@ Deixe o peso com a gente! Nossa equipe é treinada para carregar e proteger cada
 <script>
 function metaPostForm() {
     return {
-        canal: '{{ old('canal_alvo', 'ambos') }}',
-        metaPaginaId: '{{ old('meta_pagina_id', $paginas->first()?->id ?? '') }}',
-        metaContaIgId: '{{ old('meta_conta_instagram_id', $contasInstagram->first()?->id ?? '') }}',
-        texto: @js(old('texto', "🚚 Precisa de Frete ou Mudança no Rio de Janeiro com agilidade e preço justo?\n\nNa Frete Rio cuidamos de tudo com pontualidade e proteção para seus pertences!\n\n👉 Comente \"QUERO\" aqui embaixo para receber nosso orçamento com desconto exclusivo no Direct! ⚡\n\n#FreteRJ #MudançaRio #TransporteRJ")),
-        imagemUrl: @js(old('imagem_url', ($imagensGaleria->first()?->imagem_url ?? ''))),
-        ctaTipo: '{{ old('cta_tipo', 'LEARN_MORE') }}',
-        ctaUrl: @js(old('cta_url', 'https://api.whatsapp.com/send/?phone=5521981813106&text=Ol%C3%A1%2C+gostaria+de+um+or%C3%A7amento+de+frete+no+Rio+de+Janeiro%21+%28Vi+no+Facebook%29&type=phone_number&app_absent=0')),
-        gatilho: '{{ old('modo_gatilho', 'palavra_chave') }}',
-        palavrasChave: @js(old('palavras_chave_texto', 'QUERO, FRETE, ORÇAMENTO')),
-        respostaPublica: @js(old('resposta_publica_comentario', 'Acabei de te enviar todos os detalhes e valores com desconto no seu Direct! 🚚✨ Dá uma olhadinha lá!')),
-        mensagemDirect: @js(old('mensagem_direct', "Olá! Vi que você comentou no nosso post sobre fretes e mudanças! 📦🚚\n\nFale diretamente com nossa equipe no WhatsApp para tirar suas dúvidas e garantir seu desconto:\nhttps://api.whatsapp.com/send/?phone=5521981813106&text=Ol%C3%A1%2C+gostaria+de+um+or%C3%A7amento+de+frete+no+Rio+de+Janeiro%21+%28Vi+no+Instagram%29&type=phone_number&app_absent=0")),
+        canal: '{{ old('canal_alvo', $postOrigem->canal_alvo ?? 'ambos') }}',
+        metaPaginaId: '{{ old('meta_pagina_id', $postOrigem->meta_pagina_id ?? ($paginas->first()?->id ?? '')) }}',
+        metaContaIgId: '{{ old('meta_conta_instagram_id', $postOrigem->meta_conta_instagram_id ?? ($contasInstagram->first()?->id ?? '')) }}',
+        texto: @js(old('texto', $postOrigem->texto ?? "🚚 Precisa de Frete ou Mudança no Rio de Janeiro com agilidade e preço justo?\n\nNa Frete Rio cuidamos de tudo com pontualidade e proteção para seus pertences!\n\n👉 Comente \"QUERO\" aqui embaixo para receber nosso orçamento com desconto exclusivo no Direct! ⚡\n\n#FreteRJ #MudançaRio #TransporteRJ")),
+        imagemUrl: @js(old('imagem_url', $postOrigem->imagem_url ?? ($imagensGaleria->first()?->imagem_url ?? ''))),
+        ctaTipo: '{{ old('cta_tipo', $postOrigem->cta_tipo ?? 'LEARN_MORE') }}',
+        ctaUrl: @js(old('cta_url', $postOrigem->cta_url ?? 'https://api.whatsapp.com/send/?phone=5521981813106&text=Ol%C3%A1%2C+gostaria+de+um+or%C3%A7amento+de+frete+no+Rio+de+Janeiro%21+%28Vi+no+Facebook%29&type=phone_number&app_absent=0')),
+        gatilho: '{{ old('modo_gatilho', $postOrigem->modo_gatilho ?? 'palavra_chave') }}',
+        palavrasChave: @js(old('palavras_chave_texto', $postOrigem ? implode(', ', $postOrigem->palavras_chave ?? []) : 'QUERO, FRETE, ORÇAMENTO')),
+        respostaPublica: @js(old('resposta_publica_comentario', $postOrigem->resposta_publica_comentario ?? 'Acabei de te enviar todos os detalhes e valores com desconto no seu Direct! 🚚✨ Dá uma olhadinha lá!')),
+        mensagemDirect: @js(old('mensagem_direct', $postOrigem->mensagem_direct ?? "Olá! Vi que você comentou no nosso post sobre fretes e mudanças! 📦🚚\n\nFale diretamente com nossa equipe no WhatsApp para tirar suas dúvidas e garantir seu desconto:\nhttps://api.whatsapp.com/send/?phone=5521981813106&text=Ol%C3%A1%2C+gostaria+de+um+or%C3%A7amento+de+frete+no+Rio+de+Janeiro%21+%28Vi+no+Instagram%29&type=phone_number&app_absent=0")),
         publicarImediato: {{ old('publicar_imediato', '0') == '1' ? 'true' : 'false' }},
         dataAgendada: '{{ old('data_agendada', now()->addHour()->format('Y-m-d\TH:i')) }}',
         abaPreview: 'facebook',
         modalImagens: false,
         modalTemplates: false,
         modalConteudos: false,
-        conteudoId: @js(old('meta_post_conteudo_id', '')),
+        conteudoId: @js(old('meta_post_conteudo_id', $postOrigem->meta_post_conteudo_id ?? '')),
 
         // IA Assistant State
         iaObjetivo: 'Atrair novos clientes para fretes e mudanças no RJ',

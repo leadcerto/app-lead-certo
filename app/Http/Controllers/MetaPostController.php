@@ -66,7 +66,16 @@ class MetaPostController extends Controller
         $templatesTexto = \App\Models\GmbPostTemplate::where('tenant_id', $tenantId)->where('ativo', true)->get();
         $conteudosSalvos = MetaPostConteudo::ativos()->where('tenant_id', $tenantId)->orderByDesc('id')->get();
 
-        return view('meta-posts.create', compact('paginas', 'contasInstagram', 'imagensGaleria', 'templatesTexto', 'conteudosSalvos'));
+        // Passo 5 do Banco de Conteúdos: "Duplicar" no calendário manda pra
+        // cá com ?duplicar_de={id} — carrega o post de origem só se for do
+        // próprio tenant (checagem explícita, não confia no route-model-
+        // binding implícito, que roda antes do TenantScope ficar ativo).
+        $postOrigem = null;
+        if ($request->filled('duplicar_de')) {
+            $postOrigem = MetaPost::where('tenant_id', $tenantId)->find($request->query('duplicar_de'));
+        }
+
+        return view('meta-posts.create', compact('paginas', 'contasInstagram', 'imagensGaleria', 'templatesTexto', 'conteudosSalvos', 'postOrigem'));
     }
 
     public function store(Request $request, MetaPostPublishService $publishService): RedirectResponse

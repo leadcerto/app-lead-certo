@@ -220,4 +220,50 @@ class MetaPostControllerTest extends TestCase
         $response->assertSee('Banco de Imagens da Empresa');
         $response->assertSee('Banco de Textos');
     }
+
+    /**
+     * Passo 5 do Banco de Conteúdos (2026-09-17): "Duplicar" abre a tela de
+     * Nova Publicação já pré-preenchida a partir de um post existente.
+     */
+    public function test_duplicar_de_pre_preenche_formulario_a_partir_de_post_existente(): void
+    {
+        $tenant   = Tenant::factory()->create();
+        $dono     = $this->dono($tenant);
+        $pagina   = $this->criarPagina($tenant);
+        $conteudo = MetaPostConteudo::create(['tenant_id' => $tenant->id, 'titulo' => 'x', 'texto' => 'x']);
+
+        $original = MetaPost::create([
+            'tenant_id' => $tenant->id, 'canal_alvo' => 'facebook', 'meta_pagina_id' => $pagina->id,
+            'meta_post_conteudo_id' => $conteudo->id,
+            'texto' => 'Texto original pra duplicar', 'imagem_url' => 'https://cdn.exemplo.com/x.jpg',
+            'cta_tipo' => 'CALL', 'cta_url' => 'https://wa.me/5521999999999',
+            'data_agendada' => now()->subDay(), 'status' => 'publicado',
+        ]);
+
+        $response = $this->actingAs($dono)->get(route('meta-posts.create', ['duplicar_de' => $original->id]));
+
+        $response->assertOk();
+        $response->assertViewHas('postOrigem', function ($post) use ($original) {
+            return $post !== null && $post->id === $original->id;
+        });
+        $response->assertSee('Texto original pra duplicar');
+    }
+
+    public function test_duplicar_de_ignora_post_de_outro_tenant(): void
+    {
+        $tenant      = Tenant::factory()->create();
+        $outroTenant = Tenant::factory()->create();
+        $dono        = $this->dono($tenant);
+
+        $postAlheio = MetaPost::withoutGlobalScopes()->create([
+            'tenant_id' => $outroTenant->id, 'canal_alvo' => 'facebook',
+            'texto' => 'Não deveria vazar', 'data_agendada' => now(), 'status' => 'agendado',
+        ]);
+
+        $response = $this->actingAs($dono)->get(route('meta-posts.create', ['duplicar_de' => $postAlheio->id]));
+
+        $response->assertOk();
+        $response->assertViewHas('postOrigem', fn ($post) => $post === null);
+        $response->assertDontSee('Não deveria vazar');
+    }
 }
