@@ -185,6 +185,26 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('meta-posts.templates')
         ->middleware('role:admin,dono,diretor,diretor_marketing');
 
+    // Banco de Conteúdos reutilizáveis (fase 1 do Bloco N — Postagens &
+    // Analytics de Redes Sociais, pedido do Leonardo 2026-09-17): separa o
+    // conteúdo (texto+imagem+CTA+gatilho) da instância agendada, pra permitir
+    // reaproveitar a mesma postagem em datas diferentes sem recriar do zero.
+    Route::get('/meta-posts/conteudos', [\App\Http\Controllers\MetaPostConteudoController::class, 'index'])
+        ->name('meta-posts.conteudos.index')
+        ->middleware('role:admin,dono,diretor,diretor_marketing');
+    Route::post('/meta-posts/conteudos', [\App\Http\Controllers\MetaPostConteudoController::class, 'store'])
+        ->name('meta-posts.conteudos.store')
+        ->middleware('role:admin,dono,diretor,diretor_marketing');
+    Route::put('/meta-posts/conteudos/{conteudo}', [\App\Http\Controllers\MetaPostConteudoController::class, 'update'])
+        ->name('meta-posts.conteudos.update')
+        ->middleware('role:admin,dono,diretor,diretor_marketing');
+    Route::patch('/meta-posts/conteudos/{conteudo}/alternar-status', [\App\Http\Controllers\MetaPostConteudoController::class, 'alternarStatus'])
+        ->name('meta-posts.conteudos.alternar-status')
+        ->middleware('role:admin,dono,diretor,diretor_marketing');
+    Route::delete('/meta-posts/conteudos/{conteudo}', [\App\Http\Controllers\MetaPostConteudoController::class, 'destroy'])
+        ->name('meta-posts.conteudos.destroy')
+        ->middleware('role:admin,dono,diretor,diretor_marketing');
+
     // Configurações — apenas dono e admin
     Route::get('/configuracoes', [WhatsAppController::class, 'view'])
         ->name('configuracoes')
