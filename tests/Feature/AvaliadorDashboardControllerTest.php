@@ -176,7 +176,10 @@ class AvaliadorDashboardControllerTest extends TestCase
 
         $response = $this->actingAs($avaliador)->post("/avaliador/contatos/{$contatoAlheio->id}/concluir");
 
-        $response->assertForbidden();
+        // Achado real 2026-09-17: prioridade de middleware corrigida faz o
+        // TenantScope filtrar antes do route-model-binding — id de outro
+        // tenant não é mais encontrado (404), proteção de dados inalterada.
+        $response->assertNotFound();
         $this->assertNull($contatoAlheio->fresh()->contatado_em);
     }
 

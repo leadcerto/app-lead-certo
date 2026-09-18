@@ -91,7 +91,10 @@ class ContatoAvaliacaoControllerTest extends TestCase
 
         $response = $this->actingAs($dono)->get("/admin/gmb/perfis-gmb/{$perfilAlheio->id}/contatos");
 
-        $response->assertForbidden();
+        // Achado real 2026-09-17: prioridade de middleware corrigida faz o
+        // TenantScope filtrar antes do route-model-binding — id de outro
+        // tenant não é mais encontrado (404), proteção de dados inalterada.
+        $response->assertNotFound();
     }
 
     public function test_nao_remove_contato_de_outro_tenant(): void
@@ -104,7 +107,7 @@ class ContatoAvaliacaoControllerTest extends TestCase
 
         $response = $this->actingAs($dono)->delete("/admin/gmb/perfis-gmb/contatos/{$contatoAlheio->id}");
 
-        $response->assertForbidden();
+        $response->assertNotFound();
         $this->assertDatabaseHas('contatos_avaliacao', ['id' => $contatoAlheio->id]);
     }
 }

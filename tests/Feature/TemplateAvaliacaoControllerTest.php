@@ -140,7 +140,10 @@ class TemplateAvaliacaoControllerTest extends TestCase
 
         $response = $this->actingAs($dono)->get("/admin/gmb/templates-avaliacao/{$templateAlheio->id}/edit");
 
-        $response->assertForbidden();
+        // Achado real 2026-09-17: prioridade de middleware corrigida faz o
+        // TenantScope filtrar antes do route-model-binding — id de outro
+        // tenant não é mais encontrado (404), proteção de dados inalterada.
+        $response->assertNotFound();
     }
 
     public function test_nao_atualiza_template_de_outro_tenant(): void
@@ -156,7 +159,7 @@ class TemplateAvaliacaoControllerTest extends TestCase
             'categoria_id' => $templateAlheio->categoria_id,
         ]);
 
-        $response->assertForbidden();
+        $response->assertNotFound();
         $this->assertDatabaseHas('templates_avaliacao', ['id' => $templateAlheio->id, 'texto' => 'Original']);
     }
 
@@ -169,7 +172,7 @@ class TemplateAvaliacaoControllerTest extends TestCase
 
         $response = $this->actingAs($dono)->delete("/admin/gmb/templates-avaliacao/{$templateAlheio->id}");
 
-        $response->assertForbidden();
+        $response->assertNotFound();
         $this->assertDatabaseHas('templates_avaliacao', ['id' => $templateAlheio->id, 'ativo' => true]);
     }
 
@@ -222,7 +225,7 @@ class TemplateAvaliacaoControllerTest extends TestCase
 
         $response = $this->actingAs($dono)->delete("/admin/gmb/categorias/{$categoriaAlheia->id}");
 
-        $response->assertForbidden();
+        $response->assertNotFound();
         $this->assertDatabaseHas('categorias_template', ['id' => $categoriaAlheia->id]);
     }
 
@@ -266,7 +269,7 @@ class TemplateAvaliacaoControllerTest extends TestCase
             'palavras_chave' => 'invasão',
         ]);
 
-        $response->assertForbidden();
+        $response->assertNotFound();
         $this->assertNull($categoriaAlheia->fresh()->palavras_chave);
     }
 
