@@ -110,8 +110,20 @@
             <form method="POST" action="{{ route('meta-posts.store') }}" enctype="multipart/form-data" id="formMetaPost">
                 @csrf
                 <input type="hidden" name="imagem_url" :value="imagemUrl">
+                <input type="hidden" name="meta_post_conteudo_id" :value="conteudoId">
 
                 <div class="space-y-6">
+
+                    @if($conteudosSalvos->isNotEmpty())
+                    <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between gap-3">
+                        <p class="text-xs text-indigo-900">
+                            <span class="font-bold">📚 Banco de Conteúdos:</span> comece a partir de um conteúdo já salvo.
+                        </p>
+                        <button type="button" @click="modalConteudos = true" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg font-bold transition shadow-sm whitespace-nowrap">
+                            Usar Conteúdo Salvo
+                        </button>
+                    </div>
+                    @endif
 
                     {{-- 1. Canal de Divulgação --}}
                     <div>
@@ -647,6 +659,54 @@ Deixe o peso com a gente! Nossa equipe é treinada para carregar e proteger cada
         </div>
     </div>
 
+    {{-- MODAL 3: BANCO DE CONTEÚDOS (conteúdo completo: texto+imagem+CTA+gatilho de uma vez) --}}
+    <div x-show="modalConteudos" style="display: none;" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div x-show="modalConteudos" @click="modalConteudos = false" class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs transition-opacity"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+            <div x-show="modalConteudos" class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full border border-gray-200">
+                <div class="bg-white px-6 pt-5 pb-4 sm:p-6 sm:pb-4 border-b border-gray-100 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900">📚 Banco de Conteúdos</h3>
+                        <p class="text-xs text-gray-500">Escolha um conteúdo pronto — texto, imagem, botão e gatilho de comentário são preenchidos de uma vez.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <a href="{{ route('meta-posts.conteudos.index') }}" target="_blank" class="text-xs text-green-700 hover:underline font-semibold flex items-center gap-1">
+                            + Gerenciar Conteúdos
+                        </a>
+                        <button type="button" @click="modalConteudos = false" class="text-gray-400 hover:text-gray-600 text-lg font-bold">✕</button>
+                    </div>
+                </div>
+
+                <div class="p-6 max-h-[65vh] overflow-y-auto space-y-3">
+                    @if($conteudosSalvos->isNotEmpty())
+                        @foreach($conteudosSalvos as $conteudo)
+                            <div @click="aplicarConteudo(@json($conteudo))" class="p-4 border border-gray-200 rounded-xl hover:border-indigo-500 transition cursor-pointer bg-gray-50/50">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-bold text-gray-900">{{ $conteudo->titulo }}</span>
+                                    <span class="text-[10px] bg-gray-200 text-gray-700 px-2 py-0.5 rounded font-mono uppercase">{{ $conteudo->categoria }}</span>
+                                </div>
+                                <p class="text-xs text-gray-600 mt-2 line-clamp-3 whitespace-pre-line leading-relaxed">{{ $conteudo->texto }}</p>
+                            </div>
+                        @endforeach
+                    @else
+                        <div class="text-center py-10 text-gray-500">
+                            <p class="text-sm">Nenhum conteúdo salvo ainda.</p>
+                            <a href="{{ route('meta-posts.conteudos.index') }}" class="inline-block mt-3 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold">Criar Conteúdo</a>
+                        </div>
+                    @endif
+                </div>
+
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse border-t border-gray-100">
+                    <button type="button" @click="modalConteudos = false" class="w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 sm:w-auto">
+                        Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script>
@@ -668,6 +728,8 @@ function metaPostForm() {
         abaPreview: 'facebook',
         modalImagens: false,
         modalTemplates: false,
+        modalConteudos: false,
+        conteudoId: @js(old('meta_post_conteudo_id', '')),
 
         // IA Assistant State
         iaObjetivo: 'Atrair novos clientes para fretes e mudanças no RJ',
@@ -719,6 +781,19 @@ function metaPostForm() {
         aplicarTemplate(texto) {
             this.texto = texto;
             this.modalTemplates = false;
+        },
+
+        aplicarConteudo(conteudo) {
+            this.conteudoId = conteudo.id;
+            this.texto = conteudo.texto;
+            this.imagemUrl = conteudo.imagem_url || this.imagemUrl;
+            this.ctaTipo = conteudo.cta_tipo || 'NENHUM';
+            this.ctaUrl = conteudo.cta_url || '';
+            this.gatilho = conteudo.modo_gatilho || 'nenhum';
+            this.palavrasChave = (conteudo.palavras_chave || []).join(', ');
+            this.respostaPublica = conteudo.resposta_publica_comentario || '';
+            this.mensagemDirect = conteudo.mensagem_direct || '';
+            this.modalConteudos = false;
         },
 
         async gerarComIa() {
