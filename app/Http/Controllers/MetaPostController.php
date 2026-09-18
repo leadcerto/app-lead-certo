@@ -6,6 +6,7 @@ use App\Models\MetaCampanhaGatilho;
 use App\Models\MetaContaInstagram;
 use App\Models\MetaPagina;
 use App\Models\MetaPost;
+use App\Models\MetaPostConteudo;
 use App\Services\MetaPostPublishService;
 use App\Services\OpenRouterService;
 use Carbon\Carbon;
@@ -63,8 +64,9 @@ class MetaPostController extends Controller
         $contasInstagram = MetaContaInstagram::where('tenant_id', $tenantId)->where('ativo', true)->get();
         $imagensGaleria = \App\Models\GmbPostImagem::where('tenant_id', $tenantId)->orderByDesc('id')->get();
         $templatesTexto = \App\Models\GmbPostTemplate::where('tenant_id', $tenantId)->where('ativo', true)->get();
+        $conteudosSalvos = MetaPostConteudo::ativos()->where('tenant_id', $tenantId)->orderByDesc('id')->get();
 
-        return view('meta-posts.create', compact('paginas', 'contasInstagram', 'imagensGaleria', 'templatesTexto'));
+        return view('meta-posts.create', compact('paginas', 'contasInstagram', 'imagensGaleria', 'templatesTexto', 'conteudosSalvos'));
     }
 
     public function store(Request $request, MetaPostPublishService $publishService): RedirectResponse
@@ -88,6 +90,10 @@ class MetaPostController extends Controller
             'canal_alvo'                  => 'required|in:facebook,instagram,ambos',
             'meta_pagina_id'              => 'required_if:canal_alvo,facebook,ambos|nullable|exists:meta_paginas,id',
             'meta_conta_instagram_id'     => 'required_if:canal_alvo,instagram,ambos|nullable|exists:meta_contas_instagram,id',
+            'meta_post_conteudo_id'       => [
+                'nullable',
+                \Illuminate\Validation\Rule::exists('meta_post_conteudos', 'id')->where('tenant_id', $tenantId),
+            ],
             'texto'                       => 'required|string|max:2200',
             'imagem'                      => 'nullable|image|max:10240',
             'imagem_url'                  => 'nullable|url',
@@ -124,6 +130,7 @@ class MetaPostController extends Controller
         $post = MetaPost::create([
             'tenant_id'                   => $tenantId,
             'user_id'                     => $request->user()->id,
+            'meta_post_conteudo_id'       => $validated['meta_post_conteudo_id'] ?? null,
             'canal_alvo'                  => $validated['canal_alvo'],
             'meta_pagina_id'              => $validated['meta_pagina_id'] ?? null,
             'meta_conta_instagram_id'     => $validated['meta_conta_instagram_id'] ?? null,

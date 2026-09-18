@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\MetaPagina;
 use App\Models\MetaPost;
+use App\Models\MetaPostConteudo;
 use App\Models\MetaToken;
 use App\Models\Tenant;
 use App\Models\User;
@@ -134,5 +135,89 @@ class MetaPostControllerTest extends TestCase
             'canal_alvo'              => 'instagram',
             'meta_conta_instagram_id' => $conta->id,
         ]);
+    }
+
+    /**
+     * Passo 4 do Banco de Conteúdos (2026-09-17): criar uma postagem a
+     * partir de um conteúdo salvo grava a referência.
+     */
+    public function test_cria_post_a_partir_de_conteudo_salvo_guarda_a_referencia(): void
+    {
+        $tenant   = Tenant::factory()->create();
+        $dono     = $this->dono($tenant);
+        $pagina   = $this->criarPagina($tenant);
+        $conteudo = MetaPostConteudo::create(['tenant_id' => $tenant->id, 'titulo' => 'Promo', 'texto' => 'x']);
+
+        $response = $this->actingAs($dono)->post(route('meta-posts.store'), [
+            'canal_alvo'             => 'facebook',
+            'meta_pagina_id'         => $pagina->id,
+            'meta_post_conteudo_id'  => $conteudo->id,
+            'texto'                  => 'Frete rápido no Rio!',
+            'modo_gatilho'           => 'nenhum',
+            'data_agendada'          => now()->addDay()->format('Y-m-d H:i:s'),
+        ]);
+
+        $response->assertRedirect(route('meta-posts.index', ['semana' => now()->addDay()->toDateString()]));
+        $this->assertDatabaseHas('meta_posts', [
+            'texto'                 => 'Frete rápido no Rio!',
+            'meta_post_conteudo_id' => $conteudo->id,
+        ]);
+    }
+
+    /**
+     * Regressão: criar post sem vir de um conteúdo salvo (o fluxo de hoje,
+     * 100% das postagens existentes) continua funcionando idêntico.
+     */
+    public function test_cria_post_avulso_sem_conteudo_salvo_continua_funcionando(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $dono   = $this->dono($tenant);
+        $pagina = $this->criarPagina($tenant);
+
+        $response = $this->actingAs($dono)->post(route('meta-posts.store'), [
+            'canal_alvo'     => 'facebook',
+            'meta_pagina_id' => $pagina->id,
+            'texto'          => 'Post avulso',
+            'modo_gatilho'   => 'nenhum',
+            'data_agendada'  => now()->addDay()->format('Y-m-d H:i:s'),
+        ]);
+
+        $response->assertRedirect(route('meta-posts.index', ['semana' => now()->addDay()->toDateString()]));
+        $this->assertDatabaseHas('meta_posts', [
+            'texto'                 => 'Post avulso',
+            'meta_post_conteudo_id' => null,
+        ]);
+    }
+
+    public function test_tela_nova_publicacao_recebe_conteudos_salvos_ativos(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $dono   = $this->dono($tenant);
+
+        $ativo = MetaPostConteudo::create(['tenant_id' => $tenant->id, 'titulo' => 'Ativo', 'texto' => 'x', 'ativo' => true]);
+        MetaPostConteudo::create(['tenant_id' => $tenant->id, 'titulo' => 'Inativo', 'texto' => 'x', 'ativo' => false]);
+
+        $response = $this->actingAs($dono)->get(route('meta-posts.create'));
+
+        $response->assertOk();
+        $response->assertViewHas('conteudosSalvos', function ($conteudos) use ($ativo) {
+            return $conteudos->count() === 1 && $conteudos->first()->id === $ativo->id;
+        });
+    }
+
+    /**
+     * Regressão: os modais de imagem/texto do GMB continuam presentes e
+     * funcionando na tela de Nova Publicação depois da mudança deste passo.
+     */
+    public function test_tela_nova_publicacao_continua_mostrando_bancos_do_gmb(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $dono   = $this->dono($tenant);
+
+        $response = $this->actingAs($dono)->get(route('meta-posts.create'));
+
+        $response->assertOk();
+        $response->assertSee('Banco de Imagens da Empresa');
+        $response->assertSee('Banco de Textos');
     }
 }
