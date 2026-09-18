@@ -526,6 +526,10 @@
                        class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('meta-posts.templates') ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:text-white hover:bg-gray-700' }}">
                         <span>📝</span> Banco de Textos
                     </a>
+                    <a href="{{ route('meta-posts.conteudos.index') }}"
+                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('meta-posts.conteudos.*') ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:text-white hover:bg-gray-700' }}">
+                        <span>📚</span> Banco de Conteúdos
+                    </a>
                 </div>
             </div>
             @endif
