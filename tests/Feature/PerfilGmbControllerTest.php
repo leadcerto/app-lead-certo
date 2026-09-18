@@ -125,7 +125,10 @@ class PerfilGmbControllerTest extends TestCase
 
         $response = $this->actingAs($dono)->get("/admin/gmb/perfis-gmb/{$perfilAlheio->id}/edit");
 
-        $response->assertForbidden();
+        // Achado real 2026-09-17: prioridade de middleware corrigida faz o
+        // TenantScope filtrar antes do route-model-binding — id de outro
+        // tenant não é mais encontrado (404), proteção de dados inalterada.
+        $response->assertNotFound();
     }
 
     public function test_nao_atualiza_perfil_de_outro_tenant(): void
@@ -142,7 +145,7 @@ class PerfilGmbControllerTest extends TestCase
             'link_gmb' => 'https://maps.google.com/?cid=123',
         ]);
 
-        $response->assertForbidden();
+        $response->assertNotFound();
         $this->assertDatabaseHas('perfis_gmb', ['id' => $perfilAlheio->id, 'nome' => 'Original']);
     }
 
@@ -155,7 +158,7 @@ class PerfilGmbControllerTest extends TestCase
 
         $response = $this->actingAs($dono)->delete("/admin/gmb/perfis-gmb/{$perfilAlheio->id}");
 
-        $response->assertForbidden();
+        $response->assertNotFound();
         $this->assertDatabaseHas('perfis_gmb', ['id' => $perfilAlheio->id, 'ativo' => true]);
     }
 

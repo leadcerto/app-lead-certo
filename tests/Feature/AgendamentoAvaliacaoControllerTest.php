@@ -185,7 +185,13 @@ class AgendamentoAvaliacaoControllerTest extends TestCase
             'status' => 'concluido',
         ]);
 
-        $response->assertForbidden();
+        // Achado real 2026-09-17: prioridade de middleware corrigida
+        // (bootstrap/app.php) faz o TenantScope filtrar ANTES do
+        // route-model-binding resolver {agendamento} — um id de outro
+        // tenant agora nem é encontrado (404), em vez de ser resolvido e
+        // barrado só depois pelo abort_if(403) explícito do controller.
+        // Proteção de dados é a mesma (nada muda), só o código HTTP.
+        $response->assertNotFound();
         $this->assertDatabaseHas('agendamentos_avaliacao', ['id' => $agendamentoAlheio->id, 'status' => 'pendente']);
     }
 
@@ -226,7 +232,7 @@ class AgendamentoAvaliacaoControllerTest extends TestCase
 
         $response = $this->actingAs($dono)->patch("/admin/gmb/agendamentos/{$agendamentoAlheio->id}/template");
 
-        $response->assertForbidden();
+        $response->assertNotFound();
     }
 
     public function test_alertar_avaliadores_envia_email_para_pendentes(): void

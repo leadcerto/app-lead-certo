@@ -83,4 +83,45 @@ class MetaPostControllerPublicarCancelarTest extends TestCase
         $this->assertSame('cancelado', $post->fresh()->status);
         $this->assertFalse($gatilho->fresh()->ativo);
     }
+
+    /**
+     * Achado real 2026-09-17 (mesmo padrão descoberto no
+     * MetaPostConteudoController): SubstituteBindings resolve {post} ANTES
+     * de EnsureTenant setar session('tenant_id')/request attribute — o
+     * TenantScope de MetaPost não filtra nada nesse momento, então um post
+     * de OUTRO tenant pode ser resolvido pelo id na URL.
+     */
+    public function test_nao_permite_cancelar_post_de_outro_tenant(): void
+    {
+        $tenant      = Tenant::factory()->create();
+        $outroTenant = Tenant::factory()->create();
+        $dono        = $this->dono($tenant);
+
+        $postAlheio = MetaPost::withoutGlobalScopes()->create([
+            'tenant_id' => $outroTenant->id, 'canal_alvo' => 'facebook',
+            'texto' => 'x', 'data_agendada' => now()->addDay(), 'status' => 'agendado',
+        ]);
+
+        $response = $this->actingAs($dono)->delete(route('meta-posts.destroy', $postAlheio));
+
+        $response->assertNotFound();
+        $this->assertSame('agendado', $postAlheio->fresh()->status);
+    }
+
+    public function test_nao_permite_publicar_agora_post_de_outro_tenant(): void
+    {
+        $tenant      = Tenant::factory()->create();
+        $outroTenant = Tenant::factory()->create();
+        $dono        = $this->dono($tenant);
+
+        $postAlheio = MetaPost::withoutGlobalScopes()->create([
+            'tenant_id' => $outroTenant->id, 'canal_alvo' => 'facebook',
+            'texto' => 'x', 'data_agendada' => now()->addDay(), 'status' => 'agendado',
+        ]);
+
+        $response = $this->actingAs($dono)->post(route('meta-posts.publicar-agora', $postAlheio));
+
+        $response->assertNotFound();
+        $this->assertSame('agendado', $postAlheio->fresh()->status);
+    }
 }

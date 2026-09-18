@@ -57,7 +57,10 @@ class GmbQualidadeControllerTest extends TestCase
 
         $response = $this->actingAs($dono)->get("/admin/gmb/perfis-gmb/{$perfilAlheio->id}/qualidade");
 
-        $response->assertForbidden();
+        // Achado real 2026-09-17: prioridade de middleware corrigida faz o
+        // TenantScope filtrar antes do route-model-binding — id de outro
+        // tenant não é mais encontrado (404), proteção de dados inalterada.
+        $response->assertNotFound();
     }
 
     public function test_nao_reavalia_diagnostico_de_perfil_de_outro_tenant(): void
@@ -72,7 +75,7 @@ class GmbQualidadeControllerTest extends TestCase
 
         $response = $this->actingAs($dono)->post("/admin/gmb/perfis-gmb/{$perfilAlheio->id}/qualidade/reavaliar");
 
-        $response->assertForbidden();
+        $response->assertNotFound();
     }
 
     public function test_reavaliar_recalcula_a_nota_apos_novo_post(): void
