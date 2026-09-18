@@ -138,6 +138,10 @@
                                         </button>
                                     </form>
                                 @endif
+                                <a href="{{ route('meta-posts.create', ['duplicar_de' => $post->id]) }}"
+                                   class="px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition">
+                                    🔁 Duplicar
+                                </a>
                                 @if($post->podeCancelar())
                                     <form method="POST" action="{{ route('meta-posts.destroy', $post) }}" onsubmit="return confirm('Cancelar esta postagem?')">
                                         @csrf
