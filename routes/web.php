@@ -241,6 +241,8 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::post('/pendente/{vinculo}/campo/{campo}/aprovar',     [AuditorController::class, 'aprovarCampo']);
         Route::post('/pendente/{vinculo}/campo/{campo}/rejeitar',    [AuditorController::class, 'rejeitarCampo']);
         Route::post('/pendente/{vinculo}/campo/{campo}/salvar',      [AuditorController::class, 'salvarValorCampo']);
+        Route::post('/pendente/{vinculo}/aprovar-tudo',              [AuditorController::class, 'aprovarTudo']);
+        Route::post('/pendente/{vinculo}/rejeitar-tudo',             [AuditorController::class, 'rejeitarTudo']);
         Route::post('/pendentes/aprovar-lote',                       [AuditorController::class, 'aprovarLote']);
         Route::post('/pendentes/rejeitar-lote',                      [AuditorController::class, 'rejeitarLote']);
         Route::post('/pendentes/marcar-sem-nome-lote',               [AuditorController::class, 'marcarSemNomeLote']);
@@ -481,6 +483,8 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::post('/pendente/{vinculo}/campo/{campo}/aprovar',     [AuditorController::class, 'aprovarCampo']);
         Route::post('/pendente/{vinculo}/campo/{campo}/rejeitar',    [AuditorController::class, 'rejeitarCampo']);
         Route::post('/pendente/{vinculo}/campo/{campo}/salvar',      [AuditorController::class, 'salvarValorCampo']);
+        Route::post('/pendente/{vinculo}/aprovar-tudo',              [AuditorController::class, 'aprovarTudo']);
+        Route::post('/pendente/{vinculo}/rejeitar-tudo',             [AuditorController::class, 'rejeitarTudo']);
         Route::post('/pendentes/aprovar-lote',                       [AuditorController::class, 'aprovarLote']);
         Route::post('/pendentes/rejeitar-lote',                      [AuditorController::class, 'rejeitarLote']);
         Route::post('/pendentes/marcar-sem-nome-lote',               [AuditorController::class, 'marcarSemNomeLote']);
