@@ -239,11 +239,10 @@
                                            @change="toggleSelecionarTodos($event)"
                                            class="rounded border-gray-300 text-green-600 focus:ring-green-500 w-4 h-4 cursor-pointer">
                                 </th>
-                                <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">ID</th>
-                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap min-w-[210px]">Telefone</th>
-                                <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">Campo</th>
-                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider min-w-[160px]">Valor Atual</th>
-                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider min-w-[180px]">Valor Sugerido</th>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap min-w-[190px]">Telefone</th>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider min-w-[200px]">Nome</th>
+                                <th class="text-left px-3 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">ID do Contato / Nome do Meio</th>
+                                <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider min-w-[200px]">Sobrenome</th>
                                 <th class="text-right px-4 py-3 text-xs text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap min-w-[220px]">Ações</th>
                             </tr>
                         </thead>
@@ -251,14 +250,11 @@
                             <template x-for="item in pendentes" :key="itemChave(item)">
                                 <tr class="hover:bg-gray-50/80 transition-colors" :class="selecionados.includes(itemChave(item)) ? 'bg-green-50/40' : ''">
                                     <td class="px-4 py-3 text-center">
-                                        <input type="checkbox" 
+                                        <input type="checkbox"
                                                :value="itemChave(item)"
                                                :checked="selecionados.includes(itemChave(item))"
                                                @change="toggleSelecionarItem(itemChave(item))"
                                                class="rounded border-gray-300 text-green-600 focus:ring-green-500 w-4 h-4 cursor-pointer">
-                                    </td>
-                                    <td class="px-3 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
-                                        #<span x-text="item.contato_id"></span>
                                     </td>
                                     <td class="px-4 py-3 whitespace-nowrap">
                                         <div class="inline-flex items-center gap-2 font-mono text-xs font-bold text-gray-900 bg-gray-50 px-2.5 py-1 rounded-xl border border-gray-200 shadow-sm">
@@ -266,14 +262,30 @@
                                             <span class="whitespace-nowrap" x-text="item.telefone"></span>
                                         </div>
                                     </td>
-                                    <td class="px-3 py-3 whitespace-nowrap">
-                                        <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-blue-100 text-blue-800 uppercase tracking-wide" x-text="item.campo"></span>
+                                    <td class="px-4 py-3">
+                                        <template x-if="item.nome_sugerido">
+                                            <div>
+                                                <span class="line-through text-xs text-gray-400" x-text="item.nome_atual || '(vazio)'"></span>
+                                                <div class="font-bold text-gray-900 bg-yellow-100 px-2.5 py-1 rounded-lg text-xs mt-0.5 inline-block" x-text="item.nome_sugerido"></div>
+                                            </div>
+                                        </template>
+                                        <template x-if="!item.nome_sugerido">
+                                            <span class="text-xs text-gray-700" x-text="item.nome_atual || '(vazio)'"></span>
+                                        </template>
                                     </td>
-                                    <td class="px-4 py-3 text-gray-500">
-                                        <span class="line-through text-xs" x-text="item.valor_atual || '(vazio)'"></span>
+                                    <td class="px-3 py-3 whitespace-nowrap">
+                                        <span class="font-mono text-xs font-bold text-gray-500" x-text="item.id_formatado"></span>
                                     </td>
                                     <td class="px-4 py-3">
-                                        <span class="font-bold text-gray-900 bg-yellow-100 px-2.5 py-1 rounded-lg text-xs" x-text="item.valor_sugerido"></span>
+                                        <template x-if="item.sobrenome_sugerido">
+                                            <div>
+                                                <span class="line-through text-xs text-gray-400" x-text="item.sobrenome_atual || '(vazio)'"></span>
+                                                <div class="font-bold text-gray-900 bg-yellow-100 px-2.5 py-1 rounded-lg text-xs mt-0.5 inline-block" x-text="item.sobrenome_sugerido"></div>
+                                            </div>
+                                        </template>
+                                        <template x-if="!item.sobrenome_sugerido">
+                                            <span class="text-xs text-gray-700" x-text="item.sobrenome_atual || '(vazio)'"></span>
+                                        </template>
                                     </td>
                                     <td class="px-4 py-3 text-right whitespace-nowrap">
                                         <div class="flex items-center justify-end gap-1.5">
@@ -285,11 +297,11 @@
                                                     class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-bold transition flex items-center gap-1">
                                                  Sem Nome
                                             </button>
-                                            <button @click="aprovarCampo(item)"
+                                            <button @click="aprovarTudo(item)"
                                                     class="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition shadow-sm">
-                                                Aprovar
+                                                Aprovar Tudo
                                             </button>
-                                            <button @click="rejeitarCampo(item)"
+                                            <button @click="rejeitarTudo(item)"
                                                     class="px-2 py-1 text-gray-400 hover:text-red-600 rounded-lg text-xs font-medium transition">
                                                 Rejeitar
                                             </button>
@@ -722,7 +734,7 @@ function auditor() {
         },
 
         itemChave(item) {
-            return `${item.vinculo_id}:::${item.campo}`;
+            return `${item.vinculo_id}`;
         },
 
         toggleSelecionarTodos(e) {
@@ -812,14 +824,12 @@ function auditor() {
             const ddi = item.ddi || '55';
             const p = this.paises.find(x => x.ddi === ddi) || { ddi: '55', bandeira: '🇧🇷' };
             
-            let nomeInicial = item.nome || item.valor_atual || '';
-            let sobrenomeInicial = item.sobrenome || '';
-            if (item.campo === 'nome' && item.valor_sugerido) {
-                nomeInicial = item.valor_sugerido;
-            }
-            if (item.campo === 'sobrenome' && item.valor_sugerido) {
-                sobrenomeInicial = item.valor_sugerido;
-            }
+            // item pode vir da aba "Sugestões de Nomes" (nome_atual/nome_sugerido) ou
+            // da aba "Base Geral de Contatos" (nome/sobrenome direto) — prioriza a
+            // sugestão pendente quando existe, senão cai pro valor atual de qualquer
+            // uma das duas formas.
+            let nomeInicial = item.nome_sugerido || item.nome_atual || item.nome || '';
+            let sobrenomeInicial = item.sobrenome_sugerido || item.sobrenome_atual || item.sobrenome || '';
 
             // Auto-limpeza inteligente no modal (ex: remove "Frt", "9406" e deixa só "Tai")
             const nomeLimpo = this.extrairNomeJS(nomeInicial);
@@ -985,9 +995,16 @@ function auditor() {
         async executarAcaoLote(acao) {
             if (this.selecionados.length === 0) return;
 
-            const itensParaEnviar = this.selecionados.map(chave => {
-                const [vinculoId, campo] = chave.split(':::');
-                return { vinculo_id: parseInt(vinculoId), campo };
+            // Cada linha selecionada é um vínculo que pode ter nome E/OU
+            // sobrenome pendentes — expande pra {vinculo_id, campo} (formato
+            // que os endpoints de lote já esperam) com cada campo que
+            // realmente está pendente naquela linha.
+            const itensParaEnviar = [];
+            this.selecionados.forEach(vinculoIdStr => {
+                const item = this.pendentes.find(p => String(p.vinculo_id) === String(vinculoIdStr));
+                if (!item) return;
+                if (item.nome_sugerido) itensParaEnviar.push({ vinculo_id: item.vinculo_id, campo: 'nome' });
+                if (item.sobrenome_sugerido) itensParaEnviar.push({ vinculo_id: item.vinculo_id, campo: 'sobrenome' });
             });
 
             let rota = '/auditor/pendentes/aprovar-lote';
@@ -1026,17 +1043,20 @@ function auditor() {
             }
         },
 
-        async aprovarCampo(item) {
-            const res = await this.api(`/auditor/pendente/${item.vinculo_id}/campo/${item.campo}/aprovar`, 'POST');
+        async aprovarTudo(item) {
+            const res = await this.api(`/auditor/pendente/${item.vinculo_id}/aprovar-tudo`, 'POST');
             if (res.ok) {
                 await this.carregarPendentes();
                 await this.carregarStats();
             }
         },
 
-        async rejeitarCampo(item) {
-            if (!confirm(`Rejeitar sugestão "${item.valor_sugerido}" pro campo "${item.campo}" e manter "${item.valor_atual}"?`)) return;
-            const res = await this.api(`/auditor/pendente/${item.vinculo_id}/campo/${item.campo}/rejeitar`, 'POST');
+        async rejeitarTudo(item) {
+            const partes = [];
+            if (item.nome_sugerido) partes.push(`nome ("${item.nome_sugerido}")`);
+            if (item.sobrenome_sugerido) partes.push(`sobrenome ("${item.sobrenome_sugerido}")`);
+            if (!confirm(`Rejeitar a(s) sugestão(ões) de ${partes.join(' e ')} e manter os valores atuais?`)) return;
+            const res = await this.api(`/auditor/pendente/${item.vinculo_id}/rejeitar-tudo`, 'POST');
             if (res.ok) {
                 await this.carregarPendentes();
                 await this.carregarStats();

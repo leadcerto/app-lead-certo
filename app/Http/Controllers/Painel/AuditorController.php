@@ -278,31 +278,44 @@ class AuditorController extends Controller
 
         $itens = [];
         foreach ($vinculos as $v) {
-            foreach ($v->campos_pendentes_auditoria ?? [] as $campo => $pendencia) {
-                $valorAtual    = ($campo === 'email' && $v->contato?->$campo) ? $this->mascarar($v->contato->$campo, 'email') : $v->contato?->$campo;
-                $valorSugerido = ($campo === 'email' && ! empty($pendencia['sugerido'])) ? $this->mascarar($pendencia['sugerido'], 'email') : ($pendencia['sugerido'] ?? null);
-                $infoPais      = \App\Services\PaisTelefoneService::identificarPais($v->contato?->telefone ?? '');
-
-                $itens[] = [
-                    'vinculo_id'        => $v->id,
-                    'contato_id'        => $v->contato_id,
-                    'tenant_id'         => $v->tenant_id,
-                    'campo'             => $campo,
-                    'valor_atual'       => $valorAtual,
-                    'valor_sugerido'    => $valorSugerido,
-                    'origem'            => $pendencia['origem'] ?? null,
-                    'nome'              => $v->contato?->nome ?: 'Sem Nome',
-                    'sobrenome'         => $v->contato?->sobrenome,
-                    'email'             => $v->contato?->email,
-                    'telefone_original' => $v->contato?->telefone,
-                    'telefone'          => $infoPais['formatado'],
-                    'bandeira'          => $infoPais['bandeira'],
-                    'pais_nome'         => $infoPais['nome'],
-                    'ddi'               => $infoPais['ddi'],
-                    'numero_local'      => $infoPais['numero_local'] ?: preg_replace('/^' . $infoPais['ddi'] . '/', '', preg_replace('/\D/', '', $v->contato?->telefone ?? '')),
-                    'telefone_exibicao' => $infoPais['exibicao'],
-                ];
+            $pendencias = $v->campos_pendentes_auditoria ?? [];
+            if (empty($pendencias)) {
+                continue;
             }
+
+            // Achado (2026-09-21): esta aba é "Sugestões de Nomes & Sincronização" — as
+            // 3 colunas principais (nome/id/sobrenome) cobrem hoje 100% das pendências
+            // reais de produção (0 de 643 vínculos tinham só email/empresa pendente).
+            // Mas um vínculo com pendência SÓ de outro campo (email, empresa) continua
+            // aparecendo aqui — só não preenche nome_sugerido/sobrenome_sugerido — pra
+            // nunca ficar invisível na auditoria mesmo que isso aconteça no futuro.
+            $pendenciaNome      = $pendencias['nome'] ?? null;
+            $pendenciaSobrenome = $pendencias['sobrenome'] ?? null;
+            $outrosPendentes    = array_diff_key($pendencias, ['nome' => true, 'sobrenome' => true]);
+
+            $infoPais = \App\Services\PaisTelefoneService::identificarPais($v->contato?->telefone ?? '');
+
+            $itens[] = [
+                'vinculo_id'         => $v->id,
+                'contato_id'         => $v->contato_id,
+                'tenant_id'          => $v->tenant_id,
+                'id_formatado'       => "[{$v->contato_id}]",
+                'nome_atual'         => $v->contato?->nome ?: 'Sem Nome',
+                'nome_sugerido'      => $pendenciaNome['sugerido'] ?? null,
+                'nome_origem'        => $pendenciaNome['origem'] ?? null,
+                'sobrenome_atual'    => $v->contato?->sobrenome,
+                'sobrenome_sugerido' => $pendenciaSobrenome['sugerido'] ?? null,
+                'sobrenome_origem'   => $pendenciaSobrenome['origem'] ?? null,
+                'outros_campos_pendentes' => array_keys($outrosPendentes),
+                'email'              => $v->contato?->email,
+                'telefone_original'  => $v->contato?->telefone,
+                'telefone'           => $infoPais['formatado'],
+                'bandeira'           => $infoPais['bandeira'],
+                'pais_nome'          => $infoPais['nome'],
+                'ddi'                => $infoPais['ddi'],
+                'numero_local'       => $infoPais['numero_local'] ?: preg_replace('/^' . $infoPais['ddi'] . '/', '', preg_replace('/\D/', '', $v->contato?->telefone ?? '')),
+                'telefone_exibicao'  => $infoPais['exibicao'],
+            ];
         }
 
         return response()->json([
@@ -310,6 +323,83 @@ class AuditorController extends Controller
             'total'  => count($itens),
             'paises' => \App\Services\PaisTelefoneService::PAISES,
         ]);
+    }
+
+    /**
+     * Aprova de uma vez todos os campos pendentes de nome/sobrenome de um
+     * vínculo — pedido do Leonardo (2026-09-21) pra revisar a tela de
+     * Sugestões de Nomes mais rápido, sem precisar aprovar nome e sobrenome
+     * separadamente quando os dois já estão certos.
+     */
+    public function aprovarTudo(Request $request, VinculoContatoTenant $vinculo): JsonResponse
+    {
+        $pendentes = $vinculo->campos_pendentes_auditoria ?? [];
+        $camposParaAprovar = array_intersect_key($pendentes, ['nome' => true, 'sobrenome' => true]);
+
+        if (empty($camposParaAprovar)) {
+            return response()->json(['erro' => 'Nenhuma sugestão de nome/sobrenome pendente pra este vínculo.'], 422);
+        }
+
+        $humano = $vinculo->campos_editados_humano ?? [];
+
+        foreach ($camposParaAprovar as $campo => $pendencia) {
+            $valorAntigo = $vinculo->contato?->$campo;
+            $valorNovo   = $pendencia['sugerido'];
+
+            $vinculo->contato?->update([$campo => $valorNovo]);
+            unset($pendentes[$campo]);
+            $humano[$campo] = now()->toIso8601String();
+
+            AuditLog::registrar(
+                tabela:      'contatos',
+                registroId:  $vinculo->contato_id,
+                acao:        'aprovar_campo',
+                campo:       $campo,
+                valorAntigo: $valorAntigo,
+                valorNovo:   $valorNovo,
+                contexto:    ['vinculo_id' => $vinculo->id, 'tenant_id' => $vinculo->tenant_id, 'origem' => $pendencia['origem'] ?? null, 'via' => 'aprovar_tudo']
+            );
+        }
+
+        $vinculo->update([
+            'campos_pendentes_auditoria' => $pendentes ?: null,
+            'campos_editados_humano'     => $humano,
+        ]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Rejeita de uma vez nome e sobrenome pendentes de um vínculo — simétrico
+     * ao aprovarTudo(), mesma justificativa (revisão mais rápida na tela de
+     * Sugestões de Nomes).
+     */
+    public function rejeitarTudo(Request $request, VinculoContatoTenant $vinculo): JsonResponse
+    {
+        $pendentes = $vinculo->campos_pendentes_auditoria ?? [];
+        $camposParaRejeitar = array_intersect_key($pendentes, ['nome' => true, 'sobrenome' => true]);
+
+        if (empty($camposParaRejeitar)) {
+            return response()->json(['erro' => 'Nenhuma sugestão de nome/sobrenome pendente pra este vínculo.'], 422);
+        }
+
+        foreach ($camposParaRejeitar as $campo => $pendencia) {
+            unset($pendentes[$campo]);
+
+            AuditLog::registrar(
+                tabela:      'vinculos_contato_tenant',
+                registroId:  $vinculo->id,
+                acao:        'rejeitar_campo',
+                campo:       $campo,
+                valorAntigo: $pendencia['sugerido'] ?? null,
+                valorNovo:   null,
+                contexto:    ['contato_id' => $vinculo->contato_id, 'tenant_id' => $vinculo->tenant_id, 'via' => 'rejeitar_tudo']
+            );
+        }
+
+        $vinculo->update(['campos_pendentes_auditoria' => $pendentes ?: null]);
+
+        return response()->json(['ok' => true]);
     }
 
     public function aprovarCampo(Request $request, VinculoContatoTenant $vinculo, string $campo): JsonResponse
@@ -707,8 +797,8 @@ class AuditorController extends Controller
             $pendentes = $v->campos_pendentes_auditoria ?? [];
             $nomeAtual = $v->contato?->nome;
             $sobrenomeAtual = $v->contato?->sobrenome;
-            $nomeSugerido = $pendencia['nome']['sugerido'] ?? null;
-            $sobrenomeSugerido = $pendencia['sobrenome']['sugerido'] ?? null;
+            $nomeSugerido = $pendentes['nome']['sugerido'] ?? null;
+            $sobrenomeSugerido = $pendentes['sobrenome']['sugerido'] ?? null;
 
             $candNome = $nomeSugerido ?: $nomeAtual;
             $candSobrenome = $sobrenomeSugerido ?: $sobrenomeAtual;
