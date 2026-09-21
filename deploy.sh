@@ -5,8 +5,8 @@
 # VPS e evita que um `git pull` sobrescreva silenciosamente uma edição direta.
 set -euo pipefail
 
-SSH_KEY=~/.ssh/leadcerto_vps
-VPS_HOST=root@103.199.186.134
+SSH_KEY=~/.ssh/leadcerto_vps_nova
+VPS_HOST=root@31.97.172.203
 VPS_PATH=/var/www/leadcerto
 
 # Modo de manutenção: fica marcado como "ligado" só depois que o `php artisan down`
