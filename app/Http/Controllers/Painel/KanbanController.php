@@ -291,9 +291,20 @@ class KanbanController extends Controller
                 }
             }
 
-            $enviado = $canal->servico()->enviarTextoDireto($canal, $telefone, $textoParaEnviar);
+            $servico = $canal->servico();
+            $enviado = $servico->enviarTextoDireto($canal, $telefone, $textoParaEnviar);
 
             if (! $enviado) {
+                // Achado real 2026-09-21 (Amanda, Frete Rio): a mensagem genérica
+                // de erro dizia pra "verificar a conexão do canal" mesmo quando o
+                // canal estava conectado normalmente — a causa real mais comum é a
+                // janela de 24h da Meta ter expirado (lead sem responder há dias).
+                if ($servico->ultimoEnvioFalhouPorJanelaExpirada()) {
+                    return response()->json([
+                        'message' => 'A janela de 24h do WhatsApp expirou — o lead precisa mandar uma mensagem primeiro pra você poder responder de novo.',
+                    ], 502);
+                }
+
                 return response()->json(['message' => 'Falha ao enviar pelo WhatsApp. Verifique a conexão do canal.'], 502);
             }
 

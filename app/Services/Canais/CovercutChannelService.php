@@ -29,9 +29,24 @@ class CovercutChannelService implements CanalWhatsappInterface
 
     private bool $ultimoErroNumeroInvalido = false;
 
+    /**
+     * Achado real 2026-09-21 (Amanda, Frete Rio): o painel mostrava "Falha ao
+     * enviar pelo WhatsApp. Verifique a conexão do canal." mesmo quando o
+     * canal estava conectado normalmente — a causa real era a janela de 24h
+     * da Meta ter expirado (lead sem responder há dias). Mesmo padrão de
+     * $ultimoErroNumeroInvalido, pra quem chama distinguir esse motivo
+     * específico e mostrar uma mensagem que reflete a causa de verdade.
+     */
+    private bool $ultimoErroJanelaExpirada = false;
+
     public function ultimoEnvioFalhouPorNumeroInvalido(): bool
     {
         return $this->ultimoErroNumeroInvalido;
+    }
+
+    public function ultimoEnvioFalhouPorJanelaExpirada(): bool
+    {
+        return $this->ultimoErroJanelaExpirada;
     }
 
     public function enviarTexto(WhatsappCanal $canal, string $telefone, string $texto): bool
@@ -105,6 +120,7 @@ class CovercutChannelService implements CanalWhatsappInterface
     private function enviar(WhatsappCanal $canal, string $telefone, array $corpo): bool
     {
         $this->ultimoErroNumeroInvalido = false;
+        $this->ultimoErroJanelaExpirada = false;
 
         if (! $this->dentroDaJanela($canal, $telefone)) {
             return false;
@@ -171,6 +187,8 @@ class CovercutChannelService implements CanalWhatsappInterface
             ->first();
 
         if ($ticket && $ticket->janela_expira_em && now()->greaterThan($ticket->janela_expira_em)) {
+            $this->ultimoErroJanelaExpirada = true;
+
             Log::warning('CovercutChannelService: envio bloqueado, janela de conversa expirada', [
                 'canal_id'   => $canal->id,
                 'ticket_id'  => $ticket->id,
