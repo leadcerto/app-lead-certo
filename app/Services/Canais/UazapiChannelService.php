@@ -158,4 +158,14 @@ class UazapiChannelService implements CanalWhatsappInterface
     {
         return false;
     }
+
+    /**
+     * Uazapi (não-oficial) não tem o conceito de janela de 24h da Meta —
+     * sempre false, mesmo padrão de ultimoEnvioFalhouPorNumeroInvalido()
+     * acima pra quando o canal não sabe detectar esse motivo específico.
+     */
+    public function ultimoEnvioFalhouPorJanelaExpirada(): bool
+    {
+        return false;
+    }
 }

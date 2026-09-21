@@ -275,4 +275,73 @@ class CovercutChannelServiceTest extends TestCase
         $this->assertTrue($enviado);
         $this->assertFalse($servico->ultimoEnvioFalhouPorNumeroInvalido());
     }
+
+    /**
+     * Achado real 2026-09-21 (Amanda, Frete Rio): o painel mostrava "Falha ao
+     * enviar pelo WhatsApp. Verifique a conexão do canal." pra um erro que
+     * não tinha nada a ver com o canal estar desconectado — a causa real era
+     * a janela de 24h da Meta já ter expirado (lead sem responder há dias).
+     * Mesmo padrão de ultimoErroNumeroInvalido, pra distinguir esse motivo
+     * específico dos outros.
+     */
+    public function test_marca_janela_expirada_quando_bloqueado_por_janela(): void
+    {
+        Http::fake(); // nenhuma chamada HTTP deve acontecer
+        Log::spy();
+
+        $tenant  = Tenant::factory()->create();
+        $canal   = $this->canalOficial($tenant->id);
+        $contato = Contato::factory()->create(['telefone' => '5511988888888']);
+        TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'humano',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'janela_expira_em' => now()->subHour(),
+        ]);
+
+        $servico = app(CovercutChannelService::class);
+        $enviado = $servico->enviarTexto($canal, '5511988888888', 'Oi!');
+
+        $this->assertFalse($enviado);
+        $this->assertTrue($servico->ultimoEnvioFalhouPorJanelaExpirada());
+    }
+
+    public function test_nao_marca_janela_expirada_para_outros_tipos_de_falha(): void
+    {
+        Http::fake(['*/messages/send' => Http::response([
+            'error' => ['message' => 'Internal server error', 'code' => 500],
+        ], 500)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = $this->canalOficial($tenant->id);
+        $servico = app(CovercutChannelService::class);
+
+        $enviado = $servico->enviarTexto($canal, '5511977777777', 'Oi!');
+
+        $this->assertFalse($enviado);
+        $this->assertFalse($servico->ultimoEnvioFalhouPorJanelaExpirada());
+    }
+
+    public function test_nao_marca_janela_expirada_quando_envio_e_bem_sucedido(): void
+    {
+        Http::fake(['*/messages/send' => Http::response(['id' => 'wamid.xyz'], 200)]);
+
+        $tenant  = Tenant::factory()->create();
+        $canal   = $this->canalOficial($tenant->id);
+        $contato = Contato::factory()->create(['telefone' => '5511999999999']);
+        TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'janela_expira_em' => now()->addHours(10),
+        ]);
+
+        $servico = app(CovercutChannelService::class);
+        $enviado = $servico->enviarTexto($canal, '5511999999999', 'Oi!');
+
+        $this->assertTrue($enviado);
+        $this->assertFalse($servico->ultimoEnvioFalhouPorJanelaExpirada());
+    }
 }

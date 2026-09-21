@@ -56,4 +56,15 @@ interface CanalWhatsappInterface
      * quando não houve falha, e também quando o canal não tem como detectar isso.
      */
     public function ultimoEnvioFalhouPorNumeroInvalido(): bool;
+
+    /**
+     * Achado real 2026-09-21 (Amanda, Frete Rio): mesma ideia de
+     * ultimoEnvioFalhouPorNumeroInvalido(), mas pra distinguir quando a
+     * falha do ÚLTIMO envio foi especificamente porque a janela de 24h de
+     * atendimento (Meta) expirou — quem chama usa isso pra mostrar uma
+     * mensagem de erro que reflete a causa real, em vez de um erro genérico
+     * de "canal desconectado". Deve retornar false quando não houve falha,
+     * e também quando o canal não tem esse conceito de janela.
+     */
+    public function ultimoEnvioFalhouPorJanelaExpirada(): bool;
 }
