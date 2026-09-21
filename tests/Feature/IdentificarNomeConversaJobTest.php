@@ -229,9 +229,14 @@ class IdentificarNomeConversaJobTest extends TestCase
             'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'lead_novo',
             'texto' => 'Nome do cliente confirmado', 'ordem' => 1, 'ativo' => true,
         ]);
+        // Achado real 2026-09-21 (ticket #4821, Lucas): "Início de conversa"
+        // também virou um objetivo deterministicamente marcável (a própria
+        // mensagem do lead já prova isso) — trocado aqui por um objetivo
+        // genuinamente não-determinístico, pra continuar testando o caso
+        // real de "ainda falta algo que só a IA/humano resolve".
         KanbanColunaObjetivo::create([
             'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'lead_novo',
-            'texto' => 'Início de conversa', 'ordem' => 2, 'ativo' => true,
+            'texto' => 'Endereço de origem confirmado', 'ordem' => 2, 'ativo' => true,
         ]);
         $mensagem = Mensagem::create([
             'ticket_id' => $ticket->id, 'tenant_id' => $ticket->tenant_id,
