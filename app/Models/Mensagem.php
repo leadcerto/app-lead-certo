@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Jobs\AvaliarObjetivosPorMensagemHumanaJob;
 use App\Jobs\IdentificarNomeConversaJob;
 use App\Scopes\TenantScope;
+use App\Services\AvancoAutomaticoKanbanService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -24,6 +25,7 @@ class Mensagem extends Model
             } elseif ($mensagem->remetente === 'lead') {
                 static::identificarNomeSeAindaInvalido($mensagem);
                 static::atualizarUltimaMensagemLead($mensagem);
+                static::marcarObjetivoDeNomeSeJaConfirmado($mensagem);
             }
         });
     }
@@ -101,6 +103,26 @@ class Mensagem extends Model
             ->update([
                 'ultima_mensagem_lead_em' => $mensagem->enviado_em ?? now(),
             ]);
+    }
+
+    /**
+     * Achado real 2026-09-21 (ticket #4821, Lucas): identificarNomeSeAindaInvalido()
+     * acima só dispara quando o contato TRANSICIONA de "sem nome real" pra
+     * "com nome real" durante a conversa — mas um contato pode já ser criado
+     * com um nome que parece real desde o início (ex: pushName do WhatsApp
+     * já bate com o nome verdadeiro). Nesse caso o job de identificação
+     * nunca dispara, e sem este hook o objetivo de "nome confirmado" nunca
+     * seria marcado — mesmo o nome estando certo o tempo todo. Checagem
+     * determinística e barata (sem IA), segura de chamar em toda mensagem.
+     */
+    private static function marcarObjetivoDeNomeSeJaConfirmado(Mensagem $mensagem): void
+    {
+        $ticket = TicketAtendimento::withoutGlobalScopes()->find($mensagem->ticket_id);
+        if (! $ticket) {
+            return;
+        }
+
+        app(AvancoAutomaticoKanbanService::class)->marcarObjetivosDeterministicosDeLead($ticket);
     }
 
     protected $fillable = [

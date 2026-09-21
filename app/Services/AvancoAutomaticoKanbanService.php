@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\PapelColunaKanban;
+use App\Models\Contato;
 use App\Models\KanbanColuna;
 use App\Models\KanbanColunaObjetivo;
 use App\Models\TicketAtendimento;
@@ -55,6 +56,55 @@ class AvancoAutomaticoKanbanService
             // chamar sempre não muda o comportamento quando não está completo.
             $this->avancarSeCompletoInterno($atual, $idsAtivos);
         });
+    }
+
+    /**
+     * Achado real 2026-09-21 (ticket #4821, Lucas — e #??? Patrick, mesmo
+     * bug se repetindo ao vivo): o gatilho original (IdentificarNomeConversaJob,
+     * despachado só quando Contato::semNomeReal() TRANSICIONA de true pra
+     * false durante a conversa) não cobre o caso — bem comum — de o contato
+     * já ser criado com um nome que parece real desde o início (ex: pushName
+     * do WhatsApp). Nesse caso semNomeReal() já é false desde a primeira
+     * mensagem, o job nunca é despachado, e o objetivo de nome nunca é
+     * marcado — mesmo o nome estando certo o tempo todo.
+     *
+     * Achado 2 na mesma investigação: mesmo corrigindo só o objetivo de
+     * nome, a coluna "Novo" tem OUTRO objetivo ativo por padrão — "Início de
+     * conversa" — que depende do mesmo mecanismo frágil de token da IA e
+     * NUNCA é marcado por nada no sistema hoje. Mas esse objetivo é
+     * trivialmente verdadeiro no exato momento em que este método é chamado
+     * (a partir de um hook que só roda quando uma mensagem do lead acabou de
+     * ser criada — a própria existência dela já prova "conversa iniciada").
+     *
+     * Este método checa o estado ATUAL (não uma transição) e é seguro
+     * chamar a cada mensagem do lead — idempotente, não requer nenhuma
+     * chamada de IA pra nenhum dos dois objetivos.
+     */
+    public function marcarObjetivosDeterministicosDeLead(TicketAtendimento $ticket): void
+    {
+        $contato     = Contato::withoutGlobalScopes()->find($ticket->contato_id);
+        $temNomeReal = $contato && ! $contato->semNomeReal();
+
+        $objetivosAtivos = KanbanColunaObjetivo::withoutGlobalScopes()
+            ->where('tenant_id', $ticket->tenant_id)
+            ->where('coluna_kanban', $ticket->coluna_kanban)
+            ->where('ativo', true)
+            ->get(['id', 'texto']);
+
+        $idsParaMarcar = [];
+        foreach ($objetivosAtivos as $objetivo) {
+            $texto = mb_strtolower($objetivo->texto);
+
+            if ($temNomeReal && str_contains($texto, 'nome')) {
+                $idsParaMarcar[] = $objetivo->id;
+            } elseif (str_contains($texto, 'início') || str_contains($texto, 'inicio') || str_contains($texto, 'conversa')) {
+                $idsParaMarcar[] = $objetivo->id;
+            }
+        }
+
+        if ($idsParaMarcar) {
+            $this->marcarObjetivos($ticket, $idsParaMarcar);
+        }
     }
 
     public function avancarSeCompleto(TicketAtendimento $ticket): bool
