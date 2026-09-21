@@ -3,8 +3,10 @@
 namespace App\Jobs;
 
 use App\Models\Contato;
+use App\Models\KanbanColunaObjetivo;
 use App\Models\Mensagem;
 use App\Models\TicketAtendimento;
+use App\Services\AvancoAutomaticoKanbanService;
 use App\Services\OpenRouterService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -36,7 +38,7 @@ PROMPT;
 
     public function __construct(public int $mensagemId) {}
 
-    public function handle(OpenRouterService $openRouter): void
+    public function handle(OpenRouterService $openRouter, AvancoAutomaticoKanbanService $avanco): void
     {
         $mensagem = Mensagem::withoutGlobalScopes()->find($this->mensagemId);
         if (! $mensagem || ! $mensagem->conteudo) {
@@ -68,6 +70,34 @@ PROMPT;
         // Invalida google_sincronizado_em do vínculo para o Atlas atualizar no Google no próximo ciclo
         \App\Models\VinculoContatoTenant::where('contato_id', $contato->id)
             ->update(['google_sincronizado_em' => null]);
+
+        $this->marcarObjetivoDeNomeSePendente($ticket, $avanco);
+    }
+
+    /**
+     * Achado real 2026-09-21 (ticket #4816): o avanço automático de coluna
+     * dependia inteiramente da própria IA lembrar de colar uma tag no texto
+     * livre — sem nenhuma verificação de apoio, ela pode simplesmente
+     * esquecer (confirmado com evidência real: 3 chamadas de IA seguidas no
+     * mesmo ticket, todas esquecendo a tag). Este job é o único ponto do
+     * sistema que sabe, de forma determinística — sem depender de nenhuma
+     * IA — exatamente o instante em que um nome real foi capturado. Marca
+     * o objetivo correspondente (se a coluna atual tiver um) como rede de
+     * segurança, reaproveitando o mesmo AvancoAutomaticoKanbanService que já
+     * avança a coluna sozinho quando a checklist fecha.
+     */
+    private function marcarObjetivoDeNomeSePendente(TicketAtendimento $ticket, AvancoAutomaticoKanbanService $avanco): void
+    {
+        $idObjetivoNome = KanbanColunaObjetivo::withoutGlobalScopes()
+            ->where('tenant_id', $ticket->tenant_id)
+            ->where('coluna_kanban', $ticket->coluna_kanban)
+            ->where('ativo', true)
+            ->where('texto', 'like', '%nome%')
+            ->value('id');
+
+        if ($idObjetivoNome) {
+            $avanco->marcarObjetivos($ticket, [$idObjetivoNome]);
+        }
     }
 
     /**
