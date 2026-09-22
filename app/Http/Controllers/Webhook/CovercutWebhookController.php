@@ -314,7 +314,8 @@ class CovercutWebhookController extends Controller
         if ($ticketNovo) {
             app(SequenciaService::class)->iniciarParaTicket($ticket);
         } elseif ($ticket->agente_responsavel === 'bot' && $conteudo) {
-            dispatch(new SdrResponderJob($ticket->id, $conteudo, false, false, 0));
+            $delay = SdrResponderJob::resolverDelay($tenant->id, $ticket->coluna_kanban);
+            dispatch(new SdrResponderJob($ticket->id, $conteudo, false, false, $delay));
         }
     }
 

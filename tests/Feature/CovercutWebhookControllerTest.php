@@ -325,6 +325,52 @@ class CovercutWebhookControllerTest extends TestCase
     }
 
     /**
+     * Achado real 2026-09-21: o canal oficial (Covercut, o que a Frete Rio
+     * usa de verdade) despachava o SdrResponderJob com debounceSegundos=0
+     * fixo, nunca lendo o sdr_delay_segundos configurado por coluna — a IA
+     * respondia na hora a cada mensagem, mesmo quando o lead mandava a
+     * informação partida em várias mensagens seguidas. Agora usa
+     * SdrResponderJob::resolverDelay(), mesma lógica compartilhada com o
+     * Uazapi.
+     */
+    public function test_dispara_sdr_responder_job_respeitando_o_delay_configurado_da_coluna(): void
+    {
+        Bus::fake();
+
+        $tenant = Tenant::factory()->create();
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+        \App\Models\KanbanColunaConfig::create([
+            'tenant_id' => $tenant->id, 'coluna_kanban' => 'em_atendimento',
+            'sdr_delay_segundos' => 90,
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5521988887777']);
+        TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'janela_expira_em' => now()->addHours(10),
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777'],
+            'message' => ['id' => 'wamid.bot2', 'type' => 'text', 'text' => 'Rua Armando de Albuquerque'],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        Bus::assertDispatched(SdrResponderJob::class, function (SdrResponderJob $job) {
+            $ref = new \ReflectionProperty($job, 'debounceSegundos');
+            $ref->setAccessible(true);
+            return $ref->getValue($job) === 90;
+        });
+    }
+
+    /**
      * Modo Coexistence: atendente responde direto pelo WhatsApp Business App,
      * fora da API — a Covercut manda isso como `event: echo`,
      * `direction: outbound`, `echo_source: phone`. Antes desta correção
