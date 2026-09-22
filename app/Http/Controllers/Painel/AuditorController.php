@@ -739,8 +739,18 @@ class AuditorController extends Controller
             'marceneiro\w*', 'eletricista\w*', 'diarista\w*', 'faxineira\w*', 'loja\w*', 'oficina\w*',
             'vendas?', 'atendimento\w*', 'sac', 'suporte\w*', 'comercial\w*', 'adm\w*', 'estofador\w*',
             'sofa\w*', 'camorim\w*', 'urologia\w*', 'advocacia\w*', 'vidra[cç]aria\w*', 'engemedic\w*',
-            'box', 'pizza\w*', 'mdm\w*', 'ajd\w*', 'dr\w*', 'dra\w*', 'adv\w*', 'moveis\w*', 'marcenaria\w*',
-            'fiorino\w*', 'sprinter\w*', 'iveco\w*', 'vuc\w*', 'van\w*', 'refritec\w*'
+            'box', 'pizza\w*', 'mdm\w*', 'ajd\w*',
+            // Achado real 2026-09-22 (pedido do Leonardo, aba "Conflitos de
+            // Identidade"): estes 3 padrões com \w* aberto casavam com o
+            // COMEÇO de nomes reais, não só a etiqueta comercial pretendida —
+            // confirmado em produção: 'van\w*' classificava "Vanessa" (19
+            // contatos!), "Vanda", "Vania", "Vaneska", "Vanderlei" como
+            // "não é pessoa"; 'dr\w*' pegava "Drica"/"Dryelle"; 'adv\w*'
+            // pegava "Advaldo". Fechados pra só casar a abreviação/palavra
+            // inteira pretendida, sem herdar o resto de um nome de verdade.
+            'vans?', 'dr', 'dra', 'adv|advogad[ao]s?',
+            'moveis\w*', 'marcenaria\w*',
+            'fiorino\w*', 'sprinter\w*', 'iveco\w*', 'vuc\w*', 'refritec\w*'
         ];
         $patternLixo = '/\b(' . implode('|', $tagsLixo) . ')\b/iu';
 
