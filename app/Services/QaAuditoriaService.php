@@ -32,7 +32,7 @@ class QaAuditoriaService
         }
 
         $prompt = $this->montarPromptJuiz($persona->system_prompt, $conversa);
-        $raw    = $this->openRouter->chat($prompt, 'simples', 600);
+        $raw    = $this->openRouter->chat($prompt, 'simples', 600, 'qa_auditoria_ticket', $ticket->tenant_id);
 
         if (! $raw) {
             Log::warning('QaAuditoriaService: sem resposta do juiz', ['ticket_id' => $ticket->id]);
