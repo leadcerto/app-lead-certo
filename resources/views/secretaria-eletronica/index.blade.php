@@ -133,6 +133,70 @@
             <div class="bg-yellow-50 border border-yellow-100 rounded-lg p-3 text-xs text-yellow-800">
                 <strong>Importante:</strong> o celular precisa estar com internet (Wi-Fi ou dados móveis). O MacroDroid roda em segundo plano — não precisa deixar a tela ligada.
             </div>
+
+            {{-- Atalho: IA interna do MacroDroid monta a macro sozinha --}}
+            <div class="bg-green-50 border border-green-100 rounded-lg p-4 text-xs text-green-900 space-y-3">
+                <p class="font-semibold text-sm">Atalho: deixe a IA do MacroDroid montar a macro por você</p>
+                <p>
+                    O MacroDroid tem um assistente de IA (recurso da <strong>versão Premium</strong> — vale muito a pena:
+                    é um pagamento único bem barato, algo em torno de <strong>R$ 10</strong>, e o app continua funcionando
+                    pra sempre depois disso). Em vez de montar gatilho e ação manualmente (passos 3 e 4 acima), você cola
+                    o texto abaixo no assistente de IA dele e ele cria a macro inteira sozinho — muito mais simples pra
+                    quem não tem tanta prática com esse tipo de configuração.
+                </p>
+                <div class="relative">
+                    <pre id="scriptMacroDroidIa" class="bg-white border border-green-200 rounded-lg px-4 py-3 text-[11px] text-gray-800 overflow-x-auto whitespace-pre-wrap">Crie uma macro no MacroDroid com as seguintes especificações:
+
+NOME DA MACRO: Lead Certo - Chamada Perdida
+
+GATILHO (TRIGGER):
+- Categoria: Telefone
+- Tipo: Chamada Perdida (Missed Call)
+
+AÇÃO (ACTION):
+- Categoria: Conectividade
+- Tipo: Requisição HTTP (HTTP Request)
+- Método: POST
+- URL: https://app.leadcerto.app.br/api/secretaria/<span x-text="token"></span>
+- Tipo do corpo (Content-Type): application/json
+- Corpo da requisição (Body), usando a variável Magic Text do número do chamador da chamada perdida no campo "numero_chamador":
+
+{
+  "numero_chamador": "[Número do Chamador da Chamada Perdida]",
+  "numero_receptor": "55DDDSEUNUMERO",
+  "duracao_segundos": 0
+}
+
+INSTRUÇÃO IMPORTANTE:
+No campo "numero_chamador", não insira texto fixo. Utilize a variável dinâmica (Magic Text) correspondente ao número de quem ligou na chamada perdida que disparou o gatilho, para que o valor real do número seja enviado automaticamente a cada execução.
+
+Após configurar, salve a macro e deixe-a ativa.</pre>
+                    <button @click="copiarScriptMacroDroidIa()"
+                            class="absolute top-2 right-2 px-2 py-1 text-xs bg-green-700 text-white rounded hover:bg-green-600 transition-colors">
+                        <span x-text="copiadoScriptIa ? 'Copiado!' : 'Copiar'"></span>
+                    </button>
+                </div>
+                <p class="text-red-700 font-medium">
+                    Atenção: antes de colar, troque <strong>55DDDSEUNUMERO</strong> pelo número que você mesmo usa pra
+                    receber mensagem no WhatsApp (o mesmo número ativo no seu canal aqui no Lead Certo) — não deixe
+                    o número de exemplo.
+                </p>
+            </div>
+
+            <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-800">
+                <strong>Como isso se conecta com o Kanban:</strong> assim que a chamada perdida é identificada, o sistema
+                cria o contato e o card já na <strong>primeira coluna</strong> do Kanban e dispara a mensagem de abertura
+                configurada acima pro WhatsApp da pessoa. Qualquer interação dela a partir daí (responder, mandar áudio,
+                foto etc.) segue o fluxo normal do funil, exatamente como um lead que chegou por qualquer outro canal.
+            </div>
+
+            <div class="bg-orange-50 border border-orange-100 rounded-lg p-3 text-xs text-orange-800">
+                <strong>Nem toda chamada perdida é lead de verdade:</strong> boa parte das ligações que caem na caixa são
+                spam/telemarketing — números que não têm WhatsApp ou que nunca respondem a mensagem enviada (quem ligou
+                com intenção real de falar com a empresa tende a responder). O sistema já sinaliza nesta tela quando o
+                número não tem WhatsApp (badge "Número sem WhatsApp" na tabela abaixo); a identificação de números que
+                nunca respondem ainda está em desenvolvimento.
+            </div>
         </div>
     </div>
 
@@ -192,10 +256,12 @@
         </p>
 
         <textarea x-model="mensagemInicial" rows="3"
-                  @input="salvoOk = false"
+                  x-ref="textareaMensagem"
+                  x-init="$nextTick(() => ajustarAlturaTextarea($el))"
+                  @input="salvoOk = false; ajustarAlturaTextarea($el)"
                   :disabled="!envioAtivo"
                   placeholder="Ex: Oi! Vi que você ligou aqui pra gente e não consegui atender na hora. Tô disponível agora no WhatsApp, pode falar!"
-                  class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 resize-none disabled:bg-gray-50 disabled:text-gray-400"></textarea>
+                  class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 resize-none overflow-hidden disabled:bg-gray-50 disabled:text-gray-400"></textarea>
 
         <div class="flex items-center justify-between mt-3">
             <p class="text-xs text-gray-400">O sistema vai usar esta mensagem exatamente como você escreveu.</p>
@@ -369,6 +435,7 @@ function secretaria() {
         copiado: false,
         copiadoUrl: false,
         copiadoBody: false,
+        copiadoScriptIa: false,
         salvando: false,
         salvoOk: false,
         editandoId: null,
@@ -385,6 +452,17 @@ function secretaria() {
             this.chamadas           = d.chamadas ?? [];
             this.totalMes           = d.total_mes ?? 0;
             this.dispositivosAtivos = d.dispositivos_ativos ?? 0;
+
+            this.$nextTick(() => this.ajustarAlturaTextarea(this.$refs.textareaMensagem));
+        },
+
+        // Cresce a caixa de texto pra caber a mensagem inteira, sem cortar
+        // nem precisar rolar — pedido do Leonardo (2026-09-22): mensagens
+        // mais longas ficavam escondidas dentro das 3 linhas fixas.
+        ajustarAlturaTextarea(el) {
+            if (! el) return;
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
         },
 
         async toggleEnvio() {
@@ -463,6 +541,38 @@ function secretaria() {
             await navigator.clipboard.writeText(body);
             this.copiadoBody = true;
             setTimeout(() => this.copiadoBody = false, 2000);
+        },
+
+        async copiarScriptMacroDroidIa() {
+            const script = `Crie uma macro no MacroDroid com as seguintes especificações:
+
+NOME DA MACRO: Lead Certo - Chamada Perdida
+
+GATILHO (TRIGGER):
+- Categoria: Telefone
+- Tipo: Chamada Perdida (Missed Call)
+
+AÇÃO (ACTION):
+- Categoria: Conectividade
+- Tipo: Requisição HTTP (HTTP Request)
+- Método: POST
+- URL: https://app.leadcerto.app.br/api/secretaria/${this.token}
+- Tipo do corpo (Content-Type): application/json
+- Corpo da requisição (Body), usando a variável Magic Text do número do chamador da chamada perdida no campo "numero_chamador":
+
+{
+  "numero_chamador": "[Número do Chamador da Chamada Perdida]",
+  "numero_receptor": "55DDDSEUNUMERO",
+  "duracao_segundos": 0
+}
+
+INSTRUÇÃO IMPORTANTE:
+No campo "numero_chamador", não insira texto fixo. Utilize a variável dinâmica (Magic Text) correspondente ao número de quem ligou na chamada perdida que disparou o gatilho, para que o valor real do número seja enviado automaticamente a cada execução.
+
+Após configurar, salve a macro e deixe-a ativa.`;
+            await navigator.clipboard.writeText(script);
+            this.copiadoScriptIa = true;
+            setTimeout(() => this.copiadoScriptIa = false, 2000);
         },
 
         async salvarNome(chamada) {
