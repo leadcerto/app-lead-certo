@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Webhook;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\PushContatoParaGoogleJob;
 use App\Jobs\SdrResponderJob;
 use App\Models\Contato;
 use App\Models\KanbanColuna;
@@ -153,7 +154,19 @@ class CovercutWebhookController extends Controller
                 ->flagrarSeNumeroPossivelmenteReciclado($contato, $tenant->id, $nomeValido, $telefone);
         }
 
-        VinculoContatoTenant::firstOrCreate(['contato_id' => $contato->id, 'tenant_id' => $tenant->id]);
+        $vinculo = VinculoContatoTenant::firstOrCreate(['contato_id' => $contato->id, 'tenant_id' => $tenant->id]);
+
+        // Achado real 2026-09-22 (Leonardo, caso "Marcela Lobo" #98320): o
+        // UazapiWebhookController sempre teve essa chamada (linha equivalente
+        // logo após o firstOrCreate do vínculo) — aqui no canal Oficial nunca
+        // existiu. Toda a Frete Rio usa só o canal Oficial, então NENHUM lead
+        // novo dela jamais foi empurrado pro Google Contatos por esse caminho.
+        // Mesma condição do Uazapi: contato recém-criado OU vínculo ainda sem
+        // resourceName (cobre o caso de um contato pré-existente que ganha seu
+        // primeiro vínculo Google agora).
+        if ($contato->wasRecentlyCreated || ! $vinculo->google_resource_name) {
+            PushContatoParaGoogleJob::dispatch($contato->id, $tenant->id, $nomeValido ?? $pushName);
+        }
 
         // Achado real (2026-08-12): duas mensagens do mesmo lead chegando quase
         // juntas geravam dois webhooks concorrentes — cada um checava "já tem

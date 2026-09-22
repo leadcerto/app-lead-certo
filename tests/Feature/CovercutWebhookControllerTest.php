@@ -60,6 +60,78 @@ class CovercutWebhookControllerTest extends TestCase
         $this->assertDatabaseHas('mensagens', ['ticket_id' => $ticket->id, 'conteudo' => 'Ola', 'provider_message_id' => 'wamid.HBgMNTU0N001']);
     }
 
+    /**
+     * Achado real 2026-09-22 (Leonardo, caso real "Marcela Lobo" #98320 — Frete
+     * Rio, que usa só o canal Oficial): o UazapiWebhookController sempre
+     * despachou PushContatoParaGoogleJob pra contato novo, mas o
+     * CovercutWebhookController nunca teve essa chamada. Qualquer lead que só
+     * fala pelo canal Oficial nunca era empurrado pro Google Contatos.
+     */
+    public function test_lead_novo_via_covercut_e_empurrado_pro_google(): void
+    {
+        Bus::fake();
+
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521981829399', 'name' => 'Marcela Lobo'],
+            'message' => ['id' => 'wamid.marcela1', 'type' => 'text', 'text' => 'Oi, quero um orçamento'],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        $contato = Contato::where('telefone', '5521981829399')->firstOrFail();
+
+        Bus::assertDispatched(\App\Jobs\PushContatoParaGoogleJob::class, function ($job) use ($contato) {
+            return $this->propriedadeJob($job, 'contatoId') === $contato->id;
+        });
+    }
+
+    /**
+     * Mesmo achado acima: um contato JÁ existente (ex: veio de outro canal antes)
+     * que ainda não tem vínculo Google (google_resource_name vazio) também
+     * precisa ser empurrado na primeira vez que fala pelo canal Oficial — não
+     * só contato 100% novo.
+     */
+    public function test_contato_existente_sem_vinculo_google_tambem_e_empurrado(): void
+    {
+        Bus::fake();
+
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create(['telefone' => '5521999998888', 'nome' => 'Ja Existia']);
+        \App\Models\VinculoContatoTenant::create([
+            'contato_id' => $contato->id, 'tenant_id' => $tenant->id, 'google_resource_name' => null,
+        ]);
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521999998888', 'name' => 'Ja Existia'],
+            'message' => ['id' => 'wamid.jaexistia1', 'type' => 'text', 'text' => 'Oi de novo'],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        Bus::assertDispatched(\App\Jobs\PushContatoParaGoogleJob::class, function ($job) use ($contato) {
+            return $this->propriedadeJob($job, 'contatoId') === $contato->id;
+        });
+    }
+
+    private function propriedadeJob($job, string $propriedade)
+    {
+        $reflexao = new \ReflectionProperty($job, $propriedade);
+        $reflexao->setAccessible(true);
+        return $reflexao->getValue($job);
+    }
+
     public function test_mensagem_com_referral_de_anuncio_usa_janela_de_72h(): void
     {
         Bus::fake();
