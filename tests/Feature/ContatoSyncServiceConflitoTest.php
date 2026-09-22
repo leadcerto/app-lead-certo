@@ -458,6 +458,122 @@ class ContatoSyncServiceConflitoTest extends TestCase
         ]);
     }
 
+    /**
+     * Achado real 2026-09-22 (pedido do Leonardo, exemplo real: "Jaqueline Vaz"):
+     * o padrão de cadastro predominante no sistema guarda o NOME COMPLETO num
+     * campo só (`nome` = "Jaqueline Vaz", `sobrenome` vazio) — não split em
+     * duas colunas. Quando o Google devolve o contato estruturado (givenName=
+     * "Jaqueline", familyName="Vaz" — exatamente como GoogleService::
+     * formatarNomeParaGoogle() os separou ao empurrar), a comparação de 'nome'
+     * usava só o givenName ("Jaqueline") contra o "Jaqueline Vaz" local — um
+     * FALSO conflito sugerindo cortar o sobrenome. Confirmado em produção:
+     * 217 de 313 pendências reais de nome eram exatamente esse padrão.
+     */
+    public function test_nome_completo_local_com_sobrenome_vazio_nao_gera_falso_conflito(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create([
+            'telefone'  => '5521999996666',
+            'nome'      => 'Jaqueline Vaz',
+            'sobrenome' => null,
+        ]);
+
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
+        VinculoContatoTenant::create([
+            'contato_id'              => $contato->id,
+            'tenant_id'               => $tenant->id,
+            'google_resource_name'    => 'people/c987654321',
+            'google_etag'             => 'etag-999',
+            // SEM linha de base ainda (primeiro sync real pós-push) — com uma
+            // linha de base igual ao givenName, resolverCampoGoogle() sai cedo
+            // demais ("nada mudou") e o teste passaria mesmo com o bug intacto.
+            'campos_editados_humano'  => ['nome' => now()->toIso8601String()],
+        ]);
+
+        Http::fake([
+            '*people/me/connections*' => Http::response([
+                'connections' => [[
+                    'resourceName' => 'people/c987654321',
+                    'etag'         => 'etag-999',
+                    'names'        => [[
+                        'givenName'  => 'Jaqueline',
+                        'middleName' => "[{$contato->id}]",
+                        'familyName' => 'Vaz',
+                    ]],
+                    'phoneNumbers' => [['value' => '5521999996666']],
+                ]],
+                'nextSyncToken' => 'sync-token-xyz',
+            ], 200),
+        ]);
+
+        $token = $this->criarToken($tenant);
+        app(ContatoSyncService::class)->sincronizar($token, $tenant->id);
+
+        $contato->refresh();
+        $this->assertSame('Jaqueline Vaz', $contato->nome);
+
+        $vinculo = VinculoContatoTenant::where('contato_id', $contato->id)->first();
+        $this->assertArrayNotHasKey(
+            'nome',
+            $vinculo->campos_pendentes_auditoria ?? [],
+            'givenName sozinho ("Jaqueline") não pode virar sugestão de corte contra o nome completo local'
+        );
+    }
+
+    /**
+     * Achado real 2026-09-22 (pedido do Leonardo, exemplo real: "Rosangela
+     * Brito"): efeito colateral do mesmo padrão acima — sobrenome vazio local
+     * + nome completo junto ("Rosangela Brito") fazia o sync AUTO-ACEITAR o
+     * familyName do Google ("Brito") pro campo sobrenome separado (já que
+     * "sobrenome vazio" = critério de auto-aceite em resolverCampoGoogle()),
+     * duplicando o sobrenome dentro do próprio nome completo E no campo
+     * sobrenome isolado.
+     */
+    public function test_sobrenome_nao_duplica_quando_ja_esta_embutido_no_nome_completo_local(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create([
+            'telefone'  => '5521999997777',
+            'nome'      => 'Rosangela Brito',
+            'sobrenome' => null,
+        ]);
+
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
+        VinculoContatoTenant::create([
+            'contato_id'             => $contato->id,
+            'tenant_id'              => $tenant->id,
+            'google_resource_name'   => 'people/c987654321',
+            'google_etag'            => 'etag-999',
+            'campos_editados_humano' => ['nome' => now()->toIso8601String()],
+        ]);
+
+        Http::fake([
+            '*people/me/connections*' => Http::response([
+                'connections' => [[
+                    'resourceName' => 'people/c987654321',
+                    'etag'         => 'etag-999',
+                    'names'        => [[
+                        'givenName'  => 'Rosangela',
+                        'middleName' => "[{$contato->id}]",
+                        'familyName' => 'Brito',
+                    ]],
+                    'phoneNumbers' => [['value' => '5521999997777']],
+                ]],
+                'nextSyncToken' => 'sync-token-xyz',
+            ], 200),
+        ]);
+
+        $token = $this->criarToken($tenant);
+        app(ContatoSyncService::class)->sincronizar($token, $tenant->id);
+
+        $contato->refresh();
+        $this->assertSame('Rosangela Brito', $contato->nome);
+        $this->assertNull(
+            $contato->sobrenome,
+            'sobrenome não pode ser auto-preenchido com um pedaço que já está dentro do nome completo local'
+        );
+    }
+
     public function test_empresa_pre_existente_nao_e_sobrescrita_no_primeiro_vinculo_google(): void
     {
         $tenant  = Tenant::factory()->create();

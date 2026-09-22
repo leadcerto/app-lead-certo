@@ -246,8 +246,39 @@ class ContatoSyncService
                             ])
                         );
 
+                        // Achado real 2026-09-22 (pedido do Leonardo, "Jaqueline Vaz" /
+                        // "Rosangela Brito"): o sistema tem DUAS convenções coexistindo
+                        // pro nome local — (a) nome completo num campo só, sobrenome
+                        // vazio (padrão predominante em leads de WhatsApp: nome=
+                        // "Jaqueline Vaz", sobrenome=null) e (b) nome e sobrenome já
+                        // separados em colunas distintas (nome="Marcia", sobrenome=
+                        // "Souza"). Dois efeitos colaterais da convenção (a) corrigidos
+                        // juntos:
+                        // 1. Comparar 'nome' sempre contra o givenName isolado do
+                        //    Google ("Jaqueline") gerava falso conflito, sugerindo
+                        //    cortar o sobrenome — confirmado em produção: 217 de 313
+                        //    pendências reais de nome eram exatamente esse padrão.
+                        // 2. resolverCampoGoogle() trata "sobrenome local vazio" como
+                        //    critério de auto-aceite — sem essa guarda, o familyName do
+                        //    Google ("Brito") era gravado sozinho no campo sobrenome,
+                        //    DUPLICANDO um pedaço do nome que já está inteiro dentro de
+                        //    "nome" (nome="Rosangela Brito" E sobrenome="Brito").
+                        // $convencaoNomeCompleto só é true quando o nome local já tem
+                        // mais de uma palavra — um contato com nome de uma palavra só
+                        // (ex: "Marcia") e sobrenome vazio continua sincronizando
+                        // normalmente, porque ali não há risco de duplicar nada.
+                        $convencaoNomeCompleto = empty($existente->sobrenome)
+                            && str_contains((string) $existente->nome, ' ');
+
                         foreach (self::CAMPOS_SINCRONIZADOS as $campo) {
-                            $this->resolverCampoGoogle($existente, $vinculoExistente, $campo, $dados[$campo] ?? null);
+                            if ($campo === 'sobrenome' && $convencaoNomeCompleto) {
+                                continue;
+                            }
+
+                            $valorGoogle = ($campo === 'nome' && empty($existente->sobrenome))
+                                ? trim($nome . ' ' . ($dados['sobrenome'] ?? ''))
+                                : ($dados[$campo] ?? null);
+                            $this->resolverCampoGoogle($existente, $vinculoExistente, $campo, $valorGoogle);
                         }
 
                         // Achado da revisão de branch: resolverCampoGoogle() só
