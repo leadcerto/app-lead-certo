@@ -37,7 +37,7 @@ class TicketReaberturaService
      */
     public function reabrirSeNecessario(TicketAtendimento $ticketEncerrado, int $canalId, ?string $mensagem): bool
     {
-        if (! $this->deveReabrir($mensagem)) {
+        if (! $this->deveReabrir($mensagem, $ticketEncerrado->tenant_id)) {
             Log::info("TicketReaberturaService: ticket #{$ticketEncerrado->id} recebeu mensagem mas continua encerrado (parece despedida/agradecimento)");
             return false;
         }
@@ -76,7 +76,7 @@ class TicketReaberturaService
      * Em caso de dúvida ou falha da IA, opta por reabrir — perder uma venda
      * por não reabrir é pior do que reabrir um agradecimento por engano.
      */
-    private function deveReabrir(?string $mensagem): bool
+    private function deveReabrir(?string $mensagem, ?int $tenantId = null): bool
     {
         if (! $mensagem || trim($mensagem) === '') {
             return false;
@@ -98,7 +98,7 @@ class TicketReaberturaService
                 . 'NÃO precisa reabrir (ex: "obrigado", "já consegui", "tchau", "ok", emoji de agradecimento). '
                 . 'Responda com exatamente uma palavra: REABRIR ou MANTER.'],
             ['role' => 'user', 'content' => $mensagem],
-        ], 'simples', 10, 'reabertura_ticket_encerrado');
+        ], 'simples', 10, 'reabertura_ticket_encerrado', $tenantId);
 
         if (! $resposta) {
             return false;

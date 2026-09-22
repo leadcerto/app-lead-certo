@@ -316,7 +316,7 @@ PROMPT,
             ],
         ];
 
-        $resposta = $openRouter->chat($messages, 'complexo', 3000);
+        $resposta = $openRouter->chat($messages, 'complexo', 3000, 'sugerir_variaveis_sequencia', $sequencia->tenant_id);
 
         if (! $resposta) {
             return response()->json(['message' => 'IA temporariamente indisponível. Tente novamente em instantes.'], 503);

@@ -41,10 +41,10 @@ class KanbanEnviarMensagemTraducaoTest extends TestCase
         $ticket = $this->criarTicket($tenant, 'en');
         $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
 
-        $this->mock(TraducaoService::class, function ($mock) {
+        $this->mock(TraducaoService::class, function ($mock) use ($tenant) {
             $mock->shouldReceive('traduzir')
                 ->once()
-                ->with('Oi, tudo bem?', 'en')
+                ->with('Oi, tudo bem?', 'en', 'pt', $tenant->id)
                 ->andReturn('Hi, how are you?');
         });
 

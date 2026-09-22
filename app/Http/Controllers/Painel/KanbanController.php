@@ -280,7 +280,7 @@ class KanbanController extends Controller
 
             if ($model->idioma_lead && $model->idioma_lead !== 'pt') {
                 try {
-                    $traduzido = app(\App\Services\TraducaoService::class)->traduzir($request->conteudo, $model->idioma_lead);
+                    $traduzido = app(\App\Services\TraducaoService::class)->traduzir($request->conteudo, $model->idioma_lead, tenantId: $model->tenant_id);
                     if ($traduzido) {
                         $textoParaEnviar = $traduzido;
                         $idiomaEnviado   = $model->idioma_lead;

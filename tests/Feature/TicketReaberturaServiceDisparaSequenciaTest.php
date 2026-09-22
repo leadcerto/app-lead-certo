@@ -58,4 +58,39 @@ class TicketReaberturaServiceDisparaSequenciaTest extends TestCase
         $this->assertSame('aguardando_orcamento', $ticket->fresh()->coluna_kanban);
         Queue::assertPushed(SequenciaMensagemJob::class, fn ($job) => $job->ticketId === $ticket->id);
     }
+
+    /**
+     * Achado real 2026-09-22: deveReabrir() não tinha como receber tenantId
+     * — chat() sem tenantId nunca resolve o agente IA customizado do tenant
+     * nem grava ia_usages vinculado ao tenant certo.
+     */
+    public function test_deveReabrir_repassa_tenant_id_do_ticket_pro_chat(): void
+    {
+        Queue::fake();
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create();
+        $canal   = WhatsappCanal::factory()->create(['tenant_id' => $tenant->id]);
+
+        $ticket = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'encerrado', 'coluna_antes_encerrar' => 'em_atendimento',
+            'agente_responsavel' => 'humano', 'status' => 'encerrado', 'aberto_em' => now(),
+        ]);
+
+        $tenantIdRecebido = null;
+
+        $this->mock(OpenRouterService::class, function ($mock) use (&$tenantIdRecebido) {
+            $mock->shouldReceive('chat')
+                ->once()
+                ->withArgs(function ($messages, $tier, $maxTokens, $origem, $tenantId) use (&$tenantIdRecebido) {
+                    $tenantIdRecebido = $tenantId;
+                    return $origem === 'reabertura_ticket_encerrado';
+                })
+                ->andReturn('REABRIR');
+        });
+
+        app(TicketReaberturaService::class)->reabrirSeNecessario($ticket, $canal->id, 'Ainda tenho uma dúvida sobre o serviço');
+
+        $this->assertSame($tenant->id, $tenantIdRecebido);
+    }
 }

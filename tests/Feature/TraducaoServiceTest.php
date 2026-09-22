@@ -74,4 +74,47 @@ class TraducaoServiceTest extends TestCase
 
         $this->assertNull(app(TraducaoService::class)->traduzir('Olá', 'en'));
     }
+
+    /**
+     * Achado real 2026-09-22: detectarIdioma()/traduzir() não tinham como
+     * receber tenantId — chat() sem tenantId nunca resolve o agente IA
+     * customizado do tenant nem grava ia_usages vinculado ao tenant certo.
+     */
+    public function test_detectar_idioma_repassa_tenant_id_pro_chat(): void
+    {
+        $tenantIdRecebido = null;
+
+        $this->mock(OpenRouterService::class, function ($mock) use (&$tenantIdRecebido) {
+            $mock->shouldReceive('chat')
+                ->once()
+                ->withArgs(function ($messages, $tier, $maxTokens, $origem, $tenantId) use (&$tenantIdRecebido) {
+                    $tenantIdRecebido = $tenantId;
+                    return $origem === 'detectar_idioma';
+                })
+                ->andReturn('en');
+        });
+
+        app(TraducaoService::class)->detectarIdioma('Do you deliver to São Paulo?', 4321);
+
+        $this->assertSame(4321, $tenantIdRecebido);
+    }
+
+    public function test_traduzir_repassa_tenant_id_pro_chat(): void
+    {
+        $tenantIdRecebido = null;
+
+        $this->mock(OpenRouterService::class, function ($mock) use (&$tenantIdRecebido) {
+            $mock->shouldReceive('chat')
+                ->once()
+                ->withArgs(function ($messages, $tier, $maxTokens, $origem, $tenantId) use (&$tenantIdRecebido) {
+                    $tenantIdRecebido = $tenantId;
+                    return $origem === 'traduzir_mensagem';
+                })
+                ->andReturn('Hi!');
+        });
+
+        app(TraducaoService::class)->traduzir('Oi!', 'en', 'pt', 4321);
+
+        $this->assertSame(4321, $tenantIdRecebido);
+    }
 }
