@@ -9,6 +9,7 @@ use App\Models\Mensagem;
 use App\Models\TicketAtendimento;
 use App\Services\HumanizacaoService;
 use App\Services\SdrResponderService;
+use App\Services\SequenciaService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +22,7 @@ class FollowupConversas extends Command
 
     protected $description = 'Envia follow-up para leads que pararam de responder (10min = reaquecimento, estágios 1/2/3 = reengajamento por silêncio, auto-mover = transferência automática de coluna, tudo configurável por coluna)';
 
-    public function handle(SdrResponderService $sdr, HumanizacaoService $humanizacao): int
+    public function handle(SdrResponderService $sdr, HumanizacaoService $humanizacao, SequenciaService $sequencia): int
     {
         $dry = $this->option('dry-run');
 
@@ -260,7 +261,7 @@ class FollowupConversas extends Command
 
                     if (! $dry) {
                         try {
-                            $this->aplicarMovimentoAutomatico($ticket, $config->auto_mover_coluna_destino, $config->auto_mover_mensagem, $humanizacao);
+                            $this->aplicarMovimentoAutomatico($ticket, $config->auto_mover_coluna_destino, $config->auto_mover_mensagem, $humanizacao, $sequencia);
                             $autoMovidos++;
                         } catch (\Exception $e) {
                             Log::warning('FollowupConversas: erro no auto-mover', [
@@ -288,7 +289,7 @@ class FollowupConversas extends Command
      * IA, ou transferência pra humano) — pra não deixar o ticket num estado
      * inconsistente (coluna encerrada mas status ainda "aberto").
      */
-    private function aplicarMovimentoAutomatico(TicketAtendimento $ticket, string $destino, ?string $mensagem, HumanizacaoService $humanizacao): void
+    private function aplicarMovimentoAutomatico(TicketAtendimento $ticket, string $destino, ?string $mensagem, HumanizacaoService $humanizacao, SequenciaService $sequencia): void
     {
         if ($mensagem) {
             $telefone = $ticket->contato?->telefone;
@@ -346,8 +347,14 @@ class FollowupConversas extends Command
                 'coluna_kanban'      => $destino,
                 'agente_responsavel' => 'humano',
             ]);
+            // Achado real 2026-09-21 (ticket #4827, Carlos): mesmo gap de
+            // SdrResponderService/AvancoAutomaticoKanbanService — o disparo
+            // automático de coluna por silêncio também nunca acionava a
+            // Sequência de Mensagens/Automação da coluna de destino.
+            $sequencia->iniciarParaTicket($ticket);
         } else {
             $ticket->update(['coluna_kanban' => $destino]);
+            $sequencia->iniciarParaTicket($ticket);
         }
 
         Log::info("FollowupConversas: ticket #{$ticket->id} movido automaticamente por silêncio para '{$destino}'");

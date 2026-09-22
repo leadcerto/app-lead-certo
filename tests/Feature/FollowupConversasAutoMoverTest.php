@@ -2,9 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SequenciaMensagemJob;
 use App\Models\Contato;
 use App\Models\KanbanColunaConfig;
 use App\Models\Mensagem;
+use App\Models\Sequencia;
+use App\Models\SequenciaMensagem;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use App\Models\WhatsappCanal;
@@ -12,6 +15,7 @@ use App\Services\SdrResponderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class FollowupConversasAutoMoverTest extends TestCase
@@ -181,6 +185,37 @@ class FollowupConversasAutoMoverTest extends TestCase
         $this->assertSame('humano', $ticket->agente_responsavel);
     }
 
+    /**
+     * Achado real 2026-09-21 (ticket #4827, Carlos): mesmo gap encontrado nos
+     * outros caminhos automáticos — o auto-mover por silêncio também nunca
+     * disparava a Sequência de Mensagens/Automação da coluna de destino.
+     */
+    public function test_auto_mover_dispara_sequencia_configurada_na_coluna_destino(): void
+    {
+        Queue::fake();
+        $ticket = $this->criarTicketSilencioso(4, 'aguardando_orcamento');
+
+        $sequencia = Sequencia::create([
+            'tenant_id' => $ticket->tenant_id, 'nome' => 'Pagamento',
+            'coluna_kanban' => 'pagamento', 'ativo' => true,
+        ]);
+        SequenciaMensagem::create([
+            'tenant_id' => $ticket->tenant_id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,
+            'conteudo' => 'Segue o link de pagamento.', 'delay_segundos' => 0, 'ativo' => true, 'obrigatorio' => true,
+        ]);
+
+        KanbanColunaConfig::create([
+            'tenant_id' => $ticket->tenant_id, 'coluna_kanban' => 'aguardando_orcamento',
+            'auto_mover_ativo' => true, 'auto_mover_coluna_destino' => 'pagamento',
+            'auto_mover_segundos' => 3 * 86400,
+        ]);
+
+        $this->artisan('conversas:followup')->assertExitCode(0);
+
+        $this->assertSame('pagamento', $ticket->fresh()->coluna_kanban);
+        Queue::assertPushed(SequenciaMensagemJob::class, fn ($job) => $job->ticketId === $ticket->id);
+    }
+
     public function test_dry_run_nao_move_nada(): void
     {
         $ticket = $this->criarTicketSilencioso(10);
@@ -215,7 +250,8 @@ class FollowupConversasAutoMoverTest extends TestCase
             $ticket,
             'time_humano',
             null,
-            app(\App\Services\HumanizacaoService::class)
+            app(\App\Services\HumanizacaoService::class),
+            app(\App\Services\SequenciaService::class)
         );
 
         $this->assertSame('time_humano', $ticket->fresh()->coluna_kanban);
@@ -531,7 +567,8 @@ class FollowupConversasAutoMoverTest extends TestCase
             $ticket,
             'finalizado',
             null,
-            app(\App\Services\HumanizacaoService::class)
+            app(\App\Services\HumanizacaoService::class),
+            app(\App\Services\SequenciaService::class)
         );
 
         $this->assertSame('finalizado', $ticket->fresh()->coluna_kanban);

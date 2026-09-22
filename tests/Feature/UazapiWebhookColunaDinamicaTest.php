@@ -3,13 +3,17 @@
 namespace Tests\Feature;
 
 use App\Enums\PapelColunaKanban;
+use App\Jobs\SequenciaMensagemJob;
 use App\Models\Kanban;
 use App\Models\KanbanColuna;
+use App\Models\Sequencia;
+use App\Models\SequenciaMensagem;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use App\Models\WhatsappCanal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class UazapiWebhookColunaDinamicaTest extends TestCase
@@ -88,6 +92,56 @@ class UazapiWebhookColunaDinamicaTest extends TestCase
         ]);
 
         $this->assertSame('em_atendimento', $ticket->fresh()->coluna_kanban);
+    }
+
+    /**
+     * Achado real 2026-09-21 (ticket #4827, Carlos): mesmo gap encontrado nos
+     * outros caminhos automáticos — o lead respondendo à sequência de entrada
+     * e avançando pra próxima coluna também nunca disparava a Sequência de
+     * Mensagens/Automação configurada pra essa próxima coluna.
+     */
+    public function test_lead_responde_e_avanca_dispara_sequencia_configurada_na_coluna_destino(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+        Queue::fake();
+
+        $tenant = Tenant::factory()->create([
+            'uazapi_webhook_token'  => 'token-teste-seq',
+            'uazapi_instance_token' => 'instance-token-seq',
+        ]);
+        $this->criarCanal($tenant, 'token-teste-seq', 'instance-token-seq');
+
+        $sequencia = Sequencia::create([
+            'tenant_id' => $tenant->id, 'nome' => 'Atendimento Inicial',
+            'coluna_kanban' => 'em_atendimento', 'ativo' => true,
+        ]);
+        SequenciaMensagem::create([
+            'tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,
+            'conteudo' => 'Qual o endereço?', 'delay_segundos' => 0, 'ativo' => true, 'obrigatorio' => true,
+        ]);
+
+        $contato = \App\Models\Contato::factory()->create(['telefone' => '5511988885555']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'lead_novo', 'agente_responsavel' => 'bot', 'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+        \App\Models\Mensagem::create([
+            'tenant_id' => $tenant->id, 'ticket_id' => $ticket->id,
+            'remetente' => 'bot', 'tipo' => 'texto', 'conteudo' => 'Oi! Me conta o que precisa.', 'enviado_em' => now(),
+        ]);
+
+        $this->postJson('/api/webhook/uazapi/token-teste-seq', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'  => false,
+                'isGroup' => false,
+                'chatid'  => '5511988885555@s.whatsapp.net',
+                'text'    => 'Preciso de um orçamento de mudança',
+            ],
+        ]);
+
+        $this->assertSame('em_atendimento', $ticket->fresh()->coluna_kanban);
+        Queue::assertPushed(SequenciaMensagemJob::class, fn ($job) => $job->ticketId === $ticket->id);
     }
 
     public function test_chamada_whatsapp_perdida_cria_ticket_na_coluna_de_entrada_do_tenant(): void
