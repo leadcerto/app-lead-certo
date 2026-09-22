@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Http\Controllers\Painel\AuditorController;
+use App\Jobs\AtualizarNomeGoogleComDadoLocalJob;
 use App\Models\Contato;
 use App\Models\ContatoPendente;
 use App\Models\EtiquetaGoogleGrupo;
@@ -320,6 +322,28 @@ class ContatoSyncService
                         }
 
                         $vinculoExistente->update($this->dadosVinculo($pessoa));
+
+                        $resultado['atualizados']++;
+                    } elseif (AuditorController::isNaoPessoa($nome) && ! $existente->semNomeReal()) {
+                        // Achado real 2026-09-22 (pedido do Leonardo, aba "Conflitos
+                        // de Identidade": Google="Frete"/local="Jamal", Google="Frt"/
+                        // local="Frt", Google="Mdm"/local="Elisa Raquel" — sempre 0%
+                        // de similaridade): quando o nome que vem do Google é uma
+                        // etiqueta comercial (não é nome de pessoa, ver
+                        // AuditorController::isNaoPessoa/tagsLixo) e o contato local
+                        // JÁ TEM nome real cadastrado, não é número reciclado — é o
+                        // MESMO contato, só que a agenda do Google ficou desatualizada
+                        // com uma tag em vez do nome. Pedido explícito: "os dois
+                        // cadastros devem estar iguais ... maior número de informações
+                        // reais e atualizadas" — empurra o nome real local pro Google
+                        // (assíncrono, fora da transação — AtualizarNomeGoogleComDadoLocalJob)
+                        // em vez de abrir conflito de auditoria.
+                        $vinculoExistente = VinculoContatoTenant::updateOrCreate(
+                            ['contato_id' => $existente->id, 'tenant_id' => $tenantId],
+                            $this->dadosVinculo($pessoa)
+                        );
+
+                        AtualizarNomeGoogleComDadoLocalJob::dispatch($vinculoExistente->id);
 
                         $resultado['atualizados']++;
                     } else {
