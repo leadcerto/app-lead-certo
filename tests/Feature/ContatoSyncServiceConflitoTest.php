@@ -459,6 +459,61 @@ class ContatoSyncServiceConflitoTest extends TestCase
     }
 
     /**
+     * Achado real 2026-09-22 (pedido do Leonardo, aba "Conflitos de
+     * Identidade": Google="Frete"/local="Jamal", Google="Frt"/local="Frt",
+     * Google="Mdm"/local="Elisa Raquel" — sempre 0% de similaridade):
+     * etiqueta comercial vinda do Google não é nome de pessoa (ver
+     * AuditorController::isNaoPessoa). Quando o contato local já tem nome
+     * real, não é número reciclado — empurra o nome real local pro Google em
+     * vez de criar ContatoPendente. "os dois cadastros devem estar iguais".
+     */
+    public function test_tag_comercial_do_google_com_nome_real_local_empurra_nome_pro_google_em_vez_de_criar_conflito(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create([
+            'telefone'  => '5521999995555',
+            'nome'      => 'Jamal',
+            'sobrenome' => null,
+        ]);
+
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
+
+        Http::fake([
+            '*people/me/connections*' => Http::response([
+                'connections' => [[
+                    'resourceName' => 'people/c111222333',
+                    'etag'         => 'etag-frete-1',
+                    'names'        => [['givenName' => 'Frete']],
+                    'phoneNumbers' => [['value' => '5521999995555']],
+                ]],
+                'nextSyncToken' => 'sync-token-xyz',
+            ], 200),
+            '*:updateContact*' => Http::response(['resourceName' => 'people/c111222333'], 200),
+        ]);
+
+        $token = $this->criarToken($tenant);
+        app(ContatoSyncService::class)->sincronizar($token, $tenant->id);
+
+        $this->assertSame(
+            0,
+            ContatoPendente::where('contato_existente_id', $contato->id)->count(),
+            'etiqueta comercial vinda do Google não pode virar "número possivelmente reciclado" quando o local já tem nome real'
+        );
+
+        $contato->refresh();
+        $this->assertSame('Jamal', $contato->nome); // nome local não muda
+
+        $vinculo = VinculoContatoTenant::where('contato_id', $contato->id)->first();
+        $this->assertNotNull($vinculo);
+        $this->assertSame('people/c111222333', $vinculo->google_resource_name);
+
+        Http::assertSent(function ($request) {
+            return str_contains($request->url(), 'updateContact')
+                && ($request['names'][0]['givenName'] ?? null) === 'Jamal';
+        });
+    }
+
+    /**
      * Achado real 2026-09-22 (pedido do Leonardo, exemplos reais: "CVRG"/"Cvrg"
      * x90, "CLI"/"Cli" x11, "KENTEFRIO"/"Kentefrio"): confirmado em produção,
      * 247 de 295 pendências de 'sobrenome' eram diferença só de maiúscula/
