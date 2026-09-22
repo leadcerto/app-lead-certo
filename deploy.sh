@@ -57,6 +57,14 @@ MANUTENCAO_LIGADA=1
 echo "==> Puxando na VPS..."
 ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && git pull origin main"
 
+echo "==> Instalando dependências do Composer..."
+# Achado real 2026-09-22: composer.json nunca tinha mudado desde o commit
+# inicial deste repositório — este passo nunca foi exercitado antes.
+# Sem ele, uma dependência nova (ex: intervention/image) fica só no
+# composer.json/lock do git, sem a pasta vendor/ correspondente na VPS,
+# e o primeiro código que usar a lib nova quebra em produção.
+ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader"
+
 echo "==> Rodando migrations..."
 ssh -i "$SSH_KEY" "$VPS_HOST" "cd $VPS_PATH && php artisan migrate --force"
 
