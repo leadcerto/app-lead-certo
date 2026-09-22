@@ -72,6 +72,22 @@ class GmbImageSeoService
     }
 
     /**
+     * Mesma coisa que salvarImagemSeo(), mas pra conteúdo que não chegou como
+     * upload de formulário — resultado de composição de máscara ou de geração
+     * por IA, que já vêm como bytes crus em memória.
+     */
+    public function salvarImagemBytes(string $bytes, Tenant $tenant, ?PerfilGmb $perfil, ?string $extensao = 'png', ?Carbon $dataHora = null, ?string $tema = null, string $pasta = 'gmb-posts'): string
+    {
+        $dataHora = $dataHora ? $dataHora->copy()->setTimezone('America/Sao_Paulo') : now('America/Sao_Paulo');
+        $nomeArquivo = $this->gerarNomeSeo($tenant, $perfil, $dataHora, $extensao ?: 'png', $tema);
+
+        $caminho = "{$pasta}/{$nomeArquivo}";
+        Storage::disk('public')->put($caminho, $bytes);
+
+        return Storage::disk('public')->url($caminho);
+    }
+
+    /**
      * Processa o upload de uma imagem aplicando o nome otimizado de SEO.
      */
     public function salvarImagemSeo(UploadedFile $arquivo, Tenant $tenant, ?PerfilGmb $perfil, ?Carbon $dataHora = null, ?string $tema = null): string
