@@ -459,6 +459,31 @@ class ContatoSyncServiceConflitoTest extends TestCase
     }
 
     /**
+     * Achado real 2026-09-22 (pedido do Leonardo, exemplos reais: "CVRG"/"Cvrg"
+     * x90, "CLI"/"Cli" x11, "KENTEFRIO"/"Kentefrio"): confirmado em produção,
+     * 247 de 295 pendências de 'sobrenome' eram diferença só de maiúscula/
+     * minúscula — boa parte etiquetas internas em caixa alta que o Google
+     * re-capitaliza sozinho ao sincronizar. "mantenha como está no cadastro":
+     * não é conflito de verdade, não deve virar pendência de auditoria.
+     */
+    public function test_diferenca_so_de_maiuscula_minuscula_nao_gera_pendencia(): void
+    {
+        $vinculo = $this->vinculo(
+            ['sobrenome' => 'CVRG'],
+            ['campos_editados_humano' => ['sobrenome' => now()->toIso8601String()]]
+        );
+
+        app(ContatoSyncService::class)->resolverCampoGoogle($vinculo->contato, $vinculo, 'sobrenome', 'Cvrg');
+
+        $vinculo->contato->refresh();
+        $vinculo->refresh();
+        $this->assertSame('CVRG', $vinculo->contato->sobrenome); // mantém como está no cadastro
+        $this->assertArrayNotHasKey('sobrenome', $vinculo->campos_pendentes_auditoria ?? []);
+        // linha de base atualiza mesmo assim, pra não reprocessar isso todo ciclo
+        $this->assertSame('Cvrg', $vinculo->google_valores_enviados['sobrenome'] ?? null);
+    }
+
+    /**
      * Achado real 2026-09-22 (pedido do Leonardo, exemplo real: "Jaqueline Vaz"):
      * o padrão de cadastro predominante no sistema guarda o NOME COMPLETO num
      * campo só (`nome` = "Jaqueline Vaz", `sobrenome` vazio) — não split em

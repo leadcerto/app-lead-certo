@@ -65,6 +65,18 @@ class ContatoSyncService
             return;
         }
 
+        // Achado real 2026-09-22 (pedido do Leonardo): diferença só de
+        // maiúscula/minúscula não é conflito de verdade — confirmado em
+        // produção, 247 de 295 pendências de 'sobrenome' eram exatamente
+        // isso, boa parte etiquetas internas em caixa alta ("CVRG" x90,
+        // "CLI" x11) que o Google re-capitaliza sozinho. "mantenha como
+        // está no cadastro": mantém o valor local, não manda pra auditoria.
+        if (mb_strtolower((string) $valorLocal) === mb_strtolower($valorGoogle)) {
+            $vinculo->google_valores_enviados = $valoresEnviados;
+            $vinculo->save();
+            return;
+        }
+
         // Humano local x valor diferente vindo do Google — vai pra auditoria,
         // mas a linha de base atualiza mesmo assim (evita recriar a mesma
         // pendência a cada ciclo do cron enquanto ninguém resolve).
