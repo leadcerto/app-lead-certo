@@ -60,7 +60,15 @@ class GmbImageSeoService
         // Remove hífens duplicados
         $nomeBase = preg_replace('/-+/', '-', $nomeBase);
 
-        return "{$nomeBase}.{$extensao}";
+        // Achado real 2026-09-22 (Leonardo, upload em lote): a data/hora só tem
+        // precisão de MINUTO — várias imagens do mesmo lote (mesmo tenant/tema,
+        // mesmo minuto) geravam o nome IDÊNTICO, e cada storeAs() subsequente
+        // sobrescrevia o arquivo físico anterior no disco. Sufixo curto e único
+        // por chamada garante que nenhum upload no mesmo lote colida, sem afetar
+        // as palavras-chave de SEO (fica só no final do nome).
+        $sufixoUnico = substr(uniqid(), -6);
+
+        return "{$nomeBase}-{$sufixoUnico}.{$extensao}";
     }
 
     /**
