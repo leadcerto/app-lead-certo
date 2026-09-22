@@ -3,13 +3,17 @@
 namespace Tests\Feature;
 
 use App\Enums\PapelColunaKanban;
+use App\Jobs\SequenciaMensagemJob;
 use App\Models\Contato;
 use App\Models\KanbanColuna;
 use App\Models\KanbanColunaObjetivo;
+use App\Models\Sequencia;
+use App\Models\SequenciaMensagem;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use App\Services\AvancoAutomaticoKanbanService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class AvancoAutomaticoKanbanServiceTest extends TestCase
@@ -62,6 +66,36 @@ class AvancoAutomaticoKanbanServiceTest extends TestCase
         $this->assertSame('aguardando_orcamento', $fresco->coluna_kanban);
         // Checklist da nova coluna começa zerada (hook de reset já existente).
         $this->assertSame([], $fresco->objetivos_cumpridos ?? []);
+    }
+
+    /**
+     * Achado real 2026-09-21 (ticket #4827, Carlos): a Sequência de
+     * Mensagens/Automação configurada na coluna de destino só disparava no
+     * avanço manual (KanbanController) — o avanço automático por checklist
+     * completo nunca despachava as mensagens obrigatórias da nova coluna.
+     */
+    public function test_avanco_automatico_dispara_sequencia_configurada_na_coluna_destino(): void
+    {
+        Queue::fake();
+        $ticket = $this->criarTicket();
+        $obj1   = $this->criarObjetivo($ticket, 'Endereço de origem');
+        $obj2   = $this->criarObjetivo($ticket, 'Lista de itens');
+        $ticket->update(['objetivos_cumpridos' => [$obj1->id]]);
+
+        $sequencia = Sequencia::create([
+            'tenant_id' => $ticket->tenant_id, 'nome' => 'Orçamento',
+            'coluna_kanban' => 'aguardando_orcamento', 'ativo' => true,
+        ]);
+        SequenciaMensagem::create([
+            'tenant_id' => $ticket->tenant_id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,
+            'conteudo' => 'Já estamos calculando seu orçamento!', 'delay_segundos' => 0,
+            'ativo' => true, 'obrigatorio' => true,
+        ]);
+
+        app(AvancoAutomaticoKanbanService::class)->marcarObjetivos($ticket, [$obj2->id]);
+
+        $this->assertSame('aguardando_orcamento', $ticket->fresh()->coluna_kanban);
+        Queue::assertPushed(SequenciaMensagemJob::class, fn ($job) => $job->ticketId === $ticket->id);
     }
 
     public function test_nao_avanca_para_coluna_de_papel_encerramento(): void

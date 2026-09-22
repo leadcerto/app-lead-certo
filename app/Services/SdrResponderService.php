@@ -16,6 +16,7 @@ class SdrResponderService
     public function __construct(
         private LeadRouterService $router,
         private OpenRouterService $openRouter,
+        private SequenciaService $sequencia,
     ) {}
 
     /**
@@ -272,6 +273,18 @@ class SdrResponderService
                 $ticket->origemMudancaColuna = 'ia';
                 $ticket->update($updates);
                 Log::info("SdrResponder: → {$chave} via token {$token}", ['ticket_id' => $ticket->id]);
+
+                // Achado real 2026-09-21 (ticket #4827, Carlos): a Sequência de
+                // Mensagens/Automação configurada na coluna de destino (mensagens
+                // com "envio obrigatório") só disparava quando um humano movia o
+                // card manualmente (KanbanController) — nunca quando a própria IA
+                // movia via token, como aqui. O lead ficava sem receber as
+                // mensagens obrigatórias daquela coluna, mesmo o card tendo
+                // avançado corretamente.
+                if ($papel !== \App\Enums\PapelColunaKanban::Encerramento) {
+                    $this->sequencia->iniciarParaTicket($ticket);
+                }
+
                 $moveu = true;
                 break;
             }

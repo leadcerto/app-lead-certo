@@ -23,6 +23,8 @@ use Illuminate\Support\Facades\Cache;
  */
 class AvancoAutomaticoKanbanService
 {
+    public function __construct(private SequenciaService $sequencia) {}
+
     public function marcarObjetivos(TicketAtendimento $ticket, array $idsObjetivos): void
     {
         Cache::lock($this->chaveTrava($ticket), 10)->block(5, function () use ($ticket, $idsObjetivos) {
@@ -150,6 +152,12 @@ class AvancoAutomaticoKanbanService
         // objetivos_cumpridos é zerado automaticamente pelo hook do model
         // (TicketAtendimento::updating) porque este update não o define
         // explicitamente e coluna_kanban está mudando.
+
+        // Achado real 2026-09-21 (ticket #4827, Carlos): mesmo gap encontrado em
+        // SdrResponderService — a Sequência de Mensagens/Automação da coluna de
+        // destino só disparava no avanço manual (KanbanController), nunca neste
+        // avanço automático por checklist completo.
+        $this->sequencia->iniciarParaTicket($ticket);
 
         return true;
     }
