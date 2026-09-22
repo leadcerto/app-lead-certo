@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Services\GmbImageSeoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -39,5 +40,25 @@ class GmbImageSeoServiceUnicidadeTest extends TestCase
             array_unique($nomes),
             'seis chamadas com o mesmo tenant/data/tema (mesmo minuto) geraram nomes duplicados — arquivo se sobrescreve no disco'
         );
+    }
+
+    /**
+     * salvarImagemBytes() é a variante pra conteúdo que não chega como upload
+     * de formulário (resultado de composição de máscara, geração por IA).
+     */
+    public function test_salvar_imagem_bytes_grava_no_disco_e_retorna_url_publica(): void
+    {
+        Storage::fake('public');
+
+        $tenant = Tenant::factory()->create(['nome' => 'Frete Rio', 'nicho' => 'frete']);
+        $bytes  = 'conteudo-fake-de-imagem-pra-teste';
+
+        $url = app(GmbImageSeoService::class)->salvarImagemBytes($bytes, $tenant, null, 'png');
+
+        $this->assertStringContainsString('/storage/gmb-posts/', $url);
+
+        $caminhoRelativo = str_replace(Storage::disk('public')->url(''), '', $url);
+        Storage::disk('public')->assertExists($caminhoRelativo);
+        $this->assertSame($bytes, Storage::disk('public')->get($caminhoRelativo));
     }
 }
