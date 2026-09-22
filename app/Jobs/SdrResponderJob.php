@@ -34,6 +34,27 @@ class SdrResponderJob implements ShouldQueue
         private int     $tentativaDebounce = 0,
     ) {}
 
+    /**
+     * Achado real 2026-09-21: o CovercutWebhookController (canal oficial, o
+     * que a Frete Rio usa de verdade) despachava este job sempre com
+     * debounceSegundos=0 fixo, nunca lendo o sdr_delay_segundos configurado
+     * por coluna — a IA respondia imediatamente a cada mensagem do lead,
+     * mesmo quando ele mandava a informação partida em várias mensagens
+     * seguidas (ex: endereço numa mensagem, número na próxima). O
+     * UazapiWebhookController já lia essa config corretamente
+     * (sdrDelay() privado, mesma lógica) — extraído aqui pra ser
+     * compartilhado pelos dois canais, regra de paridade entre canais.
+     */
+    public static function resolverDelay(int $tenantId, string $coluna): int
+    {
+        $config = KanbanColunaConfig::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('coluna_kanban', $coluna)
+            ->value('sdr_delay_segundos');
+
+        return $config ?? self::DEBOUNCE_SEGUNDOS;
+    }
+
     public function handle(SdrResponderService $service): void
     {
         $ticket = TicketAtendimento::withoutGlobalScopes()

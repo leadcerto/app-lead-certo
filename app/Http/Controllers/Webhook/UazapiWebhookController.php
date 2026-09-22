@@ -566,12 +566,7 @@ class UazapiWebhookController extends Controller
      */
     private function sdrDelay(int $tenantId, string $coluna): int
     {
-        $config = KanbanColunaConfig::withoutGlobalScopes()
-            ->where('tenant_id', $tenantId)
-            ->where('coluna_kanban', $coluna)
-            ->value('sdr_delay_segundos');
-
-        return $config ?? SdrResponderJob::DEBOUNCE_SEGUNDOS;
+        return SdrResponderJob::resolverDelay($tenantId, $coluna);
     }
 
     private function normalizarTelefone(string $telefone): string
