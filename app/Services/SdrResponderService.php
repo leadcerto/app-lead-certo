@@ -333,7 +333,7 @@ class SdrResponderService
         $respostaPtOriginal  = null;
 
         if ($ticket->idioma_lead && $ticket->idioma_lead !== 'pt') {
-            $traduzida = app(\App\Services\TraducaoService::class)->traduzir($resposta, $ticket->idioma_lead);
+            $traduzida = app(\App\Services\TraducaoService::class)->traduzir($resposta, $ticket->idioma_lead, tenantId: $ticket->tenant_id);
             if ($traduzida) {
                 $respostaParaEnviar = $traduzida;
                 $idiomaEnviado       = $ticket->idioma_lead;

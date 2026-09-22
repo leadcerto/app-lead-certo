@@ -48,10 +48,10 @@ class SdrResponderServiceTraducaoTest extends TestCase
         $this->mock(OpenRouterService::class, function ($mock) {
             $mock->shouldReceive('chat')->once()->andReturn('Perfeito, vou verificar isso pra você.');
         });
-        $this->mock(\App\Services\TraducaoService::class, function ($mock) {
+        $this->mock(\App\Services\TraducaoService::class, function ($mock) use ($ticket) {
             $mock->shouldReceive('traduzir')
                 ->once()
-                ->with('Perfeito, vou verificar isso pra você.', 'en')
+                ->with('Perfeito, vou verificar isso pra você.', 'en', 'pt', $ticket->tenant_id)
                 ->andReturn('Perfect, I will check that for you.');
         });
 

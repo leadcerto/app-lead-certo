@@ -156,7 +156,7 @@ EOT;
         $contexto = $openRouter->chat([
             ['role' => 'system', 'content' => $promptSistema],
             ['role' => 'user',   'content' => $promptUsuario],
-        ], 'complexo', 2000);
+        ], 'complexo', 2000, 'gerar_contexto_ia', $tenantId);
 
         if (! $contexto) {
             return response()->json(['error' => 'Não foi possível gerar o contexto. Verifique a chave OpenRouter.'], 500);

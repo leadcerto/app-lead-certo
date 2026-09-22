@@ -22,7 +22,7 @@ class TraducaoService
      * (ex.: 'pt', 'en', 'es') ou null se não conseguir determinar (falha da
      * IA, texto vazio/curto demais tipo "ok" ou só emoji).
      */
-    public function detectarIdioma(string $texto): ?string
+    public function detectarIdioma(string $texto, ?int $tenantId = null): ?string
     {
         $texto = trim($texto);
         if (mb_strlen($texto) < 3) {
@@ -36,7 +36,7 @@ class TraducaoService
                 . '(texto muito curto, só emoji, número, saudação genérica que existe em vários idiomas), '
                 . 'responda exatamente NENHUM.'],
             ['role' => 'user', 'content' => $texto],
-        ], 'simples', 10, 'detectar_idioma');
+        ], 'simples', 10, 'detectar_idioma', $tenantId);
 
         if (! $resposta) {
             return null;
@@ -56,7 +56,7 @@ class TraducaoService
      * quem chama deve decidir o fallback (normalmente: usar o texto
      * original em vez de bloquear o envio).
      */
-    public function traduzir(string $texto, string $idiomaAlvo, string $idiomaOrigem = 'pt'): ?string
+    public function traduzir(string $texto, string $idiomaAlvo, string $idiomaOrigem = 'pt', ?int $tenantId = null): ?string
     {
         if ($idiomaAlvo === $idiomaOrigem) {
             return $texto;
@@ -69,7 +69,7 @@ class TraducaoService
                 . '(informal, sem formalizar demais), preservando emojis e formatação (* para negrito) como '
                 . 'estiverem. Nunca adicione explicação, nota ou texto extra.'],
             ['role' => 'user', 'content' => $texto],
-        ], 'simples', 800, 'traduzir_mensagem');
+        ], 'simples', 800, 'traduzir_mensagem', $tenantId);
 
         return $resposta ? trim($resposta) : null;
     }

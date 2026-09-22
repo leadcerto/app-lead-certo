@@ -34,16 +34,16 @@ class UazapiWebhookDeteccaoIdiomaTest extends TestCase
     public function test_detecta_idioma_e_traduz_primeira_mensagem_do_lead(): void
     {
         Http::fake(['*' => Http::response(['ok' => true], 200)]);
-        $this->mock(TraducaoService::class, function ($mock) {
+        $tenant = $this->criarTenantComCanal('wh-idioma-1', 'inst-idioma-1');
+
+        $this->mock(TraducaoService::class, function ($mock) use ($tenant) {
             $mock->shouldReceive('detectarIdioma')->once()
-                ->with('Do you deliver to São Paulo?')
+                ->with('Do you deliver to São Paulo?', $tenant->id)
                 ->andReturn('en');
             $mock->shouldReceive('traduzir')->once()
-                ->with('Do you deliver to São Paulo?', 'pt', 'en')
+                ->with('Do you deliver to São Paulo?', 'pt', 'en', $tenant->id)
                 ->andReturn('Vocês entregam em São Paulo?');
         });
-
-        $tenant = $this->criarTenantComCanal('wh-idioma-1', 'inst-idioma-1');
 
         $this->postJson('/api/webhook/uazapi/wh-idioma-1', [
             'EventType' => 'messages',

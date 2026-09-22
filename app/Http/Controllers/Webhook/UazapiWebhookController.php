@@ -369,12 +369,12 @@ class UazapiWebhookController extends Controller
         if ($conteudo && in_array($tipoMensagem, ['texto', 'audio'], true)
             && ! str_starts_with(trim($conteudo), '[') && is_null($ticket->idioma_lead)) {
             $traducao       = app(\App\Services\TraducaoService::class);
-            $idiomaDetectado = $traducao->detectarIdioma($conteudo);
+            $idiomaDetectado = $traducao->detectarIdioma($conteudo, $ticket->tenant_id);
             if ($idiomaDetectado) {
                 $ticket->update(['idioma_lead' => $idiomaDetectado]);
                 $idiomaMensagem = $idiomaDetectado;
                 if ($idiomaDetectado !== 'pt') {
-                    $conteudoPt = $traducao->traduzir($conteudo, 'pt', $idiomaDetectado);
+                    $conteudoPt = $traducao->traduzir($conteudo, 'pt', $idiomaDetectado, $ticket->tenant_id);
                 }
             }
         }
