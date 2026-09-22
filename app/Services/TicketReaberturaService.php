@@ -17,6 +17,9 @@ use Illuminate\Support\Facades\Log;
  */
 class TicketReaberturaService
 {
+    public function __construct(private SequenciaService $sequencia) {}
+
+
     public function buscarTicketEncerrado(int $tenantId, int $contatoId): ?TicketAtendimento
     {
         return TicketAtendimento::withoutGlobalScopes()
@@ -54,6 +57,14 @@ class TicketReaberturaService
         ]);
 
         Log::info("TicketReaberturaService: ticket #{$ticketEncerrado->id} reativado, voltou pra coluna '{$colunaRestaurada}'");
+
+        // Achado real 2026-09-21 (ticket #4827, Carlos): mesmo gap encontrado
+        // nos outros caminhos automáticos — a reabertura de um ticket
+        // encerrado também nunca disparava a Sequência de Mensagens/
+        // Automação da coluna pra onde ele voltou. coluna_antes_encerrar
+        // nunca é uma coluna de papel Encerramento (ver dadosParaEncerrar()),
+        // então é seguro chamar sem guarda extra aqui.
+        $this->sequencia->iniciarParaTicket($ticketEncerrado);
 
         return true;
     }

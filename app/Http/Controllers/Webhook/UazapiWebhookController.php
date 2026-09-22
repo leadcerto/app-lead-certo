@@ -430,6 +430,12 @@ class UazapiWebhookController extends Controller
                 if ($temMensagemBot && $proximaColuna) {
                     $ticket->update(['coluna_kanban' => $proximaColuna]);
                     $ticket->coluna_kanban = $proximaColuna;
+                    // Achado real 2026-09-21 (ticket #4827, Carlos): mesmo gap
+                    // encontrado em SdrResponderService/AvancoAutomaticoKanbanService
+                    // — o lead respondendo à sequência de entrada e avançando pra
+                    // próxima coluna também nunca disparava a Sequência de
+                    // Mensagens/Automação configurada pra essa próxima coluna.
+                    app(SequenciaService::class)->iniciarParaTicket($ticket);
                     $delay = $this->sdrDelay($tenant->id, $proximaColuna);
                     dispatch(new SdrResponderJob($ticket->id, $conteudo, false, false, $delay))
                         ->delay(now()->addSeconds($delay));

@@ -2,12 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SequenciaMensagemJob;
 use App\Models\Contato;
+use App\Models\Sequencia;
+use App\Models\SequenciaMensagem;
 use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use App\Models\VinculoContatoTenant;
 use App\Services\KanbanBotaoActionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class KanbanBotaoActionServiceTest extends TestCase
@@ -40,6 +44,32 @@ class KanbanBotaoActionServiceTest extends TestCase
 
         $this->assertTrue($executou);
         $this->assertSame('em_atendimento', $ticket->fresh()->coluna_kanban);
+    }
+
+    /**
+     * Achado real 2026-09-21 (ticket #4827, Carlos): o lead clicando num
+     * botão do WhatsApp que move o card não disparava a Sequência de
+     * Mensagens/Automação da coluna de destino.
+     */
+    public function test_move_column_dispara_sequencia_configurada_na_coluna_destino(): void
+    {
+        Queue::fake();
+        $tenant = Tenant::factory()->create();
+        $ticket = $this->criarTicket($tenant, 'aguardando_lead', [
+            ['text' => 'Falar com Humano', 'action' => 'move_column', 'target' => 'em_atendimento'],
+        ]);
+        $sequencia = Sequencia::create([
+            'tenant_id' => $tenant->id, 'nome' => 'Atendimento Inicial',
+            'coluna_kanban' => 'em_atendimento', 'ativo' => true,
+        ]);
+        SequenciaMensagem::create([
+            'tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,
+            'conteudo' => 'Qual o endereço?', 'delay_segundos' => 0, 'ativo' => true, 'obrigatorio' => true,
+        ]);
+
+        app(KanbanBotaoActionService::class)->executar($ticket, 'move_column:0');
+
+        Queue::assertPushed(SequenciaMensagemJob::class, fn ($job) => $job->ticketId === $ticket->id);
     }
 
     public function test_opt_out_marca_vinculo_como_bloqueado(): void

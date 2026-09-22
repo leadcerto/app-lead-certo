@@ -684,6 +684,12 @@ class KanbanController extends Controller
             'vendedor_id'        => $request->user()->id,
         ]);
 
+        // Achado real 2026-09-21 (ticket #4827, Carlos): este segundo endpoint
+        // manual de movimentação não disparava a Sequência de Mensagens/
+        // Automação da coluna de destino — só o endpoint de drag-and-drop
+        // (atualizarStatus, acima) tinha esse gatilho.
+        app(SequenciaService::class)->iniciarParaTicket($model);
+
         return response()->json(['ticket_id' => $ticket, 'coluna_kanban' => $colunaOutros]);
     }
 

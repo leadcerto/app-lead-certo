@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Log;
 
 class KanbanBotaoActionService
 {
+    public function __construct(private SequenciaService $sequencia) {}
+
     /**
      * Executa a ação configurada para $buttonId, validando contra os botões
      * que foram REALMENTE enviados por último a este ticket ($ticket->botoes_ativos,
@@ -44,6 +46,16 @@ class KanbanBotaoActionService
         }
 
         $ticket->update(['coluna_kanban' => $destino]);
+
+        // Achado real 2026-09-21 (ticket #4827, Carlos): a Sequência de
+        // Mensagens/Automação da coluna de destino não disparava quando o
+        // próprio lead clicava num botão do WhatsApp que move o card — mesmo
+        // gap encontrado em SdrResponderService/AvancoAutomaticoKanbanService.
+        $papelDestino = \App\Models\KanbanColuna::papelDe($ticket->tenant_id, $destino);
+        if ($papelDestino !== \App\Enums\PapelColunaKanban::Encerramento) {
+            $this->sequencia->iniciarParaTicket($ticket);
+        }
+
         return true;
     }
 
