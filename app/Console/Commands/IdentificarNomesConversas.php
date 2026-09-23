@@ -156,10 +156,62 @@ class IdentificarNomesConversas extends Command
 
         $resposta = trim($response->json('choices.0.message.content') ?? '');
 
-        if (! $resposta || $resposta === 'NAO_IDENTIFICADO') return [null, null];
-        if (strlen($resposta) < 2 || strlen($resposta) > 100) return [null, null];
-        if (! preg_match('/[A-Za-zÀ-ú]{2,}/', $resposta)) return [null, null];
+        if (! self::pareceNomeValido($resposta)) return [null, null];
 
         return [$resposta, null];
+    }
+
+    /**
+     * Achado real 23/09 (Leonardo, relato de contatos "com problema no
+     * nome"): 30 contatos reais em produção com o campo `nome` contaminado
+     * por texto de raciocínio bruto de modelos gratuitos "de raciocínio"
+     * (reasoning) — ex: "Here's a thinking process: 1. **Analyze User
+     * Input:** - Phone number: 555...". A validação antiga só checava
+     * tamanho (2-100 chars) e presença de 2+ letras, fraca demais pra
+     * barrar um preâmbulo de raciocínio que por acaso cabe em 100
+     * caracteres. Nome de pessoa nunca tem quebra de linha, markdown,
+     * dois-pontos ou mais de 6 palavras — e modelos de raciocínio sempre
+     * vazam pelo menos um desses sinais quando ignoram a instrução "retorne
+     * APENAS o nome".
+     */
+    public static function pareceNomeValido(string $resposta): bool
+    {
+        $resposta = trim($resposta);
+
+        if ($resposta === '' || $resposta === 'NAO_IDENTIFICADO') {
+            return false;
+        }
+
+        if (str_contains($resposta, "\n") || str_contains($resposta, "\r")) {
+            return false;
+        }
+
+        if (str_contains($resposta, '**') || str_contains($resposta, ':') || str_contains($resposta, '#')) {
+            return false;
+        }
+
+        $respostaMin = mb_strtolower($resposta);
+        $marcadoresDeRaciocinio = ['thinking process', 'analyze', 'i need to', 'the user', 'let me', "here's", 'here is'];
+        foreach ($marcadoresDeRaciocinio as $marcador) {
+            if (str_contains($respostaMin, $marcador)) {
+                return false;
+            }
+        }
+
+        if (mb_strlen($resposta) < 2 || mb_strlen($resposta) > 60) {
+            return false;
+        }
+
+        // Nome de pessoa: só letras/acentos, espaço, apóstrofo, hífen, ponto e "&".
+        if (! preg_match("/^[\p{L}\p{M}' &.-]+$/u", $resposta)) {
+            return false;
+        }
+
+        $palavras = preg_split('/\s+/', $resposta);
+        if (count($palavras) > 6) {
+            return false;
+        }
+
+        return true;
     }
 }
