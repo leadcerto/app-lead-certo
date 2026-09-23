@@ -69,6 +69,42 @@ class PushContatoParaGoogleJobLinhaBaseTest extends TestCase
         $this->assertSame('Souza', $vinculo->google_valores_enviados['sobrenome'] ?? null);
     }
 
+    /**
+     * Achado real 2026-09-22 (Leonardo, caso real "Diego Ognibene" #98325):
+     * contato criado via WhatsApp fica local com nome="Diego Ognibene"
+     * (convenção dominante: nome completo num campo só) e sobrenome vazio.
+     * GoogleService::formatarNomeParaGoogle() cortava isso no espaço e
+     * mandava givenName="Diego"/familyName="Ognibene" pro Google — o nome
+     * completo, que já estava certo localmente, saía errado só na criação do
+     * contato no Google.
+     */
+    public function test_nome_completo_local_nao_e_cortado_ao_criar_contato_novo_no_google(): void
+    {
+        Http::fake(['people.googleapis.com/*' => Http::response(['resourceName' => 'people/c999'], 200)]);
+
+        $tenant  = Tenant::factory()->create();
+        GoogleToken::create([
+            'tenant_id' => $tenant->id, 'google_email' => 'a@b.com',
+            'access_token' => 'tok', 'refresh_token' => 'ref', 'token_type' => 'Bearer',
+            'expires_at' => now()->addHour(), 'scopes' => ['contacts'],
+        ]);
+        $contato = Contato::factory()->create(['nome' => 'Diego Ognibene', 'sobrenome' => null]);
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
+        $vinculo = VinculoContatoTenant::create(['contato_id' => $contato->id, 'tenant_id' => $tenant->id]);
+
+        (new PushContatoParaGoogleJob($contato->id, $tenant->id))->handle(app(GoogleService::class), app(ContatoSyncService::class));
+
+        Http::assertSent(function ($request) {
+            $nome = $request->data()['names'][0] ?? [];
+            return ($nome['givenName'] ?? null) === 'Diego Ognibene'
+                && empty($nome['familyName'] ?? null);
+        });
+
+        $vinculo->refresh();
+        $this->assertSame('Diego Ognibene', $vinculo->google_valores_enviados['nome'] ?? null);
+        $this->assertArrayNotHasKey('sobrenome', $vinculo->google_valores_enviados ?? []);
+    }
+
     public function test_linha_de_base_do_nome_registra_o_placeholder_sem_nome(): void
     {
         Http::fake(['people.googleapis.com/*' => Http::response(['resourceName' => 'people/c999'], 200)]);
