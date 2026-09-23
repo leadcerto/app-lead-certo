@@ -43,6 +43,7 @@ return [
         'key'             => env('OPENROUTER_KEY'),
         'modelo_simples'  => env('OPENROUTER_MODELO_SIMPLES', 'openai/gpt-4o-mini'),
         'modelo_complexo' => env('OPENROUTER_MODELO_COMPLEXO', 'anthropic/claude-3.5-haiku-20241022'),
+        'modelo_imagem'   => env('OPENROUTER_MODELO_IMAGEM', 'bytedance-seed/seedream-4.5'),
     ],
 
     'groq' => [
