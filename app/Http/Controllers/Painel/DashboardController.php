@@ -85,6 +85,14 @@ class DashboardController extends Controller
             ->whereIn('contato_id', $contatoIds)
             ->count();
 
+        $agendadorParado = null;
+        if ($ultimoHeartbeat = Cache::get('scheduler:ultimo_heartbeat')) {
+            $minutosAtras = abs(now()->diffInMinutes(\Illuminate\Support\Carbon::parse($ultimoHeartbeat)));
+            if ($minutosAtras > 20) {
+                $agendadorParado = ['ultimo_heartbeat' => $ultimoHeartbeat, 'minutos_atras' => $minutosAtras];
+            }
+        }
+
         return response()->json([
             'leads_recebidos'    => $recebidos,
             'em_aberto'          => $emAberto,
@@ -97,6 +105,7 @@ class DashboardController extends Controller
                 'sem_resposta_2h'            => $semResposta2h,
                 'openrouter_sem_credito'     => Cache::get(OpenRouterService::CACHE_KEY_SEM_CREDITO),
                 'openrouter_reserva_indisponivel' => Cache::get('openrouter:reserva_indisponivel'),
+                'agendador_parado'           => $agendadorParado,
             ],
         ]);
     }

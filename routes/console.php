@@ -1,6 +1,18 @@
 <?php
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schedule;
+
+// A cada 5 min — Heartbeat do próprio agendador: grava o horário da última
+// execução real do cron. Achado real 22-23/09: o cron da VPS ficou ~45h
+// totalmente parado desde a migração de VPS (21/09) sem ninguém perceber,
+// derrubando os 16 comandos agendados em silêncio (ver leadcerto/_docs/
+// PENDENCIAS.md). Esse heartbeat alimenta o alerta "agendador parado" no
+// dashboard (DashboardController@dados) — se o cron parar de novo, o
+// timestamp fica velho e o alerta acende sozinho, sem depender de alguém
+// notar manualmente.
+Schedule::call(fn () => Cache::forever('scheduler:ultimo_heartbeat', now()->toIso8601String()))
+    ->everyFiveMinutes();
 
 // Sincroniza contatos do Google para todos os tenants a cada 15 minutos
 Schedule::command('contatos:sincronizar-google')
