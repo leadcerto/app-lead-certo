@@ -283,7 +283,22 @@ class TicketAtendimentoOrigemMudancaColunaTest extends TestCase
         $this->assertDatabaseMissing('alertas_internos', ['ticket_id' => $ticket->id, 'tipo' => 'migracao_atipica']);
     }
 
-    public function test_ia_fecha_com_objetivos_pendentes_gera_alerta(): void
+    /**
+     * Achado real 23/09 (ticket #4840, "Eduarda Santos"): a IA fechava
+     * sozinha um atendimento em tempo real via [ENCERRADO] — este teste
+     * cobria o alerta "migracao_atipica" (aviso DEPOIS do fechamento já ter
+     * acontecido, se o checklist não tinha fechado). Decisão do Leonardo: a
+     * IA não fecha mais sozinha numa resposta em tempo real, ponto — o
+     * SdrResponderService intercepta o token [ENCERRADO] antes de chegar em
+     * dadosParaEncerrar() e pausa o ticket com um alerta 'ia_pediu_
+     * encerramento' pra um humano decidir. O cenário de "fechou com
+     * objetivo pendente" não existe mais nesse caminho (o fechamento nunca
+     * chega a acontecer), então o teste passou a cobrir a pausa em vez do
+     * alerta pós-fato. 'migracao_atipica' continua existindo pros outros
+     * caminhos de fechamento (humano via KanbanController, silêncio via
+     * FollowupConversas, gatilho estagio_3).
+     */
+    public function test_ia_tenta_fechar_com_objetivos_pendentes_nao_fecha_e_pausa_para_humano(): void
     {
         \Illuminate\Support\Facades\Http::fake([
             'openrouter.ai/*' => \Illuminate\Support\Facades\Http::response([
@@ -310,8 +325,11 @@ class TicketAtendimentoOrigemMudancaColunaTest extends TestCase
 
         app(\App\Services\SdrResponderService::class)->responder($ticket);
 
+        $ticket->refresh();
+        $this->assertSame('lead_novo', $ticket->coluna_kanban, 'não pode fechar sozinho');
+        $this->assertSame('aberto', $ticket->status, 'não pode fechar sozinho');
         $this->assertDatabaseHas('alertas_internos', [
-            'ticket_id' => $ticket->id, 'tipo' => 'migracao_atipica',
+            'ticket_id' => $ticket->id, 'tipo' => 'ia_pediu_encerramento',
         ]);
     }
 

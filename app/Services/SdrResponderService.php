@@ -259,6 +259,48 @@ class SdrResponderService
                     continue; // Pula o movimento, mas depois o regex limpa o token gerado pela IA.
                 }
 
+                // Achado real 23/09 (ticket #4840, "Eduarda Santos"): a IA
+                // fechou sozinha um atendimento com a janela da Meta ainda em
+                // 23h, sem nenhum humano decidir — a cliente já tinha mandado
+                // os dois endereços e a lista de itens, um lead quase pronto
+                // perdido porque disse "falar com robô não dá". A partir de
+                // agora a IA NUNCA encerra sozinha numa resposta em tempo real
+                // a uma mensagem do lead: [ENCERRADO] pausa o atendimento
+                // (mesmo mecanismo de "aguardando orientação" já usado pra
+                // dúvida/handoff prematuro) e cria um alerta — só um humano
+                // decide se fecha de verdade.
+                // EXCEÇÃO: gatilho 'estagio_3' (silêncio prolongado, 3
+                // tentativas de follow-up sem resposta) é uma política
+                // determinística de desistência já revisada, com sua própria
+                // salvaguarda no prompt ("se o lead retomou contato, não
+                // encerre") — continua fechando sozinho como sempre fez, não
+                // é o cenário do achado acima (não há mensagem nova do lead
+                // pra IA estar "atropelando").
+                if ($papel === \App\Enums\PapelColunaKanban::Encerramento && $gatilho !== 'estagio_3') {
+                    $ticket->update([
+                        'aguardando_orientacao_em' => now(),
+                        'mensagem_espera_enviada'  => false,
+                    ]);
+
+                    try {
+                        app(\App\Services\AlertaInternoService::class)->criar(
+                            $tenantId,
+                            'ia_pediu_encerramento',
+                            'IA quis encerrar o atendimento — confirme',
+                            "A IA tentou usar [ENCERRADO] nesta conversa. Resposta que seria enviada: \"{$resposta}\" — revise o histórico e decida se fecha o atendimento ou assume a conversa.",
+                            $ticket->id,
+                        );
+                    } catch (\Exception $e) {
+                        Log::warning('SdrResponder: falha ao criar alerta de encerramento pedido pela IA', [
+                            'ticket_id' => $ticket->id, 'erro' => $e->getMessage(),
+                        ]);
+                    }
+
+                    Log::info('SdrResponder: bloqueado encerramento automático via IA, aguardando humano', ['ticket_id' => $ticket->id]);
+
+                    return null;
+                }
+
                 $updates = $papel === \App\Enums\PapelColunaKanban::Encerramento
                     ? $ticket->dadosParaEncerrar(['etapa_ia' => $etapa], $chave)
                     : ['coluna_kanban' => $chave, 'etapa_ia' => $etapa];
@@ -563,19 +605,14 @@ class SdrResponderService
             . "• [AGUARDANDO_LEAD]      → Move para Aguardando Lead (proposta enviada, aguardando retorno).\n"
             . "• [PAGAMENTO]            → Move para Pagamento (orçamento aprovado, aguardando sinal).\n"
             . "• [SERVICO_AGENDADO]     → Move para Serviço Agendado (sinal pago, serviço confirmado).\n"
-            . "• [ENCERRADO]            → Encerra o atendimento (lead desistiu, não responde ou pediu para parar).\n\n"
+            . "• [ENCERRADO]            → Você NUNCA encerra o atendimento sozinho. Use este token quando o lead "
+            . "desistir, parar de responder por muito tempo ou pedir explicitamente pra parar de receber mensagens "
+            . "(ex: 'não quero mais', 'pare de mandar mensagem', 'cancele') — inclusive se ele disser que não quer "
+            . "falar com um robô/IA (nesse caso ele quer um HUMANO, não quer parar: use o token do mesmo jeito, um "
+            . "humano vai assumir a partir daqui). O sistema pausa você automaticamente e um humano decide o que "
+            . "fazer — você não fecha nada por conta própria.\n\n"
             . "Use apenas quando tiver certeza do estado do lead. Se a conversa não mudou de estado, NÃO inclua nenhum token."
             . "\n===";
-
-        // Regra global de engajamento (Janela Meta 24h)
-        if (! isset($kanban->forcar_engajamento_meta) || $kanban->forcar_engajamento_meta) {
-            $iaContexto .= "\n\n=== DIRETRIZ GLOBAL DE ENGAJAMENTO (JANELA DO WHATSAPP) ===\n"
-                . "O WhatsApp possui uma janela de atendimento de 24 horas que se renova APENAS quando o lead nos envia uma mensagem. "
-                . "Por isso, independentemente da etapa em que você esteja (a não ser que vá usar [ENCERRADO]), o seu MAIOR OBJETIVO é manter o lead engajado. "
-                . "SEMPRE termine suas mensagens instigando o lead a continuar conversando: faça uma pergunta, peça a opinião dele ou sugira um próximo passo claro. "
-                . "Nunca envie mensagens passivas ou fechadas (ex: 'ok, obrigado', 'certo') que esfriem o assunto e façam o lead parar de responder."
-                . "\n===";
-        }
 
         // Explica o marcador "[Atendente humano respondeu]" que aparece no
         // histórico abaixo — sem isso o modelo não teria como saber que aquele
