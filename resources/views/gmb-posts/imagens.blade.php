@@ -77,6 +77,65 @@
         </div>
     </form>
 
+    {{-- Gerar fotos de fundo novas por IA (opcionalmente inspiradas em fotos já existentes) --}}
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 space-y-4">
+        <div class="flex items-center justify-between border-b border-gray-100 pb-3 flex-wrap gap-2">
+            <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
+                <span>✨</span>
+                <span>Gerar Fotos por IA</span>
+            </h2>
+            <span class="text-xs text-gray-500">A IA cria só a FOTO — a marca (máscara) nunca é tocada por ela.</span>
+        </div>
+
+        <form action="{{ route('admin.gmb-posts.imagens.gerar-ia') }}" method="POST" class="space-y-4">
+            @csrf
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Descreva a foto</label>
+                    <input type="text" name="prompt" required maxlength="500"
+                           placeholder="Ex: profissional carregando caixas de mudança, estilo fotográfico, luz natural"
+                           class="w-full text-sm px-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition shadow-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Quantidade</label>
+                    <select name="quantidade" class="w-full text-sm px-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50">
+                        @for($i = 1; $i <= 6; $i++)
+                            <option value="{{ $i }}">{{ $i }} foto{{ $i > 1 ? 's' : '' }}</option>
+                        @endfor
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Proporção</label>
+                    <select name="aspect_ratio" class="w-full text-sm px-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50">
+                        <option value="4:3">4:3 — GMB</option>
+                        <option value="1:1">1:1 — Instagram feed</option>
+                        <option value="9:16">9:16 — Stories</option>
+                        <option value="16:9">16:9 — Facebook</option>
+                    </select>
+                </div>
+            </div>
+
+            @if($imagensFundo->isNotEmpty())
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Usar como referência de estilo (opcional)</label>
+                    <select name="imagens_referencia[]" multiple size="4"
+                            class="w-full text-sm px-3 py-2 border border-gray-300 rounded-xl bg-gray-50">
+                        @foreach($imagensFundo as $img)
+                            <option value="{{ $img->id }}">{{ $img->titulo ?: $img->nome_arquivo_seo }}</option>
+                        @endforeach
+                    </select>
+                    <p class="text-xs text-gray-400 mt-1">Segure Ctrl (ou Cmd no Mac) pra selecionar mais de uma.</p>
+                </div>
+            @endif
+
+            <div class="flex justify-end">
+                <button type="submit" class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold rounded-xl shadow-md hover:shadow-lg transition">
+                    ✨ Gerar Fotos
+                </button>
+            </div>
+        </form>
+    </div>
+
     {{-- Máscaras de marca (cabeçalho/rodapé fixos aplicados por cima das fotos) --}}
     <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 space-y-4">
         <div class="flex items-center justify-between border-b border-gray-100 pb-3 flex-wrap gap-2">

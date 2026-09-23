@@ -90,7 +90,7 @@
                 <div id="boxGaleriaEspecifica" class="hidden mt-2">
                     <select name="imagem_galeria_id" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-xs text-gray-800 focus:ring-2 focus:ring-green-500">
                         @foreach($imagensSalvas as $img)
-                            <option value="{{ $img->id }}">{{ $img->titulo ?: $img->nome_arquivo_seo }}</option>
+                            <option value="{{ $img->id }}">{{ $img->tipo === 'pronta' ? '🎭 ' : '' }}{{ $img->titulo ?: $img->nome_arquivo_seo }}</option>
                         @endforeach
                     </select>
                 </div>

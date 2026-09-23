@@ -571,7 +571,13 @@ class GmbPostController extends Controller
             ->latest()
             ->get();
 
-        return view('gmb-posts.imagens', compact('imagens', 'mascaras'));
+        $imagensFundo = \App\Models\GmbPostImagem::where('tenant_id', $tenantId)
+            ->where('tipo', 'fundo')
+            ->latest()
+            ->limit(60)
+            ->get();
+
+        return view('gmb-posts.imagens', compact('imagens', 'mascaras', 'imagensFundo'));
     }
 
     /**
@@ -669,6 +675,62 @@ class GmbPostController extends Controller
         }
 
         return back()->with('sucesso', "{$total} imagem(ns) gerada(s) com a máscara aplicada!");
+    }
+
+    /**
+     * Gera fotos de fundo NOVAS por IA, opcionalmente inspiradas em fotos já
+     * existentes na galeria (usadas como referência de estilo). O resultado
+     * entra no banco como tipo=fundo — passa pelo mesmo fluxo de
+     * aplicarMascara() depois, igual a uma foto enviada manualmente.
+     */
+    public function gerarFotosIa(Request $request, \App\Services\OpenRouterImageService $imagemIa, \App\Services\GmbImageSeoService $seoService): RedirectResponse
+    {
+        $tenant = auth()->user()->tenant;
+
+        $request->validate([
+            'prompt'                => 'required|string|max:500',
+            'quantidade'            => 'nullable|integer|min:1|max:6',
+            'aspect_ratio'          => 'nullable|string|in:4:3,1:1,9:16,16:9',
+            'imagens_referencia'    => 'nullable|array',
+            'imagens_referencia.*'  => 'exists:gmb_post_imagens,id',
+        ]);
+
+        $urlsReferencia = [];
+        if ($request->filled('imagens_referencia')) {
+            $urlsReferencia = \App\Models\GmbPostImagem::where('tenant_id', $tenant->id)
+                ->whereIn('id', $request->input('imagens_referencia'))
+                ->pluck('imagem_url')
+                ->all();
+        }
+
+        $imagensGeradas = $imagemIa->gerar(
+            $request->input('prompt'),
+            $urlsReferencia,
+            $request->input('aspect_ratio', '4:3'),
+            (int) $request->input('quantidade', 1)
+        );
+
+        if (empty($imagensGeradas)) {
+            return back()->with('erro', 'Não foi possível gerar imagens agora. Verifique o crédito da OpenRouter ou tente novamente em instantes.');
+        }
+
+        $total = 0;
+        foreach ($imagensGeradas as $bytes) {
+            $url = $seoService->salvarImagemBytes($bytes, $tenant, null, 'png', null, $request->input('prompt'), 'gmb-posts/ia/' . $tenant->id);
+
+            \App\Models\GmbPostImagem::create([
+                'tenant_id'      => $tenant->id,
+                'tipo'           => 'fundo',
+                'titulo'         => 'Gerado por IA: ' . str($request->input('prompt'))->limit(60),
+                'imagem_url'     => $url,
+                'nome_arquivo_seo' => basename($url),
+                'tamanho_bytes'  => strlen($bytes),
+            ]);
+
+            $total++;
+        }
+
+        return back()->with('sucesso', "{$total} foto(s) nova(s) gerada(s) por IA! Já estão na galeria como fundo, prontas pra aplicar uma máscara.");
     }
 
     public function storeImagem(Request $request, \App\Services\GmbImageSeoService $seoService): RedirectResponse

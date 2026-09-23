@@ -8,6 +8,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -150,5 +151,67 @@ class GmbPostControllerMascarasTest extends TestCase
             'tenant_id' => $this->tenant->id, 'tipo' => 'pronta', 'imagem_mascara_id' => $mascara->id,
         ]);
         $this->assertSame(2, GmbPostImagem::where('tenant_id', $this->tenant->id)->count());
+    }
+
+    public function test_gerar_fotos_ia_salva_resultado_como_fundo_na_galeria(): void
+    {
+        Storage::fake('public');
+        Http::fake([
+            'https://openrouter.ai/api/v1/images' => Http::response([
+                'data' => [
+                    ['b64_json' => base64_encode('imagem-gerada-1')],
+                    ['b64_json' => base64_encode('imagem-gerada-2')],
+                ],
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($this->user)->post(route('admin.gmb-posts.imagens.gerar-ia'), [
+            'prompt'     => 'caminhoneiro carregando caixas, estilo fotográfico',
+            'quantidade' => 2,
+        ]);
+
+        $response->assertRedirect();
+        $this->assertSame(2, GmbPostImagem::where('tenant_id', $this->tenant->id)->where('tipo', 'fundo')->count());
+    }
+
+    public function test_gerar_fotos_ia_usa_fotos_selecionadas_como_referencia(): void
+    {
+        Storage::fake('public');
+        $fotoReferencia = GmbPostImagem::create([
+            'tenant_id' => $this->tenant->id, 'tipo' => 'fundo',
+            'imagem_url' => 'https://app.leadcerto.app.br/storage/gmb-posts/ref.png',
+            'nome_arquivo_seo' => 'ref.png',
+        ]);
+
+        Http::fake([
+            'https://openrouter.ai/api/v1/images' => Http::response([
+                'data' => [['b64_json' => base64_encode('imagem-gerada')]],
+            ], 200),
+        ]);
+
+        $this->actingAs($this->user)->post(route('admin.gmb-posts.imagens.gerar-ia'), [
+            'prompt'             => 'foto no mesmo estilo',
+            'imagens_referencia' => [$fotoReferencia->id],
+        ]);
+
+        Http::assertSent(function ($request) {
+            return ($request->data()['input_references'][0]['image_url']['url'] ?? null)
+                === 'https://app.leadcerto.app.br/storage/gmb-posts/ref.png';
+        });
+    }
+
+    public function test_gerar_fotos_ia_sem_resultado_mostra_erro_sem_quebrar(): void
+    {
+        Http::fake([
+            'https://openrouter.ai/api/v1/images' => Http::response(['error' => ['message' => 'sem credito']], 402),
+        ]);
+
+        $response = $this->actingAs($this->user)->post(route('admin.gmb-posts.imagens.gerar-ia'), [
+            'prompt' => 'foto de teste',
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('erro');
+        $this->assertSame(0, GmbPostImagem::where('tenant_id', $this->tenant->id)->count());
     }
 }

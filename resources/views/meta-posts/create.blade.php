@@ -542,6 +542,9 @@
                             @foreach($imagensGaleria as $foto)
                                 <div @click="escolherImagem('{{ $foto->imagem_url }}')" class="group relative rounded-xl overflow-hidden border border-gray-200 hover:border-green-500 cursor-pointer shadow-sm hover:shadow-md transition">
                                     <img src="{{ $foto->imagem_url }}" alt="{{ $foto->titulo }}" class="w-full h-32 object-cover group-hover:scale-105 transition duration-300">
+                                    @if($foto->tipo === 'pronta')
+                                        <span class="absolute top-1.5 left-1.5 bg-purple-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow">🎭 Pronta</span>
+                                    @endif
                                     <div class="p-2 bg-white text-[11px] truncate font-medium text-gray-700">
                                         {{ $foto->titulo ?: 'Foto Frete Rio' }}
                                     </div>
