@@ -551,6 +551,8 @@ class GmbPostController extends Controller
 
     public function destroyCategoria(\App\Models\GmbPostCategoria $categoria): RedirectResponse
     {
+        abort_unless($categoria->tenant_id === auth()->user()->tenant_id, 404);
+
         $categoria->delete();
 
         return back()->with('sucesso', 'Categoria de postagem removida.');
@@ -771,6 +773,8 @@ class GmbPostController extends Controller
 
     public function destroyImagem(\App\Models\GmbPostImagem $imagem): RedirectResponse
     {
+        abort_unless($imagem->tenant_id === auth()->user()->tenant_id, 404);
+
         $imagem->delete();
 
         return back()->with('sucesso', 'Imagem removida da galeria.');
