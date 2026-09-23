@@ -114,6 +114,9 @@ Route::middleware(['auth', 'tenant', 'role:admin,dono,diretor,diretor_marketing'
     Route::get('posts/imagens', [\App\Http\Controllers\GmbPostController::class, 'imagens'])->name('gmb-posts.imagens');
     Route::post('posts/imagens', [\App\Http\Controllers\GmbPostController::class, 'storeImagem'])->name('gmb-posts.imagens.store');
     Route::delete('posts/imagens/{imagem}', [\App\Http\Controllers\GmbPostController::class, 'destroyImagem'])->name('gmb-posts.imagens.destroy');
+    Route::post('posts/mascaras', [\App\Http\Controllers\GmbPostController::class, 'storeMascara'])->name('gmb-posts.mascaras.store');
+    Route::delete('posts/mascaras/{mascara}', [\App\Http\Controllers\GmbPostController::class, 'destroyMascara'])->name('gmb-posts.mascaras.destroy');
+    Route::post('posts/imagens/aplicar-mascara', [\App\Http\Controllers\GmbPostController::class, 'aplicarMascara'])->name('gmb-posts.imagens.aplicar-mascara');
     Route::post('posts/{post}/publicar-agora', [\App\Http\Controllers\GmbPostController::class, 'publicarAgora'])->name('gmb-posts.publicar-agora');
     Route::delete('posts/{post}', [\App\Http\Controllers\GmbPostController::class, 'destroy'])->name('gmb-posts.destroy');
     Route::post('posts/gerar-ia', [\App\Http\Controllers\GmbPostController::class, 'gerarIa'])->name('gmb-posts.gerar-ia');

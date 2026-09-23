@@ -566,7 +566,107 @@ class GmbPostController extends Controller
             ->latest()
             ->paginate(18);
 
-        return view('gmb-posts.imagens', compact('imagens'));
+        $mascaras = \App\Models\ImagemMascara::where('tenant_id', $tenantId)
+            ->where('ativo', true)
+            ->latest()
+            ->get();
+
+        return view('gmb-posts.imagens', compact('imagens', 'mascaras'));
+    }
+
+    /**
+     * Sobe uma máscara nova (PNG com janela transparente) — a posição da
+     * janela é detectada automaticamente varrendo o canal alfa
+     * (ImagemMascara::detectarJanelaTransparente()), nada é digitado à mão.
+     */
+    public function storeMascara(Request $request): RedirectResponse
+    {
+        $tenant = auth()->user()->tenant;
+
+        $request->validate([
+            'mascara' => 'required|image|mimes:png|max:10240',
+            'nome'    => 'required|string|max:150',
+        ]);
+
+        $arquivo = $request->file('mascara');
+        $janela  = \App\Models\ImagemMascara::detectarJanelaTransparente($arquivo->getRealPath());
+
+        $pasta    = 'imagem-mascaras/' . $tenant->id;
+        $caminho  = $arquivo->storeAs($pasta, uniqid('mascara_') . '.png', 'public');
+        $url      = \Illuminate\Support\Facades\Storage::disk('public')->url($caminho);
+
+        \App\Models\ImagemMascara::create([
+            'tenant_id'      => $tenant->id,
+            'nome'           => $request->input('nome'),
+            'arquivo_url'    => $url,
+            'janela_x'       => $janela['x'],
+            'janela_y'       => $janela['y'],
+            'janela_largura' => $janela['largura'],
+            'janela_altura'  => $janela['altura'],
+            'largura_total'  => $janela['largura_total'],
+            'altura_total'   => $janela['altura_total'],
+        ]);
+
+        return back()->with('sucesso', 'Máscara salva! Janela transparente detectada automaticamente.');
+    }
+
+    public function destroyMascara(\App\Models\ImagemMascara $mascara): RedirectResponse
+    {
+        $mascara->update(['ativo' => false]);
+
+        return back()->with('sucesso', 'Máscara removida.');
+    }
+
+    /**
+     * Aplica uma máscara a N imagens de fundo selecionadas na galeria,
+     * gerando uma imagem nova (tipo=pronta) pra cada uma — nunca sobrescreve
+     * a foto de fundo original, que continua disponível na galeria.
+     */
+    public function aplicarMascara(Request $request, \App\Services\ImagemComposicaoService $composicao, \App\Services\GmbImageSeoService $seoService): RedirectResponse
+    {
+        $tenant = auth()->user()->tenant;
+
+        $request->validate([
+            'imagem_mascara_id'     => 'required|exists:imagem_mascaras,id',
+            'imagens_selecionadas'  => 'required|array|min:1',
+            'imagens_selecionadas.*' => 'exists:gmb_post_imagens,id',
+        ]);
+
+        $mascara = \App\Models\ImagemMascara::where('tenant_id', $tenant->id)
+            ->findOrFail($request->input('imagem_mascara_id'));
+
+        $fotosFundo = \App\Models\GmbPostImagem::where('tenant_id', $tenant->id)
+            ->whereIn('id', $request->input('imagens_selecionadas'))
+            ->get();
+
+        $urlStorage = \Illuminate\Support\Facades\Storage::disk('public')->url('');
+        $total = 0;
+
+        foreach ($fotosFundo as $foto) {
+            $caminhoRelativo = str_starts_with($foto->imagem_url, $urlStorage)
+                ? str_replace($urlStorage, '', $foto->imagem_url)
+                : $foto->imagem_url;
+            $caminhoAbsoluto = \Illuminate\Support\Facades\Storage::disk('public')->path($caminhoRelativo);
+
+            $bytesFinais = $composicao->compor($caminhoAbsoluto, $mascara);
+            $url = $seoService->salvarImagemBytes($bytesFinais, $tenant, null, 'png', null, $foto->titulo, 'gmb-posts/prontas/' . $tenant->id);
+
+            \App\Models\GmbPostImagem::create([
+                'tenant_id'         => $tenant->id,
+                'tipo'              => 'pronta',
+                'imagem_mascara_id' => $mascara->id,
+                'titulo'            => $foto->titulo,
+                'palavras_chave'    => $foto->palavras_chave,
+                'imagem_url'        => $url,
+                'nome_arquivo_original' => $foto->nome_arquivo_original,
+                'nome_arquivo_seo'  => basename($url),
+                'tamanho_bytes'     => strlen($bytesFinais),
+            ]);
+
+            $total++;
+        }
+
+        return back()->with('sucesso', "{$total} imagem(ns) gerada(s) com a máscara aplicada!");
     }
 
     public function storeImagem(Request $request, \App\Services\GmbImageSeoService $seoService): RedirectResponse
