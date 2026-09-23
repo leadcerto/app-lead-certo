@@ -612,6 +612,8 @@ class GmbPostController extends Controller
 
     public function destroyMascara(\App\Models\ImagemMascara $mascara): RedirectResponse
     {
+        abort_unless($mascara->tenant_id === auth()->user()->tenant_id, 404);
+
         $mascara->update(['ativo' => false]);
 
         return back()->with('sucesso', 'Máscara removida.');

@@ -88,6 +88,28 @@ class GmbPostControllerMascarasTest extends TestCase
         $this->assertDatabaseHas('imagem_mascaras', ['id' => $mascara->id, 'ativo' => false]);
     }
 
+    /**
+     * Achado de revisão de segurança (22/09): destroyMascara() usava
+     * route-model-binding direto sem checar se a máscara pertence ao tenant
+     * do usuário logado — qualquer usuário autenticado de QUALQUER tenant
+     * conseguia desativar a máscara de outro tenant só trocando o ID na URL.
+     */
+    public function test_nao_permite_remover_mascara_de_outro_tenant(): void
+    {
+        $outroTenant = Tenant::create(['nome' => 'Outra Empresa', 'slug' => 'outra-empresa', 'nicho' => 'outro']);
+        $mascaraDeOutroTenant = ImagemMascara::create([
+            'tenant_id' => $outroTenant->id, 'nome' => 'Máscara Alheia', 'arquivo_url' => 'http://x/mascara.png',
+            'janela_x' => 0, 'janela_y' => 0, 'janela_largura' => 10, 'janela_altura' => 10,
+            'largura_total' => 10, 'altura_total' => 10,
+        ]);
+
+        $this->actingAs($this->user)
+            ->delete(route('admin.gmb-posts.mascaras.destroy', $mascaraDeOutroTenant))
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('imagem_mascaras', ['id' => $mascaraDeOutroTenant->id, 'ativo' => true]);
+    }
+
     public function test_aplicar_mascara_em_fotos_selecionadas_gera_imagens_prontas_sem_apagar_as_originais(): void
     {
         Storage::fake('public');
