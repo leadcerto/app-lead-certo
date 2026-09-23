@@ -129,7 +129,12 @@ class SincronizarGoogleEtiquetasCommand extends Command
                     );
 
                     // 2. Atualizar marcadores (adiciona em LEAD CERTO, remove de NOVOS LEADS)
-                    $etiquetaService->atualizarMembrosContato($tokenValido, $contato, $vinculo);
+                    // Achado real 23/09 (Leonardo, caso "Eduardo #14680"): sem o 4º argumento
+                    // true, a transição de etiqueta nunca rodava por este caminho automático
+                    // desde a implementação original (03/09) — só quando acionada manualmente
+                    // pelo painel (ContatosController). Contato ficava preso em NOVOS LEADS
+                    // mesmo já tendo o nome estruturado com o ID e já estando em LEAD CERTO.
+                    $etiquetaService->atualizarMembrosContato($tokenValido, $contato, $vinculo, true);
 
                     // 3. Registrar carimbo de sincronização do Atlas
                     $vinculo->update(['google_sincronizado_em' => now()]);
