@@ -11,6 +11,8 @@ class GmbPostImagem extends Model
 
     protected $fillable = [
         'tenant_id',
+        'tipo',
+        'imagem_mascara_id',
         'titulo',
         'palavras_chave',
         'imagem_url',
@@ -22,5 +24,10 @@ class GmbPostImagem extends Model
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function mascara(): BelongsTo
+    {
+        return $this->belongsTo(ImagemMascara::class, 'imagem_mascara_id');
     }
 }

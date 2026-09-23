@@ -77,27 +77,100 @@
         </div>
     </form>
 
+    {{-- Máscaras de marca (cabeçalho/rodapé fixos aplicados por cima das fotos) --}}
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 space-y-4">
+        <div class="flex items-center justify-between border-b border-gray-100 pb-3 flex-wrap gap-2">
+            <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
+                <span>🎭</span>
+                <span>Máscaras de Marca</span>
+            </h2>
+            <span class="text-xs text-gray-500">PNG com janela transparente — a foto de fundo entra ali, a marca (número, ícone) nunca muda.</span>
+        </div>
+
+        @if($mascaras->isNotEmpty())
+            <div class="flex flex-wrap gap-3">
+                @foreach($mascaras as $m)
+                    <div class="border border-gray-200 rounded-xl p-2 flex flex-col items-center gap-1.5 w-32">
+                        <img src="{{ $m->arquivo_url }}" alt="{{ $m->nome }}" class="w-full aspect-[4/3] object-contain rounded-lg bg-slate-900/5">
+                        <span class="text-[11px] font-semibold text-gray-700 truncate w-full text-center" title="{{ $m->nome }}">{{ $m->nome }}</span>
+                        <form action="{{ route('admin.gmb-posts.mascaras.destroy', $m) }}" method="POST" onsubmit="return confirm('Remover esta máscara?')">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="text-[10px] text-red-500 hover:text-red-700 font-semibold">Remover</button>
+                        </form>
+                    </div>
+                @endforeach
+            </div>
+        @endif
+
+        <form action="{{ route('admin.gmb-posts.mascaras.store') }}" method="POST" enctype="multipart/form-data"
+              class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end pt-2 border-t border-gray-100">
+            @csrf
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Nome da máscara</label>
+                <input type="text" name="nome" required placeholder="Ex: Padrão Frete Rio"
+                       class="w-full text-sm px-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-green-500 focus:border-green-500 transition shadow-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Arquivo PNG (com janela transparente)</label>
+                <input type="file" name="mascara" required accept="image/png"
+                       class="w-full text-sm text-gray-700 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-gray-800 file:text-white hover:file:bg-gray-700 cursor-pointer bg-gray-50 border border-gray-200 rounded-xl p-1">
+            </div>
+            <div>
+                <button type="submit" class="w-full px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white text-sm font-bold rounded-xl shadow-md hover:shadow-lg transition">
+                    Salvar Máscara
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {{-- Formulário-alvo (sem campos visíveis aqui) pra aplicar máscara nas imagens selecionadas abaixo — os checkboxes e o botão ficam fora dele (atributo form="") pra não aninhar formulários dentro do grid. --}}
+    <form id="form-aplicar-mascara" action="{{ route('admin.gmb-posts.imagens.aplicar-mascara') }}" method="POST">
+        @csrf
+    </form>
+
     {{-- Grid da Galeria de Imagens em Proporção 4:3 (1200x900) Sem Cortes --}}
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
-        <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+        <div class="flex items-center justify-between border-b border-gray-100 pb-3 flex-wrap gap-3">
             <h2 class="text-sm font-bold text-gray-800">Minhas Imagens Otimizadas ({{ $imagens->total() }})</h2>
+
+            @if($mascaras->isNotEmpty())
+                <div class="flex items-center gap-2">
+                    <select name="imagem_mascara_id" form="form-aplicar-mascara" required
+                            class="text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 bg-gray-50">
+                        <option value="">Escolha a máscara...</option>
+                        @foreach($mascaras as $m)
+                            <option value="{{ $m->id }}">{{ $m->nome }}</option>
+                        @endforeach
+                    </select>
+                    <button type="submit" form="form-aplicar-mascara"
+                            class="text-xs font-bold px-3 py-1.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition">
+                        🎭 Aplicar máscara nas selecionadas
+                    </button>
+                </div>
+            @endif
+
             <span class="text-xs text-gray-400">Exibição completa 4:3 sem distorções</span>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             @forelse($imagens as $img)
                 <div class="group bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col justify-between">
-                    
+
                     {{-- Container da Imagem em Proporção 4:3 (1200x900) com fundo suave e visualização 100% inteira --}}
                     <div class="relative aspect-[4/3] bg-slate-900/5 flex items-center justify-center overflow-hidden border-b border-gray-100 p-2 cursor-pointer"
                          @click="imgPreviewUrl = '{{ $img->imagem_url }}'; imgPreviewTitulo = '{{ $img->titulo ?: $img->nome_arquivo_seo }}'; modalPreview = true">
-                        <img src="{{ $img->imagem_url }}" 
-                             alt="{{ $img->titulo }}" 
+                        <img src="{{ $img->imagem_url }}"
+                             alt="{{ $img->titulo }}"
                              class="max-w-full max-h-full object-contain rounded-lg group-hover:scale-105 transition-transform duration-300">
-                        
+
                         <div class="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center text-white text-xs font-semibold gap-1.5 backdrop-blur-[2px]">
                             <span>🔍 Clique para Ampliar</span>
                         </div>
+
+                        <label class="absolute top-2 left-2 bg-white/90 rounded-lg p-1.5 shadow cursor-pointer" @click.stop>
+                            <input type="checkbox" name="imagens_selecionadas[]" value="{{ $img->id }}" form="form-aplicar-mascara" class="w-4 h-4">
+                        </label>
                     </div>
 
                     {{-- Informações e Nome SEO da Imagem --}}
@@ -106,8 +179,8 @@
                             <h3 class="text-xs font-bold text-gray-900 truncate" title="{{ $img->titulo }}">
                                 {{ $img->titulo ?: 'Imagem sem título' }}
                             </h3>
-                            <span class="text-[10px] font-bold px-1.5 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded flex-shrink-0">
-                                4:3 GMB
+                            <span class="text-[10px] font-bold px-1.5 py-0.5 {{ $img->tipo === 'pronta' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-green-50 text-green-700 border-green-200' }} border rounded flex-shrink-0">
+                                {{ $img->tipo === 'pronta' ? '🎭 Pronta' : '4:3 GMB' }}
                             </span>
                         </div>
 
