@@ -123,6 +123,67 @@ class ContatoSyncServiceConflitoTest extends TestCase
         );
     }
 
+    /**
+     * Achado real 23/09 (Leonardo, caso real "Helena Marins" #2497): o nome já
+     * tinha sido corrigido/dividido por um humano (nome="Helena",
+     * sobrenome="Marins") e o Google já convergiu pro mesmo valor num ciclo
+     * seguinte do cron — mas a pendência de auditoria ANTIGA (de antes da
+     * correção humana, sugerindo "Helena Marins" junto) nunca foi limpa,
+     * porque o ramo de "convergiram por conta própria" atualiza a linha de
+     * base mas esquece de fazer o unset($pendentes[$campo]) que o ramo de
+     * "aceita automaticamente" (linhas acima) já faz. A tela de Auditoria
+     * ficava oferecendo pra sempre uma sugestão que já não fazia sentido.
+     */
+    public function test_convergencia_com_valor_local_limpa_pendencia_antiga_do_mesmo_campo(): void
+    {
+        $vinculo = $this->vinculo(
+            ['nome' => 'Helena'],
+            [
+                'campos_editados_humano'     => ['nome' => now()->toIso8601String()],
+                'google_valores_enviados'    => ['nome' => 'Helena Marins'], // linha de base de antes da correção humana
+                'campos_pendentes_auditoria' => ['nome' => ['sugerido' => 'Helena Marins', 'origem' => 'google']],
+            ]
+        );
+
+        // Ciclo seguinte do cron: Google já manda só "Helena" (givenName), que
+        // agora bate com o valor local já corrigido pelo humano.
+        app(ContatoSyncService::class)->resolverCampoGoogle($vinculo->contato, $vinculo, 'nome', 'Helena');
+
+        $vinculo->contato->refresh();
+        $vinculo->refresh();
+        $this->assertSame('Helena', $vinculo->contato->nome);
+        $this->assertSame('Helena', $vinculo->google_valores_enviados['nome'] ?? null);
+        $this->assertArrayNotHasKey(
+            'nome',
+            $vinculo->campos_pendentes_auditoria ?? [],
+            'sugestão antiga tem que sumir quando o valor converge, não ficar presa pra sempre'
+        );
+    }
+
+    /**
+     * Mesmo bug do teste acima, no outro ramo que também esquece de limpar a
+     * pendência: diferença só de maiúscula/minúscula ("mantém como está no
+     * cadastro") também precisa remover uma pendência antiga do mesmo campo.
+     */
+    public function test_convergencia_por_maiuscula_minuscula_limpa_pendencia_antiga_do_mesmo_campo(): void
+    {
+        $vinculo = $this->vinculo(
+            ['sobrenome' => 'CVRG'],
+            [
+                'campos_editados_humano'     => ['sobrenome' => now()->toIso8601String()],
+                'google_valores_enviados'    => ['sobrenome' => 'Outro Valor Antigo'],
+                'campos_pendentes_auditoria' => ['sobrenome' => ['sugerido' => 'Outro Valor Antigo', 'origem' => 'google']],
+            ]
+        );
+
+        app(ContatoSyncService::class)->resolverCampoGoogle($vinculo->contato, $vinculo, 'sobrenome', 'Cvrg');
+
+        $vinculo->contato->refresh();
+        $vinculo->refresh();
+        $this->assertSame('CVRG', $vinculo->contato->sobrenome);
+        $this->assertArrayNotHasKey('sobrenome', $vinculo->campos_pendentes_auditoria ?? []);
+    }
+
     public function test_ausencia_no_google_nunca_apaga_campo_local(): void
     {
         $vinculo = $this->vinculo(['empresa' => 'Transportes Silva']);

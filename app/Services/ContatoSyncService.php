@@ -63,6 +63,9 @@ class ContatoSyncService
         if ((string) $valorLocal === $valorGoogle) {
             // Os dois convergiram pro mesmo valor por conta própria — não é conflito
             $vinculo->google_valores_enviados = $valoresEnviados;
+            $pendentes = $vinculo->campos_pendentes_auditoria ?? [];
+            unset($pendentes[$campo]);
+            $vinculo->campos_pendentes_auditoria = $pendentes ?: null;
             $vinculo->save();
             return;
         }
@@ -75,6 +78,9 @@ class ContatoSyncService
         // está no cadastro": mantém o valor local, não manda pra auditoria.
         if (mb_strtolower((string) $valorLocal) === mb_strtolower($valorGoogle)) {
             $vinculo->google_valores_enviados = $valoresEnviados;
+            $pendentes = $vinculo->campos_pendentes_auditoria ?? [];
+            unset($pendentes[$campo]);
+            $vinculo->campos_pendentes_auditoria = $pendentes ?: null;
             $vinculo->save();
             return;
         }
