@@ -19,7 +19,14 @@ class GoogleEtiquetaServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_formatar_nome_para_google_isola_primeiro_nome_id_e_sobrenome(): void
+    /**
+     * Achado real 2026-09-22 (Leonardo, caso real "Diego Ognibene" #98325):
+     * quando sobrenome está vazio, o nome completo NUNCA é mais cortado no
+     * espaço pra virar givenName/familyName separados — isso quebrava a
+     * convenção dominante do sistema (nome completo num campo só). O ID do
+     * banco continua indo no nome do meio, normalmente.
+     */
+    public function test_formatar_nome_para_google_mantem_nome_completo_sem_sobrenome_separado(): void
     {
         $contato = Contato::factory()->create([
             'id'        => 14380,
@@ -30,25 +37,25 @@ class GoogleEtiquetaServiceTest extends TestCase
         $google = app(GoogleService::class);
         $entry  = $google->formatarNomeParaGoogle($contato);
 
-        $this->assertSame('Adalberto', $entry['givenName']);
+        $this->assertSame('Adalberto Martins', $entry['givenName']);
         $this->assertSame('[14380]', $entry['middleName']);
-        $this->assertSame('Martins', $entry['familyName']);
+        $this->assertArrayNotHasKey('familyName', $entry);
     }
 
-    public function test_formatar_nome_para_google_com_nome_composto(): void
+    public function test_formatar_nome_para_google_usa_sobrenome_separado_quando_preenchido(): void
     {
         $contato = Contato::factory()->create([
             'id'        => 5500,
-            'nome'      => 'Maria Clara dos Santos',
-            'sobrenome' => null,
+            'nome'      => 'Maria Clara',
+            'sobrenome' => 'dos Santos',
         ]);
 
         $google = app(GoogleService::class);
         $entry  = $google->formatarNomeParaGoogle($contato);
 
-        $this->assertSame('Maria', $entry['givenName']);
+        $this->assertSame('Maria Clara', $entry['givenName']);
         $this->assertSame('[5500]', $entry['middleName']);
-        $this->assertSame('Clara Dos Santos', $entry['familyName']);
+        $this->assertSame('Dos Santos', $entry['familyName']);
     }
 
     public function test_sincronizar_grupos_padrao_mapeia_etiquetas_no_google(): void

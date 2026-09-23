@@ -171,14 +171,17 @@ class GoogleService
         } else {
             $givenName = $this->limparNome($contato->nome);
 
-            // Se o usuário não preencheu o sobrenome separadamente, tentamos extrair do 'nome'
-            // apenas para manter compatibilidade com contatos antigos onde tudo ficava no campo 'nome'
+            // Achado real 2026-09-22 (Leonardo, caso real "Diego Ognibene"
+            // #98325): local guarda nome="Diego Ognibene" com sobrenome
+            // vazio — a convenção DOMINANTE do sistema (confirmada mais cedo
+            // hoje: 217/313 pendências de nome eram exatamente esse padrão),
+            // não um caso legado raro. Separar automaticamente "Diego
+            // Ognibene" em givenName="Diego"/familyName="Ognibene" ao criar o
+            // contato no Google quebrava o nome completo que já estava
+            // correto localmente. Só usa o 'sobrenome' quando ele está
+            // preenchido separadamente de propósito (convenção B) — nunca
+            // mais tenta adivinhar um sobrenome cortando o 'nome' no espaço.
             $familyName = $contato->sobrenome;
-            if (empty($familyName) && str_contains($givenName, ' ')) {
-                $partes = explode(' ', $givenName);
-                $givenName = array_shift($partes);
-                $familyName = implode(' ', $partes);
-            }
 
             if (empty($familyName) && $pushName) {
                 $familyName = $this->extrairDescriptor($pushName);
