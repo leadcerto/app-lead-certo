@@ -202,8 +202,14 @@ class IdentificarNomesConversas extends Command
             return false;
         }
 
-        // Nome de pessoa: só letras/acentos, espaço, apóstrofo, hífen, ponto e "&".
-        if (! preg_match("/^[\p{L}\p{M}' &.-]+$/u", $resposta)) {
+        // Nome de pessoa: letras/acentos, espaço, hífen, ponto, vírgula, "&" e
+        // apóstrofo — nas 4 variantes que aparecem em sobrenome real
+        // (Sant'Anna/Sant´Anna/Sant'Anna/D'Ávila): reto ' (U+0027), agudo ´
+        // (U+00B4), direito ' (U+2019) e crase ` (U+0060). Achado real 23/09:
+        // uma primeira versão só aceitava o reto e rejeitava ~15 sobrenomes
+        // portugueses legítimos (Sant´Anna, D´Ávila, D´Almeida...) que usam a
+        // variante ´, quase corrompendo nome real numa remediação de dados.
+        if (! preg_match("/^[\p{L}\p{M}\s'´’`&.,-]+$/u", $resposta)) {
             return false;
         }
 

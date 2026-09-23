@@ -67,6 +67,31 @@ class IdentificarNomesConversasSanitizacaoTest extends TestCase
         $this->assertTrue($this->valido('Alan & Carol'));
     }
 
+    /**
+     * Achado real 23/09: ao levantar os contatos já contaminados por
+     * raciocínio de IA pra corrigir, a primeira versão da validação também
+     * rejeitava ~15 sobrenomes portugueses reais em produção que usam a
+     * variante de apóstrofo ´ (U+00B4, acento agudo) em vez do reto ' —
+     * quase corrompendo nome real numa remediação de dados.
+     */
+    public function test_aceita_sobrenome_com_apostrofo_variante_acento_agudo(): void
+    {
+        $this->assertTrue($this->valido('Fernanda D´almeida Morais'));
+        $this->assertTrue($this->valido('Karina Castello Sant´Ana'));
+        $this->assertTrue($this->valido('Nair Ribas D´ Ávila'));
+    }
+
+    public function test_aceita_nome_com_apostrofo_reto_e_direito(): void
+    {
+        $this->assertTrue($this->valido("Sant'Anna"));
+        $this->assertTrue($this->valido('Sant’Anna'));
+    }
+
+    public function test_aceita_lista_de_nomes_separados_por_virgula(): void
+    {
+        $this->assertTrue($this->valido('Karl, Stella, Gabriel Hossmann'));
+    }
+
     public function test_aceita_nome_com_hifen_e_apostrofo(): void
     {
         $this->assertTrue($this->valido("Jean-Pierre D'Ávila"));
