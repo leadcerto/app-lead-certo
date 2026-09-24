@@ -45,7 +45,10 @@ class AquecimentoGruposCommand extends Command
             return self::SUCCESS;
         }
 
-        $canais = WhatsappCanal::where('tipo', 'nao_oficial')->get();
+        // provider='uazapi' explícito (achado do planejamento do canal WhatsApp
+        // Messenger próprio, 23/09): aquecimento de grupos é recurso exclusivo
+        // da Uazapi, tipo='nao_oficial' sozinho também casaria com outros provedores.
+        $canais = WhatsappCanal::where('tipo', 'nao_oficial')->where('provider', 'uazapi')->get();
 
         foreach ($canais as $canal) {
             $token = $canal->tokenUazapi();

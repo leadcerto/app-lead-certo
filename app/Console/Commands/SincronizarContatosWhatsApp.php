@@ -18,8 +18,12 @@ class SincronizarContatosWhatsApp extends Command
 
     public function handle(UazapiService $uazapi): int
     {
+        // provider='uazapi' explícito (achado do planejamento do canal WhatsApp
+        // Messenger próprio, 23/09): import de agenda é recurso exclusivo da
+        // Uazapi, tipo='nao_oficial' sozinho também casaria com outros provedores.
         $query = \App\Models\WhatsappCanal::withoutGlobalScopes()
             ->where('tipo', 'nao_oficial')
+            ->where('provider', 'uazapi')
             ->where('status', 'connected');
 
         if ($tenantId = $this->option('tenant')) {
