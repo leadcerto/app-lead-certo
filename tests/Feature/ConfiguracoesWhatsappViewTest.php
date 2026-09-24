@@ -19,10 +19,14 @@ class ConfiguracoesWhatsappViewTest extends TestCase
         $response = $this->actingAs($user)->get(route('configuracoes'));
 
         $response->assertOk();
-        // Achado 2026-08-19: os dois blocos não-oficiais (Business e Messenger) são
-        // apps físicos diferentes por trás da mesma tecnologia Baileys/Uazapi — a
-        // tela precisa deixar isso explícito, não juntar num "Não-Oficial" genérico.
         $response->assertSee('WhatsApp Business (API Não Oficial — uazapi)');
-        $response->assertSee('WhatsApp Messenger (API Não Oficial — uazapi)');
+
+        // Achado real 23/09 (Leonardo): o bloco "WhatsApp Messenger" existia
+        // rotulado assim, mas por baixo criava uma instância Uazapi comum —
+        // Uazapi só é indicado pra WhatsApp Business de verdade. Removido até
+        // existir uma integração própria de Messenger de verdade (ver plano
+        // do canal WhatsApp Messenger próprio). A tela não pode mais prometer
+        // esse rótulo como se fosse uma opção funcional.
+        $response->assertDontSee('WhatsApp Messenger (API Não Oficial — uazapi)');
     }
 }
