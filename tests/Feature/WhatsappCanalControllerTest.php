@@ -81,15 +81,13 @@ class WhatsappCanalControllerTest extends TestCase
         $this->assertSame('messenger', $responseMessenger->json('0.app'));
     }
 
+    // ─── app=messenger cria um canal messenger_proprio de verdade (Fase 4,
+    // achado do plano: a tela sempre criou instância Uazapi por baixo do rótulo
+    // "Messenger" — corrigido aqui) ───────────────────────────────────────────
+
     public function test_cria_canal_do_app_messenger_quando_informado(): void
     {
-        Http::fake([
-            '*/instance/create' => Http::response([
-                'token'    => 'novo-token',
-                'instance' => ['id' => 1, 'name' => 'inst-1', 'status' => 'connecting'],
-            ], 200),
-            '*/webhook' => Http::response(['ok' => true], 200),
-        ]);
+        Http::fake(['*/sessoes' => Http::response(['ok' => true], 201)]);
 
         $tenant = Tenant::factory()->create();
         $user   = $this->usuarioDono($tenant);
@@ -98,8 +96,78 @@ class WhatsappCanalControllerTest extends TestCase
 
         $response->assertCreated();
         $this->assertDatabaseHas('whatsapp_canais', [
-            'tenant_id' => $tenant->id, 'tipo' => 'nao_oficial', 'app' => 'messenger',
+            'tenant_id' => $tenant->id, 'tipo' => 'nao_oficial', 'provider' => 'messenger_proprio', 'app' => 'messenger',
         ]);
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/sessoes') && $request->hasHeader('X-Api-Key'));
+    }
+
+    public function test_falha_ao_criar_sessao_no_messenger_proprio_nao_cria_canal(): void
+    {
+        Http::fake(['*/sessoes' => Http::response(['error' => 'falhou'], 500)]);
+
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+
+        $response = $this->actingAs($user)->postJson('/api/painel/whatsapp/canais', ['app' => 'messenger']);
+
+        $response->assertStatus(500);
+        $this->assertDatabaseCount('whatsapp_canais', 0);
+    }
+
+    public function test_status_de_canal_messenger_proprio_consulta_o_microservico_por_sessionid(): void
+    {
+        Http::fake(['*/sessoes/sessao-1/status' => Http::response(['status' => 'connected', 'conectado' => true, 'phone' => '5511999999999'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'provider' => 'messenger_proprio', 'status' => 'connecting',
+            'config' => ['session_id' => 'sessao-1'],
+        ]);
+
+        $response = $this->actingAs($user)->getJson("/api/painel/whatsapp/canais/{$canal->id}/status");
+
+        $response->assertOk();
+        $response->assertJson(['status' => 'connected', 'phone' => '5511999999999']);
+        $this->assertDatabaseHas('whatsapp_canais', ['id' => $canal->id, 'status' => 'connected']);
+    }
+
+    public function test_qrcode_de_canal_messenger_proprio_consulta_o_microservico(): void
+    {
+        Http::fake([
+            '*/sessoes/sessao-1/status'  => Http::response(['status' => 'connecting', 'conectado' => false], 200),
+            '*/sessoes/sessao-1/qrcode'  => Http::response(['qrcode' => 'data:image/png;base64,abc123'], 200),
+        ]);
+
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'provider' => 'messenger_proprio',
+            'config' => ['session_id' => 'sessao-1'],
+        ]);
+
+        $response = $this->actingAs($user)->getJson("/api/painel/whatsapp/canais/{$canal->id}/qrcode");
+
+        $response->assertOk();
+        $response->assertJson(['qrcode' => 'abc123']);
+    }
+
+    public function test_exclusao_de_canal_messenger_proprio_chama_o_microservico(): void
+    {
+        Http::fake(['*/sessoes/sessao-1' => Http::response(['ok' => true], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'provider' => 'messenger_proprio',
+            'config' => ['session_id' => 'sessao-1'],
+        ]);
+
+        $response = $this->actingAs($user)->deleteJson("/api/painel/whatsapp/canais/{$canal->id}");
+
+        $response->assertOk();
+        $this->assertDatabaseMissing('whatsapp_canais', ['id' => $canal->id]);
+        Http::assertSent(fn ($request) => $request->method() === 'DELETE' && str_contains($request->url(), '/sessoes/sessao-1'));
     }
 
     public function test_sem_app_informado_assume_business_por_padrao(): void
