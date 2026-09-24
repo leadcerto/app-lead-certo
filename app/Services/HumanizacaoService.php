@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\Canais\EnvioBrutoWhatsappInterface;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -9,6 +10,13 @@ use Illuminate\Support\Facades\Log;
  * - Divide a resposta em balões curtos e naturais
  * - Envia indicador "digitando..." antes de cada balão
  * - Aplica delay proporcional ao tamanho do texto
+ *
+ * Fase 1 do planejamento do canal WhatsApp Messenger próprio (23/09): este
+ * serviço é o "Músculo" do motor de humanização (ver leadcerto/integracoes/
+ * whatsapp-uazapi/regra-geral-de-envio-de-mensagens-no-whatsapp.md, seção 1)
+ * — universal por design, não específico de provedor. Antes era hard-wired
+ * em UazapiService; agora recebe o serviço de envio bruto como parâmetro
+ * (EnvioBrutoWhatsappInterface), pra qualquer canal não-oficial reaproveitar.
  */
 class HumanizacaoService
 {
@@ -18,17 +26,16 @@ class HumanizacaoService
     private const CHARS_POR_SEG   = 150;   // velocidade de digitação simulada
     private const PAUSA_ENTRE_MS  = 600;   // pausa entre balões
 
-    public function __construct(private UazapiService $uazapi) {}
-
     /**
      * Processa e envia uma resposta completa com humanização.
      *
-     * @param string $instanceToken  Token da instância Uazapi do tenant
+     * @param EnvioBrutoWhatsappInterface $servico  Canal não-oficial que executa o envio de verdade
+     * @param string $instanceToken  Token da instância do canal
      * @param string $numero         Telefone do destinatário (55119...)
      * @param string $texto          Resposta completa do LLM
      * @return bool true se todos os balões foram enviados com sucesso
      */
-    public function processar(string $instanceToken, string $numero, string $texto): bool
+    public function processar(EnvioBrutoWhatsappInterface $servico, string $instanceToken, string $numero, string $texto): bool
     {
         $baloes  = $this->dividirEmBaloes($texto);
         $jid     = $numero . '@s.whatsapp.net';
@@ -36,14 +43,14 @@ class HumanizacaoService
 
         foreach ($baloes as $i => $balao) {
             // Simula digitando
-            $this->uazapi->setPresenca($instanceToken, 'composing', $jid);
+            $servico->setPresenca($instanceToken, 'composing', $jid);
 
             // Delay proporcional ao tamanho do balão
             $ms = $this->calcularDelayMs($balao);
             usleep($ms * 1_000);
 
             // Envia o balão
-            $ok = $this->uazapi->enviarTexto($instanceToken, $numero, $balao);
+            $ok = $servico->enviarTexto($instanceToken, $numero, $balao);
 
             if (! $ok) {
                 $sucesso = false;
@@ -61,7 +68,7 @@ class HumanizacaoService
         }
 
         // Volta ao estado disponível após enviar tudo
-        $this->uazapi->setPresenca($instanceToken, 'available');
+        $servico->setPresenca($instanceToken, 'available');
 
         return $sucesso;
     }

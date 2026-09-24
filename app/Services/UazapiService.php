@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\Canais\EnvioBrutoWhatsappInterface;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -22,7 +23,7 @@ use Illuminate\Support\Facades\Log;
  * {number, type, file, ...}. Os antigos /send/image, /send/audio, /send/ptt,
  * /send/document, /send/buttons, /send/list etc. não existem mais na API atual.
  */
-class UazapiService
+class UazapiService implements EnvioBrutoWhatsappInterface
 {
     private string $baseUrl;
     private string $adminToken;

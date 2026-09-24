@@ -58,7 +58,7 @@ class UazapiChannelService implements CanalWhatsappInterface
             return false;
         }
 
-        $enviado = $this->humanizacao->processar($token, $telefone, $texto);
+        $enviado = $this->humanizacao->processar($this->uazapi, $token, $telefone, $texto);
         if ($enviado) {
             $this->aquecimento->registrarEnvio($canal, $telefone);
         }
