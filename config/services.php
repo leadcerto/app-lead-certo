@@ -33,6 +33,14 @@ return [
         'key'      => env('UAZAPI_KEY'),
     ],
 
+    // Microserviço próprio de WhatsApp Messenger (Baileys direto, sem Uazapi)
+    // — Fase 3 do plano em C:\Users\PICHAU\.claude\plans\nested-churning-prism.md.
+    // Roda em 127.0.0.1 na mesma VPS (ver leadcerto/integracoes/whatsapp-proprio/README.md).
+    'messenger_proprio' => [
+        'base_url' => env('MESSENGER_PROPRIO_BASE_URL', 'http://127.0.0.1:3300'),
+        'key'      => env('MESSENGER_PROPRIO_KEY'),
+    ],
+
     'covercut' => [
         'base_url'   => env('COVERCUT_BASE_URL', 'https://api.covercut.com.br/api/v1'),
         'api_key'    => env('COVERCUT_API_KEY'),
