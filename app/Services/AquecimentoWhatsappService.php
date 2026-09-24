@@ -27,6 +27,17 @@ class AquecimentoWhatsappService
     private const TETO_REGIME_FRIO   = 50;
     private const TETO_REGIME_QUENTE = 200;
 
+    // Fase 5 do plano do canal WhatsApp Messenger próprio (23/09) — as 3
+    // regras de intervalo da Seção 8 do manual de envio que faltavam código
+    // (`leadcerto/integracoes/whatsapp-uazapi/regra-geral-de-envio-de-mensagens-no-whatsapp.md`).
+    // Compartilhado por qualquer canal não-oficial (Uazapi e Messenger
+    // próprio) — decisão confirmada com o Leonardo (23/09): pode afetar o
+    // tráfego Uazapi já em produção, sem feature flag.
+    private const MAX_FRIOS_EM_SEQUENCIA            = 10;
+    private const PAUSA_APOS_SEQUENCIA_SEGUNDOS     = 300;  // 5 min
+    private const INTERVALO_MINIMO_ENTRE_FRIOS_SEGUNDOS = 30;
+    private const PAUSA_APOS_50_FRIOS_SEGUNDOS      = 7200; // 2h
+
     /**
      * Curva de rampa por dia desde a ativação do número. Cada perfil tem sua
      * própria progressão; o último degrau de cada um já é o teto de regime.
@@ -127,7 +138,55 @@ class AquecimentoWhatsappService
         $usadoHoje = $tipo === 'frio' ? ($envioHoje->contador_frio ?? 0) : ($envioHoje->contador_quente ?? 0);
         $limite    = $limites[$tipo];
 
-        return $usadoHoje < $limite;
+        if ($usadoHoje >= $limite) {
+            return false;
+        }
+
+        if ($tipo === 'frio' && $envioHoje && ! $this->respeitaRegrasDeIntervaloParaFrio($envioHoje)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * As 3 regras de intervalo da Seção 8 do manual, só valem pra contato
+     * frio — quente/inbound não tem limite de intervalo, só o teto diário já
+     * checado em podeEnviar().
+     */
+    private function respeitaRegrasDeIntervaloParaFrio(WhatsappEnvioDiario $envio): bool
+    {
+        $agora = now();
+
+        // Achado do TDD (24/09): diffInSeconds() nesta versão do Carbon
+        // devolve valor COM SINAL (negativo quando o argumento é anterior a
+        // $agora), não absoluto — sem abs() explícito, todo cálculo aqui
+        // vinha negativo e batia "< limite" sempre, bloqueando tudo.
+
+        // Regra: pausa de 2h depois que o dia bateu 50 frias. Redundante com
+        // o teto diário enquanto TETO_REGIME_FRIO continuar em 50 (não dá pra
+        // exceder 50/dia de outro jeito), mas escrita como regra própria —
+        // se o teto de regime mudar no futuro, essa pausa continua valendo.
+        if ($envio->frio_50_atingido_em && abs($agora->diffInSeconds($envio->frio_50_atingido_em)) < self::PAUSA_APOS_50_FRIOS_SEGUNDOS) {
+            return false;
+        }
+
+        if (! $envio->ultima_conversa_fria_em) {
+            return true;
+        }
+
+        $segundosDesdeUltima = abs($agora->diffInSeconds($envio->ultima_conversa_fria_em));
+
+        if ($segundosDesdeUltima < self::INTERVALO_MINIMO_ENTRE_FRIOS_SEGUNDOS) {
+            return false;
+        }
+
+        if ($envio->sequencia_frios_atual >= self::MAX_FRIOS_EM_SEQUENCIA
+            && $segundosDesdeUltima < self::PAUSA_APOS_SEQUENCIA_SEGUNDOS) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -159,5 +218,36 @@ class AquecimentoWhatsappService
         }
 
         $envio->increment($coluna);
+
+        if ($tipo === 'frio') {
+            $this->atualizarEstadoDeSequenciaFria($envio);
+        }
+    }
+
+    /**
+     * Mantém sequencia_frios_atual/ultima_conversa_fria_em/frio_50_atingido_em
+     * atualizados a cada envio frio confirmado — é o estado que
+     * respeitaRegrasDeIntervaloParaFrio() lê no próximo podeEnviar().
+     */
+    private function atualizarEstadoDeSequenciaFria(WhatsappEnvioDiario $envio): void
+    {
+        $agora = now();
+
+        // Se já passou tempo suficiente de pausa desde a última fria, a
+        // sequência quebra e recomeça do 1 (este envio); senão, continua
+        // contando.
+        $pausouDesdeAUltima = $envio->ultima_conversa_fria_em
+            && abs($agora->diffInSeconds($envio->ultima_conversa_fria_em)) >= self::PAUSA_APOS_SEQUENCIA_SEGUNDOS;
+
+        $updates = [
+            'sequencia_frios_atual'   => $pausouDesdeAUltima ? 1 : $envio->sequencia_frios_atual + 1,
+            'ultima_conversa_fria_em' => $agora,
+        ];
+
+        if ($envio->contador_frio >= self::TETO_REGIME_FRIO && ! $envio->frio_50_atingido_em) {
+            $updates['frio_50_atingido_em'] = $agora;
+        }
+
+        $envio->update($updates);
     }
 }
