@@ -38,6 +38,9 @@ Route::prefix('minerador')->middleware('minerador')->group(function () {
 // Webhook Uazapi — token por tenant na URL (sem sessão, validado no controller)
 Route::post('/webhook/uazapi/{webhookToken}', [UazapiWebhookController::class, 'handle']);
 
+// Webhook WhatsApp Messenger próprio (Baileys) — mesmo padrão de token na URL
+Route::post('/webhook/messenger-proprio/{webhookToken}', [\App\Http\Controllers\Webhook\MessengerProprioWebhookController::class, 'handle']);
+
 // Webhook Covercut (canal oficial) — URL fixa, sem token na rota; assinatura
 // HMAC (X-BSP-Signature) validada no controller usando o webhook_secret do canal.
 Route::post('/webhook/covercut', [\App\Http\Controllers\Webhook\CovercutWebhookController::class, 'handle']);

@@ -94,18 +94,79 @@
     </div>
 
     {{--
-        Achado real 23/09 (Leonardo): este bloco existia rotulado "WhatsApp
-        Messenger", mas por baixo criava uma instância Uazapi normal — a
-        mesma tecnologia do bloco Business acima, que só é indicada mesmo
-        pra WhatsApp Business. Não existe hoje nenhuma integração real com o
-        app WhatsApp Messenger (é um projeto planejado, próprio, sem Uazapi
-        — ver leadcerto/_docs/PENDENCIAS.md e o plano
-        C:\Users\PICHAU\.claude\plans\nested-churning-prism.md). Removido o
-        bloco até a implementação real existir, pra não prometer uma
-        integração que não existe.
+        Fase 4 do plano do canal WhatsApp Messenger próprio (23/09): este bloco
+        antes rotulava "WhatsApp Messenger" mas criava por baixo uma instância
+        Uazapi normal (achado real 23/09) — desativado temporariamente até
+        existir um provider de verdade. Agora `store()` cria o canal via
+        MessengerProprioService quando app='messenger' (ver
+        WhatsappCanalController), então reativa o mesmo componente Alpine
+        genérico já usado pro bloco Business acima — sem duplicar JS, o
+        componente já é 100% agnóstico de provider.
     --}}
-    <div class="mt-10 p-5 rounded-2xl border-2 border-dashed border-gray-200 text-sm text-gray-400">
-        <strong class="text-gray-500">WhatsApp Messenger</strong> — integração própria ainda em desenvolvimento, não disponível pra conectar ainda.
+    <div class="mt-10" x-data="whatsappCanais('messenger')" x-init="carregar()">
+
+    <div class="flex items-center justify-between mb-2">
+        <h1 class="text-xl font-bold text-gray-800">WhatsApp Messenger (integração própria)</h1>
+        <button @click="conectarNovo()" :disabled="conectando"
+                class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors disabled:opacity-50">
+            + Conectar novo número
+        </button>
+    </div>
+    <p class="text-xs text-gray-500 mb-6">
+        Conexão direta via QR Code com o app <strong>WhatsApp Messenger</strong> comum (tecnologia própria, sem Uazapi) — sem garantias de entrega da Meta.
+        Escaneie este QR com o app WhatsApp Messenger comum, nunca com o Business.
+    </p>
+
+    <template x-if="erro">
+        <div class="mb-4 p-3 rounded-lg bg-red-50 border border-red-200">
+            <p class="text-sm text-red-600" x-text="erro"></p>
+        </div>
+    </template>
+
+    <div class="space-y-4">
+        <template x-for="canal in canais" :key="canal.id">
+            <div class="bg-white rounded-2xl shadow-sm p-5">
+                <div class="flex items-center justify-between gap-3 mb-3">
+                    <div class="flex items-center gap-2">
+                        <template x-if="canal.status === 'connected'">
+                            <span class="flex items-center gap-2 text-green-600 font-medium text-sm">
+                                <span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+                                Conectado <span class="text-gray-400 font-normal" x-text="canal.phone"></span>
+                            </span>
+                        </template>
+                        <template x-if="canal.status !== 'connected'">
+                            <span class="flex items-center gap-2 text-gray-500 font-medium text-sm">
+                                <span class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+                                Desconectado
+                            </span>
+                        </template>
+                    </div>
+                    <button @click="excluirCanal(canal)" class="text-red-300 hover:text-red-500 text-xs">Remover</button>
+                </div>
+
+                <template x-if="canal.status !== 'connected'">
+                    <div class="flex justify-center">
+                        <template x-if="canal.qrcode">
+                            <img :src="'data:image/png;base64,' + canal.qrcode" class="w-48 h-48 border border-gray-200 rounded-xl p-2">
+                        </template>
+                        <template x-if="!canal.qrcode">
+                            <button @click="gerarQr(canal)"
+                                    class="w-48 h-48 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center text-gray-400 hover:border-green-400 hover:text-green-500 text-sm font-medium transition-colors">
+                                Gerar QR Code
+                            </button>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <template x-if="canais.length === 0 && !conectando">
+            <div class="text-center py-8 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-xl">
+                Nenhum número WhatsApp Messenger conectado ainda.
+            </div>
+        </template>
+    </div>
+
     </div>
 
     <div class="mt-10" x-data="whatsappCanaisOficiais()" x-init="carregar()">

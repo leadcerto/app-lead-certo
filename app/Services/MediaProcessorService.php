@@ -844,4 +844,86 @@ class MediaProcessorService
             return null;
         }
     }
+
+    // -------------------------------------------------------------------------
+    // WhatsApp Messenger próprio (Baileys) — Fase 4 do plano em
+    // C:\Users\PICHAU\.claude\plans\nested-churning-prism.md.
+    //
+    // Diferença estrutural em relação a Uazapi/Covercut: o microserviço
+    // (leadcerto/integracoes/whatsapp-proprio) já baixa E decripta a mídia do
+    // lado Node, usando o helper nativo downloadMediaMessage() da própria lib
+    // Baileys (ver webhook.js), e manda os bytes prontos (base64) no payload
+    // do webhook. Não existe um "baixarMidiaMessengerProprio()" por token/id
+    // — os bytes já chegaram, só falta processar (salvar, transcrever,
+    // analisar imagem), reaproveitando os mesmos helpers provider-agnósticos
+    // (salvarBytes, analisarImagemCompleta, transcreverAudioBase64) que os
+    // outros dois caminhos já usam.
+    // -------------------------------------------------------------------------
+
+    public function processarMessengerProprio(string $tipoMidia, string $bytes, string $mime, bool $transcricaoAtiva = true): ?string
+    {
+        if (! $transcricaoAtiva && in_array($tipoMidia, ['audio', 'audio_arquivo'], true)) {
+            return '[Áudio recebido — transcrição desativada para esta coluna]';
+        }
+
+        return match ($tipoMidia) {
+            'audio', 'audio_arquivo' => $this->processarAudioMessengerProprio($bytes, $mime),
+            'video'                  => '[Vídeo recebido]',
+            'documento'              => '[Documento recebido]',
+            default                  => null,
+        };
+    }
+
+    private function processarAudioMessengerProprio(string $bytes, string $mime): string
+    {
+        if (! $this->groqKey) {
+            return '[Áudio recebido — transcrição não configurada]';
+        }
+
+        $transcricao = $this->transcreverAudioBase64(base64_encode($bytes), $mime);
+
+        return $transcricao
+            ? "[Áudio transcrito: {$transcricao}]"
+            : '[Áudio recebido — não foi possível transcrever]';
+    }
+
+    /**
+     * Espelha processarImagemUnicaOficial()/processarImagemUnica() — única
+     * passada de download+análise. Aqui o "download" já aconteceu (bytes
+     * vieram prontos no payload), só falta salvar+analisar.
+     *
+     * @return array{conteudo: string, itens: ?string, midiaUrl: ?string}
+     */
+    public function processarImagemUnicaMessengerProprio(string $bytes, string $mime, ?string $caption, ?string $focoAnalise = null, bool $transcricaoAtiva = true): array
+    {
+        $midiaUrl = $this->salvarBytes($bytes, $mime ?: 'image/jpeg', 'image');
+
+        if (! $transcricaoAtiva) {
+            return [
+                'conteudo' => '[Imagem recebida — transcrição desativada para esta coluna]',
+                'itens'    => null,
+                'midiaUrl' => $midiaUrl,
+            ];
+        }
+
+        $dataUri = 'data:' . ($mime ?: 'image/jpeg') . ';base64,' . base64_encode($bytes);
+        $analise = $this->analisarImagemCompleta($dataUri, $caption ?? '', $focoAnalise);
+        $prefixo = $caption ? "[Imagem: {$caption}] " : '[Imagem] ';
+
+        return [
+            'conteudo' => $prefixo . $analise['descricao'],
+            'itens'    => $analise['itens'],
+            'midiaUrl' => $midiaUrl,
+        ];
+    }
+
+    /**
+     * Salva os bytes já recebidos permanentemente em storage/public — mesmo
+     * papel que baixarEPersistirUrl()/baixarEPersistirUrlOficial() têm nos
+     * outros dois canais, só que sem nenhum download (bytes já em mãos).
+     */
+    public function persistirUrlMessengerProprio(string $bytes, string $mime, string $mediaType): string
+    {
+        return $this->salvarBytes($bytes, $mime ?: 'application/octet-stream', $mediaType);
+    }
 }

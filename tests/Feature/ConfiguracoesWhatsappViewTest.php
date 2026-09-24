@@ -23,10 +23,12 @@ class ConfiguracoesWhatsappViewTest extends TestCase
 
         // Achado real 23/09 (Leonardo): o bloco "WhatsApp Messenger" existia
         // rotulado assim, mas por baixo criava uma instância Uazapi comum —
-        // Uazapi só é indicado pra WhatsApp Business de verdade. Removido até
-        // existir uma integração própria de Messenger de verdade (ver plano
-        // do canal WhatsApp Messenger próprio). A tela não pode mais prometer
-        // esse rótulo como se fosse uma opção funcional.
+        // Uazapi só é indicado pra WhatsApp Business de verdade. Nunca mais
+        // pode aparecer rotulado como Uazapi.
         $response->assertDontSee('WhatsApp Messenger (API Não Oficial — uazapi)');
+
+        // Fase 4 do plano: reativado com provider real (messenger_proprio, sem
+        // Uazapi em nenhuma camada).
+        $response->assertSee('WhatsApp Messenger (integração própria)');
     }
 }
