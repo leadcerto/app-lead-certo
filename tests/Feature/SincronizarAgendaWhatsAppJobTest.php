@@ -32,4 +32,31 @@ class SincronizarAgendaWhatsAppJobTest extends TestCase
         $this->assertNotNull($ticket);
         $this->assertSame($canal->id, $ticket->whatsapp_canal_id);
     }
+
+    /**
+     * Achado do planejamento do canal WhatsApp Messenger próprio (23/09):
+     * import de agenda é um recurso exclusivo da Uazapi (listarContatos()) —
+     * sem checar o provider, um canal de outro provedor mandaria o token dele
+     * pro endpoint real da Uazapi.
+     */
+    public function test_nao_importa_agenda_quando_canal_nao_e_uazapi(): void
+    {
+        Http::fake([
+            '*/contacts' => Http::response([
+                ['jid' => '5511988887777@s.whatsapp.net', 'contact_name' => 'Fulano', 'contact_FirstName' => 'Fulano'],
+            ], 200),
+        ]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id,
+            'provider'  => 'outro_provider_qualquer',
+            'config'    => ['instance_token' => 'tok'],
+        ]);
+
+        (new SincronizarAgendaWhatsAppJob($canal->id))->handle(app(\App\Services\UazapiService::class));
+
+        Http::assertNothingSent();
+        $this->assertSame(0, TicketAtendimento::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count());
+    }
 }

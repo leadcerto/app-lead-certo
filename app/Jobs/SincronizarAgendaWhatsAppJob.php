@@ -28,7 +28,10 @@ class SincronizarAgendaWhatsAppJob implements ShouldQueue
     {
         $canal = WhatsappCanal::withoutGlobalScopes()->find($this->whatsappCanalId);
 
-        if (! $canal || ! $canal->tokenUazapi()) {
+        // Achado do planejamento do canal WhatsApp Messenger próprio (23/09):
+        // import de agenda é um recurso exclusivo da Uazapi — sem checar o
+        // provider, mandaria o token de outro canal pro endpoint da Uazapi.
+        if (! $canal || $canal->provider !== 'uazapi' || ! $canal->tokenUazapi()) {
             return;
         }
 

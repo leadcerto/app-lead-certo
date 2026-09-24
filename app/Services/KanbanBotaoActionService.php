@@ -99,6 +99,14 @@ class KanbanBotaoActionService
             };
         }
 
+        // Achado do planejamento do canal WhatsApp Messenger próprio (23/09):
+        // botões (menu interativo) são um recurso hoje exclusivo do provider
+        // Uazapi — sem essa checagem, um canal de outro provider mandaria o
+        // token dele pro endpoint da Uazapi, falha silenciosa sem erro óbvio.
+        if ($ticket->canal?->provider !== 'uazapi') {
+            return false;
+        }
+
         $telefone = $ticket->contato?->telefone;
         $token    = $ticket->canal?->tokenUazapi();
         if (! $telefone || ! $token) {

@@ -113,4 +113,42 @@ class KanbanBotaoActionServiceEnviarBotoesTest extends TestCase
 
         $this->assertFalse($ok);
     }
+
+    /**
+     * Achado do planejamento do canal WhatsApp Messenger próprio (23/09):
+     * enviarBotoes() lia $ticket->canal->tokenUazapi() e chamava
+     * UazapiService::enviarMenuBotoes() incondicionalmente, sem checar o
+     * provider do canal. Um canal com provider diferente de 'uazapi' (ex: o
+     * canal Messenger próprio, ainda não implementado) mandaria o token
+     * daquele OUTRO provedor pro endpoint real da Uazapi — falha silenciosa,
+     * sem erro óbvio. Botões são um recurso hoje exclusivo do provider Uazapi.
+     */
+    public function test_nao_envia_botoes_quando_canal_nao_e_uazapi(): void
+    {
+        Http::fake(['*/send/menu' => Http::response(['id' => 'msg1'], 200)]);
+
+        $tenant  = Tenant::factory()->create();
+        $canal   = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id,
+            'provider'  => 'outro_provider_qualquer',
+            'config'    => ['instance_token' => 'token-de-outro-canal'],
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511999999999']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'aguardando_lead', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $botoes = [
+            ['text' => 'Falar com Humano', 'action' => 'move_column', 'target' => 'em_atendimento'],
+        ];
+
+        $ok = app(KanbanBotaoActionService::class)->enviarBotoes($ticket, 'Escolha uma opção', $botoes);
+
+        $this->assertFalse($ok);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/send/menu'));
+        $this->assertNull($ticket->fresh()->botoes_ativos);
+    }
 }

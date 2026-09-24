@@ -47,6 +47,28 @@ class AquecimentoGruposCommandTest extends TestCase
         Carbon::setTestNow();
     }
 
+    /**
+     * Achado do planejamento do canal WhatsApp Messenger próprio (23/09):
+     * aquecimento de grupos (figurinha/sticker) é um recurso exclusivo da
+     * Uazapi — sem checar o provider, o comando tentaria postar em grupo
+     * usando o token de outro canal contra o endpoint real da Uazapi.
+     */
+    public function test_nao_posta_em_grupo_quando_canal_nao_e_uazapi(): void
+    {
+        Http::fake([
+            '*/group/list' => Http::response(['groups' => [
+                ['chatid' => '111@g.us', 'name' => 'Figurinhas Top'],
+            ]], 200),
+            '*/send/text' => Http::response(['id' => 'abc'], 200),
+        ]);
+
+        $this->canalComGrupos(['provider' => 'outro_provider_qualquer']);
+
+        $this->artisan('whatsapp:aquecimento-grupos')->assertExitCode(0);
+
+        Http::assertNothingSent();
+    }
+
     public function test_nao_posta_de_novo_no_mesmo_grupo_no_mesmo_dia(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-20 14:00:00', 'America/Sao_Paulo'));

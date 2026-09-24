@@ -284,7 +284,7 @@ class SequenciaMensagemJob implements ShouldQueue
 
         if ($this->imagemUrl) {
 
-            $imagemOk = $uazapi->enviarImagem($token, $telefone, $this->imagemUrl, $texto);
+            $imagemOk = $canal->servico()->enviarImagem($canal, $telefone, $this->imagemUrl, $texto);
 
             if ($imagemOk) {
                 Mensagem::create([
@@ -300,7 +300,7 @@ class SequenciaMensagemJob implements ShouldQueue
             } else {
                 // Fallback: API de mídia indisponível — envia só o texto (ou URL pública)
                 $fallback   = $texto ?: $this->imagemUrl;
-                $fallbackOk = $humanizacao->processar($token, $telefone, $fallback);
+                $fallbackOk = $canal->servico()->enviarTexto($canal, $telefone, $fallback);
 
                 Mensagem::create([
                     'ticket_id'  => $ticket->id,
@@ -320,7 +320,7 @@ class SequenciaMensagemJob implements ShouldQueue
             }
         } else {
             // Só texto — com humanização completa
-            $enviado = $humanizacao->processar($token, $telefone, $texto);
+            $enviado = $canal->servico()->enviarTexto($canal, $telefone, $texto);
             $this->registrarResultadoChamadaPerdida($enviado);
 
             Mensagem::create([
