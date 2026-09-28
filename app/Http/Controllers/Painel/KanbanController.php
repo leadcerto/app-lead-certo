@@ -455,6 +455,40 @@ class KanbanController extends Controller
         ]);
     }
 
+    /**
+     * Pedido do Leonardo (24/09): botão "Auditoria" no ticket, pra um humano
+     * sinalizar uma conversa pra revisão de desenvolvimento (nunca pra IA
+     * analisar) — cria uma fila persistente em vez de depender de lembrar e
+     * passar o número do ticket manualmente toda vez que um problema aparece.
+     */
+    public function marcarRevisaoDev(Request $request, int $ticket): JsonResponse
+    {
+        $request->validate([
+            'nota' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $model = TicketAtendimento::findOrFail($ticket);
+        $model->update([
+            'revisao_dev_solicitada_em'  => now(),
+            'revisao_dev_nota'           => $request->nota,
+            'revisao_dev_solicitada_por' => $request->user()->id,
+            'revisao_dev_concluida_em'   => null,
+        ]);
+
+        return response()->json([
+            'ticket_id'                 => $ticket,
+            'revisao_dev_solicitada_em' => $model->revisao_dev_solicitada_em,
+        ]);
+    }
+
+    public function concluirRevisaoDev(int $ticket): JsonResponse
+    {
+        $model = TicketAtendimento::findOrFail($ticket);
+        $model->update(['revisao_dev_concluida_em' => now()]);
+
+        return response()->json(['ticket_id' => $ticket, 'revisao_dev_concluida_em' => $model->revisao_dev_concluida_em]);
+    }
+
     public function mover(Request $request, int $ticket): JsonResponse
     {
         $tenantId = $request->user()->tenant_id;

@@ -245,7 +245,38 @@
                                         class="text-gray-300 hover:text-red-400 text-sm leading-none ml-0.5"
                                         title="Limpar retorno">×</button>
                             </template>
+
+                            {{-- Botão "Auditoria" (pedido do Leonardo 24/09): sinaliza a
+                                 conversa pra revisão de desenvolvimento — NUNCA a IA analisa,
+                                 só cria a fila que a gente (dev) revisa depois. --}}
+                            <template x-if="!ticketAtivo.revisao_dev_solicitada_em">
+                                <button @click="auditoriaAberta = !auditoriaAberta"
+                                        class="text-[11px] text-gray-400 hover:text-red-500 border border-gray-200 hover:border-red-300 rounded-md px-1.5 py-0.5 ml-2 transition-colors"
+                                        title="Marcar esta conversa pra revisão de desenvolvimento">
+                                    🔍 Auditoria
+                                </button>
+                            </template>
+                            <template x-if="ticketAtivo.revisao_dev_solicitada_em">
+                                <span class="text-[11px] text-red-500 bg-red-50 border border-red-200 rounded-md px-1.5 py-0.5 ml-2"
+                                      title="Marcado pra revisão de desenvolvimento">
+                                    🔍 Em auditoria
+                                </span>
+                            </template>
                         </div>
+                        <template x-if="auditoriaAberta">
+                            <div class="flex items-center gap-1.5 mt-1.5">
+                                <input x-model="auditoriaNota" type="text"
+                                       placeholder="Nota opcional (ex: IA repetiu mensagem)..."
+                                       @keydown.enter.prevent="marcarAuditoria()"
+                                       class="flex-1 text-xs border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-red-300">
+                                <button @click="marcarAuditoria()"
+                                        class="text-xs bg-red-500 hover:bg-red-600 text-white px-2.5 py-1 rounded-lg transition-colors font-medium">
+                                    Marcar
+                                </button>
+                                <button @click="auditoriaAberta = false"
+                                        class="text-xs text-gray-400 hover:underline">Cancelar</button>
+                            </div>
+                        </template>
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap justify-end">
                         {{-- Botões "Devolver"/"Devolver + IA" removidos em 2026-08-20 —
@@ -785,6 +816,8 @@ function kanban() {
         orientacaoAberto:   false,
         novaNota:          '',
         salvandoNota:      false,
+        auditoriaAberta:   false,
+        auditoriaNota:     '',
         dragCard:          null,
         dragOver:          null,
         dragOccurred:      false,
@@ -962,6 +995,17 @@ function kanban() {
             }
         },
 
+        async marcarAuditoria() {
+            if (!this.ticketAtivo) return;
+            const res = await this.api(`/api/painel/kanban/ticket/${this.ticketAtivo.id}/auditoria`, 'POST', { nota: this.auditoriaNota || null });
+            if (res.ok) {
+                const json = await res.json();
+                this.ticketAtivo.revisao_dev_solicitada_em = json.revisao_dev_solicitada_em;
+                this.auditoriaAberta = false;
+                this.auditoriaNota   = '';
+            }
+        },
+
         async salvarNome() {
             const nome = this.nomeEdit.trim();
             if (!nome || !this.ticketAtivo?.contato?.id) return;
@@ -996,6 +1040,8 @@ function kanban() {
             this.orientacaoTexto    = '';
             this.orientacaoEnviando = false;
             this.orientacaoAberto   = Boolean(ticket.aguardando_orientacao_em);
+            this.auditoriaAberta = false;
+            this.auditoriaNota   = '';
             this.objetivosAberto = false;
             this.mensagens = [];
             await this.sincronizarTicketAtivo();

@@ -251,6 +251,10 @@ class TicketAtendimento extends Model
         'mensagem_espera_enviada',
         'tentativas_envio_falhas',
         'ultima_mensagem_lead_em',
+        'revisao_dev_solicitada_em',
+        'revisao_dev_nota',
+        'revisao_dev_solicitada_por',
+        'revisao_dev_concluida_em',
     ];
 
     protected function casts(): array
@@ -272,6 +276,8 @@ class TicketAtendimento extends Model
             'aguardando_orientacao_em' => 'datetime',
             'mensagem_espera_enviada'  => 'boolean',
             'tentativas_envio_falhas' => 'integer',
+            'revisao_dev_solicitada_em' => 'datetime',
+            'revisao_dev_concluida_em'  => 'datetime',
         ];
     }
 
@@ -283,6 +289,11 @@ class TicketAtendimento extends Model
     public function contato(): BelongsTo
     {
         return $this->belongsTo(Contato::class, 'contato_id');
+    }
+
+    public function solicitante(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'revisao_dev_solicitada_por');
     }
 
     public function canal(): BelongsTo
