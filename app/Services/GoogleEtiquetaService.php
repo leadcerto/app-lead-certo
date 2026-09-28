@@ -14,15 +14,26 @@ class GoogleEtiquetaService
     /**
      * Mapeamento de slugs do sistema para os nomes oficiais dos marcadores no Google Contatos.
      */
+    // Achado real 24/09 (Leonardo, Frete Rio): as etiquetas próprias do
+    // sistema (controle gerencial total, incluindo criação de novas no
+    // futuro) seguem a convenção de sempre começar com 🚩 — o Leonardo
+    // renomeou/criou os grupos reais no Google Contatos direto pela
+    // interface com essa convenção, mas o mapeamento ainda só reconhecia os
+    // nomes antigos (prefixo "- ") pra sem_nome/fornecedor/pessoal/
+    // leads_em_analise/lead_invalido. Resultado: o sistema vinha criando e
+    // usando grupos órfãos e vazios em paralelo aos reais (que o Leonardo
+    // gerencia manualmente), sem ninguém notar. Nome novo (🚩) sempre
+    // primeiro na lista — é o que casa primeiro em sincronizarGrupos() e o
+    // que seria usado se precisasse criar do zero pra um tenant novo.
     public const MAPEAMENTO_GRUPOS = [
         'novos_leads'      => ['🚩 NOVOS LEADS', 'Novos Leads', 'Lead Certo - Novos Leads'],
         'lead_certo'       => ['🚩 LEAD CERTO', 'Lead Certo', 'Lead Certo - Lead'],
-        'leads_em_analise' => ['🚩 LEADS EM ANÁLISE', 'Leads em Análise', 'Lead Certo - Leads Em Analise'],
-        'lead_invalido'    => ['🚩 ⚠️ LEAD INVALIDO', '🚩 ⚠️ LEAD INVÁLIDO', 'Lead Inválido', 'Lead Certo - Lead Invalido'],
-        'sem_nome'         => ['- 00 Sem Nome', 'Sem Nome', 'Lead Certo - Sem Nome'],
+        'leads_em_analise' => ['🚩 EM ANÁLISE', '🚩 LEADS EM ANÁLISE', 'Leads em Análise', 'Lead Certo - Leads Em Analise'],
+        'lead_invalido'    => ['🚩 ⚠️ INVALIDOS', '🚩 ⚠️ INVÁLIDOS', '🚩 ⚠️ LEAD INVALIDO', '🚩 ⚠️ LEAD INVÁLIDO', 'Lead Inválido', 'Lead Certo - Lead Invalido'],
+        'sem_nome'         => ['🚩 SEM NOME', '- 00 Sem Nome', 'Sem Nome', 'Lead Certo - Sem Nome'],
         'cliente'          => ['- CLIENTE', 'Cliente', 'Lead Certo - Cliente'],
-        'fornecedor'       => ['- 00 Fornecedores', 'Fornecedor', 'Lead Certo - Fornecedor'],
-        'pessoal'          => ['- 00 Pessoal', 'Pessoal', 'Lead Certo - Pessoal'],
+        'fornecedor'       => ['🚩 FORNECEDORES', '- 00 Fornecedores', 'Fornecedor', 'Lead Certo - Fornecedor'],
+        'pessoal'          => ['🚩 PESSOAL', '- 00 Pessoal', 'Pessoal', 'Lead Certo - Pessoal'],
     ];
 
     public function __construct(private GoogleService $google) {}
@@ -123,6 +134,8 @@ class GoogleEtiquetaService
         $grupoInvalido   = $gruposMap->get('lead_invalido')?->google_group_resource_name;
         $grupoSemNome    = $gruposMap->get('sem_nome')?->google_group_resource_name;
         $grupoCliente    = $gruposMap->get('cliente')?->google_group_resource_name;
+        $grupoFornecedor = $gruposMap->get('fornecedor')?->google_group_resource_name;
+        $grupoPessoal    = $gruposMap->get('pessoal')?->google_group_resource_name;
 
         // Se o lead é inválido ou bloqueado
         if ($contato->bloqueado || $contato->opt_out) {
@@ -163,6 +176,17 @@ class GoogleEtiquetaService
         // Cliente
         if ($grupoCliente && $contato->tipo_contato === 'cliente') {
             $this->google->modificarMembrosGrupo($token, $grupoCliente, [$resourceName]);
+        }
+
+        // Achado real 24/09 (Leonardo): os grupos Fornecedores/Pessoal já
+        // eram provisionados (sincronizarGrupos), mas ninguém nunca
+        // adicionava um contato a eles de verdade — só o mapeamento com o
+        // Google existia, a sincronização por contato não.
+        if ($grupoFornecedor && $contato->tipo_contato === 'fornecedor') {
+            $this->google->modificarMembrosGrupo($token, $grupoFornecedor, [$resourceName]);
+        }
+        if ($grupoPessoal && $contato->tipo_contato === 'pessoal') {
+            $this->google->modificarMembrosGrupo($token, $grupoPessoal, [$resourceName]);
         }
 
         return true;
