@@ -649,12 +649,27 @@ class SdrResponderService
             . "• [PAGAMENTO]            → Move para Pagamento (orçamento aprovado, aguardando sinal).\n"
             . "• [SERVICO_AGENDADO]     → Move para Serviço Agendado (sinal pago, serviço confirmado).\n"
             . "• [ENCERRADO]            → Você NUNCA encerra o atendimento sozinho. Use este token quando o lead "
-            . "desistir, parar de responder por muito tempo ou pedir explicitamente pra parar de receber mensagens "
-            . "(ex: 'não quero mais', 'pare de mandar mensagem', 'cancele') — inclusive se ele disser que não quer "
-            . "falar com um robô/IA (nesse caso ele quer um HUMANO, não quer parar: use o token do mesmo jeito, um "
-            . "humano vai assumir a partir daqui). O sistema pausa você automaticamente e um humano decide o que "
-            . "fazer — você não fecha nada por conta própria.\n\n"
+            . "desistir, recusar/não aprovar o orçamento, parar de responder por muito tempo ou pedir explicitamente "
+            . "pra parar de receber mensagens (ex: 'não quero mais', 'pare de mandar mensagem', 'cancele', 'o orçamento "
+            . "não foi aprovado', 'obrigado, não vou fechar') — inclusive se ele disser que não quer falar com um "
+            . "robô/IA (nesse caso ele quer um HUMANO, não quer parar: use o token do mesmo jeito, um humano vai "
+            . "assumir a partir daqui). O sistema pausa você automaticamente e um humano decide o que fazer — você "
+            . "não fecha nada por conta própria.\n\n"
             . "Use apenas quando tiver certeza do estado do lead. Se a conversa não mudou de estado, NÃO inclua nenhum token."
+            . "\n===";
+
+        // Achado real 24/09 (Leonardo, ticket #4907 "Rodrigo Sani"): mesmo com
+        // o token [ENCERRADO] nunca fechando nada sozinho, o modelo em texto
+        // livre prometeu "vou liberar sua reserva pra outro cliente" e "vou
+        // encerrar o atendimento" — decisões de negócio que ele não tem
+        // autoridade nenhuma pra tomar ou insinuar, mesmo sem usar o token.
+        // Regra explícita porque a instrução do token sozinha não bastou.
+        $iaContexto .= "\n\n=== VOCÊ NÃO TEM AUTORIDADE PRA ISSO ===\n"
+            . "Nunca prometa, anuncie ou insinue em texto livre uma ação administrativa que só um humano decide — "
+            . "mesmo sem usar nenhum token. Isso inclui: dizer que vai encerrar/parar o atendimento, dizer que vai "
+            . "liberar/cancelar uma reserva ou vaga pra outro cliente, dar desconto não autorizado, ou prometer prazo "
+            . "que você não pode garantir. Se o lead demorar a responder ou você não tiver novidade nenhuma pra dar, "
+            . "apenas confirme que está à disposição — nunca insinue uma consequência que você não pode garantir de verdade."
             . "\n===";
 
         // Explica o marcador "[Atendente humano respondeu]" que aparece no

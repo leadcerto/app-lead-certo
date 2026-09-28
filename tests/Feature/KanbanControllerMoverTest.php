@@ -191,5 +191,51 @@ class KanbanControllerMoverTest extends TestCase
 
         \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\SequenciaMensagemJob::class);
     }
+
+    /**
+     * Achado real 24/09 (ticket #4913, "Fernanda"): a IA pausou esperando um
+     * humano decidir sobre uma dúvida (fim de semana sem agenda disponível).
+     * O Leonardo respondeu a cliente diretamente e arrastou o card pra
+     * "Aguardando Orçamento" — que tem sequência/IA ativa, então o sistema
+     * devolveu o controle pro bot automaticamente, e 3 minutos depois a IA
+     * mandou "vou preparar seu orçamento", contradizendo o que o humano
+     * acabara de dizer. Regra do Leonardo: depois de uma dúvida pausar o
+     * atendimento, quem segue é o humano — mover o card não pode devolver o
+     * controle pra IA silenciosamente enquanto isso não for resolvido.
+     */
+    public function test_mover_nao_restaura_bot_quando_ticket_aguarda_orientacao_humana(): void
+    {
+        \Illuminate\Support\Facades\Queue::fake();
+
+        $tenant  = Tenant::factory()->create();
+        $user    = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $contato = Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'humano',
+            'status' => 'aberto', 'aberto_em' => now(),
+            'aguardando_orientacao_em' => now(),
+        ]);
+
+        $sequencia = \App\Models\Sequencia::create([
+            'tenant_id' => $tenant->id, 'nome' => 'Seq Orçamento', 'coluna_kanban' => 'aguardando_orcamento', 'ativo' => true,
+        ]);
+        \App\Models\SequenciaMensagem::create([
+            'tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,
+            'conteudo' => 'Vou preparar seu orçamento', 'delay_segundos' => 0, 'ativo' => true,
+        ]);
+
+        $this->actingAs($user)->postJson("/api/painel/kanban/ticket/{$ticket->id}/mover", [
+            'coluna' => 'aguardando_orcamento',
+        ])->assertOk();
+
+        $ticket->refresh();
+        $this->assertSame('aguardando_orcamento', $ticket->coluna_kanban);
+        // A pausa em si já é limpa automaticamente ao mudar de coluna (regra
+        // pré-existente do model — a dúvida é específica do contexto da
+        // coluna anterior, e o hook já fecha o alerta com essa justificativa).
+        // O bug real era só o agente_responsavel voltar pra 'bot' sozinho.
+        $this->assertSame('humano', $ticket->agente_responsavel, 'não pode devolver o controle pra IA com dúvida pendente');
+    }
 }
 

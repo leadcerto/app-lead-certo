@@ -71,6 +71,26 @@ class SdrResponderServicePromptGuardrailsTest extends TestCase
         $this->assertStringContainsString('[DUVIDA:', $prompt);
     }
 
+    /**
+     * Achado real 24/09 (Leonardo, ticket #4907 "Rodrigo Sani"): a IA prometeu
+     * "vou liberar sua reserva pra outro cliente" e "vou encerrar o
+     * atendimento" em texto livre, sem usar nenhum token — decisões de
+     * negócio que ela não tem autoridade pra tomar ou insinuar.
+     */
+    public function test_prompt_contem_regra_de_nao_prometer_acoes_sem_autoridade(): void
+    {
+        $prompt = $this->capturarPrompt($this->criarTicketComPersona());
+
+        $this->assertStringContainsString('Nunca prometa, anuncie ou insinue em texto livre uma ação administrativa', $prompt);
+    }
+
+    public function test_prompt_do_token_encerrado_cita_recusa_de_orcamento_como_gatilho(): void
+    {
+        $prompt = $this->capturarPrompt($this->criarTicketComPersona());
+
+        $this->assertStringContainsString('recusar/não aprovar o orçamento', $prompt);
+    }
+
     public function test_objetivo_cumprido_aparece_marcado_junto_com_a_instrucao_de_nao_repetir(): void
     {
         // Regra 5 na prática: o bloco de objetivos (já existente) e a instrução

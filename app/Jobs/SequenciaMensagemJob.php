@@ -43,6 +43,25 @@ class SequenciaMensagemJob implements ShouldQueue
             return;
         }
 
+        // Achado real 24/09 (ticket #4907, "Rodrigo Sani"): o lead recusou o
+        // orçamento e se despediu, mas o card continuou recebendo mensagens
+        // automáticas de cobrança por 18 horas. As mensagens de uma
+        // sequência são todas enfileiradas de uma vez quando o lead entra na
+        // coluna — este job nunca checava aguardando_orientacao_em, o campo
+        // que pausa o atendimento quando alguma rede de segurança da IA
+        // (token [ENCERRADO]/[DUVIDA]/handoff prematuro/etc.) decide que um
+        // humano precisa revisar antes de qualquer coisa continuar. Sem
+        // exceção por "obrigatório" aqui — diferente do guard de
+        // agente_responsavel logo abaixo, esta pausa sinaliza que NADA
+        // automático deve continuar até um humano decidir.
+        if ($ticket->aguardando_orientacao_em) {
+            Log::info('SequenciaMensagemJob: ticket aguardando orientação humana, envio cancelado', [
+                'ticket_id' => $this->ticketId,
+            ]);
+            $this->registrarResultadoChamadaPerdida(false);
+            return;
+        }
+
         $bloqueado = \App\Models\VinculoContatoTenant::where('contato_id', $ticket->contato_id)
             ->where('tenant_id', $ticket->tenant_id)
             ->whereNotNull('bloqueado_em')
