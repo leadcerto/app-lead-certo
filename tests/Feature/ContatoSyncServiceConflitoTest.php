@@ -715,6 +715,52 @@ class ContatoSyncServiceConflitoTest extends TestCase
         );
     }
 
+    /**
+     * Achado real 2026-09-28 (Leonardo, aba "Conflitos de Identidade" — casos
+     * reais "Francisco Muniz Jr"/"Francisco" e "Gaby"/"Here"): resolver um
+     * conflito ("Mesma Pessoa"/"Número Reciclado") marca o ContatoPendente
+     * como 'fundido'/'novo_criado', mas processarPessoa() só evitava
+     * duplicata comparando contra status='aguardando' — no ciclo seguinte do
+     * cron (contatos:sincronizar-google, a cada poucos minutos), a mesma
+     * divergência de nome recriava um ContatoPendente NOVO do zero pro mesmo
+     * contato+telefone, fazendo o Leonardo resolver a mesma coisa
+     * repetidamente sem nunca esvaziar a fila.
+     */
+    public function test_nao_recria_conflito_de_identidade_ja_resolvido_no_ciclo_seguinte(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create([
+            'telefone' => '5521999998888',
+            'nome'     => 'Roberto',
+        ]);
+
+        ContatoPendente::create([
+            'tenant_id'            => $tenant->id,
+            'telefone'             => '5521999998888',
+            'contato_existente_id' => $contato->id,
+            'status'               => 'fundido', // já resolvido pelo Leonardo num ciclo anterior
+            'nome'                 => 'Patricia',
+            'dados_brutos'         => ['nome' => 'Patricia'],
+            'nome_existente'       => 'Roberto',
+            'tipo_conflito'        => 'numero_possivelmente_reciclado',
+            'similaridade_nome'    => 0,
+            'criado_em'            => now()->subDays(2),
+            'resolvido_em'         => now()->subDay(),
+        ]);
+
+        // Mesma divergência de nome volta a aparecer no ciclo seguinte do sync
+        $this->fakeConexoesGoogle('5521999998888', 'Patricia', 'Sem Empresa');
+
+        $token = $this->criarToken($tenant);
+        app(ContatoSyncService::class)->sincronizar($token, $tenant->id);
+
+        $this->assertSame(
+            1,
+            ContatoPendente::where('contato_existente_id', $contato->id)->count(),
+            'uma decisão já tomada (fundido/novo_criado) não pode ser recriada pelo próximo ciclo do sync'
+        );
+    }
+
     public function test_empresa_pre_existente_nao_e_sobrescrita_no_primeiro_vinculo_google(): void
     {
         $tenant  = Tenant::factory()->create();

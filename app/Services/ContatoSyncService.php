@@ -352,7 +352,7 @@ class ContatoSyncService
                         AtualizarNomeGoogleComDadoLocalJob::dispatch($vinculoExistente->id);
 
                         $resultado['atualizados']++;
-                    } else {
+                    } elseif (! $this->conflitoJaFoiDecidido($tenantId, $telefone, $existente->id)) {
                         // Similaridade baixa → possível chip reciclado → auditoria
                         ContatoPendente::firstOrCreate(
                             [
@@ -403,6 +403,10 @@ class ContatoSyncService
             return;
         }
 
+        if ($this->conflitoJaFoiDecidido($tenantId, $telefone, $contatoExistente->id)) {
+            return;
+        }
+
         ContatoPendente::firstOrCreate(
             [
                 'tenant_id'            => $tenantId,
@@ -422,6 +426,26 @@ class ContatoSyncService
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Achado real 2026-09-28 (Leonardo, aba "Conflitos de Identidade" — casos
+     * reais "Francisco Muniz Jr"/"Francisco" e "Gaby"/"Here"): o Leonardo já
+     * tinha resolvido ("Mesma Pessoa"/"Número Reciclado") o mesmo conflito
+     * várias vezes, e ele voltava a aparecer do zero no ciclo seguinte do
+     * cron — a mesma divergência de nome entre Google e local persiste (às
+     * vezes o próprio dado do Google oscila entre "Francisco" e "Francisco
+     * Muniz Jr" de um sync pro outro), mas a decisão humana já tomada
+     * (fundido/novo_criado/descartado) precisa ser respeitada, igual à
+     * pendência de telefone "ignorado" corrigida antes.
+     */
+    private function conflitoJaFoiDecidido(int $tenantId, string $telefone, int $contatoExistenteId): bool
+    {
+        return ContatoPendente::where('tenant_id', $tenantId)
+            ->where('telefone', $telefone)
+            ->where('contato_existente_id', $contatoExistenteId)
+            ->where('status', '!=', 'aguardando')
+            ->exists();
+    }
 
     private function extrairDados(array $pessoa, string $nome): array
     {
