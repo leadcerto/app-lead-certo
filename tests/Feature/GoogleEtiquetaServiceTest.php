@@ -97,4 +97,123 @@ class GoogleEtiquetaServiceTest extends TestCase
             'google_group_resource_name' => 'contactGroups/novos_123',
         ]);
     }
+
+    /**
+     * Achado real 24/09 (Leonardo, Frete Rio): o Leonardo renomeou/criou os
+     * grupos reais no Google Contatos direto pela interface (ex.: "🚩 SEM
+     * NOME" com 5.348 membros, "🚩 FORNECEDORES" com 70), mas
+     * MAPEAMENTO_GRUPOS ainda só reconhecia os nomes antigos ("- 00 Sem
+     * Nome", "- 00 Fornecedores") — o sistema vinha criando/usando grupos
+     * órfãos e vazios em paralelo aos reais, sem o Leonardo notar porque ele
+     * gerenciava os grupos certos manualmente. sincronizarGrupos() precisa
+     * casar com o nome novo primeiro.
+     */
+    public function test_sincronizar_grupos_reconhece_nomes_novos_com_bandeirinha_pras_etiquetas_que_antes_usavam_prefixo_traco(): void
+    {
+        $tenant = Tenant::factory()->create();
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
+
+        $token = GoogleToken::create([
+            'tenant_id'     => $tenant->id,
+            'google_email'  => 'teste@leadcerto.com',
+            'access_token'  => 'tok',
+            'refresh_token' => 'ref',
+            'token_type'    => 'Bearer',
+            'expires_at'    => now()->addHour(),
+            'scopes'        => ['contacts'],
+        ]);
+
+        // sem_nome/fornecedor/pessoal só existem via EtiquetaSeeder em produção
+        // (não roda nas migrations que RefreshDatabase aplica nos testes) —
+        // leads_em_analise/lead_invalido/novos_leads/lead_certo já vêm da
+        // migration 2026_08_28_000001, por isso não precisam ser criados aqui.
+        foreach (['sem_nome' => '#F59E0B', 'fornecedor' => '#8B5CF6', 'pessoal' => '#06B6D4'] as $slug => $cor) {
+            Etiqueta::updateOrCreate(['tenant_id' => null, 'slug' => $slug], ['nome' => ucfirst($slug), 'cor' => $cor, 'ativo' => true]);
+        }
+
+        Http::fake([
+            '*contactGroups?pageSize=200*' => Http::response([
+                'contactGroups' => [
+                    ['name' => '🚩 SEM NOME',      'resourceName' => 'contactGroups/sem_nome_real'],
+                    ['name' => '🚩 FORNECEDORES',  'resourceName' => 'contactGroups/fornecedores_real'],
+                    ['name' => '🚩 PESSOAL',       'resourceName' => 'contactGroups/pessoal_real'],
+                    ['name' => '🚩 EM ANÁLISE',    'resourceName' => 'contactGroups/em_analise_real'],
+                    // Grupo órfão antigo, ainda existe no Google mas vazio —
+                    // não deve ser escolhido quando o nome novo também existe.
+                    ['name' => '- 00 Sem Nome',    'resourceName' => 'contactGroups/sem_nome_orfao'],
+                ],
+            ], 200),
+        ]);
+
+        $mapeados = app(GoogleEtiquetaService::class)->sincronizarGrupos($token);
+
+        $this->assertSame('contactGroups/sem_nome_real', $mapeados['sem_nome'] ?? null);
+        $this->assertSame('contactGroups/fornecedores_real', $mapeados['fornecedor'] ?? null);
+        $this->assertSame('contactGroups/pessoal_real', $mapeados['pessoal'] ?? null);
+        $this->assertSame('contactGroups/em_analise_real', $mapeados['leads_em_analise'] ?? null);
+    }
+
+    /**
+     * Achado real 24/09: os grupos "Fornecedores" e "Pessoal" já eram
+     * provisionados no Google (sincronizarGrupos), mas atualizarMembrosContato()
+     * nunca adicionava um contato a eles de verdade — só tratava sem_nome,
+     * cliente e a promoção pra lead_certo.
+     */
+    public function test_atualiza_membro_do_grupo_fornecedor_quando_tipo_contato_e_fornecedor(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $token = GoogleToken::create([
+            'tenant_id' => $tenant->id, 'google_email' => 'teste@leadcerto.com',
+            'access_token' => 'tok', 'refresh_token' => 'ref', 'token_type' => 'Bearer',
+            'expires_at' => now()->addHour(), 'scopes' => ['contacts'],
+        ]);
+
+        $etiquetaFornecedor = Etiqueta::updateOrCreate(['tenant_id' => null, 'slug' => 'fornecedor'], ['nome' => 'Fornecedor', 'cor' => '#8B5CF6', 'ativo' => true]);
+        EtiquetaGoogleGrupo::create([
+            'etiqueta_id' => $etiquetaFornecedor->id, 'tenant_id' => $tenant->id,
+            'google_group_resource_name' => 'contactGroups/fornecedores_real',
+        ]);
+
+        $contato = Contato::factory()->create(['tipo_contato' => 'fornecedor']);
+        $vinculo = VinculoContatoTenant::create([
+            'contato_id' => $contato->id, 'tenant_id' => $tenant->id,
+            'google_resource_name' => 'people/c123',
+        ]);
+
+        Http::fake(['*contactGroups/fornecedores_real/members:modify*' => Http::response(['resourceName' => 'contactGroups/fornecedores_real'], 200)]);
+
+        app(GoogleEtiquetaService::class)->atualizarMembrosContato($token, $contato, $vinculo);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'fornecedores_real/members:modify')
+            && in_array('people/c123', $request['resourceNamesToAdd'] ?? []));
+    }
+
+    public function test_atualiza_membro_do_grupo_pessoal_quando_tipo_contato_e_pessoal(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $token = GoogleToken::create([
+            'tenant_id' => $tenant->id, 'google_email' => 'teste@leadcerto.com',
+            'access_token' => 'tok', 'refresh_token' => 'ref', 'token_type' => 'Bearer',
+            'expires_at' => now()->addHour(), 'scopes' => ['contacts'],
+        ]);
+
+        $etiquetaPessoal = Etiqueta::updateOrCreate(['tenant_id' => null, 'slug' => 'pessoal'], ['nome' => 'Pessoal', 'cor' => '#06B6D4', 'ativo' => true]);
+        EtiquetaGoogleGrupo::create([
+            'etiqueta_id' => $etiquetaPessoal->id, 'tenant_id' => $tenant->id,
+            'google_group_resource_name' => 'contactGroups/pessoal_real',
+        ]);
+
+        $contato = Contato::factory()->create(['tipo_contato' => 'pessoal']);
+        $vinculo = VinculoContatoTenant::create([
+            'contato_id' => $contato->id, 'tenant_id' => $tenant->id,
+            'google_resource_name' => 'people/c456',
+        ]);
+
+        Http::fake(['*contactGroups/pessoal_real/members:modify*' => Http::response(['resourceName' => 'contactGroups/pessoal_real'], 200)]);
+
+        app(GoogleEtiquetaService::class)->atualizarMembrosContato($token, $contato, $vinculo);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'pessoal_real/members:modify')
+            && in_array('people/c456', $request['resourceNamesToAdd'] ?? []));
+    }
 }
