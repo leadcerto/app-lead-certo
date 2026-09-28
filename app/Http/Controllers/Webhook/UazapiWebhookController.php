@@ -301,16 +301,18 @@ class UazapiWebhookController extends Controller
                     // volume (2+ imagens seguidas) estourava timeout e deixava o
                     // card sem os itens mesmo com a descrição salva certinho
                     // (achado real 2026-08-15, ticket 3085, mesmo bug do Covercut).
-                    $resultado    = app(MediaProcessorService::class)->processarImagemUnica($msg, $canal->tokenUazapi(), $focoAnalise, $transcricaoAtiva);
+                    $resultado    = app(MediaProcessorService::class)->processarImagemUnica($msg, $canal->tokenUazapi(), $focoAnalise, $transcricaoAtiva, $ticket->lista_itens);
                     $conteudo     = $resultado['conteudo'];
                     $tipoMensagem = 'imagem';
                     $midiaUrl     = $resultado['midiaUrl'];
 
-                    // Acumula os itens identificados na imagem no card, pra quem
-                    // vende ver de relance o que já foi enviado sem reabrir cada foto.
+                    // Achado real 24/09 (ticket #4920, "Rebecca Dias"): antes só
+                    // concatenava o texto de cada imagem — o mesmo item mencionado
+                    // em duas fotos virava duas entradas. Agora a IA já recebe a
+                    // lista atual como contexto (linha acima) e devolve a lista
+                    // COMPLETA mesclada — substitui em vez de concatenar.
                     if ($resultado['itens']) {
-                        $listaAtual = $ticket->lista_itens ? $ticket->lista_itens . "\n" : '';
-                        $ticket->update(['lista_itens' => $listaAtual . $resultado['itens']]);
+                        $ticket->update(['lista_itens' => $resultado['itens']]);
                     }
                 } else {
                     $processado = app(MediaProcessorService::class)->processar($msg, $canal->tokenUazapi(), null, $transcricaoAtiva);

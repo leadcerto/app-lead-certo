@@ -344,7 +344,7 @@ class CovercutWebhookController extends Controller
      *
      * @return array{0: ?string, 1: string, 2: ?string} [conteudo, tipoMensagem, midiaUrl]
      */
-    private function resolverConteudoEMidia(array $message, WhatsappCanal $canal, TicketAtendimento $ticket, ?string $messageId): array
+    private function resolverConteudoEMidia(array $message, WhatsappCanal $canal, TicketAtendimento $ticket, ?string $messageId, bool $mensagemDoHumano = false): array
     {
         // `message.text` chega como STRING simples no payload real da Covercut
         // (ex.: "text": "Ola"), não como objeto `{body: ...}` — o formato Meta
@@ -374,22 +374,40 @@ class CovercutWebhookController extends Controller
             }
         } elseif ($tipo === 'image') {
             try {
-                $focoAnalise = $colunaConfig?->foco_analise_imagem;
+                // Achado real 24/09 (ticket #4920, "Rebecca Dias"): esta função é
+                // compartilhada com processarMensagemHumana() (atendente
+                // respondendo direto pelo WhatsApp Business App) — o foco de
+                // análise da coluna (ex.: "verificar se é comprovante de PIX")
+                // não faz sentido nenhum pra imagem que o PRÓPRIO atendente
+                // manda. Só analisa com visão/foco quando é o lead enviando;
+                // imagem do humano só é baixada e salva, sem chamada de IA.
+                if ($mensagemDoHumano) {
+                    $midia = app(MediaProcessorService::class)->baixarEPersistirUrlOficial($message, $canal, 'image');
+                    $conteudo     = '[Imagem enviada pelo atendente]';
+                    $tipoMensagem = 'imagem';
+                    $midiaUrl     = $midia;
+                } else {
+                    $focoAnalise = $colunaConfig?->foco_analise_imagem;
 
-                // Download único + 1 chamada de visão que já devolve descrição e
-                // itens juntos — antes disso a mesma imagem era baixada até 3x e
-                // passava por 2 chamadas de IA separadas, o que sob volume (2+
-                // imagens seguidas) estourava timeout e deixava o card sem os
-                // itens mesmo com a descrição salva certinho (achado real
-                // 2026-08-15, ticket 3085).
-                $resultado    = app(MediaProcessorService::class)->processarImagemUnicaOficial($message, $canal, $focoAnalise, $transcricaoAtiva);
-                $conteudo     = $resultado['conteudo'];
-                $tipoMensagem = 'imagem';
-                $midiaUrl     = $resultado['midiaUrl'];
+                    // Download único + 1 chamada de visão que já devolve descrição e
+                    // itens juntos — antes disso a mesma imagem era baixada até 3x e
+                    // passava por 2 chamadas de IA separadas, o que sob volume (2+
+                    // imagens seguidas) estourava timeout e deixava o card sem os
+                    // itens mesmo com a descrição salva certinho (achado real
+                    // 2026-08-15, ticket 3085).
+                    $resultado    = app(MediaProcessorService::class)->processarImagemUnicaOficial($message, $canal, $focoAnalise, $transcricaoAtiva, $ticket->lista_itens);
+                    $conteudo     = $resultado['conteudo'];
+                    $tipoMensagem = 'imagem';
+                    $midiaUrl     = $resultado['midiaUrl'];
 
-                if ($resultado['itens']) {
-                    $listaAtual = $ticket->lista_itens ? $ticket->lista_itens . "\n" : '';
-                    $ticket->update(['lista_itens' => $listaAtual . $resultado['itens']]);
+                    // Achado real 24/09 (mesmo ticket): antes só concatenava o texto
+                    // de cada imagem — o mesmo item mencionado em duas fotos virava
+                    // duas entradas. Agora a IA já recebe a lista atual como
+                    // contexto (linha acima) e devolve a lista COMPLETA mesclada —
+                    // substitui em vez de concatenar.
+                    if ($resultado['itens']) {
+                        $ticket->update(['lista_itens' => $resultado['itens']]);
+                    }
                 }
             } catch (\Throwable $e) {
                 Log::warning('Covercut webhook: falha ao processar imagem', ['message_id' => $messageId, 'erro' => $e->getMessage()]);
@@ -474,7 +492,7 @@ class CovercutWebhookController extends Controller
             $ticket->update($updates);
         }
 
-        [$conteudo, $tipoMensagem, $midiaUrl] = $this->resolverConteudoEMidia($payload['message'] ?? [], $canal, $ticket, $messageId);
+        [$conteudo, $tipoMensagem, $midiaUrl] = $this->resolverConteudoEMidia($payload['message'] ?? [], $canal, $ticket, $messageId, mensagemDoHumano: true);
 
         if (! $conteudo) {
             // Não usa placeholder aqui (diferente do Uazapi): tipos sem conteúdo

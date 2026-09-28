@@ -202,14 +202,18 @@ class MessengerProprioWebhookController extends Controller
                 $processor = app(MediaProcessorService::class);
 
                 if ($tipoMidia === 'imagem') {
-                    $resultado    = $processor->processarImagemUnicaMessengerProprio($bytes, $mime, $conteudo, $focoAnalise, $transcricaoAtiva);
+                    $resultado    = $processor->processarImagemUnicaMessengerProprio($bytes, $mime, $conteudo, $focoAnalise, $transcricaoAtiva, $ticket->lista_itens);
                     $conteudo     = $resultado['conteudo'];
                     $tipoMensagem = 'imagem';
                     $midiaUrl     = $resultado['midiaUrl'];
 
+                    // Achado real 24/09 (ticket #4920): antes só concatenava o texto
+                    // de cada imagem — o mesmo item mencionado em duas fotos virava
+                    // duas entradas. Agora a IA já recebe a lista atual como
+                    // contexto (linha acima) e devolve a lista COMPLETA mesclada —
+                    // substitui em vez de concatenar.
                     if ($resultado['itens']) {
-                        $listaAtual = $ticket->lista_itens ? $ticket->lista_itens . "\n" : '';
-                        $ticket->update(['lista_itens' => $listaAtual . $resultado['itens']]);
+                        $ticket->update(['lista_itens' => $resultado['itens']]);
                     }
                 } else {
                     $processado = $processor->processarMessengerProprio($tipoMidia, $bytes, $mime, $transcricaoAtiva);
