@@ -136,6 +136,81 @@ class ValidarCadastrosContatosTest extends TestCase
         $this->assertTrue($vinculoCanon->etiquetas()->where('slug', 'lead_certo')->exists());
     }
 
+    /**
+     * Regra do 8º dia (pedido do Leonardo, 24/09, confirmado em detalhe):
+     * conta a partir da aberto_em do TICKET ATIVO atual (reabertura reinicia
+     * a contagem) — não da data de criação do contato/vínculo. --dias=N filtra
+     * só quem já bateu N dias; sem a flag, comportamento antigo (processa
+     * tudo que estiver marcado, usado no dry-run/uso manual) continua igual.
+     */
+    public function test_flag_dias_so_processa_contato_com_ticket_ativo_ha_pelo_menos_n_dias(): void
+    {
+        $tenant = $this->setupTenantComEtiquetas();
+        $emAnalise = Etiqueta::where('slug', 'leads_em_analise')->first();
+
+        $contatoRecente = Contato::factory()->create(['telefone' => '5521994359537']);
+        $vinculoRecente = VinculoContatoTenant::create(['contato_id' => $contatoRecente->id, 'tenant_id' => $tenant->id, 'google_resource_name' => 'people/recente']);
+        $vinculoRecente->etiquetas()->attach($emAnalise->id);
+        \App\Models\TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contatoRecente->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now()->subDays(2), // só 2 dias — não bateu ainda
+        ]);
+
+        $contatoAntigo = Contato::factory()->create(['telefone' => '5521988887777']);
+        $vinculoAntigo = VinculoContatoTenant::create(['contato_id' => $contatoAntigo->id, 'tenant_id' => $tenant->id, 'google_resource_name' => 'people/antigo8d']);
+        $vinculoAntigo->etiquetas()->attach($emAnalise->id);
+        \App\Models\TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contatoAntigo->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now()->subDays(9), // 9 dias — bateu
+        ]);
+
+        Http::fake([
+            'people.googleapis.com/v1/contactGroups/lead_certo/members:modify'       => Http::response(['status' => 'OK'], 200),
+            'people.googleapis.com/v1/contactGroups/leads_em_analise/members:modify' => Http::response(['status' => 'OK'], 200),
+        ]);
+
+        $this->artisan("contatos:validar-cadastros --tenant={$tenant->id} --dias=8")
+            ->assertExitCode(0);
+
+        // Só o contato com ticket de 9 dias foi processado
+        $this->assertTrue($vinculoAntigo->fresh()->etiquetas()->where('slug', 'lead_certo')->exists());
+        // O recente (2 dias) continua intocado, ainda em leads_em_analise
+        $this->assertTrue($vinculoRecente->fresh()->etiquetas()->where('slug', 'leads_em_analise')->exists());
+        $this->assertFalse($vinculoRecente->fresh()->etiquetas()->where('slug', 'lead_certo')->exists());
+    }
+
+    /**
+     * Sem --tenant, o comando roda pra todos os tenants com Google conectado
+     * de uma vez — é assim que o agendamento diário (00h01) cobre a base
+     * inteira sem precisar de uma linha de cron por tenant.
+     */
+    public function test_sem_tenant_processa_todos_os_tenants_com_google_conectado(): void
+    {
+        $tenantA = $this->setupTenantComEtiquetas();
+        $tenantB = $this->setupTenantComEtiquetas();
+        $emAnaliseA = Etiqueta::where('slug', 'leads_em_analise')->first();
+
+        $contatoA = Contato::factory()->create(['telefone' => '5521994359537']);
+        $vinculoA = VinculoContatoTenant::create(['contato_id' => $contatoA->id, 'tenant_id' => $tenantA->id, 'google_resource_name' => 'people/tenantA']);
+        $vinculoA->etiquetas()->attach($emAnaliseA->id);
+
+        $contatoB = Contato::factory()->create(['telefone' => '5521988887777']);
+        $vinculoB = VinculoContatoTenant::create(['contato_id' => $contatoB->id, 'tenant_id' => $tenantB->id, 'google_resource_name' => 'people/tenantB']);
+        $vinculoB->etiquetas()->attach($emAnaliseA->id);
+
+        Http::fake([
+            'people.googleapis.com/v1/contactGroups/lead_certo/members:modify'       => Http::response(['status' => 'OK'], 200),
+            'people.googleapis.com/v1/contactGroups/leads_em_analise/members:modify' => Http::response(['status' => 'OK'], 200),
+        ]);
+
+        $this->artisan('contatos:validar-cadastros')->assertExitCode(0);
+
+        $this->assertTrue($vinculoA->fresh()->etiquetas()->where('slug', 'lead_certo')->exists());
+        $this->assertTrue($vinculoB->fresh()->etiquetas()->where('slug', 'lead_certo')->exists());
+    }
+
     public function test_falha_add_nao_atualiza_pivot_local(): void
     {
         $tenant  = $this->setupTenantComEtiquetas();
