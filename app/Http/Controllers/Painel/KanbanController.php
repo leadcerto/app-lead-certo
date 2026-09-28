@@ -494,7 +494,17 @@ class KanbanController extends Controller
             ->where('coluna_kanban', $colunaDepois)
             ->first();
 
-        if ($temSequenciaAtiva || ($colunaConfig && $colunaConfig->ia_ativo)) {
+        // Achado real 24/09 (ticket #4913, "Fernanda"): o ticket estava
+        // pausado esperando um humano decidir sobre uma dúvida da IA. O
+        // Leonardo respondeu a cliente diretamente e arrastou o card pra uma
+        // coluna com IA/sequência ativa — o sistema devolvia o controle pro
+        // bot automaticamente, e a sequência mandou uma mensagem
+        // contradizendo o que o humano acabara de dizer. Regra do Leonardo:
+        // depois de uma dúvida pausar o atendimento, quem segue é o humano —
+        // mover o card não pode devolver o controle pra IA silenciosamente
+        // enquanto isso não for resolvido (via orientar(), que já limpa
+        // aguardando_orientacao_em de propósito).
+        if (($temSequenciaAtiva || ($colunaConfig && $colunaConfig->ia_ativo)) && ! $model->aguardando_orientacao_em) {
             $updates['agente_responsavel'] = 'bot';
         }
 
