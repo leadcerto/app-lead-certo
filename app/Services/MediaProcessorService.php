@@ -84,7 +84,7 @@ class MediaProcessorService
      *
      * @return array{conteudo: string, itens: ?string, midiaUrl: ?string}
      */
-    public function processarImagemUnica(array $msg, string $instanceToken, ?string $focoAnalise = null, bool $transcricaoAtiva = true): array
+    public function processarImagemUnica(array $msg, string $instanceToken, ?string $focoAnalise = null, bool $transcricaoAtiva = true, ?string $listaItensAtual = null): array
     {
         $caption = is_string($msg['content'] ?? null) ? ($msg['content'] ?? '') : '';
         $baixada = $this->baixarImagemUazapi($msg, $instanceToken);
@@ -110,7 +110,7 @@ class MediaProcessorService
             ? 'data:' . ($baixada['mime'] ?: 'image/jpeg') . ';base64,' . base64_encode($baixada['bytes'])
             : $baixada['url'];
 
-        $analise = $this->analisarImagemCompleta($imagemParaVisao, $caption, $focoAnalise);
+        $analise = $this->analisarImagemCompleta($imagemParaVisao, $caption, $focoAnalise, $listaItensAtual);
         $prefixo = $caption ? "[Imagem: {$caption}] " : '[Imagem] ';
 
         return [
@@ -154,7 +154,7 @@ class MediaProcessorService
      *
      * @return array{descricao: string, itens: ?string}
      */
-    private function analisarImagemCompleta(string $imageUrl, string $caption, ?string $focoAnalise): array
+    private function analisarImagemCompleta(string $imageUrl, string $caption, ?string $focoAnalise, ?string $listaItensAtual = null): array
     {
         if (! $this->openRouterKey) {
             return ['descricao' => '[Imagem recebida — processamento de visão não configurado]', 'itens' => null];
@@ -176,14 +176,29 @@ class MediaProcessorService
             $prompt .= " O remetente adicionou a legenda: \"{$caption}\".";
         }
 
-        $prompt .= "\n\nDepois da descrição, pule uma linha e escreva exatamente \"ITENS:\" seguido de uma lista "
-            . "em tópicos curtos (um item por linha, começando com '-') do que aparece na imagem relacionado a: "
-            . "{$foco}. Seja objetivo, sem frases longas (ex: '- Sofá 3 lugares'). "
-            . 'IMPORTANTE: cada objeto completo é UM item só — nunca liste as peças/partes que compõem esse '
-            . 'mesmo objeto como itens separados (ex.: uma bicicleta é "- 1 bicicleta", nunca vira "- Bicicleta", '
-            . '"- Pedais", "- Guidão", "- Rodas" cada um numa linha; um sofá é "- 1 sofá 3 lugares", não vira braço, '
-            . 'assento e almofadas separados). Se houver mais de um do mesmo objeto, informe a quantidade num item '
-            . 'só (ex.: "- 3 bicicletas"). Se nada relevante aparecer, escreva "ITENS: nada identificado".';
+        // Achado real 24/09 (Leonardo, ticket #4920 "Rebecca Dias"): a lista de
+        // itens do card só concatenava o texto de cada imagem separadamente —
+        // o mesmo item mencionado em duas fotos virava duas entradas em vez de
+        // uma só com quantidade somada. Agora a lista já identificada até aqui
+        // entra como contexto no prompt, e a IA devolve a lista COMPLETA já
+        // mesclada (soma quantidade de item repetido) — quem chama substitui
+        // lista_itens pelo que voltar aqui, em vez de concatenar.
+        $prompt .= "\n\nDepois da descrição, pule uma linha e escreva exatamente \"ITENS:\" seguido da lista "
+            . "ATUALIZADA e COMPLETA de itens relacionados a: {$foco}, já identificados nesta conversa "
+            . '(incluindo os desta imagem), num formato compacto numa linha só: quantidade e nome de cada item, '
+            . 'separados por vírgula (ex.: "4 cadeiras, 1 geladeira, 1 fogão, 2 camas, 4 TVs"). ';
+
+        $prompt .= $listaItensAtual
+            ? "Lista já identificada até agora: \"{$listaItensAtual}\". Se algum item desta nova imagem já "
+                . 'estiver nessa lista, some a quantidade em vez de duplicar a entrada; senão, adicione um item '
+                . 'novo. Devolva a lista COMPLETA atualizada, não só os itens desta imagem. '
+            : 'Esta é a primeira imagem da conversa — comece a lista do zero. ';
+
+        $prompt .= 'IMPORTANTE: cada objeto completo é UM item só — nunca liste as peças/partes que compõem esse '
+            . 'mesmo objeto como itens separados (ex.: uma bicicleta é "1 bicicleta", nunca vira "bicicleta, '
+            . 'pedais, guidão, rodas" cada um à parte; um sofá é "1 sofá 3 lugares", não vira braço, assento e '
+            . 'almofadas separados). Se nada relevante aparecer nesta imagem e a lista continuar vazia, escreva '
+            . '"ITENS: nada identificado".';
 
         try {
             // OpenRouter route=fallback tenta cada modelo em ordem até um responder
@@ -201,7 +216,12 @@ class MediaProcessorService
                         ['type' => 'text',      'text'      => $prompt],
                     ],
                 ]],
-                'max_tokens' => 400,
+                // Achado real 24/09 (ticket #4920): 400 tokens não era espaço
+                // suficiente pra descrição + lista de itens numa imagem com
+                // vários móveis — a resposta cortava no meio da frase antes de
+                // sequer chegar no marcador "ITENS:" (ex.: "...uma geladeira e
+                // um conjunto de" — parava ali, sem terminar).
+                'max_tokens' => 700,
             ]);
 
             if ($response->successful()) {
@@ -697,7 +717,7 @@ class MediaProcessorService
      *
      * @return array{conteudo: string, itens: ?string, midiaUrl: ?string}
      */
-    public function processarImagemUnicaOficial(array $message, WhatsappCanal $canal, ?string $focoAnalise = null, bool $transcricaoAtiva = true): array
+    public function processarImagemUnicaOficial(array $message, WhatsappCanal $canal, ?string $focoAnalise = null, bool $transcricaoAtiva = true, ?string $listaItensAtual = null): array
     {
         $caption = $message['image']['caption'] ?? '';
         $mediaId = $message['image']['id'] ?? null;
@@ -727,7 +747,7 @@ class MediaProcessorService
         }
 
         $dataUri = 'data:' . ($midia['mime'] ?: 'image/jpeg') . ';base64,' . base64_encode($midia['bytes']);
-        $analise = $this->analisarImagemCompleta($dataUri, $caption, $focoAnalise);
+        $analise = $this->analisarImagemCompleta($dataUri, $caption, $focoAnalise, $listaItensAtual);
         $prefixo = $caption ? "[Imagem: {$caption}] " : '[Imagem] ';
 
         return [
@@ -894,7 +914,7 @@ class MediaProcessorService
      *
      * @return array{conteudo: string, itens: ?string, midiaUrl: ?string}
      */
-    public function processarImagemUnicaMessengerProprio(string $bytes, string $mime, ?string $caption, ?string $focoAnalise = null, bool $transcricaoAtiva = true): array
+    public function processarImagemUnicaMessengerProprio(string $bytes, string $mime, ?string $caption, ?string $focoAnalise = null, bool $transcricaoAtiva = true, ?string $listaItensAtual = null): array
     {
         $midiaUrl = $this->salvarBytes($bytes, $mime ?: 'image/jpeg', 'image');
 
@@ -907,7 +927,7 @@ class MediaProcessorService
         }
 
         $dataUri = 'data:' . ($mime ?: 'image/jpeg') . ';base64,' . base64_encode($bytes);
-        $analise = $this->analisarImagemCompleta($dataUri, $caption ?? '', $focoAnalise);
+        $analise = $this->analisarImagemCompleta($dataUri, $caption ?? '', $focoAnalise, $listaItensAtual);
         $prefixo = $caption ? "[Imagem: {$caption}] " : '[Imagem] ';
 
         return [

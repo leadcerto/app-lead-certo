@@ -257,6 +257,60 @@ class CovercutWebhookMidiaTest extends TestCase
         Http::assertSentCount(2); // 1 download da mídia + 1 chamada de visão — não duplica mais
     }
 
+    /**
+     * Achado real 24/09 (ticket #4920, "Rebecca Dias"): imagem enviada pelo
+     * ATENDENTE (modo Coexistence, echo/outbound/phone) estava passando pela
+     * mesma análise de visão com o foco da coluna configurado pro LEAD (ex.:
+     * "verificar se é comprovante de PIX") — gerava descrição sem sentido
+     * nenhum pra imagem que o próprio atendente mandou (ex.: um resumo de
+     * preço virou "não é um comprovante de PIX, é imagem de um veículo").
+     * Confirmado com o Leonardo: só imagem RECEBIDA (do lead) precisa de
+     * análise — imagem do atendente só é baixada e salva, sem chamada de IA.
+     */
+    public function test_imagem_do_atendente_via_coexistence_e_salva_sem_chamada_de_visao(): void
+    {
+        config(['services.openrouter.key' => 'fake-openrouter-key']);
+
+        Http::fake([
+            '*/media/get*'    => Http::response('conteudo-binario-fake-imagem', 200, ['Content-Type' => 'image/jpeg']),
+            'openrouter.ai/*' => Http::response(['choices' => [['message' => ['content' => 'não deveria ser chamado']]]], 200),
+        ]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+        \App\Models\KanbanColunaConfig::create([
+            'tenant_id' => $tenant->id, 'coluna_kanban' => 'aguardando_lead',
+            'foco_analise_imagem' => 'verificar se é comprovante de PIX',
+        ]);
+        $contato = \App\Models\Contato::factory()->create(['telefone' => '5521988887777']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
+            'whatsapp_canal_id' => $canal->id,
+            'coluna_kanban' => 'aguardando_lead', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $payload = [
+            'event' => 'echo', 'direction' => 'outbound', 'echo_source' => 'phone', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988887777'],
+            'message' => ['id' => 'wamid.imgatendente1', 'type' => 'image', 'image' => ['id' => 'media-img-atendente1', 'mime_type' => 'image/jpeg']],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        $mensagem = Mensagem::where('provider_message_id', 'wamid.imgatendente1')->first();
+        $this->assertNotNull($mensagem);
+        $this->assertSame('humano', $mensagem->remetente);
+        $this->assertSame('[Imagem enviada pelo atendente]', $mensagem->conteudo);
+        $this->assertNotNull($mensagem->midia_url);
+
+        $this->assertNull($ticket->fresh()->lista_itens);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'openrouter.ai'));
+    }
+
     public function test_imagem_sem_id_no_payload_e_tratada_sem_quebrar(): void
     {
         Http::fake();

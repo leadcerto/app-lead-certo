@@ -132,9 +132,18 @@ class ListaItensImagemTest extends TestCase
         });
     }
 
-    public function test_segunda_imagem_acumula_na_lista_existente(): void
+    /**
+     * Achado real 24/09 (Leonardo, ticket #4920 "Rebecca Dias"): a lista de
+     * itens só concatenava blocos de bullets de cada imagem, sem mesclar —
+     * o mesmo item mencionado em duas fotos virava duas entradas. A partir de
+     * agora, a lista já acumulada até aqui é enviada como contexto pra IA de
+     * visão, que devolve a lista COMPLETA e já mesclada (soma quantidade de
+     * item repetido em vez de duplicar) — o card substitui lista_itens pelo
+     * que a IA devolveu, em vez de concatenar.
+     */
+    public function test_segunda_imagem_substitui_lista_pela_versao_mesclada_devolvida_pela_ia(): void
     {
-        $this->fakeOpenRouterListaItens("- Mesa de jantar");
+        $this->fakeOpenRouterListaItens('1 sofá, 1 mesa de jantar');
 
         $tenant  = $this->criarTenantComCanal('wh-itens-2', 'inst-itens-2');
         $contato = Contato::factory()->create(['telefone' => '5511922223333']);
@@ -142,7 +151,7 @@ class ListaItensImagemTest extends TestCase
             'tenant_id' => $tenant->id, 'contato_id' => $contato->id,
             'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
             'status' => 'aberto', 'aberto_em' => now(),
-            'lista_itens' => '- Sofá 3 lugares',
+            'lista_itens' => '1 sofá',
         ]);
 
         $this->postJson('/api/webhook/uazapi/wh-itens-2', [
@@ -158,8 +167,16 @@ class ListaItensImagemTest extends TestCase
         ]);
 
         $ticket->refresh();
-        $this->assertStringContainsString('Sofá 3 lugares', $ticket->lista_itens);
-        $this->assertStringContainsString('Mesa de jantar', $ticket->lista_itens);
+        $this->assertSame('1 sofá, 1 mesa de jantar', $ticket->lista_itens);
+
+        // A lista já existente precisa ter ido no prompt como contexto, pra IA
+        // saber o que já foi identificado e poder somar/mesclar corretamente.
+        Http::assertSent(function ($request) {
+            if (! str_contains($request->url(), 'openrouter.ai')) {
+                return false;
+            }
+            return str_contains(json_encode($request->data()), 'sof');
+        });
     }
 
     public function test_resposta_nada_identificado_nao_e_adicionada_a_lista(): void
