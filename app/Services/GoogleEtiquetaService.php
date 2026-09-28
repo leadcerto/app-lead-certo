@@ -31,7 +31,11 @@ class GoogleEtiquetaService
         'leads_em_analise' => ['🚩 EM ANÁLISE', '🚩 LEADS EM ANÁLISE', 'Leads em Análise', 'Lead Certo - Leads Em Analise'],
         'lead_invalido'    => ['🚩 ⚠️ INVALIDOS', '🚩 ⚠️ INVÁLIDOS', '🚩 ⚠️ LEAD INVALIDO', '🚩 ⚠️ LEAD INVÁLIDO', 'Lead Inválido', 'Lead Certo - Lead Invalido'],
         'sem_nome'         => ['🚩 SEM NOME', '- 00 Sem Nome', 'Sem Nome', 'Lead Certo - Sem Nome'],
-        'cliente'          => ['- CLIENTE', 'Cliente', 'Lead Certo - Cliente'],
+        // Achado real 24/09: mesma renomeação em andamento pra "🚩 CLIENTES"
+        // (lead que já comprou da empresa ao menos uma vez) — pego antes do
+        // próximo ciclo agendado (contatos:sincronizar-google-etiquetas roda
+        // a cada 10min) pra não criar um grupo órfão de novo.
+        'cliente'          => ['🚩 CLIENTES', '- CLIENTE', 'Cliente', 'Lead Certo - Cliente'],
         'fornecedor'       => ['🚩 FORNECEDORES', '- 00 Fornecedores', 'Fornecedor', 'Lead Certo - Fornecedor'],
         'pessoal'          => ['🚩 PESSOAL', '- 00 Pessoal', 'Pessoal', 'Lead Certo - Pessoal'],
     ];

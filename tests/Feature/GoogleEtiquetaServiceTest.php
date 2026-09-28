@@ -127,7 +127,7 @@ class GoogleEtiquetaServiceTest extends TestCase
         // (não roda nas migrations que RefreshDatabase aplica nos testes) —
         // leads_em_analise/lead_invalido/novos_leads/lead_certo já vêm da
         // migration 2026_08_28_000001, por isso não precisam ser criados aqui.
-        foreach (['sem_nome' => '#F59E0B', 'fornecedor' => '#8B5CF6', 'pessoal' => '#06B6D4'] as $slug => $cor) {
+        foreach (['sem_nome' => '#F59E0B', 'fornecedor' => '#8B5CF6', 'pessoal' => '#06B6D4', 'cliente' => '#10B981'] as $slug => $cor) {
             Etiqueta::updateOrCreate(['tenant_id' => null, 'slug' => $slug], ['nome' => ucfirst($slug), 'cor' => $cor, 'ativo' => true]);
         }
 
@@ -138,6 +138,9 @@ class GoogleEtiquetaServiceTest extends TestCase
                     ['name' => '🚩 FORNECEDORES',  'resourceName' => 'contactGroups/fornecedores_real'],
                     ['name' => '🚩 PESSOAL',       'resourceName' => 'contactGroups/pessoal_real'],
                     ['name' => '🚩 EM ANÁLISE',    'resourceName' => 'contactGroups/em_analise_real'],
+                    // Achado real 24/09: "- CLIENTE" renomeado pra "🚩 CLIENTES"
+                    // (lead que já comprou ao menos uma vez).
+                    ['name' => '🚩 CLIENTES',      'resourceName' => 'contactGroups/clientes_real'],
                     // Grupo órfão antigo, ainda existe no Google mas vazio —
                     // não deve ser escolhido quando o nome novo também existe.
                     ['name' => '- 00 Sem Nome',    'resourceName' => 'contactGroups/sem_nome_orfao'],
@@ -151,6 +154,7 @@ class GoogleEtiquetaServiceTest extends TestCase
         $this->assertSame('contactGroups/fornecedores_real', $mapeados['fornecedor'] ?? null);
         $this->assertSame('contactGroups/pessoal_real', $mapeados['pessoal'] ?? null);
         $this->assertSame('contactGroups/em_analise_real', $mapeados['leads_em_analise'] ?? null);
+        $this->assertSame('contactGroups/clientes_real', $mapeados['cliente'] ?? null);
     }
 
     /**
