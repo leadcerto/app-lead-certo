@@ -51,14 +51,14 @@ class PaisTelefoneServiceCoberturaTest extends TestCase
     }
 
     /**
-     * Achado real (durante a escrita deste teste): identificarPais() descarta
-     * o "+" junto com o resto da pontuação antes de decidir se é Brasil —
-     * qualquer número com exatamente 10 ou 11 dígitos cai na heurística de
-     * "local brasileiro sem DDI", mesmo vindo com "+DDI" explícito e sendo de
-     * outro país. Limitação pré-existente do algoritmo, fora do escopo desta
-     * expansão de países — os exemplos abaixo evitam esse comprimento
-     * (10/11 dígitos) só pra não colidir com a heurística, não testam o
-     * formato nacional exato de cada país.
+     * Achado real (durante a escrita deste teste, 2026-09-21): identificarPais()
+     * descartava o "+" junto com o resto da pontuação antes de decidir se é
+     * Brasil — qualquer número com exatamente 10 ou 11 dígitos caía na
+     * heurística de "local brasileiro sem DDI", mesmo vindo com "+DDI"
+     * explícito e sendo de outro país. Corrigido em 24/09 (ver
+     * test_identifica_suica_mesmo_com_11_digitos_parecendo_numero_brasileiro
+     * abaixo) — os exemplos abaixo continuam evitando esse comprimento por
+     * segurança, mas a limitação em si já não existe mais.
      */
     public function test_identifica_polonia_recem_adicionada(): void
     {
@@ -84,5 +84,35 @@ class PaisTelefoneServiceCoberturaTest extends TestCase
     {
         $resultado = PaisTelefoneService::identificarPais('5521999999999');
         $this->assertSame('BR', $resultado['iso']);
+    }
+
+    // ─── Achado real 24/09 (Leonardo, contato "Vanete" #98404): número suíço
+    // virando "+55 (41)..." errado — DDD 41 (Curitiba) e DDI da Suíça são o
+    // mesmo número, por isso a checagem de Brasil sem DDI precisa confirmar o
+    // formato de celular/fixo real, não só o comprimento total. ─────────────
+
+    public function test_identifica_suica_mesmo_com_11_digitos_parecendo_numero_brasileiro(): void
+    {
+        // 41 79 258 60 58 — 11 dígitos, "41" é tanto DDI da Suíça quanto DDD
+        // de Curitiba, mas "79258..." não tem o formato de celular BR (não
+        // começa com 9 depois do DDD) nem de fixo (9 dígitos, não 8).
+        $resultado = PaisTelefoneService::identificarPais('41792586058');
+        $this->assertSame('CH', $resultado['iso']);
+    }
+
+    public function test_ainda_identifica_celular_de_curitiba_sem_ddi_mesmo_com_ddd_igual_ao_da_suica(): void
+    {
+        // Mesmo DDD "41" da Suíça, mas com formato real de celular brasileiro
+        // (9 dígitos, começando com 9) — tem que continuar sendo Brasil.
+        $resultado = PaisTelefoneService::identificarPais('41991234567');
+        $this->assertSame('BR', $resultado['iso']);
+    }
+
+    public function test_identifica_espanha_mesmo_com_ddi_igual_a_ddd_de_minas_gerais(): void
+    {
+        // DDI da Espanha (34) também é DDD de Minas Gerais — celular espanhol
+        // real (9 dígitos, começa com 6 ou 7, nunca 9) não pode virar Brasil.
+        $resultado = PaisTelefoneService::identificarPais('34612345678');
+        $this->assertSame('ES', $resultado['iso']);
     }
 }

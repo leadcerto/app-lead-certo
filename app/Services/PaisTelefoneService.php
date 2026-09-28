@@ -227,6 +227,16 @@ class PaisTelefoneService
         ['iso' => 'PF', 'nome' => 'Polinésia Francesa', 'ddi' => '689', 'bandeira' => '🇵🇫', 'mascara' => 'XX XX XX XX'],
     ];
 
+    // Lista fechada dos 67 DDDs reais do Brasil (ANATEL) — usada pra
+    // desambiguar número local brasileiro sem DDI de número estrangeiro cujo
+    // DDI colide com um DDD real (ex.: 41 = DDI da Suíça E DDD de Curitiba).
+    private const DDDS_VALIDOS = [
+        11,12,13,14,15,16,17,18,19, 21,22,24, 27,28, 31,32,33,34,35,37,38,
+        41,42,43,44,45,46, 47,48,49, 51,53,54,55, 61, 62,64, 63, 65,66, 67,
+        68, 69, 71,73,74,75,77, 79, 81,87, 82, 83, 84, 85,88, 86,89,
+        91,93,94, 92,97, 95, 96, 98,99,
+    ];
+
     /**
      * Identifica o país de um número de telefone e retorna os dados formatados com bandeira.
      */
@@ -262,28 +272,35 @@ class PaisTelefoneService
         // Remove prefixo 00 internacional
         $semZeros = preg_replace('/^00+/', '', $digitos);
 
-        // 1. Se for Brasil (Começa com 55 e tem 12 ou 13 dígitos, ou 10/11 dígitos locais brasileiros)
-        if ((str_starts_with($semZeros, '55') && (strlen($semZeros) === 12 || strlen($semZeros) === 13)) ||
-            (strlen($semZeros) === 10 || strlen($semZeros) === 11)) {
-            
-            $local = str_starts_with($semZeros, '55') && strlen($semZeros) >= 12 ? substr($semZeros, 2) : $semZeros;
-            $ddd = substr($local, 0, 2);
-            $resto = substr($local, 2);
+        // 1. Brasil com DDI 55 explícito (12 ou 13 dígitos) — inequívoco, sem
+        // ambiguidade nenhuma, sempre prioridade máxima.
+        if (str_starts_with($semZeros, '55') && (strlen($semZeros) === 12 || strlen($semZeros) === 13)) {
+            $local = substr($semZeros, 2);
 
-            $formatado = (strlen($resto) === 9)
-                ? "+55 ({$ddd}) " . substr($resto, 0, 5) . '-' . substr($resto, 5)
-                : "+55 ({$ddd}) " . substr($resto, 0, 4) . '-' . substr($resto, 4);
+            return self::montarResultadoBrasil($local);
+        }
 
-            return [
-                'iso'          => 'BR',
-                'nome'         => 'Brasil',
-                'bandeira'     => '🇧🇷',
-                'ddi'          => '55',
-                'numero_limpo' => '55' . $local,
-                'numero_local' => $local,
-                'formatado'    => $formatado,
-                'exibicao'     => "🇧🇷 {$formatado}",
-            ];
+        // 1.5 Achado real 24/09 (Leonardo, contato "Vanete", Suíça): a regra
+        // antiga tratava QUALQUER número de 10-11 dígitos como brasileiro sem
+        // DDI, só pelo comprimento — um celular suíço (41 79 258 60 58) tem
+        // 11 dígitos, e "41" é tanto DDI da Suíça quanto DDD de Curitiba,
+        // virando "+55 (41)..." errado. Mesma colisão existe com vários
+        // outros países de DDI curto (Espanha=34≈MG, França=33≈SP litoral
+        // etc.) — DDD sozinho não desambigua. Agora só assume Brasil sem DDI
+        // quando o DDD é um dos 67 reais E o resto bate o formato de celular
+        // (9 dígitos, começa com 9 — regra nacional desde a universalização
+        // do 9º dígito) ou fixo (8 dígitos). Case genuinamente ambíguo (ex.:
+        // sobra sem esse formato) cai pro loop de países abaixo, que consegue
+        // desambiguar pelo DDI de verdade.
+        if (strlen($semZeros) === 10 || strlen($semZeros) === 11) {
+            $ddd   = substr($semZeros, 0, 2);
+            $resto = substr($semZeros, 2);
+            $pareceCelularBr = strlen($resto) === 9 && $resto[0] === '9';
+            $pareceFixoBr    = strlen($resto) === 8;
+
+            if (in_array((int) $ddd, self::DDDS_VALIDOS, true) && ($pareceCelularBr || $pareceFixoBr)) {
+                return self::montarResultadoBrasil($semZeros);
+            }
         }
 
         // 2. Busca entre os países cadastrados ordenando por DDI mais longo primeiro
@@ -312,6 +329,14 @@ class PaisTelefoneService
             }
         }
 
+        // 2.5 Fallback: 10-11 dígitos que não bateu DDD real (item 1.5) nem
+        // nenhum DDI de país cadastrado (item 2) — mantém o comportamento
+        // antigo (assume Brasil) como último recurso, só desce de prioridade
+        // pra depois da checagem de países de verdade.
+        if (strlen($semZeros) === 10 || strlen($semZeros) === 11) {
+            return self::montarResultadoBrasil($semZeros);
+        }
+
         // 3. Fallback: Se não encontrou país específico, exibe como internacional genérico
         $formatado = '+' . $semZeros;
         return [
@@ -323,6 +348,32 @@ class PaisTelefoneService
             'numero_local' => $semZeros,
             'formatado'    => $formatado,
             'exibicao'     => "🌐 {$formatado}",
+        ];
+    }
+
+    /**
+     * Monta o resultado padrão de Brasil a partir do número local (DDD +
+     * resto, já sem o "55") — extraído porque agora tem 3 pontos de retorno
+     * diferentes (55 explícito, DDD real validado, fallback antigo).
+     */
+    private static function montarResultadoBrasil(string $local): array
+    {
+        $ddd   = substr($local, 0, 2);
+        $resto = substr($local, 2);
+
+        $formatado = (strlen($resto) === 9)
+            ? "+55 ({$ddd}) " . substr($resto, 0, 5) . '-' . substr($resto, 5)
+            : "+55 ({$ddd}) " . substr($resto, 0, 4) . '-' . substr($resto, 4);
+
+        return [
+            'iso'          => 'BR',
+            'nome'         => 'Brasil',
+            'bandeira'     => '🇧🇷',
+            'ddi'          => '55',
+            'numero_limpo' => '55' . $local,
+            'numero_local' => $local,
+            'formatado'    => $formatado,
+            'exibicao'     => "🇧🇷 {$formatado}",
         ];
     }
 
