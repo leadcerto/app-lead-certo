@@ -35,6 +35,17 @@ Schedule::command('openrouter:atualizar-modelos')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/openrouter-modelos.log'));
 
+// 00:01 — Regra do 8º dia (pedido do Leonardo, 24/09): contatos cujo ticket
+// ativo já está aberto há 8+ dias saem de "novos_leads"/"leads_em_analise" e
+// recebem "lead_certo" ou "lead_invalido" conforme a validação de telefone.
+// Regra global do Kanban (não amarrada a nenhum canal específico), roda pra
+// todos os tenants com Google conectado de uma vez.
+Schedule::command('contatos:validar-cadastros --dias=8')
+    ->dailyAt('00:01')
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/validar-cadastros.log'));
+
 // A cada 15 min — Identifica nomes de contatos "Sem Nome" lendo conversas (priorizando novos leads)
 Schedule::command('contatos:identificar-nomes --limit=15')
     ->everyFifteenMinutes()

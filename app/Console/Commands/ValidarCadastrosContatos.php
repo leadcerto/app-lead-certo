@@ -16,15 +16,24 @@ use Illuminate\Support\Facades\Log;
  * final no Google removendo a de origem. --dry-run só mostra o que faria,
  * incluindo qual contato mescla em qual (gate operacional antes de aplicar
  * de verdade — spec).
+ *
+ * Regra do 8º dia (pedido do Leonardo, 24/09): --dias=N restringe aos
+ * contatos cujo TICKET ATIVO ATUAL já está aberto há pelo menos N dias —
+ * contagem reinicia se o ticket reabrir. Sem a flag, processa tudo que
+ * estiver marcado, igual sempre foi (uso manual/dry-run). --tenant vira
+ * opcional: sem ele, roda em todos os tenants com Google conectado — é
+ * assim que o agendamento diário único (00h01, ver routes/console.php)
+ * cobre a base inteira, regra global do Kanban, sem depender de canal.
  */
 class ValidarCadastrosContatos extends Command
 {
     protected $signature = 'contatos:validar-cadastros
-                            {--tenant= : ID do tenant}
+                            {--tenant= : ID do tenant (padrão: todos os tenants com Google conectado)}
                             {--dry-run : Mostra o que seria feito sem aplicar}
-                            {--chunk=200 : Quantidade de vínculos por lote}';
+                            {--chunk=200 : Quantidade de vínculos por lote}
+                            {--dias= : Só processa contatos cujo ticket ativo está aberto há pelo menos N dias}';
 
-    protected $description = 'Valida telefone dos contatos em analise/novos de um tenant e aplica lead_certo ou lead_invalido';
+    protected $description = 'Valida telefone dos contatos em analise/novos e aplica lead_certo ou lead_invalido';
 
     private int $certos    = 0;
     private int $invalidos = 0;
@@ -39,22 +48,34 @@ class ValidarCadastrosContatos extends Command
 
     public function handle(): int
     {
-        $tenantId = (int) $this->option('tenant');
-        if (! $tenantId) {
-            $this->error('--tenant é obrigatório.');
+        $tenantIdOption = $this->option('tenant');
+
+        $tokensQuery = \App\Models\GoogleToken::query();
+        if ($tenantIdOption) {
+            $tokensQuery->where('tenant_id', (int) $tenantIdOption);
+        }
+        $tokens = $tokensQuery->get();
+
+        if ($tokens->isEmpty()) {
+            $this->error($tenantIdOption ? 'Tenant sem GoogleToken conectado.' : 'Nenhum tenant com GoogleToken conectado.');
 
             return 1;
         }
 
-        $dryRun = (bool) $this->option('dry-run');
-        $chunk  = (int) $this->option('chunk');
-
-        $token = \App\Models\GoogleToken::where('tenant_id', $tenantId)->first();
-        if (! $token) {
-            $this->error('Tenant sem GoogleToken conectado.');
-
-            return 1;
+        foreach ($tokens as $token) {
+            $this->processarTenant($token, (int) $token->tenant_id);
         }
+
+        return 0;
+    }
+
+    private function processarTenant(\App\Models\GoogleToken $token, int $tenantId): void
+    {
+        $dryRun      = (bool) $this->option('dry-run');
+        $chunk       = (int) $this->option('chunk');
+        $diasMinimos = $this->option('dias') !== null ? (int) $this->option('dias') : null;
+
+        $this->certos = $this->invalidos = $this->erros = 0;
 
         $slugsOrigem = ['novos_leads', 'leads_em_analise'];
 
@@ -64,17 +85,28 @@ class ValidarCadastrosContatos extends Command
         $grupoLeadInvalido    = $etiquetaLeadInvalido?->googleGrupoParaTenant($tenantId);
 
         if (! $grupoLeadCerto || ! $grupoLeadInvalido) {
-            $this->error('Etiquetas de validação não provisionadas pra este tenant.');
+            $this->error("Tenant #{$tenantId}: etiquetas de validação não provisionadas.");
 
-            return 1;
+            return;
         }
 
-        $this->info($dryRun ? '[DRY-RUN] Nenhuma alteração será salva.' : 'Validando cadastros...');
+        $this->info("Tenant #{$tenantId}: " . ($dryRun ? '[DRY-RUN] Nenhuma alteração será salva.' : 'Validando cadastros...'));
 
-        VinculoContatoTenant::where('tenant_id', $tenantId)
+        $query = VinculoContatoTenant::where('tenant_id', $tenantId)
             ->whereNotNull('google_resource_name')
-            ->whereHas('etiquetas', fn ($q) => $q->whereIn('slug', $slugsOrigem))
-            ->with('contato', 'etiquetas')
+            ->whereHas('etiquetas', fn ($q) => $q->whereIn('slug', $slugsOrigem));
+
+        if ($diasMinimos !== null) {
+            $query->whereExists(function ($sub) use ($diasMinimos) {
+                $sub->selectRaw('1')
+                    ->from('tickets_atendimento')
+                    ->whereColumn('tickets_atendimento.contato_id', 'vinculos_contato_tenant.contato_id')
+                    ->whereIn('tickets_atendimento.status', ['aberto', 'aguardando'])
+                    ->where('tickets_atendimento.aberto_em', '<=', now()->subDays($diasMinimos));
+            });
+        }
+
+        $query->with('contato', 'etiquetas')
             ->chunkById($chunk, function ($lote) use ($dryRun, $token, $tenantId, $grupoLeadCerto, $grupoLeadInvalido, $etiquetaLeadCerto, $etiquetaLeadInvalido, $slugsOrigem) {
                 foreach ($lote as $vinculo) {
                     if (! $vinculo->contato) {
@@ -207,7 +239,5 @@ class ValidarCadastrosContatos extends Command
         if ($dryRun) {
             $this->warn('Rode sem --dry-run para aplicar.');
         }
-
-        return 0;
     }
 }
