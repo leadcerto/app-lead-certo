@@ -213,6 +213,49 @@ class SdrResponderService
             }
         }
 
+        // ── 3.8. Movimento pra AGUARDANDO_LEAD sem orçamento real (achado real
+        // 24/09, tickets #4908 "Jairo Jr" e #4907 "Rodrigo Sani"): a coluna
+        // "aguardando_orcamento" roda uma IA "observadora silenciosa" cujo
+        // único trabalho é detectar quando um HUMANO manda o valor (R$) pro
+        // lead e então mover o card — varredura no histórico mostrou 60% dos
+        // tickets do tenant avançando em menos de 5min, muitos em 1-2s,
+        // tempo impossível pra um humano ter digitado um orçamento de
+        // verdade. Mesma rede de segurança determinística dos guardrails
+        // acima: não confia só na palavra do modelo, confere se existe de
+        // verdade uma mensagem de um ATENDENTE HUMANO com valor em R$.
+        if ($ticket->coluna_kanban === 'aguardando_orcamento' && str_contains($resposta, '[AGUARDANDO_LEAD]')) {
+            $orcamentoRealEnviado = $ticket->mensagens->contains(
+                fn ($m) => $m->remetente === 'humano' && preg_match('/R\$\s?\d/u', $m->conteudo ?? '')
+            );
+
+            if (! $orcamentoRealEnviado) {
+                $ticket->update([
+                    'aguardando_orientacao_em' => now(),
+                    'mensagem_espera_enviada'  => false,
+                ]);
+
+                try {
+                    app(\App\Services\AlertaInternoService::class)->criar(
+                        $ticket->tenant_id,
+                        'movimento_sem_orcamento_real',
+                        'Agente tentou avançar pra Aguardando Lead sem orçamento real enviado',
+                        "Resposta bloqueada antes de enviar: \"{$resposta}\" — nenhuma mensagem de atendente humano com valor em R\$ encontrada nesta conversa.",
+                        $ticket->id,
+                    );
+                } catch (\Exception $e) {
+                    Log::warning('SdrResponder: falha ao criar alerta de movimento sem orçamento real', [
+                        'ticket_id' => $ticket->id, 'erro' => $e->getMessage(),
+                    ]);
+                }
+
+                Log::warning('SdrResponder: bloqueado movimento pra aguardando_lead sem orçamento real, ticket pausado', [
+                    'ticket_id' => $ticket->id, 'resposta' => $resposta,
+                ]);
+
+                return null;
+            }
+        }
+
         // ── 4. Detectar token de movimento de coluna e aplicar ──────────────
         // Token = chave da coluna em maiúsculas entre colchetes. Gerado dinamicamente
         // a partir das colunas reais do tenant — se o franqueado renomear uma coluna,

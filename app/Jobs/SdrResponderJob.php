@@ -109,6 +109,34 @@ class SdrResponderJob implements ShouldQueue
             }
         }
 
+        // Achado real 24/09 (tickets #4907 "Rodrigo Sani", #4908 "Jairo Jr"):
+        // cada mensagem do lead despacha seu próprio SdrResponderJob com seu
+        // próprio temporizador de debounce — quando o lead manda várias
+        // mensagens seguidas rapidinho, mais de um desses jobs pode concluir
+        // "não sou obsoleto" quase ao mesmo tempo (cada um mirando a mesma
+        // última mensagem do lead) e cada um chama a IA e manda sua própria
+        // resposta, gerando 2-4 respostas quase simultâneas e parecidas (não
+        // idênticas, porque cada uma é uma chamada de LLM independente).
+        // Trava determinística: se já existe mensagem do bot mais recente que
+        // a última mensagem do lead, alguém já respondeu a essa leva — não
+        // chama a IA de novo.
+        $ultimaMensagemLeadEm = Mensagem::withoutGlobalScopes()
+            ->where('ticket_id', $this->ticketId)
+            ->where('remetente', 'lead')
+            ->orderByDesc('enviado_em')
+            ->value('enviado_em');
+
+        $ultimaMensagemBotEm = Mensagem::withoutGlobalScopes()
+            ->where('ticket_id', $this->ticketId)
+            ->where('remetente', 'bot')
+            ->orderByDesc('enviado_em')
+            ->value('enviado_em');
+
+        if ($ultimaMensagemLeadEm && $ultimaMensagemBotEm && $ultimaMensagemBotEm >= $ultimaMensagemLeadEm) {
+            Log::info("SdrResponderJob: já existe resposta do bot pra última mensagem do lead (outra execução já respondeu), ignorando. ticket #{$this->ticketId}");
+            return;
+        }
+
         if ($ticket->status === 'encerrado' || $ticket->coluna_kanban === 'encerrado' || \App\Models\KanbanColuna::papelDe($ticket->tenant_id, $ticket->coluna_kanban) === \App\Enums\PapelColunaKanban::Encerramento) {
             Log::info("SdrResponderJob: ticket #{$this->ticketId} está encerrado, resposta cancelada");
             return;
