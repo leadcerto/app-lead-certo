@@ -4,6 +4,24 @@
 
 @section('content')
 <div x-data="gestorKanbanRelatorios()" x-init="carregar()">
+
+    <div class="flex items-center gap-1 mb-5 border-b border-gray-200">
+        <button @click="aba = 'semanais'"
+                class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
+                :class="aba === 'semanais' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'">
+            Relatórios Semanais
+        </button>
+        <button @click="aba = 'auditoria'"
+                class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5"
+                :class="aba === 'auditoria' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'">
+            Auditoria
+            <span x-show="auditorias.length > 0" x-text="auditorias.length"
+                  class="text-[10px] bg-red-100 text-red-600 rounded-full px-1.5 py-0.5 font-semibold"></span>
+        </button>
+    </div>
+
+    <template x-if="aba === 'semanais'">
+    <div>
     <h1 class="text-xl font-bold text-gray-800 mb-1">Relatórios Semanais — Gestor do Kanban</h1>
     <p class="text-sm text-gray-500 mb-5">Gerado todo sábado à meia-noite, analisando os últimos 7 dias.</p>
 
@@ -58,18 +76,79 @@
             </div>
         </template>
     </div>
+    </div>
+    </template>
+
+    {{-- Aba Auditoria (pedido do Leonardo 24/09): fila de tickets marcados
+         manualmente pra revisão de desenvolvimento — nunca a IA analisa,
+         só nós (dev) — via botão "🔍 Auditoria" no detalhe do ticket. --}}
+    <template x-if="aba === 'auditoria'">
+    <div>
+    <h1 class="text-xl font-bold text-gray-800 mb-1">Auditoria — Tickets marcados pra revisão</h1>
+    <p class="text-sm text-gray-500 mb-5">Marcados manualmente no ticket quando algo parece errado — a IA nunca analisa isso, só nós.</p>
+
+    <template x-if="auditorias.length === 0">
+        <div class="py-16 text-center text-gray-400">
+            <p class="text-sm">Nenhum ticket marcado pra auditoria no momento.</p>
+        </div>
+    </template>
+
+    <div class="space-y-3">
+        <template x-for="t in auditorias" :key="t.id">
+            <div class="bg-white rounded-xl border border-gray-200 p-4">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="text-sm font-semibold text-gray-800"
+                           x-text="(t.contato?.nome || 'Sem nome') + ' · Ticket #' + t.id"></p>
+                        <p class="text-xs text-gray-400"
+                           x-text="[t.contato?.telefone, t.coluna_kanban].filter(Boolean).join(' · ')"></p>
+                    </div>
+                    <span class="text-xs text-gray-400 whitespace-nowrap"
+                          x-text="new Date(t.revisao_dev_solicitada_em).toLocaleString('pt-BR')"></span>
+                </div>
+                <template x-if="t.revisao_dev_nota">
+                    <p class="text-sm text-gray-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mt-2 whitespace-pre-wrap" x-text="t.revisao_dev_nota"></p>
+                </template>
+                <div class="flex items-center justify-between mt-3">
+                    <span class="text-xs text-gray-400" x-text="'Marcado por ' + (t.solicitante?.nome || '—')"></span>
+                    <button @click="concluirAuditoria(t.id)"
+                            class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg transition-colors font-medium">
+                        Marcar como revisado
+                    </button>
+                </div>
+            </div>
+        </template>
+    </div>
+    </div>
+    </template>
+
 </div>
 
 <script>
 function gestorKanbanRelatorios() {
     return {
+        aba: 'semanais',
         relatorios: [],
+        auditorias: [],
         aberto: null,
         copiado: null,
         async carregar() {
             const res = await fetch('/api/painel/kanban/relatorios');
             const json = await res.json();
             this.relatorios = json.data;
+            await this.carregarAuditorias();
+        },
+        async carregarAuditorias() {
+            const res = await fetch('/api/painel/kanban/auditorias');
+            const json = await res.json();
+            this.auditorias = json.data;
+        },
+        async concluirAuditoria(ticketId) {
+            const res = await fetch(`/api/painel/kanban/ticket/${ticketId}/auditoria/concluir`, {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+            });
+            if (res.ok) this.auditorias = this.auditorias.filter(t => t.id !== ticketId);
         },
         toggle(id) {
             this.aberto = this.aberto === id ? null : id;

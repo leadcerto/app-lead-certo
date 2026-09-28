@@ -417,12 +417,15 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::post('/kanban/ticket/{ticket}/mover',           [KanbanController::class, 'mover']);
         Route::post('/kanban/ticket/{ticket}/retorno',         [KanbanController::class, 'agendarRetorno']);
         Route::post('/kanban/ticket/{ticket}/midia',           [KanbanController::class, 'enviarMidia']);
+        Route::post('/kanban/ticket/{ticket}/auditoria',           [KanbanController::class, 'marcarRevisaoDev']);
+        Route::post('/kanban/ticket/{ticket}/auditoria/concluir',  [KanbanController::class, 'concluirRevisaoDev']);
     });
 
     // Relatórios semanais do Gestor do Kanban — dono e admin apenas
     Route::middleware('role:admin,dono')->group(function () {
         Route::get('/kanban/relatorios', [GestorKanbanRelatorioController::class, 'index']);
         Route::get('/kanban/relatorios/{id}', [GestorKanbanRelatorioController::class, 'show']);
+        Route::get('/kanban/auditorias', [GestorKanbanRelatorioController::class, 'auditorias']);
     });
 
     // Gerenciar motivos de encerramento — dono e admin apenas (ver a lista, todo mundo do Kanban pode)

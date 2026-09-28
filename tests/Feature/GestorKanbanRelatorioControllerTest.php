@@ -12,6 +12,17 @@ class GestorKanbanRelatorioControllerTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_pagina_renderiza_sem_erro_com_a_aba_de_auditoria_nova(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $dono   = User::factory()->create(['perfil' => 'dono', 'tenant_id' => $tenant->id, 'ativo' => true]);
+
+        $response = $this->actingAs($dono)->get(route('kanban.relatorios'));
+
+        $response->assertOk();
+        $response->assertSee('Auditoria');
+    }
+
     public function test_dono_ve_lista_de_relatorios_do_proprio_tenant(): void
     {
         $tenantA = Tenant::factory()->create();
