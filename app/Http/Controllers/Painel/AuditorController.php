@@ -341,12 +341,13 @@ class AuditorController extends Controller
         }
 
         $humano = $vinculo->campos_editados_humano ?? [];
+        $sobrenomeTambemAprovado = isset($camposParaAprovar['sobrenome']);
 
         foreach ($camposParaAprovar as $campo => $pendencia) {
             $valorAntigo = $vinculo->contato?->$campo;
             $valorNovo   = $pendencia['sugerido'];
 
-            $vinculo->contato?->update([$campo => $valorNovo]);
+            $vinculo->contato?->update($this->dadosAprovacaoNome($vinculo->contato, $campo, $valorNovo, $sobrenomeTambemAprovado));
             unset($pendentes[$campo]);
             $humano[$campo] = now()->toIso8601String();
 
@@ -402,6 +403,33 @@ class AuditorController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /**
+     * Achado real (28/09, Leonardo): a sugestão de nome vinda do Google
+     * costuma vir com o nome completo (ex: "Helena Marins"), enquanto o
+     * sobrenome local antigo guarda só o sobrenome ("Marins") — aprovar só o
+     * nome deixava os dois campos com a mesma informação duplicada. Segue a
+     * convenção do sistema de nome completo num campo só: zera o sobrenome
+     * só quando ele já está contido no nome novo (não quando carrega
+     * informação própria, tipo profissão) e só quando o sobrenome não está
+     * sendo aprovado junto (nesse caso o próprio valor novo dele prevalece).
+     */
+    private function dadosAprovacaoNome(?Contato $contato, string $campo, $valorNovo, bool $sobrenomeTambemAprovado): array
+    {
+        $dados = [$campo => $valorNovo];
+
+        if (
+            $campo === 'nome'
+            && ! $sobrenomeTambemAprovado
+            && $contato?->sobrenome
+            && is_string($valorNovo)
+            && str_contains($valorNovo, $contato->sobrenome)
+        ) {
+            $dados['sobrenome'] = null;
+        }
+
+        return $dados;
+    }
+
     public function aprovarCampo(Request $request, VinculoContatoTenant $vinculo, string $campo): JsonResponse
     {
         $pendencia = $vinculo->campos_pendentes_auditoria[$campo] ?? null;
@@ -412,7 +440,9 @@ class AuditorController extends Controller
         $valorAntigo = $vinculo->contato?->$campo;
         $valorNovo   = $pendencia['sugerido'];
 
-        $vinculo->contato?->update([$campo => $valorNovo]);
+        // Este endpoint aprova um campo por vez — sobrenome nunca é aprovado
+        // junto na mesma chamada.
+        $vinculo->contato?->update($this->dadosAprovacaoNome($vinculo->contato, $campo, $valorNovo, sobrenomeTambemAprovado: false));
 
         $pendentes = $vinculo->campos_pendentes_auditoria;
         unset($pendentes[$campo]);
@@ -623,6 +653,14 @@ class AuditorController extends Controller
         $itens = $request->input('itens', []);
         $total = 0;
 
+        // Sobrenome pode vir como outro item do mesmo lote, pro mesmo
+        // vínculo — nesse caso a aprovação de "nome" não deve zerar o
+        // sobrenome, o próprio item de sobrenome já cuida do valor novo.
+        $vinculosComSobrenomeNoLote = collect($itens)
+            ->filter(fn ($i) => ($i['campo'] ?? null) === 'sobrenome')
+            ->pluck('vinculo_id')
+            ->all();
+
         foreach ($itens as $item) {
             $vinculoId = $item['vinculo_id'] ?? null;
             $campo     = $item['campo'] ?? null;
@@ -636,8 +674,9 @@ class AuditorController extends Controller
 
             $valorAntigo = $vinculo->contato?->$campo;
             $valorNovo   = $pendencia['sugerido'];
+            $sobrenomeTambemAprovado = in_array($vinculoId, $vinculosComSobrenomeNoLote);
 
-            $vinculo->contato?->update([$campo => $valorNovo]);
+            $vinculo->contato?->update($this->dadosAprovacaoNome($vinculo->contato, $campo, $valorNovo, $sobrenomeTambemAprovado));
 
             $pendentes = $vinculo->campos_pendentes_auditoria ?? [];
             unset($pendentes[$campo]);

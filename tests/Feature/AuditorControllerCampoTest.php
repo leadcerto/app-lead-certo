@@ -151,6 +151,82 @@ class AuditorControllerCampoTest extends TestCase
         $this->assertNull($vinculo->fresh()->campos_pendentes_auditoria);
     }
 
+    /**
+     * Achado real 2026-09-28 (Leonardo, tela "Sugestões de Nomes &
+     * Sincronização"): a sugestão de nome vinda do Google costuma já vir com
+     * o nome completo (ex: "Helena Marins"), enquanto o sobrenome local
+     * antigo guarda só o sobrenome ("Marins") — aprovar só o nome deixava os
+     * dois campos com a mesma informação duplicada. Convenção do sistema é
+     * nome completo num campo só; só zera o sobrenome quando ele já está
+     * contido no nome novo (não quando carrega informação própria, tipo
+     * profissão).
+     */
+    public function test_aprovar_tudo_zera_sobrenome_quando_ja_esta_contido_no_nome_novo(): void
+    {
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create(['nome' => 'Helena', 'sobrenome' => 'Marins']);
+        $vinculo = VinculoContatoTenant::create([
+            'contato_id' => $contato->id, 'tenant_id' => $tenant->id,
+            'campos_pendentes_auditoria' => [
+                'nome' => ['sugerido' => 'Helena Marins', 'origem' => 'google'],
+            ],
+        ]);
+        $user = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin']);
+
+        $this->actingAs($user)
+            ->postJson("/api/painel/auditor/pendente/{$vinculo->id}/aprovar-tudo")
+            ->assertOk();
+
+        $contato->refresh();
+        $this->assertSame('Helena Marins', $contato->nome);
+        $this->assertNull($contato->sobrenome);
+    }
+
+    public function test_aprovar_campo_nome_zera_sobrenome_quando_ja_esta_contido_no_nome_novo(): void
+    {
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create(['nome' => 'Helena', 'sobrenome' => 'Marins']);
+        $vinculo = VinculoContatoTenant::create([
+            'contato_id' => $contato->id, 'tenant_id' => $tenant->id,
+            'campos_pendentes_auditoria' => [
+                'nome' => ['sugerido' => 'Helena Marins', 'origem' => 'google'],
+            ],
+        ]);
+        $user = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin']);
+
+        $this->actingAs($user)
+            ->postJson("/api/painel/auditor/pendente/{$vinculo->id}/campo/nome/aprovar")
+            ->assertOk();
+
+        $contato->refresh();
+        $this->assertSame('Helena Marins', $contato->nome);
+        $this->assertNull($contato->sobrenome);
+    }
+
+    public function test_aprovar_nome_preserva_sobrenome_quando_nao_e_redundante(): void
+    {
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create(['nome' => 'Wesley', 'sobrenome' => 'Motorista']);
+        $vinculo = VinculoContatoTenant::create([
+            'contato_id' => $contato->id, 'tenant_id' => $tenant->id,
+            'campos_pendentes_auditoria' => [
+                'nome' => ['sugerido' => 'Wesley Wess', 'origem' => 'google'],
+            ],
+        ]);
+        $user = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin']);
+
+        $this->actingAs($user)
+            ->postJson("/api/painel/auditor/pendente/{$vinculo->id}/aprovar-tudo")
+            ->assertOk();
+
+        $contato->refresh();
+        $this->assertSame('Wesley Wess', $contato->nome);
+        $this->assertSame('Motorista', $contato->sobrenome); // descritor, não redundante — preservado
+    }
+
     public function test_aprovar_tudo_nao_mexe_em_pendencia_de_outro_campo(): void
     {
         $vinculo = $this->vinculoComDoisPendentes(); // pendente: nome + empresa
@@ -201,6 +277,58 @@ class AuditorControllerCampoTest extends TestCase
         $this->assertArrayNotHasKey('nome', $vinculo->campos_pendentes_auditoria);
         $this->assertArrayNotHasKey('sobrenome', $vinculo->campos_pendentes_auditoria);
         $this->assertArrayHasKey('empresa', $vinculo->campos_pendentes_auditoria); // intacto
+    }
+
+    public function test_aprovar_lote_zera_sobrenome_redundante_por_item(): void
+    {
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create(['nome' => 'Helena', 'sobrenome' => 'Marins']);
+        $vinculo = VinculoContatoTenant::create([
+            'contato_id' => $contato->id, 'tenant_id' => $tenant->id,
+            'campos_pendentes_auditoria' => [
+                'nome' => ['sugerido' => 'Helena Marins', 'origem' => 'google'],
+            ],
+        ]);
+        $user = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin']);
+
+        $this->actingAs($user)
+            ->postJson('/api/painel/auditor/pendentes/aprovar-lote', [
+                'itens' => [['vinculo_id' => $vinculo->id, 'campo' => 'nome']],
+            ])
+            ->assertOk();
+
+        $contato->refresh();
+        $this->assertSame('Helena Marins', $contato->nome);
+        $this->assertNull($contato->sobrenome);
+    }
+
+    public function test_aprovar_lote_nao_zera_sobrenome_quando_ele_tambem_esta_no_mesmo_lote(): void
+    {
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create(['nome' => 'Paloma', 'sobrenome' => '9384']);
+        $vinculo = VinculoContatoTenant::create([
+            'contato_id' => $contato->id, 'tenant_id' => $tenant->id,
+            'campos_pendentes_auditoria' => [
+                'nome'      => ['sugerido' => 'Paloma Ribeiro', 'origem' => 'google'],
+                'sobrenome' => ['sugerido' => 'Vendas',         'origem' => 'google'],
+            ],
+        ]);
+        $user = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin']);
+
+        $this->actingAs($user)
+            ->postJson('/api/painel/auditor/pendentes/aprovar-lote', [
+                'itens' => [
+                    ['vinculo_id' => $vinculo->id, 'campo' => 'nome'],
+                    ['vinculo_id' => $vinculo->id, 'campo' => 'sobrenome'],
+                ],
+            ])
+            ->assertOk();
+
+        $contato->refresh();
+        $this->assertSame('Paloma Ribeiro', $contato->nome);
+        $this->assertSame('Vendas', $contato->sobrenome);
     }
 
     /**
