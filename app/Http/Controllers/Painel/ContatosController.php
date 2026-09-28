@@ -1248,6 +1248,6 @@ class ContatosController extends Controller
 
     private function limparTelefone(string $raw): ?string
     {
-        return \App\Console\Commands\NormalizarTelefones::normalizar($raw);
+        return app(\App\Services\TelefoneService::class)->normalizar($raw);
     }
 }
