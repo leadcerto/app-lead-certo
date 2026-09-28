@@ -349,7 +349,7 @@
                                 <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase whitespace-nowrap min-w-[180px]">Nome no Google</th>
                                 <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase whitespace-nowrap min-w-[180px]">Nome Existente</th>
                                 <th class="text-left px-4 py-3 text-xs text-gray-500 font-bold uppercase whitespace-nowrap">Similaridade</th>
-                                <th class="text-right px-4 py-3 text-xs text-gray-500 font-bold uppercase whitespace-nowrap min-w-[280px]">Decisão</th>
+                                <th class="text-right px-4 py-3 text-xs text-gray-500 font-bold uppercase whitespace-nowrap min-w-[200px]">Decisão</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
@@ -364,23 +364,27 @@
                                               x-text="Math.round(c.similaridade_nome * 100) + '%'"></span>
                                     </td>
                                     <td class="px-4 py-3 text-right">
-                                        <div class="flex items-center justify-end gap-1.5 flex-wrap">
-                                            <button @click="abrirEditarConflitoModal(c)"
-                                                    class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition flex items-center gap-1">
-                                                <span>✏️ Editar</span>
-                                            </button>
-                                            <button @click="resolverConflito(c, 'fundir')"
-                                                    class="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold shadow-sm">
-                                                Mesma Pessoa
-                                            </button>
-                                            <button @click="resolverConflito(c, 'criar-novo')"
-                                                    class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shadow-sm">
-                                                Número Reciclado
-                                            </button>
-                                            <button @click="resolverConflito(c, 'descartar')"
-                                                    class="px-2 py-1 text-gray-400 hover:text-red-600 rounded-lg text-xs">
-                                                Descartar
-                                            </button>
+                                        <div class="flex flex-col items-end gap-1.5">
+                                            <div class="flex items-center gap-1.5">
+                                                <button @click="resolverConflito(c, 'fundir')"
+                                                        class="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold shadow-sm whitespace-nowrap">
+                                                    Mesma Pessoa
+                                                </button>
+                                                <button @click="resolverConflito(c, 'criar-novo')"
+                                                        class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shadow-sm whitespace-nowrap">
+                                                    Número Reciclado
+                                                </button>
+                                            </div>
+                                            <div class="flex items-center gap-1.5">
+                                                <button @click="abrirEditarConflitoModal(c)"
+                                                        class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition flex items-center gap-1 whitespace-nowrap">
+                                                    <span>✏️ Editar</span>
+                                                </button>
+                                                <button @click="resolverConflito(c, 'descartar')"
+                                                        class="px-2 py-1 text-gray-400 hover:text-red-600 rounded-lg text-xs whitespace-nowrap">
+                                                    Descartar
+                                                </button>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
