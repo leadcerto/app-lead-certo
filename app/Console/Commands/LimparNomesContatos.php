@@ -172,15 +172,27 @@ PROMPT;
                     }
 
                     if (! $dryRun) {
-                        AuditoriaContato::firstOrCreate(
-                            ['contato_id' => $contato->id, 'campo' => 'telefone', 'status' => 'pendente'],
-                            [
+                        // Achado real (28/09): comparar só com 'pendente' deixava o
+                        // ciclo agendado recriar a pendência do zero pra sempre depois
+                        // do Leonardo marcar como "ignorado" na tela de Auditoria — um
+                        // "ignorado" é uma decisão humana já tomada, não deve
+                        // ressurgir sozinho.
+                        $jaRevisado = AuditoriaContato::where('contato_id', $contato->id)
+                            ->where('campo', 'telefone')
+                            ->whereIn('status', ['pendente', 'ignorado'])
+                            ->exists();
+
+                        if (! $jaRevisado) {
+                            AuditoriaContato::create([
+                                'contato_id'     => $contato->id,
                                 'tipo'           => 'telefone_invalido',
+                                'campo'          => 'telefone',
                                 'valor_original' => $original,
                                 'valor_sugerido' => $sugestao,
                                 'observacao'     => $motivo,
-                            ]
-                        );
+                                'status'         => 'pendente',
+                            ]);
+                        }
                         $emAuditoria++;
                     }
                     continue;

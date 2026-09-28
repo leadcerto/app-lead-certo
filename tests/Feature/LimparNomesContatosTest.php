@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AuditoriaContato;
 use App\Models\Contato;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -56,6 +57,38 @@ class LimparNomesContatosTest extends TestCase
         $this->artisan('contatos:limpar-nomes --so-telefones')->assertExitCode(0);
 
         $this->assertSame('5521964143278', $contato->fresh()->telefone);
+    }
+
+    /**
+     * Achado real (28/09, Auditoria — contatos "Gebrail" #88400, "Renata
+     * México" #88399, "Sem Nome" #88398): 3 telefones com formato irrecuperável
+     * (dado histórico da importação inicial, 14/07) voltavam a aparecer na
+     * Auditoria depois do Leonardo marcar como "ignorado" — porque
+     * normalizarTelefones() só verificava `status=pendente` antes de criar uma
+     * pendência nova; uma pendência "ignorado" não contava, e o próximo ciclo
+     * agendado (contatos:limpar-nomes --lote=30, roda em lotes rotativos)
+     * recriava a pendência do zero pro mesmo contato, indefinidamente.
+     */
+    public function test_nao_recria_pendencia_de_telefone_apos_humano_marcar_como_ignorado(): void
+    {
+        $contato = Contato::factory()->create(['telefone' => '22063398015024']);
+        AuditoriaContato::create([
+            'contato_id'     => $contato->id,
+            'tipo'           => 'telefone_invalido',
+            'campo'          => 'telefone',
+            'valor_original' => '22063398015024',
+            'valor_sugerido' => null,
+            'observacao'     => 'Formato desconhecido — 14 dígitos: 22063398015024',
+            'status'         => 'ignorado',
+        ]);
+
+        $this->artisan('contatos:limpar-nomes --so-telefones')->assertExitCode(0);
+
+        $this->assertSame(
+            1,
+            AuditoriaContato::where('contato_id', $contato->id)->where('campo', 'telefone')->count()
+        );
+        $this->assertDatabaseHas('auditoria_contatos', ['contato_id' => $contato->id, 'status' => 'ignorado']);
     }
 
     public function test_dry_run_nao_mescla_nem_altera_nada(): void
