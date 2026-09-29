@@ -174,4 +174,56 @@ class UazapiChannelServiceTest extends TestCase
 
         $this->assertDatabaseHas('whatsapp_envios_diarios', ['whatsapp_canal_id' => $canal->id, 'contador_frio' => 1]);
     }
+
+    /**
+     * Plano de extração de contatos de grupos/comunidades (29/09).
+     */
+    public function test_implementa_canal_com_grupos(): void
+    {
+        $this->assertInstanceOf(
+            \App\Services\Canais\CanalComGruposInterface::class,
+            app(UazapiChannelService::class)
+        );
+    }
+
+    public function test_lista_grupos_via_uazapi_usando_token_do_canal(): void
+    {
+        Http::fake(['*/group/list' => Http::response([
+            'groups' => [
+                [
+                    'chatid' => '120363012345678901@g.us',
+                    'Name'   => 'Vip Membros',
+                    'Participants' => [
+                        ['PhoneNumber' => '5521999998888@s.whatsapp.net'],
+                        ['PhoneNumber' => '5521988887777@s.whatsapp.net'],
+                    ],
+                ],
+            ],
+        ], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'nao_oficial', 'provider' => 'uazapi',
+            'config' => ['instance_token' => 'token-canal-uazapi'],
+        ]);
+
+        $grupos = app(UazapiChannelService::class)->listarGrupos($canal);
+
+        $this->assertSame('120363012345678901@g.us', $grupos[0]['jid']);
+        $this->assertSame('Vip Membros', $grupos[0]['nome']);
+        $this->assertSame(
+            [['telefone' => '5521999998888'], ['telefone' => '5521988887777']],
+            $grupos[0]['participantes']
+        );
+    }
+
+    public function test_lista_grupos_retorna_vazio_quando_canal_sem_token(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $canal  = WhatsappCanal::factory()->create(['tenant_id' => $tenant->id, 'config' => []]);
+
+        $grupos = app(UazapiChannelService::class)->listarGrupos($canal);
+
+        $this->assertSame([], $grupos);
+    }
 }

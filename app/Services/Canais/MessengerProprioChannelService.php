@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Log;
  * mesmo motor de humanização (HumanizacaoService, generalizado na Fase 1).
  * Só troca o "enviador bruto" de UazapiService pra MessengerProprioService.
  */
-class MessengerProprioChannelService implements CanalWhatsappInterface
+class MessengerProprioChannelService implements CanalWhatsappInterface, CanalComGruposInterface
 {
     public function __construct(
         private HumanizacaoService $humanizacao,
@@ -157,5 +157,20 @@ class MessengerProprioChannelService implements CanalWhatsappInterface
     public function ultimoEnvioFalhouPorJanelaExpirada(): bool
     {
         return false;
+    }
+
+    /**
+     * Só leitura — nunca passa pela trava de aquecimento (essa trava é só
+     * pra envio, ver sessionIdSeAutorizado() acima). Plano de extração de
+     * contatos de grupos/comunidades (29/09).
+     */
+    public function listarGrupos(WhatsappCanal $canal): array
+    {
+        $sessionId = $canal->sessionIdMessengerProprio();
+        if (! $sessionId) {
+            return [];
+        }
+
+        return $this->messengerProprio->listarGrupos($sessionId);
     }
 }

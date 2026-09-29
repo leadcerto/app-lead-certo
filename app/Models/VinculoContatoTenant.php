@@ -21,6 +21,7 @@ class VinculoContatoTenant extends Model
         'google_valores_enviados'    => 'array',
         'campos_editados_humano'     => 'array',
         'campos_pendentes_auditoria' => 'array',
+        'grupos_whatsapp_em_comum'   => 'array',
     ];
 
     protected $fillable = [
@@ -33,6 +34,7 @@ class VinculoContatoTenant extends Model
         'google_valores_enviados',
         'campos_editados_humano',
         'campos_pendentes_auditoria',
+        'grupos_whatsapp_em_comum',
     ];
 
     /**

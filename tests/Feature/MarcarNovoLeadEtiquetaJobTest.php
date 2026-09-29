@@ -59,6 +59,32 @@ class MarcarNovoLeadEtiquetaJobTest extends TestCase
         Http::assertSent(fn ($r) => str_contains($r->url(), 'novos-1/members:modify') && in_array('people/c999', $r['resourceNamesToAdd'] ?? []));
     }
 
+    /**
+     * Plano de extração de contatos de grupos/comunidades (29/09): contato
+     * extraído de grupo é frio, nunca teve contato real com a empresa — não
+     * pode entrar na esteira de "novos leads" (o pipeline de vendas de
+     * verdade), mesmo que o grupo novos_leads já esteja provisionado.
+     */
+    public function test_nao_marca_novos_leads_quando_contato_veio_de_grupo_whatsapp(): void
+    {
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class, \App\Jobs\EnriquecerContatoNovoViaGoogleJob::class]);
+
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create(['origem' => 'whatsapp_grupo']);
+        $vinculo = VinculoContatoTenant::create([
+            'contato_id' => $contato->id, 'tenant_id' => $tenant->id,
+            'google_resource_name' => 'people/c997',
+        ]);
+
+        Http::fake();
+
+        (new MarcarNovoLeadEtiquetaJob($vinculo->id))->handle(app(GoogleService::class));
+
+        $vinculo->refresh();
+        $this->assertFalse($vinculo->etiquetas()->where('slug', 'novos_leads')->exists());
+        Http::assertNothingSent();
+    }
+
     public function test_nao_marca_se_grupo_ainda_nao_provisionado(): void
     {
         Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
