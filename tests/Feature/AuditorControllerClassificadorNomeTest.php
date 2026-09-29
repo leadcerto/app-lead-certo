@@ -35,4 +35,20 @@ class AuditorControllerClassificadorNomeTest extends TestCase
             );
         }
     }
+
+    /**
+     * Achado real 2026-09-28 (Leonardo, aba "Conflitos de Identidade" — caso
+     * real "Nosso Lar Mudanças" #5294): o Leonardo usa a própria agenda do
+     * Google pra categorizar números que não são leads de venda (aqui,
+     * marcando um concorrente) — "Concorrente" não estava na lista de
+     * etiquetas comerciais, então virava "número possivelmente reciclado"
+     * à toa, resolvido e recriado repetidas vezes.
+     */
+    public function test_concorrente_e_reconhecido_como_etiqueta_comercial(): void
+    {
+        $this->assertTrue(
+            AuditorController::isNaoPessoa('Concorrente'),
+            "'Concorrente' é etiqueta de categorização interna do Leonardo, não nome de pessoa"
+        );
+    }
 }

@@ -360,8 +360,8 @@
                                     <td class="px-4 py-3 text-gray-600" x-text="c.nome_existente"></td>
                                     <td class="px-4 py-3">
                                         <span class="px-2 py-0.5 rounded text-xs font-bold"
-                                              :class="c.similaridade_nome >= 0.7 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
-                                              x-text="Math.round(c.similaridade_nome * 100) + '%'"></span>
+                                              :class="c.similaridade_nome >= 70 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                                              x-text="Math.round(c.similaridade_nome) + '%'"></span>
                                     </td>
                                     <td class="px-4 py-3 text-right">
                                         <div class="flex flex-col items-end gap-1.5">

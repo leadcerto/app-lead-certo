@@ -761,6 +761,118 @@ class ContatoSyncServiceConflitoTest extends TestCase
         );
     }
 
+    /**
+     * Achado real 2026-09-28 (Leonardo, aba "Conflitos de Identidade" —
+     * exemplos reais: Google="Wtp"/local="Wtp Ar Condicionado", Google="Edu"/
+     * local="Edu Vistoria Detran", Google="Vera"/local="Vera Lucia Melo
+     * Raimundo", Google="Jr"/local="Vanderlei Jr"): similar_text() mede
+     * sobreposição de caracteres na string inteira e penaliza a diferença de
+     * tamanho — um nome sendo abreviação/palavra do outro sempre dava baixa
+     * similaridade e virava "número possivelmente reciclado" à toa, mesmo
+     * sendo claramente a mesma pessoa/empresa com o nome mais curto ou mais
+     * completo em um dos lados. Corrigido: se todas as palavras do nome menor
+     * aparecem no nome maior, não é conflito.
+     *
+     * Este caso: o nome que chega do Google é mais completo (mais palavras)
+     * que o local — deve fluir pelo merge normal (mesma proteção de sempre
+     * contra sobrescrever campo já preenchido no primeiro vínculo —
+     * camposJaHumanos() — vira sugestão na aba "Sugestões de Nomes", não
+     * aplica direto), e principalmente NÃO pode virar "número possivelmente
+     * reciclado".
+     */
+    public function test_nome_do_google_mais_completo_que_o_local_nao_gera_conflito(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create([
+            'telefone' => '5521999994321',
+            'nome'     => 'Vera',
+        ]);
+
+        $this->fakeConexoesGoogle('5521999994321', 'Vera Lucia Melo Raimundo', 'Sem Empresa');
+
+        $token = $this->criarToken($tenant);
+        app(ContatoSyncService::class)->sincronizar($token, $tenant->id);
+
+        $this->assertSame(
+            0,
+            ContatoPendente::where('contato_existente_id', $contato->id)->count(),
+            '"Vera" é abreviação de "Vera Lucia Melo Raimundo" — não pode virar número possivelmente reciclado'
+        );
+
+        $vinculo = VinculoContatoTenant::where('contato_id', $contato->id)->first();
+        $this->assertSame(
+            'Vera Lucia Melo Raimundo',
+            $vinculo->campos_pendentes_auditoria['nome']['sugerido'] ?? null,
+            'nome já preenchido no primeiro vínculo vira sugestão (proteção de camposJaHumanos), não sobrescreve direto'
+        );
+    }
+
+    /**
+     * Mesmo achado do teste acima, direção oposta: o nome LOCAL é mais
+     * completo que o do Google — não pode aceitar o fragmento do Google como
+     * atualização (perderia informação), mas também não é conflito. Mesmo
+     * padrão já usado pra etiqueta comercial (isNaoPessoa): empurra o nome
+     * real local de volta pro Google.
+     */
+    public function test_nome_local_mais_completo_que_o_do_google_empurra_nome_pro_google_em_vez_de_criar_conflito(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create([
+            'telefone'  => '5521999994322',
+            'nome'      => 'Wtp Ar Condicionado',
+            'sobrenome' => null,
+        ]);
+
+        Bus::fake([EnriquecerContatoNovoViaGoogleJob::class]);
+
+        Http::fake([
+            '*people/me/connections*' => Http::response([
+                'connections' => [[
+                    'resourceName' => 'people/c555666777',
+                    'etag'         => 'etag-wtp-1',
+                    'names'        => [['givenName' => 'Wtp']],
+                    'phoneNumbers' => [['value' => '5521999994322']],
+                ]],
+                'nextSyncToken' => 'sync-token-xyz',
+            ], 200),
+            '*:updateContact*' => Http::response(['resourceName' => 'people/c555666777'], 200),
+        ]);
+
+        $token = $this->criarToken($tenant);
+        app(ContatoSyncService::class)->sincronizar($token, $tenant->id);
+
+        $this->assertSame(
+            0,
+            ContatoPendente::where('contato_existente_id', $contato->id)->count(),
+            '"Wtp" é abreviação de "Wtp Ar Condicionado" — não pode virar número possivelmente reciclado'
+        );
+
+        $contato->refresh();
+        $this->assertSame('Wtp Ar Condicionado', $contato->nome); // não perde informação
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'updateContact')
+            && ($request['names'][0]['givenName'] ?? null) === 'Wtp Ar Condicionado');
+    }
+
+    /**
+     * Mesmo achado, no caminho de mensagem nova do WhatsApp (webhook), que usa
+     * flagrarSeNumeroPossivelmenteReciclado() em vez de processarPessoa().
+     */
+    public function test_flagrar_reciclado_nao_marca_quando_um_nome_e_abreviacao_do_outro(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create([
+            'telefone' => '5521999994323',
+            'nome'     => 'Edu Vistoria Detran',
+        ]);
+
+        app(ContatoSyncService::class)->flagrarSeNumeroPossivelmenteReciclado(
+            $contato, $tenant->id, 'Edu', '5521999994323'
+        );
+
+        $this->assertSame(0, ContatoPendente::where('contato_existente_id', $contato->id)->count());
+    }
+
     public function test_empresa_pre_existente_nao_e_sobrescrita_no_primeiro_vinculo_google(): void
     {
         $tenant  = Tenant::factory()->create();
