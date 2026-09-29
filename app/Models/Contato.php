@@ -47,6 +47,23 @@ class Contato extends Model
     ];
 
     /**
+     * Achado real 2026-09-29 (pedido do Leonardo): qualquer mudança de nome que
+     * NÃO venha do próprio classificador de IA (contatos:limpar-nomes, que
+     * sempre grava nome_revisado_ia_em na mesma chamada) precisa voltar pra fila
+     * de revisão — senão um nome vindo de fusão de conflito de identidade,
+     * edição manual ou sync do Google fica com a regra antiga pra sempre,
+     * porque a query do comando pula quem já tem nome_revisado_ia_em preenchido.
+     */
+    protected static function booted(): void
+    {
+        static::updating(function (Contato $contato) {
+            if ($contato->isDirty('nome') && ! $contato->isDirty('nome_revisado_ia_em')) {
+                $contato->nome_revisado_ia_em = null;
+            }
+        });
+    }
+
+    /**
      * Protocolo de nomes do Lead Certo (migration cria_cargo_auditor_contatos_ia,
      * confirmado com o Leonardo 2026-09-16): Nome do meio é sempre o ID do próprio
      * contato, nunca um dado editável — ignora completamente o que estiver gravado
