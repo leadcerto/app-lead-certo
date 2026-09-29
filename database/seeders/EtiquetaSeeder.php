@@ -22,6 +22,9 @@ class EtiquetaSeeder extends Seeder
             ['slug' => 'sem_nome',     'nome' => 'Sem Nome',     'cor' => '#F59E0B'], // âmbar
             ['slug' => 'inativo',      'nome' => 'Inativo',      'cor' => '#6B7280'], // cinza
             ['slug' => 'bloqueado',    'nome' => 'Bloqueado',    'cor' => '#EF4444'], // vermelho
+            // Achado real 29/09 (Leonardo): contatos extraídos de grupos/comunidades
+            // do WhatsApp — prospecção fria, ainda sem nenhum contato feito.
+            ['slug' => 'frios',        'nome' => 'Frios',        'cor' => '#0284C7'], // azul frio
         ];
 
         foreach ($sistema as $dados) {
