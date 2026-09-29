@@ -158,6 +158,76 @@ class GoogleEtiquetaServiceTest extends TestCase
     }
 
     /**
+     * Achado real 29/09 (Leonardo, Frete Rio): nova etiqueta "🚩 FRIOS" pra
+     * contatos extraídos de grupos/comunidades do WhatsApp (prospecção fria
+     * futura, ainda sem contato feito). Pedido explícito: "anote tudo para
+     * que nas novas contas você crie todas elas automaticamente" — precisa
+     * casar com o grupo real quando já existe no Google, e criar do zero
+     * (com o nome oficial certo) quando a conta é nova e o grupo não existe
+     * ainda.
+     */
+    public function test_sincronizar_grupos_reconhece_etiqueta_frios(): void
+    {
+        $tenant = Tenant::factory()->create();
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
+
+        $token = GoogleToken::create([
+            'tenant_id'     => $tenant->id,
+            'google_email'  => 'teste@leadcerto.com',
+            'access_token'  => 'tok',
+            'refresh_token' => 'ref',
+            'token_type'    => 'Bearer',
+            'expires_at'    => now()->addHour(),
+            'scopes'        => ['contacts'],
+        ]);
+
+        Etiqueta::updateOrCreate(['tenant_id' => null, 'slug' => 'frios'], ['nome' => 'Frios', 'cor' => '#0284C7', 'ativo' => true]);
+
+        Http::fake([
+            '*contactGroups?pageSize=200*' => Http::response([
+                'contactGroups' => [
+                    ['name' => '🚩 FRIOS', 'resourceName' => 'contactGroups/frios_real'],
+                ],
+            ], 200),
+        ]);
+
+        $mapeados = app(GoogleEtiquetaService::class)->sincronizarGrupos($token);
+
+        $this->assertSame('contactGroups/frios_real', $mapeados['frios'] ?? null);
+    }
+
+    public function test_sincronizar_grupos_cria_etiqueta_frios_do_zero_pra_conta_nova(): void
+    {
+        $tenant = Tenant::factory()->create();
+        Bus::fake([\App\Jobs\ProvisionarEtiquetasGoogleJob::class]);
+
+        $token = GoogleToken::create([
+            'tenant_id'     => $tenant->id,
+            'google_email'  => 'teste@leadcerto.com',
+            'access_token'  => 'tok',
+            'refresh_token' => 'ref',
+            'token_type'    => 'Bearer',
+            'expires_at'    => now()->addHour(),
+            'scopes'        => ['contacts'],
+        ]);
+
+        Etiqueta::updateOrCreate(['tenant_id' => null, 'slug' => 'frios'], ['nome' => 'Frios', 'cor' => '#0284C7', 'ativo' => true]);
+
+        // Conta nova — nenhum grupo existe no Google ainda.
+        Http::fake([
+            '*contactGroups?pageSize=200*' => Http::response(['contactGroups' => []], 200),
+            '*contactGroups' => Http::response(['resourceName' => 'contactGroups/frios_novo'], 200),
+        ]);
+
+        $mapeados = app(GoogleEtiquetaService::class)->sincronizarGrupos($token);
+
+        $this->assertSame('contactGroups/frios_novo', $mapeados['frios'] ?? null);
+        Http::assertSent(fn ($request) => $request->method() === 'POST'
+            && str_contains($request->url(), 'contactGroups')
+            && ($request['contactGroup']['name'] ?? null) === '🚩 FRIOS');
+    }
+
+    /**
      * Achado real 24/09: os grupos "Fornecedores" e "Pessoal" já eram
      * provisionados no Google (sincronizarGrupos), mas atualizarMembrosContato()
      * nunca adicionava um contato a eles de verdade — só tratava sem_nome,

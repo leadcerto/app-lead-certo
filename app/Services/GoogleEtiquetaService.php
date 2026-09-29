@@ -38,6 +38,9 @@ class GoogleEtiquetaService
         'cliente'          => ['🚩 CLIENTES', '- CLIENTE', 'Cliente', 'Lead Certo - Cliente'],
         'fornecedor'       => ['🚩 FORNECEDORES', '- 00 Fornecedores', 'Fornecedor', 'Lead Certo - Fornecedor'],
         'pessoal'          => ['🚩 PESSOAL', '- 00 Pessoal', 'Pessoal', 'Lead Certo - Pessoal'],
+        // Achado real 29/09 (Leonardo): contatos extraídos de grupos/comunidades
+        // do WhatsApp — prospecção fria futura, sem contato feito ainda.
+        'frios'            => ['🚩 FRIOS'],
     ];
 
     public function __construct(private GoogleService $google) {}
