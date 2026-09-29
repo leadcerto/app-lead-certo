@@ -93,6 +93,18 @@ class MessengerProprioWebhookController extends Controller
             return;
         }
 
+        // Achado real 29/09 (incidente em produção): o microserviço já
+        // filtra mensagem de grupo/status na origem (ehMensagemDeContatoIndividual,
+        // webhook.js), mas defesa em profundidade aqui também — "numero" que
+        // não é telefone de verdade (JID de grupo cru, "status", etc.) não
+        // pode virar Contato/Ticket, muito menos disparar resposta da IA.
+        // Telefone real (com DDI) tem no máximo 15 dígitos (E.164); JID de
+        // grupo tem 18-20.
+        if (! preg_match('/^\d{8,15}$/', $telefone)) {
+            Log::warning('MessengerProprio webhook: "numero" não parece telefone de verdade, mensagem ignorada', ['numero' => $telefone]);
+            return;
+        }
+
         if ($messageId && Mensagem::withoutGlobalScopes()->where('provider_message_id', $messageId)->exists()) {
             Log::debug('MessengerProprio webhook: mensagem duplicada ignorada', ['messageId' => $messageId]);
             return;
