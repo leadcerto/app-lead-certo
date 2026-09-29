@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Log;
  * etc.) — o WhatsApp não distingue a origem do envio, então nenhum caminho pode
  * escapar do teto.
  */
-class UazapiChannelService implements CanalWhatsappInterface
+class UazapiChannelService implements CanalWhatsappInterface, CanalComGruposInterface
 {
     public function __construct(
         private HumanizacaoService $humanizacao,
@@ -167,5 +167,36 @@ class UazapiChannelService implements CanalWhatsappInterface
     public function ultimoEnvioFalhouPorJanelaExpirada(): bool
     {
         return false;
+    }
+
+    /**
+     * Só leitura — nunca passa pela trava de aquecimento (é só pra envio,
+     * ver tokenSeAutorizado() acima). Plano de extração de contatos de
+     * grupos/comunidades (29/09). Normaliza o formato bruto da Uazapi
+     * (PascalCase, telefone com sufixo @s.whatsapp.net) pro mesmo formato
+     * comum que MessengerProprioChannelService já devolve.
+     */
+    public function listarGrupos(WhatsappCanal $canal): array
+    {
+        $token = $canal->tokenUazapi();
+        if (! $token) {
+            return [];
+        }
+
+        $gruposBrutos = $this->uazapi->listarGrupos($token);
+
+        return array_map(function (array $grupo) {
+            return [
+                'jid'  => $grupo['chatid'] ?? $grupo['id'] ?? '',
+                'nome' => $grupo['Name'] ?? 'Grupo',
+                'participantes' => array_values(array_filter(array_map(
+                    function (array $p) {
+                        $telefone = preg_replace('/@.+$/', '', $p['PhoneNumber'] ?? '');
+                        return $telefone !== '' ? ['telefone' => $telefone] : null;
+                    },
+                    $grupo['Participants'] ?? []
+                ))),
+            ];
+        }, $gruposBrutos);
     }
 }

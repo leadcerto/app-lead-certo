@@ -166,4 +166,55 @@ class MessengerProprioChannelServiceTest extends TestCase
 
         $this->assertDatabaseHas('whatsapp_envios_diarios', ['whatsapp_canal_id' => $canal->id, 'contador_frio' => 1]);
     }
+
+    /**
+     * Plano de extração de contatos de grupos/comunidades (29/09) —
+     * listarGrupos() nunca passa pela trava de aquecimento (é só leitura,
+     * nunca envia nada), ao contrário de todo método enviarX() acima.
+     */
+    public function test_implementa_canal_com_grupos(): void
+    {
+        $this->assertInstanceOf(
+            \App\Services\Canais\CanalComGruposInterface::class,
+            app(MessengerProprioChannelService::class)
+        );
+    }
+
+    public function test_lista_grupos_via_messenger_proprio_usando_sessionid_do_canal(): void
+    {
+        Http::fake(['*/sessoes/tenant-1-principal/grupos' => Http::response([
+            'grupos' => [
+                [
+                    'jid'  => '120363012345678901@g.us',
+                    'nome' => 'Vip Membros',
+                    'participantes' => [['telefone' => '5521999998888'], ['telefone' => '5521988887777']],
+                ],
+            ],
+        ], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = $this->canal($tenant);
+
+        $grupos = app(MessengerProprioChannelService::class)->listarGrupos($canal);
+
+        $this->assertSame('120363012345678901@g.us', $grupos[0]['jid']);
+        $this->assertSame('Vip Membros', $grupos[0]['nome']);
+        $this->assertCount(2, $grupos[0]['participantes']);
+        Http::assertSent(fn ($request) =>
+            str_contains($request->url(), '/sessoes/tenant-1-principal/grupos')
+            && $request->hasHeader('X-Api-Key')
+        );
+    }
+
+    public function test_lista_grupos_retorna_vazio_quando_canal_sem_sessionid(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $canal  = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'provider' => 'messenger_proprio', 'config' => [],
+        ]);
+
+        $grupos = app(MessengerProprioChannelService::class)->listarGrupos($canal);
+
+        $this->assertSame([], $grupos);
+    }
 }

@@ -205,4 +205,20 @@ class MessengerProprioService implements EnvioBrutoWhatsappInterface
     {
         return $this->enviarMedia($sessionId, $numero, 'sticker', $url);
     }
+
+    /**
+     * Só leitura — plano de extração de contatos de grupos/comunidades
+     * (29/09). Formato de retorno já vem pronto do microserviço (grupos.js):
+     * [['jid' => string, 'nome' => string, 'participantes' => [['telefone' => string], ...]], ...]
+     */
+    public function listarGrupos(string $sessionId): array
+    {
+        try {
+            $response = $this->http()->timeout(30)->get("{$this->baseUrl}/sessoes/{$sessionId}/grupos");
+            return $response->successful() ? ($response->json('grupos') ?? []) : [];
+        } catch (\Exception $e) {
+            Log::error('MessengerProprio listarGrupos exception', ['erro' => $e->getMessage()]);
+            return [];
+        }
+    }
 }

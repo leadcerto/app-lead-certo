@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Models\TicketAtendimento;
 use App\Models\WhatsappCanal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -58,12 +59,29 @@ class SincronizacaoIteraPorCanalTest extends TestCase
         Http::assertSent(fn ($request) => $request->header('token')[0] === 'token-canal-b');
     }
 
-    public function test_importar_participantes_grupos_cria_contato_e_ticket_com_canal_correto(): void
+    /**
+     * Achado real 29/09 (plano de extração de contatos de grupos, pedido do
+     * Leonardo): reescrito pra cadastrar só como Contato frio (etiqueta 🚩
+     * FRIOS), sem cruzar nome da agenda nem criar Ticket/Kanban automático —
+     * mudança de comportamento intencional, não regressão. Ver
+     * ImportarParticipantesGruposTest.php pra cobertura completa do novo
+     * comportamento.
+     */
+    public function test_importar_participantes_grupos_cria_contato_frio_scoped_ao_tenant_correto(): void
     {
+        Bus::fake([
+            \App\Jobs\ProvisionarEtiquetasGoogleJob::class,
+            \App\Jobs\EnriquecerContatoNovoViaGoogleJob::class,
+            \App\Jobs\MarcarNovoLeadEtiquetaJob::class,
+            \App\Jobs\PushContatoParaGoogleJob::class,
+            \App\Jobs\MarcarContatoFrioEtiquetaJob::class,
+        ]);
+
         Http::fake([
             '*/group/list' => Http::response([
                 'groups' => [
                     [
+                        'chatid' => '120363011111111111@g.us',
                         'Name' => 'Grupo Teste',
                         'Participants' => [
                             ['PhoneNumber' => '5511988887777@s.whatsapp.net'],
@@ -71,23 +89,25 @@ class SincronizacaoIteraPorCanalTest extends TestCase
                     ],
                 ],
             ], 200),
-            '*/contacts' => Http::response([
-                ['jid' => '5511988887777@s.whatsapp.net', 'contact_name' => 'Fulano', 'contact_FirstName' => 'Fulano'],
-            ], 200),
         ]);
 
         $tenant = Tenant::factory()->create();
-        $canal  = WhatsappCanal::factory()->create(['tenant_id' => $tenant->id, 'status' => 'connected']);
+        WhatsappCanal::factory()->create(['tenant_id' => $tenant->id, 'status' => 'connected']);
 
         $this->artisan('grupos:importar-participantes', ['--tenant' => $tenant->id])->assertSuccessful();
 
         $contato = \App\Models\Contato::where('telefone', '5511988887777')->first();
         $this->assertNotNull($contato);
-        $this->assertSame('Fulano', $contato->nome);
+        $this->assertSame('Sem Nome', $contato->nome);
+        $this->assertSame('whatsapp_grupo', $contato->origem);
 
-        $ticket = TicketAtendimento::withoutGlobalScopes()->where('tenant_id', $tenant->id)->first();
-        $this->assertNotNull($ticket);
-        $this->assertSame($canal->id, $ticket->whatsapp_canal_id);
+        $vinculo = \App\Models\VinculoContatoTenant::where('contato_id', $contato->id)->first();
+        $this->assertSame($tenant->id, $vinculo->tenant_id);
+
+        $this->assertSame(
+            0,
+            TicketAtendimento::withoutGlobalScopes()->where('contato_id', $contato->id)->count()
+        );
     }
 
     public function test_sincronizar_contatos_pula_canal_sem_token_e_continua_processando_os_demais(): void

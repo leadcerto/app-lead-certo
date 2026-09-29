@@ -27,8 +27,16 @@ class MarcarNovoLeadEtiquetaJob implements ShouldQueue
 
     public function handle(GoogleService $google): void
     {
-        $vinculo = VinculoContatoTenant::find($this->vinculoId);
+        $vinculo = VinculoContatoTenant::with('contato')->find($this->vinculoId);
         if (! $vinculo || ! $vinculo->google_resource_name) {
+            return;
+        }
+
+        // Achado real 2026-09-29: contato extraído de grupo/comunidade do
+        // WhatsApp é frio, nunca teve contato real com a empresa — não pode
+        // entrar na esteira de "novos leads" (pipeline de vendas de
+        // verdade). Ver [[whatsapp-extracao-contatos-grupos]].
+        if ($vinculo->contato?->origem === 'whatsapp_grupo') {
             return;
         }
 
