@@ -231,17 +231,32 @@ class ContatoSyncService
                     // do WhatsApp) volta do Google como "Kamily" — 63% de
                     // similaridade, abaixo do limiar de 75% — e o contato ia
                     // parar na fila de "número possivelmente reciclado".
-                    $similaridade = $this->similaridadeNome(
-                        $nome,
-                        $this->limparNome((string) ($existente->nome ?? ''))
-                    );
+                    $nomeExistenteLimpo = $this->limparNome((string) ($existente->nome ?? ''));
+
+                    $similaridade = $this->similaridadeNome($nome, $nomeExistenteLimpo);
+
+                    // Achado real 2026-09-28 (Leonardo, aba "Conflitos de
+                    // Identidade" — exemplos reais: Google="Wtp"/local="Wtp Ar
+                    // Condicionado", Google="Vera"/local="Vera Lucia Melo
+                    // Raimundo", Google="Jr"/local="Vanderlei Jr"):
+                    // similar_text() mede sobreposição de caracteres na string
+                    // inteira e penaliza diferença de tamanho — um nome sendo
+                    // abreviação (só uma palavra) do outro sempre dava baixa
+                    // similaridade e virava conflito à toa, mesmo sendo
+                    // claramente a mesma pessoa/empresa. Direção importa: só é
+                    // seguro aceitar automaticamente quando o nome MAIS
+                    // COMPLETO é o que teria prevalecido de qualquer forma
+                    // (local mais completo → empurra pro Google, nunca aceita
+                    // o fragmento como novo valor local).
+                    $localEhAbreviacaoDoGoogle = $this->todasPalavrasContidas($nomeExistenteLimpo, $nome);
+                    $googleEhAbreviacaoDoLocal = $this->todasPalavrasContidas($nome, $nomeExistenteLimpo);
 
                     // "! $existente->nome" sozinho não pega "Sem Nome" (string
                     // preenchida) — sem semNomeReal() aqui, um contato "Sem Nome"
                     // caía no ramo de "número possivelmente reciclado" (baixa
                     // similaridade contra um nome de verdade vindo do Google) e
                     // nunca chegava nem a tentar o merge de campos vazios abaixo.
-                    if ($similaridade >= self::LIMIAR_SIMILARIDADE || $existente->semNomeReal()) {
+                    if ($similaridade >= self::LIMIAR_SIMILARIDADE || $existente->semNomeReal() || $localEhAbreviacaoDoGoogle) {
                         // Mesma pessoa → resolve cada campo sincronizado pela regra de
                         // conflito centralizada (resolverCampoGoogle) e garante vínculo.
                         // firstOrCreate (não updateOrCreate) porque o loop abaixo já lê/
@@ -330,7 +345,7 @@ class ContatoSyncService
                         $vinculoExistente->update($this->dadosVinculo($pessoa));
 
                         $resultado['atualizados']++;
-                    } elseif (AuditorController::isNaoPessoa($nome) && ! $existente->semNomeReal()) {
+                    } elseif ((AuditorController::isNaoPessoa($nome) || $googleEhAbreviacaoDoLocal) && ! $existente->semNomeReal()) {
                         // Achado real 2026-09-22 (pedido do Leonardo, aba "Conflitos
                         // de Identidade": Google="Frete"/local="Jamal", Google="Frt"/
                         // local="Frt", Google="Mdm"/local="Elisa Raquel" — sempre 0%
@@ -343,7 +358,10 @@ class ContatoSyncService
                         // cadastros devem estar iguais ... maior número de informações
                         // reais e atualizadas" — empurra o nome real local pro Google
                         // (assíncrono, fora da transação — AtualizarNomeGoogleComDadoLocalJob)
-                        // em vez de abrir conflito de auditoria.
+                        // em vez de abrir conflito de auditoria. Achado 2026-09-28:
+                        // mesmo tratamento quando o nome do Google é só uma abreviação
+                        // do nome local (ver $googleEhAbreviacaoDoLocal acima) — aceitar
+                        // o fragmento como novo valor local perderia informação.
                         $vinculoExistente = VinculoContatoTenant::updateOrCreate(
                             ['contato_id' => $existente->id, 'tenant_id' => $tenantId],
                             $this->dadosVinculo($pessoa)
@@ -400,6 +418,16 @@ class ContatoSyncService
 
         $similaridade = $this->similaridadeNome($nomeNovo, $contatoExistente->nome);
         if ($similaridade >= self::LIMIAR_SIMILARIDADE) {
+            return;
+        }
+
+        // Achado real 2026-09-28: mesmo ajuste do processarPessoa() — um nome
+        // sendo abreviação/palavra do outro (ex: "Edu" de "Edu Vistoria
+        // Detran") não é número reciclado.
+        if (
+            $this->todasPalavrasContidas($nomeNovo, (string) $contatoExistente->nome)
+            || $this->todasPalavrasContidas((string) $contatoExistente->nome, $nomeNovo)
+        ) {
             return;
         }
 
@@ -569,6 +597,33 @@ class ContatoSyncService
 
         similar_text($a, $b, $percent);
         return round($percent, 2);
+    }
+
+    /**
+     * Achado real 2026-09-28 (Leonardo, aba "Conflitos de Identidade" —
+     * exemplos reais: Google="Wtp"/local="Wtp Ar Condicionado", Google="Edu"/
+     * local="Edu Vistoria Detran", Google="Vera"/local="Vera Lucia Melo
+     * Raimundo", Google="Jr"/local="Vanderlei Jr"): verifica se todas as
+     * palavras do nome MENOR aparecem, como palavra inteira, no nome MAIOR —
+     * checagem por palavra (não substring cru) pra não confundir "Ana" com
+     * "Mariana" (substring cru bateria, palavra inteira não).
+     */
+    private function todasPalavrasContidas(string $menor, string $maior): bool
+    {
+        $palavrasMenor = array_filter(explode(' ', $this->normalizarNome($menor)));
+        $palavrasMaior = array_filter(explode(' ', $this->normalizarNome($maior)));
+
+        if (empty($palavrasMenor) || empty($palavrasMaior)) {
+            return false;
+        }
+
+        foreach ($palavrasMenor as $palavra) {
+            if (! in_array($palavra, $palavrasMaior, true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function normalizarNome(string $nome): string

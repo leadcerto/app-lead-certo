@@ -789,7 +789,14 @@ class AuditorController extends Controller
             // inteira pretendida, sem herdar o resto de um nome de verdade.
             'vans?', 'dr', 'dra', 'adv|advogad[ao]s?',
             'moveis\w*', 'marcenaria\w*',
-            'fiorino\w*', 'sprinter\w*', 'iveco\w*', 'vuc\w*', 'refritec\w*'
+            'fiorino\w*', 'sprinter\w*', 'iveco\w*', 'vuc\w*', 'refritec\w*',
+            // Achado real 2026-09-28 (Leonardo, aba "Conflitos de Identidade",
+            // caso real "Nosso Lar Mudanças" #5294): etiqueta de categorização
+            // interna que o Leonardo usa na própria agenda do Google pra
+            // marcar números que não são leads de venda — não é abreviação de
+            // nome (não cai na checagem de palavras contidas), é etiqueta
+            // mesmo, igual "Frete"/"Cliente"/etc já tratados acima.
+            'concorrente\w*',
         ];
         $patternLixo = '/\b(' . implode('|', $tagsLixo) . ')\b/iu';
 
