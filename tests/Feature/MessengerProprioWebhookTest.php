@@ -152,6 +152,37 @@ class MessengerProprioWebhookTest extends TestCase
         $this->assertSame('aberto', $ticket->status);
     }
 
+    /**
+     * Achado real 29/09 (incidente em produção): o microserviço agora filtra
+     * mensagem de grupo/status na origem, mas defesa em profundidade aqui
+     * também — se por algum motivo um "numero" que não é telefone de verdade
+     * chegar (JID de grupo cru, "status", etc.), não pode virar Contato nem
+     * Ticket, muito menos disparar resposta da IA.
+     */
+    public function test_numero_que_nao_e_telefone_de_verdade_e_ignorado(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $this->criarCanal($tenant, 'wh-messenger-grupo');
+
+        foreach (['120363421042216461', 'status'] as $numeroInvalido) {
+            $response = $this->postJson('/api/webhook/messenger-proprio/wh-messenger-grupo', [
+                'tipo'      => 'mensagem',
+                'sessionId' => 'sessao-1',
+                'messageId' => 'msg-' . $numeroInvalido,
+                'fromMe'    => false,
+                'numero'    => $numeroInvalido,
+                'pushName'  => 'Alguém',
+                'texto'     => 'Mensagem que não deveria virar lead',
+                'timestamp' => now()->timestamp,
+            ]);
+
+            $response->assertOk();
+            $this->assertNull(Contato::where('telefone', $numeroInvalido)->first(), "'{$numeroInvalido}' não pode virar Contato");
+        }
+    }
+
     public function test_evento_de_conexao_atualiza_status_e_telefone_do_canal(): void
     {
         $tenant = Tenant::factory()->create();
