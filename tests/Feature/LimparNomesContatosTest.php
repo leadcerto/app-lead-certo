@@ -119,6 +119,32 @@ class LimparNomesContatosTest extends TestCase
         $this->assertDatabaseMissing('auditoria_contatos', ['contato_id' => $contato->id]);
     }
 
+    /**
+     * Achado real 2026-09-29 (pedido do Leonardo, aba "Conflitos de
+     * Identidade"): "sempre falamos com uma pessoa, mesmo quando ela
+     * representa a empresa" — nome de empresa sem nenhuma pessoa identificada
+     * não fica mais no campo nome (antes: tipo="empresa" mantinha o nome da
+     * empresa ali). Agora vira "Sem Nome" com o nome da empresa preservado
+     * como contexto no sobrenome, mesmo tratamento que profissão/descritor já
+     * recebe pra tipo="pessoa".
+     */
+    public function test_empresa_sem_pessoa_identificada_vira_sem_nome_com_empresa_no_sobrenome(): void
+    {
+        config(['services.openrouter.key' => 'fake-key']);
+        $contato = Contato::factory()->create(['nome' => 'Muay Thai Equipamentos']);
+
+        $this->fakeRespostaIA([
+            ['id' => $contato->id, 'tipo' => 'empresa', 'nome' => 'Muay Thai Equipamentos', 'descritor' => null],
+        ]);
+
+        $this->artisan('contatos:limpar-nomes')->assertExitCode(0);
+
+        $fresh = $contato->fresh();
+        $this->assertSame('Sem Nome', $fresh->nome);
+        $this->assertSame('Muay Thai Equipamentos', $fresh->sobrenome);
+        $this->assertNotNull($fresh->nome_revisado_ia_em);
+    }
+
     public function test_nao_reenvia_pra_ia_contato_ja_revisado(): void
     {
         config(['services.openrouter.key' => 'fake-key']);

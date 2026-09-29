@@ -391,32 +391,57 @@ PROMPT;
                 $nomeIA      = $resultado['nome'] ?? null;
                 $descritorIA = $resultado['descritor'] ?? null;
 
-                // LIXO: aplica "Sem Nome" direto. Decisão do Leonardo (2026-08-12):
-                // a fila de Auditoria pra esse caso nunca era esvaziada na prática
-                // (chegou a acumular 3.539 pendências) — manter a trava de revisão
-                // humana só deixava nome ruim visível pra sempre. Continua
-                // registrado via log, só não bloqueia mais em fila de ação humana.
-                if ($tipo === 'lixo' || ! $nomeIA) {
+                // LIXO ou EMPRESA sem pessoa identificada: nome vira "Sem Nome".
+                // Decisão do Leonardo (2026-08-12, lixo): a fila de Auditoria pra
+                // esse caso nunca era esvaziada na prática (chegou a acumular
+                // 3.539 pendências) — manter a trava de revisão humana só deixava
+                // nome ruim visível pra sempre. Continua registrado via log, só
+                // não bloqueia mais em fila de ação humana.
+                //
+                // Achado real 2026-09-29 (pedido do Leonardo): "sempre falamos com
+                // uma pessoa, mesmo quando ela representa a empresa" — nome de
+                // empresa sem nenhuma pessoa identificada não fica mais no campo
+                // nome (antes: tipo="empresa" mantinha o nome da empresa ali).
+                // Agora o nome da empresa vira contexto no sobrenome, mesmo
+                // tratamento que profissão/descritor já recebe pra tipo="pessoa" —
+                // não perde a informação, só sai do campo que deveria identificar
+                // uma pessoa de verdade.
+                if ($tipo === 'lixo' || $tipo === 'empresa' || ! $nomeIA) {
+                    $sobrenomeEmpresa = ($tipo === 'empresa' && $nomeIA) ? $nomeIA : null;
+
+                    $mudouNome      = $contato->nome !== 'Sem Nome';
+                    $mudouSobrenome = $sobrenomeEmpresa && $sobrenomeEmpresa !== $contato->sobrenome;
+
                     if ($this->output->isVerbose()) {
                         $this->newLine();
-                        $this->warn("  [SEM NOME] #{$contato->id}: '{$contato->nome}' → 'Sem Nome'");
+                        $this->warn("  [SEM NOME] #{$contato->id}: '{$contato->nome}' → 'Sem Nome'"
+                            . ($sobrenomeEmpresa ? " | sobrenome='{$sobrenomeEmpresa}'" : ''));
                     }
+
                     if (! $dryRun) {
-                        Log::info('LimparNomesContatos: aplicado Sem Nome automaticamente', [
-                            'contato_id'      => $contato->id,
-                            'nome_original'   => $contato->nome,
-                        ]);
-                        $contato->update(['nome' => 'Sem Nome', 'nome_revisado_ia_em' => now()]);
+                        if ($mudouNome || $mudouSobrenome) {
+                            Log::info('LimparNomesContatos: aplicado Sem Nome automaticamente', [
+                                'contato_id'    => $contato->id,
+                                'nome_original' => $contato->nome,
+                                'tipo'          => $tipo,
+                            ]);
+                            $updates = ['nome' => 'Sem Nome', 'nome_revisado_ia_em' => now()];
+                            if ($sobrenomeEmpresa) {
+                                $updates['sobrenome'] = $sobrenomeEmpresa;
+                            }
+                            $contato->update($updates);
+                        } else {
+                            $contato->update(['nome_revisado_ia_em' => now()]);
+                        }
                     }
                     $semNome++;
                     $bar->advance();
                     continue;
                 }
 
-                // EMPRESA: mantém o nome da empresa limpo, sem descritor
                 // PESSOA: nome humano limpo + descritor no sobrenome
                 $mudouNome      = $nomeIA !== $contato->nome;
-                $mudouDescritor = $tipo === 'pessoa' && $descritorIA !== $contato->sobrenome;
+                $mudouDescritor = $descritorIA !== $contato->sobrenome;
 
                 if (! $mudouNome && ! $mudouDescritor) {
                     if (! $dryRun) {
@@ -430,13 +455,12 @@ PROMPT;
 
                 if ($this->output->isVerbose()) {
                     $this->newLine();
-                    $label = $tipo === 'empresa' ? '[EMPRESA]' : '[PESSOA]';
-                    $this->line("  {$label} #{$contato->id}: '{$contato->nome}' → nome='{$nomeIA}' | descritor='{$descritorIA}'");
+                    $this->line("  [PESSOA] #{$contato->id}: '{$contato->nome}' → nome='{$nomeIA}' | descritor='{$descritorIA}'");
                 }
 
                 if (! $dryRun) {
                     $updates = ['nome' => $nomeIA, 'nome_revisado_ia_em' => now()];
-                    if ($tipo === 'pessoa' && $descritorIA) {
+                    if ($descritorIA) {
                         $updates['sobrenome'] = $descritorIA;
                     }
                     $contato->update($updates);
