@@ -34,6 +34,10 @@ class SelecaoCanalWhatsappService
         return $kanban->canais()
             ->where('tipo', $tipo)
             ->where('status', 'connected')
+            // Achado real 30/09: canal desativado manualmente (ver
+            // WhatsappCanal::$desativado_em) nunca pode ser sorteado pra
+            // enviar mensagem, mesmo que o status ainda diga 'connected'.
+            ->whereNull('desativado_em')
             ->inRandomOrder()
             ->first();
     }

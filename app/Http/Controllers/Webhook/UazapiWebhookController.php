@@ -88,6 +88,19 @@ class UazapiWebhookController extends Controller
 
     private function handleMensagem(array $payload, Tenant $tenant, \App\Models\WhatsappCanal $canal): void
     {
+        // Achado real 30/09 (Leonardo, canal Uazapi do tenant "Lead Certo"):
+        // desativar um canal manualmente (ver WhatsappCanal::$desativado_em)
+        // só faz sentido se ele realmente parar de agir — a sessão pode
+        // continuar viva do lado da Uazapi e seguir mandando webhook mesmo
+        // assim. Ignora qualquer mensagem recebida enquanto o canal estiver
+        // marcado como desativado, sem tocar no ticket/histórico existente.
+        if ($canal->desativado_em !== null) {
+            Log::info('Uazapi webhook: mensagem ignorada, canal desativado manualmente', [
+                'canal_id' => $canal->id,
+            ]);
+            return;
+        }
+
         $msg = $payload['message'] ?? [];
 
         // WhatsApp manda mensagem de voz como mediaType 'ptt' (push-to-talk), não
