@@ -229,6 +229,7 @@ class GmbPostController extends Controller
         $templateIndex = 0;
         $imagemIndex = 0;
         $criados = 0;
+        $falhasImagem = 0;
 
         foreach ($validated['matriz'] as $perfilId => $dias) {
             $perfil = PerfilGmb::where('tenant_id', $tenantId)->find($perfilId);
@@ -334,6 +335,16 @@ class GmbPostController extends Controller
                 // Aplica renomeação SEO individualizada para a postagem se a imagem for da galeria
                 if ($imagemUrl) {
                     $seoService->prepararImagemParaPost($post);
+                    $post->refresh();
+
+                    // Achado real 2026-09-29 (92 posts com imagem quebrada só
+                    // descobertos semanas depois, na publicação): confirma AGORA,
+                    // na criação, que o arquivo realmente existe no disco — se
+                    // não existir, avisa no resumo do lote em vez de descobrir só
+                    // no dia da publicação.
+                    if (!$seoService->imagemUrlValidaNoDisco($post->imagem_url)) {
+                        $falhasImagem++;
+                    }
                 }
 
                 $criados++;
@@ -341,8 +352,13 @@ class GmbPostController extends Controller
             }
         }
 
+        $mensagem = "{$criados} postagens agendadas com sucesso para a semana!";
+        if ($falhasImagem > 0) {
+            $mensagem .= " Atenção: {$falhasImagem} postagem(ns) ficaram sem uma imagem confirmada no disco — verifique antes de publicar.";
+        }
+
         return redirect()->route('admin.gmb-posts.index', ['semana' => $inicioSemana->toDateString()])
-            ->with('sucesso', "{$criados} postagens agendadas com sucesso para a semana!");
+            ->with('sucesso', $mensagem);
     }
 
     /**
