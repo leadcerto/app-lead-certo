@@ -55,6 +55,27 @@ class MessengerProprioChannelServiceTest extends TestCase
         $this->assertFalse($enviado);
     }
 
+    /**
+     * Achado real 30/09 (Leonardo): número compartilhado com a plataforma
+     * oficial (ex.: mesmo número da Covercut) só pode entrar em grupo pra
+     * extrair participante — nunca enviar mensagem de verdade. Checagem aqui
+     * (ponto único por onde todo envio passa) protege mesmo se algum caminho
+     * tentar enviar direto pro canal, sem passar pelo sorteio aleatório de
+     * SelecaoCanalWhatsappService.
+     */
+    public function test_retorna_false_quando_canal_marcado_como_somente_extracao(): void
+    {
+        Http::fake(['*/sessoes/tenant-1-principal/enviar/texto' => Http::response(['id' => 'abc'], 200)]);
+
+        $tenant = Tenant::factory()->create();
+        $canal  = $this->canal($tenant, ['somente_extracao' => true]);
+
+        $enviado = app(MessengerProprioChannelService::class)->enviarTexto($canal, '5511999999999', 'Oi!');
+
+        $this->assertFalse($enviado);
+        Http::assertNothingSent();
+    }
+
     public function test_whatsapp_canal_servico_resolve_messenger_proprio_channel_service_para_esse_provider(): void
     {
         $tenant = Tenant::factory()->create();

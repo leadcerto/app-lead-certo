@@ -29,6 +29,17 @@ class MessengerProprioChannelService implements CanalWhatsappInterface, CanalCom
      */
     private function sessionIdSeAutorizado(WhatsappCanal $canal, string $telefone): ?string
     {
+        // Achado real 30/09 (Leonardo): número compartilhado com a plataforma
+        // oficial (ex.: mesmo número da Covercut) só pode entrar em grupo pra
+        // extrair participante — nunca enviar mensagem de verdade. Checagem
+        // aqui (ponto único por onde todo envio passa) além da exclusão em
+        // SelecaoCanalWhatsappService — protege mesmo se algum caminho tentar
+        // enviar direto pro canal sem passar pelo sorteio aleatório.
+        if ($canal->somente_extracao) {
+            Log::warning('MessengerProprioChannelService: envio bloqueado, canal marcado como somente extração', ['canal_id' => $canal->id]);
+            return null;
+        }
+
         $sessionId = $canal->sessionIdMessengerProprio();
 
         if (! $sessionId) {

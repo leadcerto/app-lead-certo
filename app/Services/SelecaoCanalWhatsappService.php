@@ -38,6 +38,11 @@ class SelecaoCanalWhatsappService
             // WhatsappCanal::$desativado_em) nunca pode ser sorteado pra
             // enviar mensagem, mesmo que o status ainda diga 'connected'.
             ->whereNull('desativado_em')
+            // Achado real 30/09: canal marcado como "só extração" (número
+            // compartilhado com a plataforma oficial, usado só pra vasculhar
+            // grupo) nunca pode ser sorteado pra envio — separação de papéis
+            // pedida pelo Leonardo.
+            ->where('somente_extracao', false)
             ->inRandomOrder()
             ->first();
     }

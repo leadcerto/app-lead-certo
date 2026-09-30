@@ -48,7 +48,7 @@ class WhatsappCanalController extends Controller
             $query->where('app', $request->query('app'));
         }
 
-        $canais = $query->orderBy('id')->get(['id', 'status', 'phone', 'connected_since', 'app']);
+        $canais = $query->orderBy('id')->get(['id', 'status', 'phone', 'connected_since', 'app', 'somente_extracao']);
 
         return response()->json($canais);
     }
@@ -61,8 +61,16 @@ class WhatsappCanalController extends Controller
         // (todo canal não-oficial existente era, na prática, WhatsApp Business).
         $app = $request->input('app', 'business');
 
+        // Achado real 30/09 (Leonardo): número Messenger compartilhado com a
+        // plataforma oficial (ex.: mesmo número da Covercut) só pode entrar
+        // em grupo pra extrair participante — nunca enviar mensagem de
+        // verdade. Só relevante pra 'messenger' — o bloco Business não
+        // oferece esse checkbox (Uazapi está desativado, sem novo canal
+        // Business sendo criado hoje).
+        $somenteExtracao = $app === 'messenger' && $request->boolean('somente_extracao');
+
         $canal = $app === 'messenger'
-            ? $this->criarCanalMessengerProprio($tenantId)
+            ? $this->criarCanalMessengerProprio($tenantId, $somenteExtracao)
             : $this->criarCanalUazapi($tenantId, $app);
 
         if (! $canal) {
@@ -72,9 +80,13 @@ class WhatsappCanalController extends Controller
         // Vincula o canal recém-criado a TODOS os Kanbans do tenant — decisão
         // do produto: um número novo já entra disponível pra prospecção, em vez de
         // ficar invisível até alguém visitar /kanban/config e vincular manualmente
-        // (mesmo padrão da migration de backfill do Task 3).
-        $kanbanIds = Kanban::where('tenant_id', $tenantId)->pluck('id');
-        $canal->kanbans()->syncWithoutDetaching($kanbanIds);
+        // (mesmo padrão da migration de backfill do Task 3). Canal marcado como
+        // "só extração" fica de fora de propósito — nunca deve ser elegível pra
+        // sorteio de envio (ver SelecaoCanalWhatsappService).
+        if (! $somenteExtracao) {
+            $kanbanIds = Kanban::where('tenant_id', $tenantId)->pluck('id');
+            $canal->kanbans()->syncWithoutDetaching($kanbanIds);
+        }
 
         return response()->json(['id' => $canal->id, 'status' => $canal->status], 201);
     }
@@ -114,7 +126,7 @@ class WhatsappCanalController extends Controller
         return $canal;
     }
 
-    private function criarCanalMessengerProprio(int $tenantId): ?WhatsappCanal
+    private function criarCanalMessengerProprio(int $tenantId, bool $somenteExtracao = false): ?WhatsappCanal
     {
         $sessionId    = 'tenant-' . $tenantId . '-' . Str::random(6);
         $webhookToken = Str::random(48);
@@ -125,10 +137,11 @@ class WhatsappCanalController extends Controller
         }
 
         return WhatsappCanal::create([
-            'tenant_id'     => $tenantId,
-            'tipo'          => 'nao_oficial',
-            'provider'      => 'messenger_proprio',
-            'app'           => 'messenger',
+            'tenant_id'        => $tenantId,
+            'tipo'             => 'nao_oficial',
+            'provider'         => 'messenger_proprio',
+            'app'              => 'messenger',
+            'somente_extracao' => $somenteExtracao,
             'aquecimento_iniciado_em' => now(),
             'status'        => 'connecting',
             'webhook_token' => $webhookToken,
