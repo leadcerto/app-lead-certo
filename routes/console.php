@@ -139,3 +139,15 @@ Schedule::command('meta:publicar-posts')
     ->withoutOverlapping()
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/meta-publicar-posts.log'));
+
+// 03:00 — Extrai contatos de grupos/comunidades do WhatsApp (Messenger próprio)
+// pra prospecção fria (🚩 FRIOS), pedido do Leonardo (29/09), destravado em
+// 30/09: resolução real de participante @lid via sock.signalRepository.lidMapping
+// (ver ImportarParticipantesGrupos.php). Roda de madrugada — horário de menor
+// movimento — e já é naturalmente incremental (dedupe por telefone no
+// Contato::where(), nunca reprocessa quem já foi cadastrado).
+Schedule::command('grupos:importar-participantes')
+    ->dailyAt('03:00')
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/grupos-importar-participantes.log'));
