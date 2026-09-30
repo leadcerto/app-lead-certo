@@ -33,7 +33,11 @@ class WhatsappCanalController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = WhatsappCanal::where('tenant_id', $request->user()->tenant_id)
-            ->where('tipo', 'nao_oficial');
+            ->where('tipo', 'nao_oficial')
+            // Canal desativado manualmente (ver WhatsappCanal::$desativado_em)
+            // some da tela — continua no banco, intacto, pra poder reativar
+            // depois sem perder aquecimento/histórico.
+            ->whereNull('desativado_em');
 
         // Achado real 2026-08-19: WhatsApp Business e WhatsApp Messenger são apps
         // diferentes por trás da mesma conexão não-oficial (Uazapi/Baileys) — sem

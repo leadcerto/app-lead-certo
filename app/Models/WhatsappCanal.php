@@ -27,6 +27,7 @@ class WhatsappCanal extends Model
         'perfil_aquecimento',
         'aquecimento_iniciado_em',
         'status',
+        'desativado_em',
         'phone',
         'connected_since',
         'webhook_token',
@@ -37,6 +38,7 @@ class WhatsappCanal extends Model
         'connected_since'         => 'datetime',
         'config'                  => 'array',
         'aquecimento_iniciado_em' => 'datetime',
+        'desativado_em'           => 'datetime',
     ];
 
     public function tenant(): BelongsTo
