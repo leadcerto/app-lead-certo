@@ -54,6 +54,27 @@ class SelecaoCanalWhatsappServiceTest extends TestCase
     }
 
     /**
+     * Achado real 30/09 (Leonardo): número Messenger compartilhado com a
+     * plataforma oficial (ex.: mesmo número da Covercut) só pode entrar em
+     * grupo pra extrair participante — nunca ser sorteado pra enviar
+     * mensagem de verdade, mesmo que esteja vinculado ao Kanban e conectado.
+     */
+    public function test_nunca_seleciona_canal_marcado_como_somente_extracao(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+
+        $somenteExtracao = WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'status' => 'connected', 'somente_extracao' => true,
+        ]);
+        $kanban->canais()->attach([$somenteExtracao->id]);
+
+        $selecionado = app(SelecaoCanalWhatsappService::class)->naoOficialAleatorioParaKanban($kanban);
+
+        $this->assertNull($selecionado);
+    }
+
+    /**
      * Achado em 2026-08-03: quando o único canal não-oficial de um tenant é
      * desconectado (ex.: botão "Remover"), as chamadas proativas (ligação
      * perdida, formulário) passavam a sempre receber null aqui e o ticket

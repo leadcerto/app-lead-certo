@@ -117,6 +117,18 @@
         Escaneie este QR com o app WhatsApp Messenger comum, nunca com o Business.
     </p>
 
+    {{--
+        Achado real 30/09 (Leonardo): número Messenger compartilhado com a
+        plataforma oficial (ex.: mesmo número da Covercut) só pode entrar em
+        grupo pra extrair participante — nunca enviar mensagem de verdade.
+        Este checkbox controla isso na criação; depois de conectado não dá
+        pra mudar por aqui (ver WhatsappCanal::$somente_extracao).
+    --}}
+    <label class="flex items-start gap-2 mb-4 text-xs text-gray-600 cursor-pointer">
+        <input type="checkbox" x-model="somenteExtracao" class="mt-0.5">
+        <span>Este número é só pra extração de grupos/comunidades — <strong>nunca vai enviar mensagem</strong> (ex.: mesmo número já usado no canal oficial).</span>
+    </label>
+
     <template x-if="erro">
         <div class="mb-4 p-3 rounded-lg bg-red-50 border border-red-200">
             <p class="text-sm text-red-600" x-text="erro"></p>
@@ -138,6 +150,11 @@
                             <span class="flex items-center gap-2 text-gray-500 font-medium text-sm">
                                 <span class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
                                 Desconectado
+                            </span>
+                        </template>
+                        <template x-if="canal.somente_extracao">
+                            <span class="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full" title="Só extrai participantes de grupo — nunca envia mensagem">
+                                Só extração
                             </span>
                         </template>
                     </div>
@@ -252,6 +269,7 @@ function whatsappCanais(app) {
         conectando: false,
         erro: null,
         intervalos: {},
+        somenteExtracao: false, // só usado pelo bloco 'messenger' — ver checkbox acima
 
         async carregar() {
             const res = await fetch('/api/painel/whatsapp/canais?app=' + this.app, {
@@ -269,10 +287,11 @@ function whatsappCanais(app) {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                 },
-                body: JSON.stringify({ app: this.app }),
+                body: JSON.stringify({ app: this.app, somente_extracao: this.somenteExtracao }),
             });
             this.conectando = false;
             if (res.ok) {
+                this.somenteExtracao = false;
                 await this.carregar();
             } else {
                 try {

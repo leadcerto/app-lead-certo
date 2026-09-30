@@ -101,6 +101,34 @@ class WhatsappCanalControllerTest extends TestCase
         Http::assertSent(fn ($request) => str_contains($request->url(), '/sessoes') && $request->hasHeader('X-Api-Key'));
     }
 
+    /**
+     * Achado real 30/09 (Leonardo): número Messenger compartilhado com a
+     * plataforma oficial (ex.: mesmo número da Covercut) só pode entrar em
+     * grupo pra extrair participante — nunca enviar mensagem de verdade. O
+     * checkbox "somente_extracao" na criação marca o canal e pula o vínculo
+     * automático com o Kanban (senão ficaria elegível pro sorteio de envio).
+     */
+    public function test_cria_canal_messenger_marcado_como_somente_extracao_sem_vincular_kanban(): void
+    {
+        Http::fake(['*/sessoes' => Http::response(['ok' => true], 201)]);
+
+        $tenant = Tenant::factory()->create();
+        $user   = $this->usuarioDono($tenant);
+        $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+
+        $response = $this->actingAs($user)->postJson('/api/painel/whatsapp/canais', [
+            'app' => 'messenger', 'somente_extracao' => true,
+        ]);
+
+        $response->assertCreated();
+        $this->assertDatabaseHas('whatsapp_canais', [
+            'tenant_id' => $tenant->id, 'provider' => 'messenger_proprio', 'somente_extracao' => true,
+        ]);
+
+        $canalId = $response->json('id');
+        $this->assertFalse($kanban->canais()->whereKey($canalId)->exists());
+    }
+
     public function test_falha_ao_criar_sessao_no_messenger_proprio_nao_cria_canal(): void
     {
         Http::fake(['*/sessoes' => Http::response(['error' => 'falhou'], 500)]);
