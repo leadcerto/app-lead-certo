@@ -243,6 +243,7 @@ class SecretariaEletronicaController extends Controller
                 'chamou_em'        => $c->chamou_em?->format('d/m/Y H:i'),
                 'mensagem_enviada' => $c->mensagem_enviada,
                 'numero_invalido'  => $c->numero_invalido,
+                'provavel_spam_sem_resposta' => $c->provavel_spam_sem_resposta,
                 'ticket_id'        => $c->ticket_id,
                 'contato_id'       => $c->contato_id,
                 'contato_nome'     => $c->contato?->nome,

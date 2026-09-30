@@ -46,6 +46,15 @@ Schedule::command('contatos:validar-cadastros --dias=8')
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/validar-cadastros.log'));
 
+// 00:05 — Secretária Eletrônica, Caso B de spam/telemarketing (pendência
+// registrada 22/09): mensagem de abertura foi enviada mas o lead nunca
+// respondeu após alguns dias — marca como provável spam na tela.
+Schedule::command('chamadas:marcar-spam-sem-resposta --dias=3')
+    ->dailyAt('00:05')
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/chamadas-spam-sem-resposta.log'));
+
 // A cada 15 min — Identifica nomes de contatos "Sem Nome" lendo conversas (priorizando novos leads)
 Schedule::command('contatos:identificar-nomes --limit=15')
     ->everyFifteenMinutes()
