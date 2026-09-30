@@ -193,9 +193,9 @@ Após configurar, salve a macro e deixe-a ativa.</pre>
             <div class="bg-orange-50 border border-orange-100 rounded-lg p-3 text-xs text-orange-800">
                 <strong>Nem toda chamada perdida é lead de verdade:</strong> boa parte das ligações que caem na caixa são
                 spam/telemarketing — números que não têm WhatsApp ou que nunca respondem a mensagem enviada (quem ligou
-                com intenção real de falar com a empresa tende a responder). O sistema já sinaliza nesta tela quando o
-                número não tem WhatsApp (badge "Número sem WhatsApp" na tabela abaixo); a identificação de números que
-                nunca respondem ainda está em desenvolvimento.
+                com intenção real de falar com a empresa tende a responder). O sistema sinaliza nesta tela os dois casos:
+                número não tem WhatsApp (badge "Número sem WhatsApp") e mensagem enviada sem nenhuma resposta do lead
+                depois de alguns dias (badge "Provável spam (sem resposta)").
             </div>
         </div>
     </div>
@@ -388,7 +388,13 @@ Após configurar, salve a macro e deixe-a ativa.</pre>
                                             Número sem WhatsApp
                                         </span>
                                     </template>
-                                    <template x-if="!chamada.numero_invalido && chamada.mensagem_enviada">
+                                    <template x-if="!chamada.numero_invalido && chamada.provavel_spam_sem_resposta">
+                                        <span class="inline-flex items-center gap-1 text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full" title="Mensagem enviada, mas o lead nunca respondeu — provável spam/telemarketing">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                                            Provável spam (sem resposta)
+                                        </span>
+                                    </template>
+                                    <template x-if="!chamada.numero_invalido && !chamada.provavel_spam_sem_resposta && chamada.mensagem_enviada">
                                         <span class="inline-flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
                                             <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                                             Mensagem enviada

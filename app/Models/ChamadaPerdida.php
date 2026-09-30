@@ -20,14 +20,16 @@ class ChamadaPerdida extends Model
         'mensagem_enviada',
         'mensagem_enviada_em',
         'numero_invalido',
+        'provavel_spam_sem_resposta',
         'origem_app',
     ];
 
     protected $casts = [
-        'chamou_em'           => 'datetime',
-        'mensagem_enviada_em' => 'datetime',
-        'mensagem_enviada'    => 'boolean',
-        'numero_invalido'     => 'boolean',
+        'chamou_em'                   => 'datetime',
+        'mensagem_enviada_em'         => 'datetime',
+        'mensagem_enviada'            => 'boolean',
+        'numero_invalido'             => 'boolean',
+        'provavel_spam_sem_resposta'  => 'boolean',
     ];
 
     public function tenant(): BelongsTo
