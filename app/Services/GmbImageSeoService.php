@@ -7,6 +7,7 @@ use App\Models\PerfilGmb;
 use App\Models\Tenant;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -139,15 +140,54 @@ class GmbImageSeoService
             return;
         }
 
+        // Achado real 2026-09-29 (Leonardo, 92 posts com "Erro Google (500)"
+        // e miniatura quebrada): copy()/move() do Laravel pode falhar e
+        // devolver false sem lançar exceção (disco cheio, permissão, etc.) —
+        // sem checar o retorno, o post era atualizado como se a imagem
+        // estivesse no novo caminho mesmo quando o arquivo nunca chegou lá.
+        // O problema só aparecia semanas depois, na hora de publicar (Google
+        // tenta buscar a imagem e recebe 404). Se falhar, mantém o
+        // imagem_url original (ainda válido) e registra o erro pra
+        // investigar, em vez de silenciosamente corromper o post.
+
         // Se a imagem de origem for da galeria (/galeria/), copia em vez de mover para manter o original na galeria
-        if (str_contains($caminhoRelativo, 'galeria/')) {
-            Storage::disk('public')->copy($caminhoRelativo, $novoCaminho);
-        } else {
-            Storage::disk('public')->move($caminhoRelativo, $novoCaminho);
+        $sucesso = str_contains($caminhoRelativo, 'galeria/')
+            ? Storage::disk('public')->copy($caminhoRelativo, $novoCaminho)
+            : Storage::disk('public')->move($caminhoRelativo, $novoCaminho);
+
+        if (! $sucesso) {
+            Log::error('GmbImageSeoService: falha ao copiar/mover imagem pro nome SEO final, imagem_url mantida no valor original', [
+                'post_id'          => $post->id,
+                'caminho_origem'   => $caminhoRelativo,
+                'caminho_destino'  => $novoCaminho,
+            ]);
+            return;
         }
 
         $post->update([
             'imagem_url' => Storage::disk('public')->url($novoCaminho),
         ]);
+    }
+
+    /**
+     * Achado real 2026-09-29: além de blindar prepararImagemParaPost(), o
+     * "Gerador em Lote" precisa de um jeito de confirmar, logo após criar cada
+     * post, que a imagem realmente existe no disco — em vez de só descobrir
+     * semanas depois, na hora de publicar, que o arquivo nunca esteve lá.
+     */
+    public function imagemUrlValidaNoDisco(?string $imagemUrl): bool
+    {
+        if (empty($imagemUrl)) {
+            return false;
+        }
+
+        $urlStorage = Storage::disk('public')->url('');
+        if (!str_starts_with($imagemUrl, $urlStorage)) {
+            return false;
+        }
+
+        $caminhoRelativo = str_replace($urlStorage, '', $imagemUrl);
+
+        return Storage::disk('public')->exists($caminhoRelativo);
     }
 }
