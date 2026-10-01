@@ -112,9 +112,15 @@ class ImportarParticipantesGrupos extends Command
                     continue;
                 }
 
+                // Achado real 01/10 (Leonardo): a lista de participantes nunca
+                // vem com nome, só quando a pessoa manda mensagem no grupo é
+                // que o microserviço captura o nome dela (ver
+                // nomesParticipantes.js, lado Node) — aproveita quando veio.
+                $nome = trim((string) ($p['nome'] ?? ''));
+
                 $contato = Contato::create([
                     'telefone' => $telefone,
-                    'nome'     => 'Sem Nome',
+                    'nome'     => $nome !== '' ? $nome : 'Sem Nome',
                     'origem'   => 'whatsapp_grupo',
                     'opt_out'  => false,
                 ]);

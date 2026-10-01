@@ -89,6 +89,52 @@ class ImportarParticipantesGruposTest extends TestCase
         Bus::assertDispatched(MarcarContatoFrioEtiquetaJob::class);
     }
 
+    /**
+     * Achado real 01/10 (Leonardo): a lista de participantes de grupo nunca
+     * vem com nome, só quando a pessoa manda mensagem o microserviço captura
+     * (ver nomesParticipantes.js, lado Node) — o comando usa o nome quando
+     * vem preenchido, em vez de sempre "Sem Nome".
+     */
+    public function test_usa_o_nome_do_participante_quando_vem_preenchido(): void
+    {
+        $this->fakeJobsPadrao();
+        $tenant = Tenant::factory()->create();
+        $this->canalMessengerProprio($tenant);
+
+        Http::fake(['*/sessoes/sessao-teste/grupos' => Http::response([
+            'grupos' => [[
+                'jid'  => '120363012345678901@g.us',
+                'nome' => 'Vip Membros',
+                'participantes' => [['telefone' => '5521999998888', 'nome' => 'João Silva']],
+            ]],
+        ], 200)]);
+
+        $this->artisan('grupos:importar-participantes')->assertExitCode(0);
+
+        $contato = Contato::where('telefone', '5521999998888')->first();
+        $this->assertSame('João Silva', $contato->nome);
+    }
+
+    public function test_mantem_sem_nome_quando_participante_nao_tem_nome_capturado(): void
+    {
+        $this->fakeJobsPadrao();
+        $tenant = Tenant::factory()->create();
+        $this->canalMessengerProprio($tenant);
+
+        Http::fake(['*/sessoes/sessao-teste/grupos' => Http::response([
+            'grupos' => [[
+                'jid'  => '120363012345678901@g.us',
+                'nome' => 'Vip Membros',
+                'participantes' => [['telefone' => '5521999998888', 'nome' => null]],
+            ]],
+        ], 200)]);
+
+        $this->artisan('grupos:importar-participantes')->assertExitCode(0);
+
+        $contato = Contato::where('telefone', '5521999998888')->first();
+        $this->assertSame('Sem Nome', $contato->nome);
+    }
+
     public function test_registra_jid_e_nome_do_grupo_em_comum_no_vinculo(): void
     {
         $this->fakeJobsPadrao();
