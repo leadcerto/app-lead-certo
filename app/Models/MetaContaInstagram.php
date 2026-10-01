@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Scopes\TenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 
 class MetaContaInstagram extends Model
 {
@@ -23,12 +24,14 @@ class MetaContaInstagram extends Model
         'nome',
         'foto_perfil_url',
         'ativo',
+        'principal',
     ];
 
     protected function casts(): array
     {
         return [
-            'ativo' => 'boolean',
+            'ativo'     => 'boolean',
+            'principal' => 'boolean',
         ];
     }
 
@@ -40,5 +43,22 @@ class MetaContaInstagram extends Model
     public function pagina(): BelongsTo
     {
         return $this->belongsTo(MetaPagina::class, 'meta_pagina_id');
+    }
+
+    /**
+     * Garante no máximo 1 conta "principal" por tenant por vez — o MySQL não
+     * suporta índice único parcial, então a garantia precisa ser feita aqui
+     * (dentro de uma transação, pra nunca existir um instante com 2 ou 0
+     * principal por causa de uma falha no meio do caminho).
+     */
+    public function marcarComoPrincipal(): void
+    {
+        DB::transaction(function () {
+            static::where('tenant_id', $this->tenant_id)
+                ->where('id', '!=', $this->id)
+                ->update(['principal' => false]);
+
+            $this->update(['principal' => true]);
+        });
     }
 }

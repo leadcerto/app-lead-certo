@@ -129,6 +129,32 @@ class MetaService
     }
 
     /**
+     * Busca id e nome do usuário Meta dono do token — usado pra popular
+     * meta_user_id/nome_usuario (achado da vistoria de 01/10: esses campos
+     * existiam na migration mas nunca eram preenchidos) e pra detectar
+     * reconexão com um login diferente do que já estava salvo.
+     */
+    public function obterPerfilUsuario(string $accessToken): ?array
+    {
+        try {
+            $res = Http::get(self::GRAPH_BASE_URL . '/me', [
+                'fields'       => 'id,name',
+                'access_token' => $accessToken,
+            ]);
+
+            if ($res->successful()) {
+                return $res->json();
+            }
+
+            Log::error('MetaService::obterPerfilUsuario falhou', ['body' => $res->body()]);
+            return null;
+        } catch (\Exception $e) {
+            Log::error('MetaService::obterPerfilUsuario exceção', ['erro' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
      * Lista (sem gravar nada) todas as Páginas do Facebook que este token pode
      * administrar, via /me/accounts. Uma conta pessoal da Meta costuma
      * administrar páginas de VÁRIOS negócios/tenants diferentes — por isso

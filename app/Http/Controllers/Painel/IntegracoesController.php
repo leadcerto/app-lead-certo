@@ -197,21 +197,40 @@ class IntegracoesController extends Controller
             $accessTokenFinal = $tokenLongaDuracao['access_token'] ?? $resToken['access_token'];
             $expiresIn = $tokenLongaDuracao['expires_in'] ?? $resToken['expires_in'] ?? (60 * 86400);
 
+            // 2.1. Achado da vistoria de 01/10 (Leonardo): reconectar com um
+            // login do Facebook DIFERENTE do que já estava salvo sobrescrevia
+            // o token em silêncio — páginas/contas vinculadas pelo login
+            // antigo podiam parar de funcionar sem nenhum aviso. Busca o
+            // perfil (id/nome) do novo login ANTES de sobrescrever, pra
+            // comparar com o que já estava salvo.
+            $perfilNovoLogin = $this->meta->obterPerfilUsuario($accessTokenFinal);
+            $metaTokenAnterior = \App\Models\MetaToken::withoutGlobalScopes()->where('tenant_id', $tenantId)->first();
+            $trocouDeLogin = $metaTokenAnterior?->meta_user_id
+                && ($perfilNovoLogin['id'] ?? null)
+                && $metaTokenAnterior->meta_user_id !== $perfilNovoLogin['id'];
+
             // 3. Salva ou atualiza o MetaToken
             $metaToken = \App\Models\MetaToken::withoutGlobalScopes()->updateOrCreate(
                 ['tenant_id' => $tenantId],
                 [
-                    'access_token' => $accessTokenFinal,
-                    'expires_at'   => Carbon::now()->addSeconds($expiresIn),
-                    'scopes'       => \App\Services\MetaService::SCOPES,
+                    'access_token'  => $accessTokenFinal,
+                    'expires_at'    => Carbon::now()->addSeconds($expiresIn),
+                    'scopes'        => \App\Services\MetaService::SCOPES,
+                    'meta_user_id'  => $perfilNovoLogin['id'] ?? null,
+                    'nome_usuario'  => $perfilNovoLogin['name'] ?? null,
                 ]
             );
 
             // 4. Não vincula páginas automaticamente — a mesma conta pessoal da
             // Meta pode administrar páginas de VÁRIOS negócios diferentes.
             // O operador escolhe manualmente quais pertencem a este tenant.
+            $mensagem = 'Meta conectada! Selecione abaixo qual(is) página(s) pertence(m) a esta empresa.';
+            if ($trocouDeLogin) {
+                $mensagem = "Atenção: você conectou com um login do Facebook diferente do anterior (\"{$metaTokenAnterior->nome_usuario}\" → \"{$perfilNovoLogin['name']}\"). Páginas e contas de Instagram vinculadas pelo login anterior podem parar de funcionar. Selecione abaixo as páginas deste novo login.";
+            }
+
             return redirect()->route('meta.selecionar-paginas')
-                ->with('sucesso', 'Meta conectada! Selecione abaixo qual(is) página(s) pertence(m) a esta empresa.');
+                ->with($trocouDeLogin ? 'erro' : 'sucesso', $mensagem);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Erro no metaCallback', [
                 'erro'  => $e->getMessage(),
@@ -310,5 +329,44 @@ class IntegracoesController extends Controller
             return redirect()->route('integracoes')
                 ->with('erro', 'Erro ao desconectar Meta: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Achado da vistoria de 01/10 (Leonardo): marcar qual conta de Instagram
+     * é a "principal" — usada como padrão quando um post não especifica
+     * qual conta usar (ver MetaPostController::store()).
+     */
+    public function metaMarcarContaInstagramPrincipal(Request $request, \App\Models\MetaContaInstagram $conta): RedirectResponse
+    {
+        abort_if($conta->tenant_id !== $this->getTenantId($request), 404);
+
+        $conta->marcarComoPrincipal();
+
+        return redirect()->route('integracoes')
+            ->with('sucesso', "@{$conta->username} marcada como conta principal do Instagram.");
+    }
+
+    /**
+     * Desativa/reativa uma conta de Instagram específica sem precisar
+     * desconectar a Meta inteira — antes só existia a coluna `ativo`, sem
+     * nenhum jeito de alterá-la pela tela.
+     */
+    public function metaAlternarContaInstagramAtiva(Request $request, \App\Models\MetaContaInstagram $conta): RedirectResponse
+    {
+        abort_if($conta->tenant_id !== $this->getTenantId($request), 404);
+
+        $vaiDesativar = $conta->ativo;
+
+        // Conta inativa nunca pode continuar marcada como principal.
+        $conta->update([
+            'ativo'     => ! $vaiDesativar,
+            'principal' => $vaiDesativar ? false : $conta->principal,
+        ]);
+
+        $mensagem = $vaiDesativar
+            ? "@{$conta->username} desativada — não vai mais aparecer como opção pra novo post."
+            : "@{$conta->username} reativada.";
+
+        return redirect()->route('integracoes')->with('sucesso', $mensagem);
     }
 }
