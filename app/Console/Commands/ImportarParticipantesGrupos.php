@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\AtualizarNomeGoogleComDadoLocalJob;
 use App\Jobs\MarcarContatoFrioEtiquetaJob;
 use App\Jobs\PushContatoParaGoogleJob;
 use App\Models\Contato;
@@ -72,9 +73,10 @@ class ImportarParticipantesGrupos extends Command
 
         $numeroCanal = preg_replace('/\D/', '', (string) $canal->phone);
 
-        $totalCriados  = 0;
-        $totalExistiam = 0;
-        $totalSemNum   = 0;
+        $totalCriados         = 0;
+        $totalExistiam        = 0;
+        $totalSemNum          = 0;
+        $totalNomesRecuperados = 0;
 
         foreach ($grupos as $grupo) {
             $nomeGrupo     = $grupo['nome'] ?? 'Grupo';
@@ -108,6 +110,27 @@ class ImportarParticipantesGrupos extends Command
                         'tenant_id'  => $tenant->id,
                     ]);
                     $this->registrarGrupoEmComum($vinculo, $jid, $nomeGrupo);
+
+                    // Achado real 01/10 (Leonardo, pedido explícito): contato
+                    // criado antes do nome ter sido capturado (ou a pessoa
+                    // ainda não tinha mandado mensagem no grupo na época)
+                    // fica "Sem Nome" pra sempre, mesmo que o nome resolva
+                    // depois — recupera retroativamente aqui, mesma rotina
+                    // diária, sem precisar de comando separado. Restrito a
+                    // origem='whatsapp_grupo' pra nunca sobrescrever nome de
+                    // contato que veio de outro lugar e é "Sem Nome" por
+                    // outro motivo.
+                    $nomeCapturado = trim((string) ($p['nome'] ?? ''));
+                    if ($contato->origem === 'whatsapp_grupo' && $contato->nome === 'Sem Nome' && $nomeCapturado !== '') {
+                        $contato->update(['nome' => $nomeCapturado]);
+
+                        if ($vinculo->google_resource_name && $vinculo->google_etag) {
+                            AtualizarNomeGoogleComDadoLocalJob::dispatch($vinculo->id);
+                        }
+
+                        $totalNomesRecuperados++;
+                    }
+
                     $totalExistiam++;
                     continue;
                 }
@@ -147,10 +170,12 @@ class ImportarParticipantesGrupos extends Command
         Log::info('ImportarParticipantesGrupos: importação concluída', [
             'tenant_id' => $tenant->id, 'canal_id' => $canal->id,
             'criados' => $totalCriados, 'existiam' => $totalExistiam, 'sem_numero' => $totalSemNum,
+            'nomes_recuperados' => $totalNomesRecuperados,
         ]);
 
         $this->info("  ✓ Novos contatos frios criados: {$totalCriados}");
         $this->info("  ✓ Já existiam no CRM:           {$totalExistiam}");
+        $this->info("  ✓ Nomes recuperados agora:      {$totalNomesRecuperados}");
         $this->line("  - Sem número (ignorados):       {$totalSemNum}");
     }
 

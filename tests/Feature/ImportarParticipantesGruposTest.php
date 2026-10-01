@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\AtualizarNomeGoogleComDadoLocalJob;
 use App\Jobs\MarcarContatoFrioEtiquetaJob;
 use App\Jobs\PushContatoParaGoogleJob;
 use App\Models\Contato;
@@ -33,6 +34,7 @@ class ImportarParticipantesGruposTest extends TestCase
             \App\Jobs\MarcarNovoLeadEtiquetaJob::class,
             PushContatoParaGoogleJob::class,
             MarcarContatoFrioEtiquetaJob::class,
+            AtualizarNomeGoogleComDadoLocalJob::class,
         ]);
     }
 
@@ -133,6 +135,118 @@ class ImportarParticipantesGruposTest extends TestCase
 
         $contato = Contato::where('telefone', '5521999998888')->first();
         $this->assertSame('Sem Nome', $contato->nome);
+    }
+
+    /**
+     * Achado real 01/10 (Leonardo, pedido explícito): contato criado antes do
+     * nome ter sido capturado fica "Sem Nome" pra sempre, a menos que a
+     * mesma rotina diária recupere retroativamente quando o nome resolver
+     * numa rodada futura.
+     */
+    public function test_recupera_nome_retroativamente_quando_contato_existente_estava_sem_nome(): void
+    {
+        $this->fakeJobsPadrao();
+        $tenant  = Tenant::factory()->create();
+        $this->canalMessengerProprio($tenant);
+        $contato = Contato::factory()->create([
+            'telefone' => '5521999998888', 'nome' => 'Sem Nome', 'origem' => 'whatsapp_grupo',
+        ]);
+
+        Http::fake(['*/sessoes/sessao-teste/grupos' => Http::response([
+            'grupos' => [[
+                'jid'  => '120363012345678901@g.us',
+                'nome' => 'Vip Membros',
+                'participantes' => [['telefone' => '5521999998888', 'nome' => 'João Silva']],
+            ]],
+        ], 200)]);
+
+        $this->artisan('grupos:importar-participantes')->assertExitCode(0);
+
+        $contato->refresh();
+        $this->assertSame('João Silva', $contato->nome);
+    }
+
+    public function test_recuperacao_de_nome_dispara_job_de_atualizar_google_quando_ja_tem_etag(): void
+    {
+        $this->fakeJobsPadrao();
+        $tenant  = Tenant::factory()->create();
+        $this->canalMessengerProprio($tenant);
+        $contato = Contato::factory()->create([
+            'telefone' => '5521999998888', 'nome' => 'Sem Nome', 'origem' => 'whatsapp_grupo',
+        ]);
+        $vinculo = VinculoContatoTenant::create([
+            'contato_id' => $contato->id, 'tenant_id' => $tenant->id,
+            'google_resource_name' => 'people/c123', 'google_etag' => 'etag-abc',
+        ]);
+
+        Http::fake(['*/sessoes/sessao-teste/grupos' => Http::response([
+            'grupos' => [[
+                'jid'  => '120363012345678901@g.us',
+                'nome' => 'Vip Membros',
+                'participantes' => [['telefone' => '5521999998888', 'nome' => 'João Silva']],
+            ]],
+        ], 200)]);
+
+        $this->artisan('grupos:importar-participantes')->assertExitCode(0);
+
+        Bus::assertDispatched(AtualizarNomeGoogleComDadoLocalJob::class, fn ($job) => $this->jobTemVinculoId($job, $vinculo->id));
+    }
+
+    public function test_recuperacao_de_nome_nao_dispara_job_de_google_sem_etag_ainda(): void
+    {
+        $this->fakeJobsPadrao();
+        $tenant  = Tenant::factory()->create();
+        $this->canalMessengerProprio($tenant);
+        $contato = Contato::factory()->create([
+            'telefone' => '5521999998888', 'nome' => 'Sem Nome', 'origem' => 'whatsapp_grupo',
+        ]);
+        VinculoContatoTenant::create(['contato_id' => $contato->id, 'tenant_id' => $tenant->id]);
+
+        Http::fake(['*/sessoes/sessao-teste/grupos' => Http::response([
+            'grupos' => [[
+                'jid'  => '120363012345678901@g.us',
+                'nome' => 'Vip Membros',
+                'participantes' => [['telefone' => '5521999998888', 'nome' => 'João Silva']],
+            ]],
+        ], 200)]);
+
+        $this->artisan('grupos:importar-participantes')->assertExitCode(0);
+
+        $contato->refresh();
+        $this->assertSame('João Silva', $contato->nome);
+        Bus::assertNotDispatched(AtualizarNomeGoogleComDadoLocalJob::class);
+    }
+
+    public function test_nao_recupera_nome_quando_contato_existente_nao_e_de_origem_whatsapp_grupo(): void
+    {
+        $this->fakeJobsPadrao();
+        $tenant  = Tenant::factory()->create();
+        $this->canalMessengerProprio($tenant);
+        $contato = Contato::factory()->create([
+            'telefone' => '5521999998888', 'nome' => 'Sem Nome', 'origem' => 'manual',
+        ]);
+
+        Http::fake(['*/sessoes/sessao-teste/grupos' => Http::response([
+            'grupos' => [[
+                'jid'  => '120363012345678901@g.us',
+                'nome' => 'Vip Membros',
+                'participantes' => [['telefone' => '5521999998888', 'nome' => 'João Silva']],
+            ]],
+        ], 200)]);
+
+        $this->artisan('grupos:importar-participantes')->assertExitCode(0);
+
+        $contato->refresh();
+        $this->assertSame('Sem Nome', $contato->nome);
+        Bus::assertNotDispatched(AtualizarNomeGoogleComDadoLocalJob::class);
+    }
+
+    private function jobTemVinculoId(object $job, int $vinculoId): bool
+    {
+        $reflexao = new \ReflectionClass($job);
+        $prop = $reflexao->getProperty('vinculoId');
+        $prop->setAccessible(true);
+        return $prop->getValue($job) === $vinculoId;
     }
 
     public function test_registra_jid_e_nome_do_grupo_em_comum_no_vinculo(): void
