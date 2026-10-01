@@ -82,16 +82,25 @@ class MetaPostController extends Controller
     {
         $tenantId = $this->getTenantId($request);
 
+        // Achado real da vistoria de 01/10 (Leonardo): quando o formulário não
+        // envia qual conta usar, o fallback pegava a primeira que o banco
+        // devolvesse, sem ordem definida — com 2+ contas ativas o resultado
+        // era imprevisível. Agora prefere a conta marcada como "principal";
+        // sem nenhuma principal definida, cai pra ordem determinística por id
+        // (mantém compatibilidade com tenant que só tem 1 conta e nunca
+        // marcou principal nenhuma).
         if (in_array($request->canal_alvo, ['instagram', 'ambos']) && ! $request->filled('meta_conta_instagram_id')) {
-            $unicaConta = MetaContaInstagram::where('tenant_id', $tenantId)->where('ativo', true)->first();
-            if ($unicaConta) {
-                $request->merge(['meta_conta_instagram_id' => $unicaConta->id]);
+            $conta = MetaContaInstagram::where('tenant_id', $tenantId)->where('ativo', true)
+                ->orderByDesc('principal')->orderBy('id')->first();
+            if ($conta) {
+                $request->merge(['meta_conta_instagram_id' => $conta->id]);
             }
         }
         if (in_array($request->canal_alvo, ['facebook', 'ambos']) && ! $request->filled('meta_pagina_id')) {
-            $unicaPagina = MetaPagina::where('tenant_id', $tenantId)->where('ativo', true)->first();
-            if ($unicaPagina) {
-                $request->merge(['meta_pagina_id' => $unicaPagina->id]);
+            $pagina = MetaPagina::where('tenant_id', $tenantId)->where('ativo', true)
+                ->orderBy('id')->first();
+            if ($pagina) {
+                $request->merge(['meta_pagina_id' => $pagina->id]);
             }
         }
 

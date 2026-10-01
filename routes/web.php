@@ -135,6 +135,12 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::match(['get', 'post'], '/meta/desconectar', [IntegracoesController::class, 'metaDesconectar'])
         ->name('meta.desconectar')
         ->middleware('role:admin,dono,growth_manager');
+    Route::post('/meta/contas-instagram/{conta}/marcar-principal', [IntegracoesController::class, 'metaMarcarContaInstagramPrincipal'])
+        ->name('meta.contas-instagram.marcar-principal')
+        ->middleware('role:admin,dono,growth_manager');
+    Route::post('/meta/contas-instagram/{conta}/alternar-ativa', [IntegracoesController::class, 'metaAlternarContaInstagramAtiva'])
+        ->name('meta.contas-instagram.alternar-ativa')
+        ->middleware('role:admin,dono,growth_manager');
 
     // Meta Comment-to-DM Gatilhos
     Route::get('/meta/gatilhos', [\App\Http\Controllers\Painel\MetaCampanhasGatilhoController::class, 'index'])
