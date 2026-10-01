@@ -546,6 +546,13 @@
             </div>
         </div>
 
+        {{-- Seção: Grupos WhatsApp em comum (quebra-gelo pra prospecção fria) —
+             pedido do Leonardo (01/10), só aparece quando tem pelo menos 1 grupo --}}
+        <div id="grupos-em-comum-secao" class="hidden">
+            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Grupos WhatsApp em comum</h3>
+            <div id="grupos-em-comum-lista" class="flex flex-wrap gap-1.5"></div>
+        </div>
+
         {{-- Seção: Histórico de Atendimentos --}}
         <div>
             <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Histórico de Atendimentos</h3>
@@ -738,6 +745,23 @@ function preencherDrawer(d) {
     document.getElementById('sys-created').textContent = d.created_at
         ? new Date(d.created_at).toLocaleDateString('pt-BR')
         : '—';
+
+    // Grupos WhatsApp em comum
+    const grupos = d.grupos_whatsapp_em_comum || [];
+    const secaoGrupos = document.getElementById('grupos-em-comum-secao');
+    const listaGrupos = document.getElementById('grupos-em-comum-lista');
+    listaGrupos.innerHTML = '';
+    if (grupos.length > 0) {
+        grupos.forEach(g => {
+            const span = document.createElement('span');
+            span.className = 'text-xs bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full';
+            span.textContent = g.nome_visto || 'Grupo';
+            listaGrupos.appendChild(span);
+        });
+        secaoGrupos.classList.remove('hidden');
+    } else {
+        secaoGrupos.classList.add('hidden');
+    }
 }
 
 function modoEdicao(ativar) {

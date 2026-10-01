@@ -960,14 +960,26 @@ class ContatosController extends Controller
 
     public function showContato(Request $request, Contato $contato): JsonResponse
     {
-        return response()->json($contato->makeVisible([
+        $dados = $contato->makeVisible([
             'cpf','rg','cnpj','razao_social','nome_fantasia','genero','estado_civil',
             'aniversario','endereco','cep','pais','telefone_2','email_2',
             'instagram','facebook','linkedin','twitter','tiktok','website',
             'observacoes','score','tags','origem','tipo_contato','opt_out',
             'status_validacao','created_at','nome_do_meio','sobrenome',
             'departamento','empresa','profissao','cidade','estado',
-        ]));
+        ])->toArray();
+
+        // Pedido do Leonardo (01/10): mostrar no painel os grupos/comunidades
+        // do WhatsApp em comum com esse contato (já gravado desde a extração
+        // de grupos, ver ImportarParticipantesGrupos::registrarGrupoEmComum())
+        // — fica só aqui, nunca empurrado pro Google (já tem a etiqueta 🚩
+        // FRIOS fazendo esse papel lá).
+        $vinculo = VinculoContatoTenant::where('contato_id', $contato->id)
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->first();
+        $dados['grupos_whatsapp_em_comum'] = $vinculo->grupos_whatsapp_em_comum ?? [];
+
+        return response()->json($dados);
     }
 
     public function atualizarContato(Request $request, Contato $contato): JsonResponse
