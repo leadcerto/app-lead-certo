@@ -8,6 +8,7 @@ use App\Models\TicketAtendimento;
 use App\Services\SdrResponderService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class SdrResponderJob implements ShouldQueue
@@ -109,17 +110,53 @@ class SdrResponderJob implements ShouldQueue
             }
         }
 
-        // Achado real 24/09 (tickets #4907 "Rodrigo Sani", #4908 "Jairo Jr"):
-        // cada mensagem do lead despacha seu próprio SdrResponderJob com seu
-        // próprio temporizador de debounce — quando o lead manda várias
-        // mensagens seguidas rapidinho, mais de um desses jobs pode concluir
-        // "não sou obsoleto" quase ao mesmo tempo (cada um mirando a mesma
-        // última mensagem do lead) e cada um chama a IA e manda sua própria
-        // resposta, gerando 2-4 respostas quase simultâneas e parecidas (não
-        // idênticas, porque cada uma é uma chamada de LLM independente).
-        // Trava determinística: se já existe mensagem do bot mais recente que
-        // a última mensagem do lead, alguém já respondeu a essa leva — não
-        // chama a IA de novo.
+        // Achado real 24/09 (tickets #4907 "Rodrigo Sani", #4908 "Jairo Jr"),
+        // corrigido de novo em 02/10 depois de reincidir (ticket #4999
+        // "Mariana Pacará", pares de mensagens saindo no MESMO segundo): cada
+        // mensagem do lead despacha seu próprio SdrResponderJob. A checagem
+        // "já existe resposta do bot mais recente" sozinha não bastava porque
+        // ela roda ANTES de chamar a IA (que demora alguns segundos) — dois
+        // workers podiam passar pela checagem quase ao mesmo tempo, os dois
+        // chamarem a IA, e os dois mandarem resposta (2 chamadas de LLM
+        // independentes, por isso as mensagens duplicadas eram parecidas, não
+        // idênticas). Trava a seção crítica inteira (checagem + resposta)
+        // numa seção atômica, mesmo padrão já usado em
+        // SecretariaEletronicaController/UazapiWebhookController pra
+        // resolução de ticket. Lock não-bloqueante (não tranca um worker da
+        // fila esperando) — se outra execução já está processando esta leva,
+        // reagenda pra reavaliar em breve (mesmo mecanismo de reagendamento
+        // do debounce acima); quando essa rodar de novo, a checagem de "já
+        // existe resposta do bot" vai detectar que já foi respondido e
+        // encerrar sem chamar a IA de novo.
+        $lock = Cache::lock("sdr-responder:{$this->ticketId}", 90);
+
+        if (! $lock->get()) {
+            Log::info("SdrResponderJob: outra execução já está processando este ticket, reagendando. ticket #{$this->ticketId}");
+
+            if ($this->tentativaDebounce < self::MAX_TENTATIVAS_DEBOUNCE) {
+                self::dispatch(
+                    $this->ticketId,
+                    $this->ultimaMensagem,
+                    $this->origemLigacao,
+                    false,
+                    $this->debounceSegundos,
+                    $this->orientacaoHumana,
+                    $this->tentativaDebounce + 1,
+                )->delay(now()->addSeconds(5));
+            }
+
+            return;
+        }
+
+        try {
+            $this->processarResposta($ticket, $service);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function processarResposta(TicketAtendimento $ticket, SdrResponderService $service): void
+    {
         $ultimaMensagemLeadEm = Mensagem::withoutGlobalScopes()
             ->where('ticket_id', $this->ticketId)
             ->where('remetente', 'lead')
