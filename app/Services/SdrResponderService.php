@@ -93,6 +93,20 @@ class SdrResponderService
             return null;
         }
 
+        // ── 3.45. Detectar "sem necessidade de resposta" (achado 02/10) ─────
+        // Leonardo (ticket #4999 "Mariana Pacará"): com a Meta cobrando por
+        // mensagem (não mais por conversa), cada mensagem de cortesia pura da
+        // IA (ex.: "Fico feliz em ajudar! Estou por aqui!" respondendo a um
+        // simples "obrigada") é custo sem valor agregado. Decisão: a própria
+        // IA decide, com o contexto completo da conversa, quando a mensagem
+        // do lead não precisa de resposta nenhuma — token igual ao padrão de
+        // [DUVIDA:], mas sem pausar nem alertar ninguém (não é uma situação
+        // que precise de revisão humana, é só "nada novo a dizer agora").
+        if (str_contains($resposta, '[SEM_RESPOSTA]')) {
+            Log::info('SdrResponder: IA decidiu que a mensagem do lead não precisa de resposta', ['ticket_id' => $ticket->id]);
+            return null;
+        }
+
         // ── 3.5. Detectar dúvida (Regra 2) ───────────────────────────────────
         // Se o agente decidiu pausar (instrução de autovalidação da Regra 7,
         // ver montarHistorico()), a resposta inteira é só esse token — nenhum
@@ -708,6 +722,24 @@ class SdrResponderService
                 . "Sempre convide o cliente a interagir para que ele continue respondendo e a conversa progrida."
                 . "\n===";
         }
+
+        // Achado real 02/10 (Leonardo, ticket #4999 "Mariana Pacará"): com a
+        // Meta cobrando por mensagem entregue (não mais por conversa), uma
+        // mensagem de cortesia pura (ex.: responder "Fico feliz em ajudar!
+        // Estou por aqui!" a um simples "obrigada") é custo sem valor. Esta
+        // regra é uma EXCEÇÃO explícita à "Regra de Ouro" acima — pra não
+        // deixar ambíguo quando as duas parecem se chocar (uma pede sempre
+        // terminar com pergunta, esta pede às vezes não responder nada).
+        $iaContexto .= "\n\n=== QUANDO NÃO RESPONDER NADA ===\n"
+            . "Se a última mensagem do lead for só um agradecimento/confirmação curta (ex.: \"ok\", "
+            . "\"obrigada\", \"valeu\", \"👍\", \"de nada\") e ela NÃO contiver nenhuma pergunta nova, "
+            . "informação nova, nem deixar nenhuma pergunta sua (da mensagem anterior) sem resposta, "
+            . "você não precisa responder nada — responda SOMENTE com o token [SEM_RESPOSTA], sem mais "
+            . "nenhum texto. Isso tem prioridade sobre a Regra de Ouro acima (não precisa terminar com "
+            . "pergunta se a decisão é não responder). Na dúvida se a mensagem do lead precisa de algo "
+            . "mais, responda normalmente — só use este token quando tiver certeza de que não há nada "
+            . "pendente da sua parte nem do lead."
+            . "\n===";
 
         // Regra 7 — autovalidação antes de responder (1 chamada só, sem chamada
         // dupla — decisão fechada). Regra 2 é o efeito prático desta validação:
