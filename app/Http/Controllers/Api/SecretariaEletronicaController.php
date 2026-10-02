@@ -77,6 +77,17 @@ class SecretariaEletronicaController extends Controller
             ['nome' => $numeroChamador, 'origem' => 'ligacao']
         );
 
+        // Achado real 02/10 (Leonardo): número já confirmado sem WhatsApp (via
+        // webhook de status da Meta, ver CovercutWebhookController::
+        // processarStatusEntrega()) é um fato permanente sobre o número, não
+        // sobre esta ligação — nem cria ticket, nem tenta mandar mensagem de
+        // novo. Evita repetir o ciclo inteiro a cada chamada do mesmo número
+        // de telemarketing.
+        if ($contato->whatsapp_invalido_em) {
+            $chamada->update(['contato_id' => $contato->id, 'numero_invalido' => true]);
+            return response()->json(['ok' => true, 'acao' => 'numero_sem_whatsapp_confirmado']);
+        }
+
         // Vincula ao tenant se ainda não vinculado
         VinculoContatoTenant::firstOrCreate([
             'contato_id' => $contato->id,
@@ -240,7 +251,12 @@ class SecretariaEletronicaController extends Controller
             ->map(fn ($c) => [
                 'id'               => $c->id,
                 'numero_chamador'  => $c->numero_chamador,
-                'chamou_em'        => $c->chamou_em?->format('d/m/Y H:i'),
+                // Achado real 02/10 (Leonardo): o horário exibido não batia com o
+                // horário real da chamada — `config('app.timezone')` é UTC (não
+                // mudamos isso globalmente, afetaria todo histórico já gravado e
+                // os horários do agendador), então o instante salvo está correto,
+                // só precisa ser convertido pro fuso de exibição aqui.
+                'chamou_em'        => $c->chamou_em?->setTimezone('America/Sao_Paulo')->format('d/m/Y H:i'),
                 'mensagem_enviada' => $c->mensagem_enviada,
                 'numero_invalido'  => $c->numero_invalido,
                 'provavel_spam_sem_resposta' => $c->provavel_spam_sem_resposta,

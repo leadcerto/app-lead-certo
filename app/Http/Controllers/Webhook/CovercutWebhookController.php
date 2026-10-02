@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Webhook;
 use App\Http\Controllers\Controller;
 use App\Jobs\PushContatoParaGoogleJob;
 use App\Jobs\SdrResponderJob;
+use App\Models\ChamadaPerdida;
 use App\Models\Contato;
 use App\Models\KanbanColuna;
 use App\Models\KanbanColunaConfig;
@@ -80,18 +81,14 @@ class CovercutWebhookController extends Controller
             // Eco da nossa própria mensagem enviada via API — nada a fazer, já
             // registramos a Mensagem no momento do envio. Não é um evento "não
             // tratado" de verdade, só não precisa de ação nenhuma.
+        } elseif ($event === 'status') {
+            // Achado real 2026-08-14, confirmado em produção em 02/10 (134
+            // ocorrências reais em 5 dias de log): é aqui que a Meta avisa de
+            // verdade quando um número não tem WhatsApp (`errors[0].code
+            // 131026`) — o envio inicial sempre responde sucesso síncrono, só
+            // a falha de entrega chega depois, por este evento.
+            $this->processarStatusEntrega($payload, $canal);
         } else {
-            // Achado real 2026-08-14: uma ligação perdida com número sem WhatsApp
-            // teve a mensagem de abertura "aceita" pela API (HTTP sucesso), mas
-            // nunca chegou de verdade — a Meta só informaria isso depois, via um
-            // evento de status de entrega (`event: "status"`, provavelmente com
-            // `status.status: "failed"`) que nunca vimos chegar aqui. Não dá pra
-            // confirmar o formato real sem capturar uma ocorrência de verdade —
-            // loga em warning (nível já capturado em produção) pra pegar a
-            // próxima com o payload completo. Mesmo padrão já usado no
-            // UazapiWebhookController (commit 31e2667). Remover este log assim
-            // que o formato for confirmado e o tratamento real for implementado
-            // (ou confirmado que a Covercut não manda esse evento pra nós).
             Log::warning('Covercut webhook: evento não tratado — payload completo abaixo', [
                 'canal_id'  => $canal->id,
                 'event'     => $event,
@@ -114,6 +111,65 @@ class CovercutWebhookController extends Controller
         $assinaturaCalculada = hash_hmac('sha256', $request->getContent(), $segredo);
 
         return hash_equals($assinaturaCalculada, $assinaturaRecebida);
+    }
+
+    /**
+     * Achado real 02/10 (Leonardo): confirmado em produção via log — toda
+     * entrega da Meta gera este evento (`sent`/`delivered`/`read`/`played`
+     * ao longo da vida da mensagem, ou `failed` quando não entrega). Só
+     * `failed` com o código de número inválido interessa aqui; os demais
+     * status não exigem ação (não são "não tratados" de verdade, só não
+     * mudam nada do nosso lado).
+     */
+    private function processarStatusEntrega(array $payload, WhatsappCanal $canal): void
+    {
+        $status = $payload['status'] ?? null;
+        if (! is_array($status) || ($status['status'] ?? null) !== 'failed') {
+            return;
+        }
+
+        $codigo = $status['errors'][0]['code'] ?? null;
+        if ((int) $codigo !== 131026) {
+            return;
+        }
+
+        $recipient = $status['recipient'] ?? null;
+        if (! $recipient) {
+            return;
+        }
+
+        $telefone = $this->normalizarTelefone($recipient);
+        $tenant   = $canal->tenant;
+
+        $contato = Contato::where('telefone', $telefone)->first();
+        if (! $contato || $contato->whatsapp_invalido_em) {
+            return;
+        }
+
+        $contato->update(['whatsapp_invalido_em' => now()]);
+
+        ChamadaPerdida::where('tenant_id', $tenant->id)
+            ->where('numero_chamador', $telefone)
+            ->update(['numero_invalido' => true]);
+
+        $tickets = TicketAtendimento::where('tenant_id', $tenant->id)
+            ->where('contato_id', $contato->id)
+            ->whereNotIn('coluna_kanban', KanbanColuna::chavesComPapel($tenant->id, \App\Enums\PapelColunaKanban::Encerramento))
+            ->get();
+
+        foreach ($tickets as $ticket) {
+            $ticket->update($ticket->dadosParaEncerrar([
+                'tag_desfecho' => 'numero_invalido',
+                'encerrado_em' => now(),
+            ]));
+        }
+
+        Log::info('Covercut webhook: número confirmado sem WhatsApp — contato marcado e ticket(s) encerrado(s)', [
+            'canal_id'    => $canal->id,
+            'contato_id'  => $contato->id,
+            'telefone'    => $telefone,
+            'tickets_qtd' => $tickets->count(),
+        ]);
     }
 
     private function processarMensagem(array $payload, WhatsappCanal $canal): void
