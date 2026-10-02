@@ -31,6 +31,20 @@ class FollowupConversas extends Command
         // ── Follow-up CURTO (10 min) ─────────────────────────────────────────
         // Última mensagem é do lead, enviada entre 10 min e 90 min atrás
         // Usamos a última mensagem pelo id máximo (compatível com only_full_group_by)
+        //
+        // Achado real 02/10 (Leonardo, tickets #4932 e #5001): faltava trava de
+        // "já mandei essa cutucada" aqui — diferente dos estágios 1/2/3
+        // (followup_estagio_enviado), o curto não tinha nada registrando que já
+        // tinha disparado pra este silêncio. O cron roda a cada 5min, e como o
+        // token [SEM_RESPOSTA] (quando a IA decide não mandar nada) não grava
+        // Mensagem nenhuma, "última mensagem é do lead" continuava verdadeiro
+        // em TODO ciclo dentro da janela de 10-90min — até 16 chamadas de IA
+        // pro mesmo silêncio, cada uma gerando uma cutucada nova (antes do
+        // [SEM_RESPOSTA]) ou só queimando crédito à toa (depois). Corrigido
+        // comparando `followup_curto_enviado_em` contra o horário da última
+        // mensagem: só dispara se nunca disparou pra esta leva, ou se o lead
+        // mandou mensagem nova depois do último disparo — reseta sozinho sem
+        // precisar mexer em nenhum webhook.
         $curtos = DB::table('tickets_atendimento as t')
             ->join(DB::raw('(
                 SELECT m1.ticket_id, m1.enviado_em as ultima_em, m1.remetente as ultimo_remetente
@@ -44,6 +58,10 @@ class FollowupConversas extends Command
             ->where('t.status', 'aberto')
             ->where('ultima.ultimo_remetente', 'lead')
             ->whereBetween('ultima.ultima_em', [now()->subMinutes(90), now()->subMinutes(10)])
+            ->where(function ($q) {
+                $q->whereNull('t.followup_curto_enviado_em')
+                    ->orWhereColumn('t.followup_curto_enviado_em', '<', 'ultima.ultima_em');
+            })
             ->select('t.id', 't.tenant_id')
             ->get();
 
@@ -74,6 +92,11 @@ class FollowupConversas extends Command
             if (! $dry) {
                 try {
                     $sdr->responder($ticket, gatilho: 'vacuo_10m');
+                    // Marca ANTES de checar se enviou de verdade — o custo que
+                    // queremos evitar é a chamada repetida à IA, não só o envio
+                    // (o [SEM_RESPOSTA] já evita o envio, mas sozinho não evita
+                    // a chamada se repetir a cada 5min).
+                    $ticket->update(['followup_curto_enviado_em' => now()]);
                     $enviados++;
                 } catch (\Exception $e) {
                     Log::warning('FollowupConversas: erro no curto', ['ticket_id' => $row->id, 'erro' => $e->getMessage()]);
