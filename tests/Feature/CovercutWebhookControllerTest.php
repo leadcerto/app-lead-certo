@@ -511,12 +511,14 @@ class CovercutWebhookControllerTest extends TestCase
     }
 
     /**
-     * Achado real 2026-08-14: um evento de status de entrega (`event: "status"`)
-     * chegando aqui seria descartado silenciosamente, sem nenhum log — se a
-     * Covercut já manda esse evento (ou vier a mandar), nunca teríamos evidência.
-     * Loga em warning (nível capturado em produção) até confirmarmos o formato
-     * real e implementarmos o tratamento — mesmo padrão já usado no
-     * UazapiWebhookController pro `EventType` desconhecido (commit 31e2667).
+     * Achado real 2026-08-14, resolvido em 02/10: `event: "status"` chegava
+     * aqui e era só logado em warning, sem tratamento real — ver
+     * CovercutWebhookStatusNumeroInvalidoTest.php pro processamento de verdade
+     * (número inválido, código 131026). Este teste cobre só o que sobrou do
+     * caso original: um evento GENUINAMENTE desconhecido (nem "message", nem
+     * "echo", nem "status") continua caindo no catch-all e sendo logado —
+     * mesmo padrão já usado no UazapiWebhookController pro `EventType`
+     * desconhecido (commit 31e2667).
      */
     public function test_evento_desconhecido_e_logado_em_warning_sem_quebrar(): void
     {
@@ -529,8 +531,7 @@ class CovercutWebhookControllerTest extends TestCase
         ]);
 
         $payload = [
-            'event' => 'status', 'from_number_id' => '950147584848138',
-            'status' => ['id' => 'wamid.abc123', 'status' => 'failed', 'recipient' => '5521988887777'],
+            'event' => 'algum_evento_novo_que_nunca_vimos', 'from_number_id' => '950147584848138',
         ];
 
         $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
@@ -538,9 +539,36 @@ class CovercutWebhookControllerTest extends TestCase
         Log::shouldHaveReceived('warning')
             ->withArgs(fn ($message, $context) => str_contains($message, 'evento não tratado')
                 && $context['canal_id'] === $canal->id
-                && $context['event'] === 'status'
+                && $context['event'] === 'algum_evento_novo_que_nunca_vimos'
                 && $context['payload'] === $payload)
             ->once();
+    }
+
+    /**
+     * Companheiro do teste acima: um evento de status "comum" (sent/delivered/
+     * read, ou failed por outro motivo que não número inválido) agora é
+     * tratado de verdade — não deve gerar warning nenhum, seria ruído puro
+     * (confirmado em produção: ~400-700 desses por dia, bem mais que os raros
+     * casos de número inválido que realmente importam acompanhar).
+     */
+    public function test_evento_status_comum_nao_gera_warning_de_evento_nao_tratado(): void
+    {
+        Log::spy();
+
+        $tenant = Tenant::factory()->create();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $payload = [
+            'event' => 'status', 'from_number_id' => '950147584848138',
+            'status' => ['id' => 'wamid.abc123', 'status' => 'delivered', 'recipient' => '5521988887777'],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        Log::shouldNotHaveReceived('warning');
     }
 
     /**

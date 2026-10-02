@@ -37,7 +37,7 @@ class Contato extends Model
         // Extra
         'observacoes',
         // Controle
-        'origem', 'opt_out', 'bloqueado', 'tipo_contato',
+        'origem', 'opt_out', 'bloqueado', 'tipo_contato', 'whatsapp_invalido_em',
         // Classificação
         'tipo_pessoa', 'status_validacao',
         // Lead Certo
@@ -78,11 +78,12 @@ class Contato extends Model
     protected function casts(): array
     {
         return [
-            'opt_out'             => 'boolean',
-            'bloqueado'           => 'boolean',
-            'aniversario'         => 'date',
-            'tags'                => 'array',
-            'nome_revisado_ia_em' => 'datetime',
+            'opt_out'              => 'boolean',
+            'bloqueado'            => 'boolean',
+            'aniversario'          => 'date',
+            'tags'                 => 'array',
+            'nome_revisado_ia_em'  => 'datetime',
+            'whatsapp_invalido_em' => 'datetime',
         ];
     }
 

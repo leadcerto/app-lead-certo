@@ -54,6 +54,19 @@ class FormularioLeadJob implements ShouldQueue
             return;
         }
 
+        // Achado real 02/10 (Leonardo): número já confirmado sem WhatsApp (fato
+        // permanente sobre o número, ver CovercutWebhookController::
+        // processarStatusEntrega()) — não faz sentido tentar mandar mensagem de
+        // novo nem deixar o ticket aberto poluindo o Kanban.
+        if ($ticket->contato->whatsapp_invalido_em) {
+            $ticket->update($ticket->dadosParaEncerrar([
+                'tag_desfecho' => 'numero_invalido',
+                'encerrado_em' => now(),
+            ]));
+            $envio->update(['processado' => true]);
+            return;
+        }
+
         if ($formulario->double_optin) {
             // Double opt-in: envia confirmação antes de disparar o bot
             $canal->servico()->enviarTexto(
