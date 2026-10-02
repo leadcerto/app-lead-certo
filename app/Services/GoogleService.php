@@ -25,6 +25,10 @@ class GoogleService
         'https://www.googleapis.com/auth/calendar',
         'https://mail.google.com/',
         'https://www.googleapis.com/auth/business.manage',
+        // Search Console — achado 02/10 (Leonardo): leitura dos dados de SEO
+        // (cliques, impressões, indexação) direto na conversa com a IA, ver
+        // leadcerto/_docs/mcp-google-search-console-projeto.md.
+        'https://www.googleapis.com/auth/webmasters.readonly',
     ];
 
     private string $clientId;
