@@ -95,6 +95,68 @@ class UazapiWebhookColunaDinamicaTest extends TestCase
     }
 
     /**
+     * Achado da revisão final do plano de kanban_id (08/10/2026): tanto
+     * chaveDeEntrada() quanto proximaChave() aqui resolviam tenant-wide — com
+     * 2 Kanbans, uma coluna do funil com ordem menor podia "furar a fila" e
+     * virar erroneamente a entrada/próxima coluna de um ticket do Kanban geral.
+     */
+    public function test_lead_responde_avanca_dentro_do_proprio_kanban_mesmo_com_2_kanbans(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+
+        $tenant = Tenant::factory()->create([
+            'uazapi_webhook_token'  => 'token-teste-2kanbans',
+            'uazapi_instance_token' => 'instance-token-2kanbans',
+        ]);
+        $this->criarCanal($tenant, 'token-teste-2kanbans', 'instance-token-2kanbans');
+        $kanbanGeral = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+        KanbanColuna::where('kanban_id', $kanbanGeral->id)->where('papel', PapelColunaKanban::Entrada)
+            ->update(['chave' => 'novo_contato']);
+
+        // Reescala a ordem do Kanban geral (×10, preservando a ordem relativa)
+        // pra abrir espaço pra colunas do funil "furarem a fila" tenant-wide.
+        foreach (KanbanColuna::where('kanban_id', $kanbanGeral->id)->get() as $coluna) {
+            $coluna->update(['ordem' => $coluna->ordem * 10]);
+        }
+
+        $kanbanFunil = Kanban::create([
+            'tenant_id' => $tenant->id, 'tipo' => 'funil_teste', 'nome' => 'Funil Teste', 'ordem' => 1,
+        ]);
+        KanbanColuna::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanbanFunil->id,
+            'chave' => 'funil_entrada', 'label' => 'Entrada do Funil',
+            'papel' => PapelColunaKanban::Entrada, 'ordem' => 5,
+        ]);
+        KanbanColuna::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanbanFunil->id,
+            'chave' => 'funil_seguinte', 'label' => 'Seguinte do Funil',
+            'papel' => PapelColunaKanban::EmAndamento, 'ordem' => 15,
+        ]);
+
+        $contato = \App\Models\Contato::factory()->create(['telefone' => '5511988885555']);
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanbanGeral->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'novo_contato', 'agente_responsavel' => 'bot', 'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+        \App\Models\Mensagem::create([
+            'tenant_id' => $tenant->id, 'ticket_id' => $ticket->id,
+            'remetente' => 'bot', 'tipo' => 'texto', 'conteudo' => 'Oi! Me conta o que precisa.', 'enviado_em' => now(),
+        ]);
+
+        $this->postJson('/api/webhook/uazapi/token-teste-2kanbans', [
+            'EventType' => 'messages',
+            'message'   => [
+                'fromMe'  => false,
+                'isGroup' => false,
+                'chatid'  => '5511988885555@s.whatsapp.net',
+                'text'    => 'Preciso de um orçamento de mudança',
+            ],
+        ]);
+
+        $this->assertSame('em_atendimento', $ticket->fresh()->coluna_kanban);
+    }
+
+    /**
      * Achado real 2026-09-21 (ticket #4827, Carlos): mesmo gap encontrado nos
      * outros caminhos automáticos — o lead respondendo à sequência de entrada
      * e avançando pra próxima coluna também nunca disparava a Sequência de

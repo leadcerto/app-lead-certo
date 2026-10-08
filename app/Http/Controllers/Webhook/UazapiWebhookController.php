@@ -437,13 +437,13 @@ class UazapiWebhookController extends Controller
             app(SequenciaService::class)->iniciarParaTicket($ticket);
         } else {
             // Lead respondeu em ticket existente
-            $chaveEntrada = \App\Models\KanbanColuna::chaveDeEntrada($tenant->id);
+            $chaveEntrada = \App\Models\KanbanColuna::chaveDeEntrada($tenant->id, $ticket->kanban_id);
             if ($ticket->coluna_kanban === $chaveEntrada && $conteudo) {
                 // Lead respondeu à sequência → avança para a próxima coluna e dispara SDR
                 $temMensagemBot = Mensagem::where('ticket_id', $ticket->id)
                     ->where('remetente', 'bot')
                     ->exists();
-                $proximaColuna = \App\Models\KanbanColuna::proximaChave($tenant->id, $chaveEntrada);
+                $proximaColuna = \App\Models\KanbanColuna::proximaChave($tenant->id, $chaveEntrada, $ticket->kanban_id);
                 if ($temMensagemBot && $proximaColuna) {
                     $ticket->update(['coluna_kanban' => $proximaColuna]);
                     $ticket->coluna_kanban = $proximaColuna;
