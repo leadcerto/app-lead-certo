@@ -146,11 +146,14 @@ class SincronizarContatosWhatsApp extends Command
                 ->exists();
 
             if (! $temTicket && $novoContato) {
+                $kanban = \App\Models\Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->first();
+
                 TicketAtendimento::withoutGlobalScopes()->create([
                     'tenant_id'          => $tenant->id,
+                    'kanban_id'          => $kanban?->id,
                     'contato_id'         => $contato->id,
                     'whatsapp_canal_id'  => $canal->id,
-                    'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
+                    'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id, $kanban?->id),
                     'agente_responsavel' => 'humano',
                     'sdr_persona_id'     => $personaId,
                     'status'             => 'aberto',

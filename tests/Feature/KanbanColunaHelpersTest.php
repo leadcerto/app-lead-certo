@@ -174,6 +174,31 @@ class KanbanColunaHelpersTest extends TestCase
         $this->assertSame('lead_novo', KanbanColuna::chaveDeEntrada($tenant->id));
     }
 
+    /**
+     * Review Focus (spec 2026-10-07, achado crítico): com 2 Kanbans, chamar
+     * chaveDeEntrada() SEM o parâmetro novo é ambíguo, mas não pode virar
+     * exceção/erro 500 — nenhum chamador existente foi atualizado pra passar
+     * kanban_id, então precisa continuar "funcionando" (resultado ambíguo e
+     * documentado, não uma quebra).
+     */
+    public function test_chave_de_entrada_sem_kanban_id_nao_lanca_excecao_com_2_kanbans(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $this->criarColunasPadrao($tenant);
+
+        $kanbanFunil = Kanban::create([
+            'tenant_id' => $tenant->id, 'tipo' => 'funil_teste', 'nome' => 'Funil Teste', 'ordem' => 1,
+        ]);
+        KanbanColuna::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanbanFunil->id,
+            'chave' => 'funil_novo_lead', 'label' => 'Novo Lead', 'papel' => PapelColunaKanban::Entrada, 'ordem' => 1,
+        ]);
+
+        $resultado = KanbanColuna::chaveDeEntrada($tenant->id);
+
+        $this->assertContains($resultado, ['lead_novo', 'funil_novo_lead']);
+    }
+
     public function test_chave_de_entrada_com_kanban_id_de_outro_tenant_nao_vaza_coluna(): void
     {
         $tenantA = Tenant::factory()->create();

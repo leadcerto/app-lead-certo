@@ -54,4 +54,29 @@ class SincronizarContatosWhatsAppSoUazapiTest extends TestCase
 
         Http::assertSent(fn ($request) => str_contains($request->url(), '/contacts'));
     }
+
+    public function test_ticket_criado_pro_contato_novo_grava_kanban_id(): void
+    {
+        Http::fake([
+            '*/contacts' => Http::response([
+                ['jid' => '5511977775555@s.whatsapp.net', 'contact_name' => 'Beltrano', 'contact_FirstName' => 'Beltrano'],
+            ], 200),
+        ]);
+
+        $tenant = Tenant::factory()->create();
+        $kanban = \App\Models\Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tipo'      => 'nao_oficial',
+            'provider'  => 'uazapi',
+            'status'    => 'connected',
+            'config'    => ['instance_token' => 'tok'],
+        ]);
+
+        $this->artisan('contatos:sincronizar-whatsapp')->assertExitCode(0);
+
+        $ticket = \App\Models\TicketAtendimento::withoutGlobalScopes()->where('tenant_id', $tenant->id)->first();
+        $this->assertNotNull($ticket);
+        $this->assertSame($kanban->id, $ticket->kanban_id);
+    }
 }

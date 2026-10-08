@@ -158,6 +158,8 @@ class MetaWebhookController extends Controller
             ->first();
 
         if (! $contato) {
+            // BUG conhecido (achado 08/10/2026, ver leadcerto/_docs/PENDENCIAS.md): falta
+            // 'telefone', que é NOT NULL no schema — quebra com erro 500 pra remetente novo.
             $contato = Contato::create([
                 'nome'        => 'Lead ' . ucfirst($plataforma),
                 'observacoes' => "meta_user_id:{$senderId} | plataforma:{$plataforma}",
@@ -184,7 +186,7 @@ class MetaWebhookController extends Controller
                 'tenant_id'     => $tenantId,
                 'kanban_id'     => $kanban?->id,
                 'contato_id'    => $contato->id,
-                'coluna_kanban' => $kanban ? \App\Models\KanbanColuna::chaveDeEntrada($tenantId, $kanban->id) : 'novo_lead',
+                'coluna_kanban' => \App\Models\KanbanColuna::chaveDeEntrada($tenantId, $kanban?->id),
                 'status'        => 'aberto',
                 'aberto_em'     => now(),
                 'origem'        => $origemTicket,

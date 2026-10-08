@@ -143,6 +143,9 @@ class ProcessarCommentToDmJob implements ShouldQueue
             ->first();
 
         if (! $contato) {
+            // BUG conhecido (achado 08/10/2026, ver leadcerto/_docs/PENDENCIAS.md): falta
+            // 'telefone', que é NOT NULL no schema — quebra com erro 500 pra remetente novo,
+            // DEPOIS de já ter mandado a resposta pública e o Direct (ver bug abaixo também).
             $contato = Contato::create([
                 'nome'        => $nomeFinal,
                 'observacoes' => "meta_user_id:{$this->fromId} | plataforma:{$this->plataforma} | @{$this->fromUsername}",
@@ -170,7 +173,7 @@ class ProcessarCommentToDmJob implements ShouldQueue
                 'tenant_id'     => $tenantId,
                 'kanban_id'     => $kanban?->id,
                 'contato_id'    => $contato->id,
-                'coluna_kanban' => $kanban ? \App\Models\KanbanColuna::chaveDeEntrada($tenantId, $kanban->id) : 'novo_lead',
+                'coluna_kanban' => \App\Models\KanbanColuna::chaveDeEntrada($tenantId, $kanban?->id),
                 'status'        => 'aberto',
                 'aberto_em'     => now(),
                 'origem'        => $origemTicket,
@@ -178,6 +181,9 @@ class ProcessarCommentToDmJob implements ShouldQueue
         }
 
         // Registra a mensagem enviada no histórico
+        // BUG conhecido (achado 08/10/2026, ver leadcerto/_docs/PENDENCIAS.md): 'sistema' não
+        // é um valor aceito pelo enum de `remetente` (só lead/bot/humano) — quebra sempre que
+        // esse trecho roda de verdade, depois do ticket já criado e do Direct já enviado.
         if ($enviouDirect && $ticket) {
             Mensagem::create([
                 'tenant_id' => $tenantId,

@@ -30,14 +30,21 @@ class TicketAtendimentoKanbanIdTest extends TestCase
         $this->assertTrue($ticket->kanban->is($kanban));
     }
 
-    public function test_backfill_preenche_kanban_id_dos_tickets_ja_existentes(): void
+    public function test_migracao_real_preenche_kanban_id_dos_tickets_ja_existentes(): void
     {
-        $tenant = Tenant::factory()->create();
-        $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+        // Dropa a coluna (o RefreshDatabase já rodou a migration real na suíte toda) pra
+        // simular o estado "antes da migration" e poder chamar a migration de verdade de
+        // novo — não uma cópia da lógica dela. Isso cobre a Review Focus 3 (backfill
+        // completo) e 4 (tenant sem Kanban 'vendas' não quebra a migration inteira).
+        \Illuminate\Support\Facades\Schema::table('tickets_atendimento', function ($table) {
+            $table->dropConstrainedForeignId('kanban_id');
+        });
 
-        // Simula um ticket criado ANTES da migration existir, inserindo direto sem kanban_id.
-        $id = \Illuminate\Support\Facades\DB::table('tickets_atendimento')->insertGetId([
-            'tenant_id'     => $tenant->id,
+        $tenantComVendas = Tenant::factory()->create();
+        $kanban = Kanban::where('tenant_id', $tenantComVendas->id)->where('tipo', 'vendas')->firstOrFail();
+
+        $idComVendas = \Illuminate\Support\Facades\DB::table('tickets_atendimento')->insertGetId([
+            'tenant_id'     => $tenantComVendas->id,
             'contato_id'    => \App\Models\Contato::factory()->create()->id,
             'coluna_kanban' => 'lead_novo',
             'status'        => 'aberto',
@@ -46,15 +53,24 @@ class TicketAtendimentoKanbanIdTest extends TestCase
             'updated_at'    => now(),
         ]);
 
-        // Roda o backfill da migration manualmente (mesma lógica que ela usa, via query
-        // builder — não SQL cru, pra funcionar igual no SQLite dos testes e no MySQL de produção).
-        Kanban::where('tipo', 'vendas')->get()->each(function (Kanban $k) {
-            \Illuminate\Support\Facades\DB::table('tickets_atendimento')
-                ->where('tenant_id', $k->tenant_id)
-                ->whereNull('kanban_id')
-                ->update(['kanban_id' => $k->id]);
-        });
+        // Tenant num estado inconsistente (nunca deveria existir, mas é defensivo): sem
+        // NENHUM Kanban tipo='vendas' — a migration não pode quebrar por causa dele.
+        $tenantSemVendas = Tenant::factory()->create();
+        Kanban::where('tenant_id', $tenantSemVendas->id)->where('tipo', 'vendas')->delete();
+        $idSemVendas = \Illuminate\Support\Facades\DB::table('tickets_atendimento')->insertGetId([
+            'tenant_id'     => $tenantSemVendas->id,
+            'contato_id'    => \App\Models\Contato::factory()->create()->id,
+            'coluna_kanban' => 'lead_novo',
+            'status'        => 'aberto',
+            'aberto_em'     => now(),
+            'created_at'    => now(),
+            'updated_at'    => now(),
+        ]);
 
-        $this->assertSame($kanban->id, TicketAtendimento::find($id)->kanban_id);
+        // Roda a migration real de novo (o próprio arquivo, não uma cópia da lógica).
+        (require base_path('database/migrations/2026_10_08_000001_add_kanban_id_to_tickets_atendimento_table.php'))->up();
+
+        $this->assertSame($kanban->id, TicketAtendimento::find($idComVendas)->kanban_id);
+        $this->assertNull(TicketAtendimento::find($idSemVendas)->kanban_id);
     }
 }
