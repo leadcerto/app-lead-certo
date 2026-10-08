@@ -346,7 +346,7 @@ class TicketAtendimento extends Model
      */
     public function dadosParaEncerrar(array $extra = [], ?string $colunaDestino = null): array
     {
-        $colunaDestino ??= \App\Models\KanbanColuna::primeiraChaveComPapel($this->tenant_id, \App\Enums\PapelColunaKanban::Encerramento)
+        $colunaDestino ??= \App\Models\KanbanColuna::primeiraChaveComPapel($this->tenant_id, \App\Enums\PapelColunaKanban::Encerramento, $this->kanban_id)
             ?? 'encerrado';
 
         $updates = array_merge($extra, [
@@ -354,7 +354,7 @@ class TicketAtendimento extends Model
             'status'        => 'encerrado',
         ]);
 
-        if (\App\Models\KanbanColuna::papelDe($this->tenant_id, $this->coluna_kanban) !== \App\Enums\PapelColunaKanban::Encerramento) {
+        if (\App\Models\KanbanColuna::papelDe($this->tenant_id, $this->coluna_kanban, $this->kanban_id) !== \App\Enums\PapelColunaKanban::Encerramento) {
             $updates['coluna_antes_encerrar'] = $this->coluna_kanban;
         }
 

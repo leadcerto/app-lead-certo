@@ -134,12 +134,12 @@ class AvancoAutomaticoKanbanService
             }
         }
 
-        $proxima = KanbanColuna::proximaChave($ticket->tenant_id, $ticket->coluna_kanban);
+        $proxima = KanbanColuna::proximaChave($ticket->tenant_id, $ticket->coluna_kanban, $ticket->kanban_id);
         if (! $proxima) {
             return false;
         }
 
-        $papel = KanbanColuna::papelDe($ticket->tenant_id, $proxima);
+        $papel = KanbanColuna::papelDe($ticket->tenant_id, $proxima, $ticket->kanban_id);
         if (in_array($papel, [PapelColunaKanban::Encerramento, PapelColunaKanban::TransferenciaHumana], true)) {
             return false;
         }

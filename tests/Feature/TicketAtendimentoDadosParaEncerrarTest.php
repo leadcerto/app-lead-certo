@@ -49,4 +49,35 @@ class TicketAtendimentoDadosParaEncerrarTest extends TestCase
 
         $this->assertSame('perdido', $dados['coluna_kanban']);
     }
+
+    /**
+     * Achado da revisão final do plano de kanban_id (08/10/2026): com 2 Kanbans,
+     * resolver a coluna de Encerramento só por tenant_id é ambíguo — um ticket do
+     * Kanban geral podia ser "encerrado" na coluna de Encerramento do Kanban do
+     * funil. Agora que o ticket sabe seu próprio kanban_id, a resolução deve usar
+     * APENAS as colunas do Kanban a que o ticket pertence.
+     */
+    public function test_dados_para_encerrar_usa_a_coluna_do_proprio_kanban_do_ticket_com_2_kanbans(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $kanbanGeral = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+
+        $kanbanFunil = Kanban::create([
+            'tenant_id' => $tenant->id, 'tipo' => 'funil_teste', 'nome' => 'Funil Teste', 'ordem' => 1,
+        ]);
+        KanbanColuna::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanbanFunil->id,
+            'chave' => 'funil_encerrado', 'label' => 'Encerrado', 'papel' => PapelColunaKanban::Encerramento, 'ordem' => 1,
+        ]);
+
+        $contato = Contato::factory()->create();
+        $ticket = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanbanGeral->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot', 'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $dados = $ticket->dadosParaEncerrar();
+
+        $this->assertSame('encerrado', $dados['coluna_kanban']);
+    }
 }

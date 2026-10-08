@@ -69,6 +69,51 @@ class AvancoAutomaticoKanbanServiceTest extends TestCase
     }
 
     /**
+     * Achado da revisão final do plano de kanban_id (08/10/2026): proximaChave()
+     * ordena as colunas de TODOS os Kanbans do tenant juntas por `ordem` — uma
+     * coluna do Kanban do funil com `ordem` menor que a próxima coluna real do
+     * Kanban geral "furava a fila" e virava o destino do avanço automático.
+     */
+    public function test_avanco_automatico_nao_pula_pro_kanban_do_funil_com_ordem_menor(): void
+    {
+        $tenant  = Tenant::factory()->create();
+        $contato = Contato::factory()->create();
+        $kanbanGeral = \App\Models\Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+
+        // Reescala a ordem das colunas do Kanban geral (×10, preservando a ordem
+        // relativa entre elas) pra abrir espaço pra uma coluna do funil entrar
+        // "no meio" tenant-wide sem bagunçar a ordem DENTRO do Kanban geral —
+        // exatamente o cenário que "fura a fila" sem o fix (a coluna do funil,
+        // com ordem 25, fica entre em_atendimento=20 e aguardando_orcamento=30
+        // quando as colunas de TODOS os Kanbans são ordenadas juntas).
+        foreach (\App\Models\KanbanColuna::where('kanban_id', $kanbanGeral->id)->get() as $coluna) {
+            $coluna->update(['ordem' => $coluna->ordem * 10]);
+        }
+
+        $kanbanFunil = \App\Models\Kanban::create([
+            'tenant_id' => $tenant->id, 'tipo' => 'funil_teste', 'nome' => 'Funil Teste', 'ordem' => 1,
+        ]);
+        \App\Models\KanbanColuna::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanbanFunil->id,
+            'chave' => 'funil_intermediaria', 'label' => 'Intermediária',
+            'papel' => PapelColunaKanban::EmAndamento, 'ordem' => 25,
+        ]);
+
+        $ticket = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanbanGeral->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+        $obj1 = $this->criarObjetivo($ticket, 'Endereço de origem');
+        $obj2 = $this->criarObjetivo($ticket, 'Lista de itens');
+        $ticket->update(['objetivos_cumpridos' => [$obj1->id]]);
+
+        app(AvancoAutomaticoKanbanService::class)->marcarObjetivos($ticket, [$obj2->id]);
+
+        $this->assertSame('aguardando_orcamento', $ticket->fresh()->coluna_kanban);
+    }
+
+    /**
      * Achado real 2026-09-21 (ticket #4827, Carlos): a Sequência de
      * Mensagens/Automação configurada na coluna de destino só disparava no
      * avanço manual (KanbanController) — o avanço automático por checklist
