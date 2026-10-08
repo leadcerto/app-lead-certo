@@ -140,4 +140,54 @@ class SdrResponderServiceTokenDinamicoTest extends TestCase
         // disparava pra uma coluna de Encerramento renomeada, deixando o ticket 'aberto'.
         $this->assertSame('encerrado', $ticket->status);
     }
+
+    /**
+     * Achado da revisão final do plano de kanban_id (08/10/2026): o loop de
+     * detecção de token escaneava TODAS as colunas do tenant, inclusive de
+     * outros Kanbans — um token coincidindo com o nome de uma coluna do
+     * Kanban do funil podia mover um ticket do Kanban geral pra lá.
+     */
+    public function test_token_de_coluna_de_outro_kanban_nao_move_o_ticket(): void
+    {
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+
+        $tenant = Tenant::factory()->create(['uazapi_instance_token' => 'tok']);
+        $kanbanGeral = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+
+        $kanbanFunil = Kanban::create([
+            'tenant_id' => $tenant->id, 'tipo' => 'funil_teste', 'nome' => 'Funil Teste', 'ordem' => 1,
+        ]);
+        KanbanColuna::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanbanFunil->id,
+            'chave' => 'funil_especial', 'label' => 'Especial do Funil',
+            'papel' => PapelColunaKanban::EmAndamento, 'ordem' => 1,
+        ]);
+
+        $persona = SdrPersona::create([
+            'tenant_id' => $tenant->id, 'nome_interno' => 'padrao', 'nome_display' => 'Joao',
+            'system_prompt' => 'Você é um atendente.', 'ativo' => true, 'is_default' => true, 'tier' => 'simples',
+        ]);
+        $contato = Contato::factory()->create(['telefone' => '5511988887777']);
+        $ticket = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanbanGeral->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot', 'status' => 'aberto',
+            'aberto_em' => now(), 'sdr_persona_id' => $persona->id, 'etapa_ia' => 'etapa_1',
+        ]);
+        // Precisa de uma mensagem do lead — sem isso, a rede de segurança anti-
+        // alucinação já bloqueia qualquer movimento de avanço, mascarando o bug
+        // de kanban_id que este teste quer provar.
+        \App\Models\Mensagem::create([
+            'tenant_id' => $tenant->id, 'ticket_id' => $ticket->id,
+            'remetente' => 'lead', 'tipo' => 'texto', 'conteudo' => 'Oi',
+        ]);
+
+        $this->mock(OpenRouterService::class, function ($mock) {
+            $mock->shouldReceive('chat')->once()->andReturn('Combinado! [FUNIL_ESPECIAL]');
+        });
+
+        app(SdrResponderService::class)->responder($ticket);
+
+        $ticket->refresh();
+        $this->assertSame('em_atendimento', $ticket->coluna_kanban);
+    }
 }

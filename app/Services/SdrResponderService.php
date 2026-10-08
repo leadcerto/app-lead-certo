@@ -275,7 +275,7 @@ class SdrResponderService
         // a partir das colunas reais do tenant — se o franqueado renomear uma coluna,
         // o token muda junto (a tela de config mostra o token atual como dica).
         $tenantId = $ticket->tenant_id;
-        $chaves   = \App\Models\KanbanColuna::chavesDoTenant($tenantId);
+        $chaves   = \App\Models\KanbanColuna::chavesDoTenant($tenantId, $ticket->kanban_id);
 
         // Normaliza alucinações comuns do modelo (caso use uma variação em vez do token exato)
         $resposta = str_replace(
@@ -304,7 +304,7 @@ class SdrResponderService
                     ->where('coluna_kanban', $chave)
                     ->value('etapa_ia_ao_mover') ?? 'etapa_1';
 
-                $papel   = \App\Models\KanbanColuna::papelDe($tenantId, $chave);
+                $papel   = \App\Models\KanbanColuna::papelDe($tenantId, $chave, $ticket->kanban_id);
 
                 // Regra Anti-Alucinação: se o lead NUNCA respondeu neste ticket, a IA
                 // não pode decidir mover a coluna para frente (ex: [EM_ATENDIMENTO]).
