@@ -147,4 +147,43 @@ class KanbanColunaHelpersTest extends TestCase
         $nova->delete();
         $this->assertCount(4, KanbanColuna::chavesDoTenant($tenant->id));
     }
+
+    public function test_chave_de_entrada_com_kanban_id_resolve_corretamente_entre_2_kanbans(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $kanbanGeral = $this->criarColunasPadrao($tenant); // chave 'lead_novo', papel Entrada
+
+        $kanbanFunil = Kanban::create([
+            'tenant_id' => $tenant->id, 'tipo' => 'funil_teste', 'nome' => 'Funil Teste', 'ordem' => 1,
+        ]);
+        KanbanColuna::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanbanFunil->id,
+            'chave' => 'funil_novo_lead', 'label' => 'Novo Lead', 'papel' => PapelColunaKanban::Entrada, 'ordem' => 1,
+        ]);
+
+        $this->assertSame('lead_novo', KanbanColuna::chaveDeEntrada($tenant->id, $kanbanGeral->id));
+        $this->assertSame('funil_novo_lead', KanbanColuna::chaveDeEntrada($tenant->id, $kanbanFunil->id));
+    }
+
+    public function test_chave_de_entrada_sem_kanban_id_continua_funcionando_com_1_kanban(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $this->criarColunasPadrao($tenant);
+
+        // Comportamento de hoje, sem o parâmetro novo — não pode quebrar.
+        $this->assertSame('lead_novo', KanbanColuna::chaveDeEntrada($tenant->id));
+    }
+
+    public function test_chave_de_entrada_com_kanban_id_de_outro_tenant_nao_vaza_coluna(): void
+    {
+        $tenantA = Tenant::factory()->create();
+        $tenantB = Tenant::factory()->create();
+        $this->criarColunasPadrao($tenantA);
+        $kanbanDoB = $this->criarColunasPadrao($tenantB);
+
+        // Pede a coluna de entrada do tenant A, mas passa o kanban_id do tenant B —
+        // o filtro por tenant_id tem que prevalecer, não pode achar a coluna do B.
+        $this->expectException(\RuntimeException::class);
+        KanbanColuna::chaveDeEntrada($tenantA->id, $kanbanDoB->id);
+    }
 }
