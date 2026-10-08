@@ -218,6 +218,7 @@ class TicketAtendimento extends Model
 
     protected $fillable = [
         'tenant_id',
+        'kanban_id',
         'contato_id',
         'whatsapp_canal_id',
         'janela_expira_em',
@@ -286,6 +287,11 @@ class TicketAtendimento extends Model
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function kanban(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Kanban::class);
     }
 
     public function contato(): BelongsTo

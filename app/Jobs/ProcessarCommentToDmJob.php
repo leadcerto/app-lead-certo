@@ -164,10 +164,13 @@ class ProcessarCommentToDmJob implements ShouldQueue
             ->first();
 
         if (! $ticket) {
+            $kanban = \App\Models\Kanban::where('tenant_id', $tenantId)->where('tipo', 'vendas')->first();
+
             $ticket = TicketAtendimento::create([
                 'tenant_id'     => $tenantId,
+                'kanban_id'     => $kanban?->id,
                 'contato_id'    => $contato->id,
-                'coluna_kanban' => 'novo_lead',
+                'coluna_kanban' => $kanban ? \App\Models\KanbanColuna::chaveDeEntrada($tenantId, $kanban->id) : 'novo_lead',
                 'status'        => 'aberto',
                 'aberto_em'     => now(),
                 'origem'        => $origemTicket,

@@ -277,12 +277,14 @@ class CovercutWebhookController extends Controller
                         return [null, false];
                     } else {
                         $persona = $tenant->personas()->where('is_default', true)->where('ativo', true)->first();
+                        $kanban = \App\Models\Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->first();
 
                         $ticket = TicketAtendimento::create([
                             'tenant_id'             => $tenant->id,
+                            'kanban_id'             => $kanban?->id,
                             'contato_id'            => $contato->id,
                             'whatsapp_canal_id'     => $canal->id,
-                            'coluna_kanban'         => KanbanColuna::chaveDeEntrada($tenant->id),
+                            'coluna_kanban'         => KanbanColuna::chaveDeEntrada($tenant->id, $kanban?->id),
                             'agente_responsavel'    => 'bot',
                             'sdr_persona_id'        => $persona?->id,
                             'status'                => 'aberto',

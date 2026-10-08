@@ -60,32 +60,36 @@ class KanbanColuna extends Model
      *
      * @return Collection<int, self>
      */
-    protected static function doTenant(int $tenantId): Collection
+    protected static function doTenant(int $tenantId, ?int $kanbanId = null): Collection
     {
-        return static::withoutGlobalScope(TenantScope::class)
-            ->where('tenant_id', $tenantId)
-            ->orderBy('ordem')
-            ->get();
+        $query = static::withoutGlobalScope(TenantScope::class)
+            ->where('tenant_id', $tenantId);
+
+        if ($kanbanId !== null) {
+            $query->where('kanban_id', $kanbanId);
+        }
+
+        return $query->orderBy('ordem')->get();
     }
 
-    public static function chavesDoTenant(int $tenantId): array
+    public static function chavesDoTenant(int $tenantId, ?int $kanbanId = null): array
     {
-        return static::doTenant($tenantId)->pluck('chave')->all();
+        return static::doTenant($tenantId, $kanbanId)->pluck('chave')->all();
     }
 
-    public static function papelDe(int $tenantId, string $chave): ?PapelColunaKanban
+    public static function papelDe(int $tenantId, string $chave, ?int $kanbanId = null): ?PapelColunaKanban
     {
-        return static::doTenant($tenantId)->firstWhere('chave', $chave)?->papel;
+        return static::doTenant($tenantId, $kanbanId)->firstWhere('chave', $chave)?->papel;
     }
 
-    public static function ordemDe(int $tenantId, string $chave): ?int
+    public static function ordemDe(int $tenantId, string $chave, ?int $kanbanId = null): ?int
     {
-        return static::doTenant($tenantId)->firstWhere('chave', $chave)?->ordem;
+        return static::doTenant($tenantId, $kanbanId)->firstWhere('chave', $chave)?->ordem;
     }
 
-    public static function chaveDeEntrada(int $tenantId): string
+    public static function chaveDeEntrada(int $tenantId, ?int $kanbanId = null): string
     {
-        $coluna = static::doTenant($tenantId)->first(fn (self $c) => $c->papel === PapelColunaKanban::Entrada);
+        $coluna = static::doTenant($tenantId, $kanbanId)->first(fn (self $c) => $c->papel === PapelColunaKanban::Entrada);
 
         if (! $coluna) {
             throw new \RuntimeException("Tenant {$tenantId} não tem nenhuma coluna de papel Entrada configurada.");
@@ -94,23 +98,23 @@ class KanbanColuna extends Model
         return $coluna->chave;
     }
 
-    public static function chavesComPapel(int $tenantId, PapelColunaKanban $papel): array
+    public static function chavesComPapel(int $tenantId, PapelColunaKanban $papel, ?int $kanbanId = null): array
     {
-        return static::doTenant($tenantId)
+        return static::doTenant($tenantId, $kanbanId)
             ->filter(fn (self $c) => $c->papel === $papel)
             ->pluck('chave')
             ->values()
             ->all();
     }
 
-    public static function primeiraChaveComPapel(int $tenantId, PapelColunaKanban $papel): ?string
+    public static function primeiraChaveComPapel(int $tenantId, PapelColunaKanban $papel, ?int $kanbanId = null): ?string
     {
-        return static::doTenant($tenantId)->first(fn (self $c) => $c->papel === $papel)?->chave;
+        return static::doTenant($tenantId, $kanbanId)->first(fn (self $c) => $c->papel === $papel)?->chave;
     }
 
-    public static function proximaChave(int $tenantId, string $chaveAtual): ?string
+    public static function proximaChave(int $tenantId, string $chaveAtual, ?int $kanbanId = null): ?string
     {
-        $colunas = static::doTenant($tenantId)->values();
+        $colunas = static::doTenant($tenantId, $kanbanId)->values();
         $indice = $colunas->search(fn (self $c) => $c->chave === $chaveAtual);
 
         if ($indice === false) {
@@ -120,9 +124,9 @@ class KanbanColuna extends Model
         return $colunas->get($indice + 1)?->chave;
     }
 
-    public static function descricaoParaIa(int $tenantId, string $chave): string
+    public static function descricaoParaIa(int $tenantId, string $chave, ?int $kanbanId = null): string
     {
-        $coluna = static::doTenant($tenantId)->firstWhere('chave', $chave);
+        $coluna = static::doTenant($tenantId, $kanbanId)->firstWhere('chave', $chave);
 
         return $coluna ? "{$coluna->label} — {$coluna->papel->descricao()}" : $chave;
     }

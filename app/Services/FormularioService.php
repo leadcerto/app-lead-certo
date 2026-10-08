@@ -149,9 +149,10 @@ class FormularioService
 
         $ticket = TicketAtendimento::create([
             'tenant_id'          => $tenant->id,
+            'kanban_id'          => $kanban?->id,
             'contato_id'         => $contato->id,
             'whatsapp_canal_id'  => $canal?->id,
-            'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id),
+            'coluna_kanban'      => \App\Models\KanbanColuna::chaveDeEntrada($tenant->id, $kanban?->id),
             'agente_responsavel' => 'bot',
             'etapa_ia'           => 'etapa_1',
             'origem'             => 'formulario',
