@@ -616,4 +616,29 @@ class CovercutWebhookControllerTest extends TestCase
 
         $this->assertNull(Mensagem::withoutGlobalScopes()->where('provider_message_id', 'wamid.echosemticket')->first());
     }
+
+    public function test_mensagem_nova_cria_ticket_com_kanban_id(): void
+    {
+        Bus::fake();
+
+        $tenant = Tenant::factory()->create();
+        $kanban = \App\Models\Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+        WhatsappCanal::factory()->create([
+            'tenant_id' => $tenant->id, 'tipo' => 'oficial', 'provider' => 'covercut',
+            'config' => ['phone_number_id' => '950147584848138', 'webhook_secret' => 'segredo-abc'],
+        ]);
+
+        $payload = [
+            'event' => 'message', 'direction' => 'inbound', 'from_number_id' => '950147584848138',
+            'contact' => ['wa_id' => '5521988886666', 'name' => 'Lead Teste'],
+            'message' => ['id' => 'wamid.kanbanidteste', 'type' => 'text', 'text' => 'Oi'],
+        ];
+
+        $this->postComAssinatura($payload, 'segredo-abc')->assertOk();
+
+        $contato = Contato::where('telefone', '5521988886666')->firstOrFail();
+        $ticket  = TicketAtendimento::withoutGlobalScopes()->where('contato_id', $contato->id)->firstOrFail();
+
+        $this->assertSame($kanban->id, $ticket->kanban_id);
+    }
 }
