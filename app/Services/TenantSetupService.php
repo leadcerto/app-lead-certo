@@ -55,7 +55,7 @@ class TenantSetupService
 
         $kanban = \App\Models\Kanban::firstOrCreate(
             ['tenant_id' => $tenant->id, 'tipo' => 'vendas'],
-            ['nome' => 'Vendas', 'ordem' => 0]
+            ['nome' => 'Vendas', 'nome_curto' => 'Atendimentos', 'ordem' => 0]
         );
 
         $colunasCriadas = [];

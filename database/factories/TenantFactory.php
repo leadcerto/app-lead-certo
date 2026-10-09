@@ -27,7 +27,8 @@ class TenantFactory extends Factory
     {
         return $this->afterCreating(function (Tenant $tenant) {
             $kanban = Kanban::create([
-                'tenant_id' => $tenant->id, 'tipo' => 'vendas', 'nome' => 'Vendas', 'ordem' => 0,
+                'tenant_id' => $tenant->id, 'tipo' => 'vendas', 'nome' => 'Vendas',
+                'nome_curto' => 'Atendimentos', 'ordem' => 0,
             ]);
 
             foreach (self::colunasPadrao() as $def) {
