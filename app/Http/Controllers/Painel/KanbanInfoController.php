@@ -17,6 +17,7 @@ class KanbanInfoController extends Controller
 
         return response()->json([
             'nome'                    => $kanban?->nome ?? '',
+            'nome_curto'              => $kanban?->nome_curto ?? '',
             'conhecimento_geral'      => $kanban?->conhecimento_geral ?? '',
             'forcar_engajamento_meta' => $kanban?->forcar_engajamento_meta ?? true,
         ]);
@@ -32,6 +33,7 @@ class KanbanInfoController extends Controller
         // virou 8 cards independentes).
         $validated = $request->validate([
             'nome'                    => 'sometimes|required|string|max:100',
+            'nome_curto'              => 'sometimes|required|string|max:20|regex:/^\S+$/',
             'conhecimento_geral'      => 'nullable|string|max:20000',
             'forcar_engajamento_meta' => 'sometimes|boolean',
         ]);
@@ -40,6 +42,9 @@ class KanbanInfoController extends Controller
 
         if (array_key_exists('nome', $validated)) {
             $kanban->nome = $validated['nome'];
+        }
+        if (array_key_exists('nome_curto', $validated)) {
+            $kanban->nome_curto = $validated['nome_curto'];
         }
         if ($request->has('conhecimento_geral')) {
             $kanban->conhecimento_geral = $validated['conhecimento_geral'] ?? null;
