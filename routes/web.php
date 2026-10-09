@@ -289,10 +289,11 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('kanban.variaveis')
         ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing');
 
-    // Relatórios semanais do Gestor do Kanban — dono e admin
+    // Relatórios semanais do Gestor do Kanban — visualização aberta a todo mundo com
+    // acesso a Kanban (não tem nada editável nesta tela — só leitura pra todo mundo já)
     Route::get('/kanban/relatorios', [GestorKanbanRelatorioController::class, 'view'])
         ->name('kanban.relatorios')
-        ->middleware('role:admin,dono');
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing');
 
     // Motivos de encerramento — visualização aberta a todo mundo com acesso a Kanban,
     // edição restrita a admin
@@ -430,10 +431,18 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::post('/kanban/ticket/{ticket}/auditoria/concluir',  [KanbanController::class, 'concluirRevisaoDev']);
     });
 
-    // Relatórios semanais do Gestor do Kanban — dono e admin apenas
-    Route::middleware('role:admin,dono')->group(function () {
+    // Relatórios semanais do Gestor do Kanban — leitura aberta a todo mundo com acesso
+    // a Kanban
+    Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing')->group(function () {
         Route::get('/kanban/relatorios', [GestorKanbanRelatorioController::class, 'index']);
         Route::get('/kanban/relatorios/{id}', [GestorKanbanRelatorioController::class, 'show']);
+    });
+
+    // Fila de auditoria interna (tickets marcados pra revisão de dev) — feature
+    // diferente de Relatórios do Gestor, só compartilhava o grupo de rota por
+    // coincidência; continua restrita a admin/dono (achado 09/10/2026, não faz
+    // parte do escopo desta etapa).
+    Route::middleware('role:admin,dono')->group(function () {
         Route::get('/kanban/auditorias', [GestorKanbanRelatorioController::class, 'auditorias']);
     });
 
