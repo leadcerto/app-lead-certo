@@ -277,15 +277,17 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('campanhas')
         ->middleware('role:admin,dono,diretor,growth_manager');
 
-    // Configurações do Kanban — dono e admin
+    // Configurações do Kanban — visualização aberta a todo mundo com acesso a Kanban,
+    // edição restrita a admin (time Lead Certo)
     Route::get('/kanban/config', fn () => view('kanban.config'))
         ->name('kanban.config')
-        ->middleware('role:admin,dono');
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing');
 
-    // Variáveis de mensagem — dono e admin
+    // Variáveis de mensagem — visualização aberta a todo mundo com acesso a Kanban,
+    // edição restrita a admin
     Route::get('/kanban/variaveis', fn () => view('kanban.variaveis'))
         ->name('kanban.variaveis')
-        ->middleware('role:admin,dono');
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing');
 
     // Relatórios semanais do Gestor do Kanban — dono e admin
     Route::get('/kanban/relatorios', [GestorKanbanRelatorioController::class, 'view'])
@@ -582,41 +584,36 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::delete('/contexto-ia/tabela-precos',  [ContextoIaController::class, 'removerTabela']);
     });
 
-    // Configuração por coluna do Kanban (IA contexto) — dono e admin
-    Route::middleware('role:admin,dono')->group(function () {
+    // Configuração do Kanban (colunas, canais, info, objetivos, variáveis, criar Kanban) —
+    // visualização aberta a todo mundo com acesso a Kanban, edição restrita a admin (time
+    // Lead Certo) — achado 09/10/2026: dono deixou de poder editar essas áreas.
+    Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing')->group(function () {
         Route::get('/kanban/coluna-config/{coluna}', [KanbanColunaConfigController::class, 'show']);
-        Route::put('/kanban/coluna-config/{coluna}', [KanbanColunaConfigController::class, 'update']);
-        // Base de conhecimento geral do Kanban
         Route::get('/kanban/info', [\App\Http\Controllers\Painel\KanbanInfoController::class, 'show']);
+        Route::get('/kanban/colunas',             [KanbanColunaController::class, 'index']);
+        Route::get('/kanban/papeis',              [KanbanColunaController::class, 'papeis']);
+        Route::get('/kanban/canais', [\App\Http\Controllers\Painel\KanbanCanalController::class, 'index']);
+        Route::get('/kanban/variaveis',           [SpintaxVariavelController::class, 'index']);
+        Route::get('/kanban/variaveis/listar',    [SpintaxVariavelController::class, 'listar']);
+    });
+
+    Route::middleware('role:admin')->group(function () {
+        Route::put('/kanban/coluna-config/{coluna}', [KanbanColunaConfigController::class, 'update']);
         Route::put('/kanban/info', [\App\Http\Controllers\Painel\KanbanInfoController::class, 'update']);
-        // Checklist de objetivos por coluna
         Route::post('/kanban/coluna-objetivos/{coluna}',              [\App\Http\Controllers\Painel\KanbanColunaObjetivoController::class, 'store']);
         Route::put('/kanban/coluna-objetivos/{coluna}/{id}',          [\App\Http\Controllers\Painel\KanbanColunaObjetivoController::class, 'update']);
         Route::delete('/kanban/coluna-objetivos/{coluna}/{id}',       [\App\Http\Controllers\Painel\KanbanColunaObjetivoController::class, 'destroy']);
         Route::post('/kanban/coluna-objetivos/{coluna}/reordenar',    [\App\Http\Controllers\Painel\KanbanColunaObjetivoController::class, 'reordenar']);
-        // Criação de um novo Kanban (multi-Kanban por tenant)
         Route::post('/kanban', [KanbanController::class, 'criar']);
-        // CRUD self-service de colunas do Kanban
-        Route::get('/kanban/colunas',             [KanbanColunaController::class, 'index']);
-        Route::get('/kanban/papeis',              [KanbanColunaController::class, 'papeis']);
         Route::post('/kanban/colunas',            [KanbanColunaController::class, 'store']);
         Route::put('/kanban/colunas/{coluna}',    [KanbanColunaController::class, 'update']);
         Route::delete('/kanban/colunas/{coluna}', [KanbanColunaController::class, 'destroy']);
         Route::post('/kanban/colunas/reordenar',  [KanbanColunaController::class, 'reordenar']);
-        // Vínculo de canais WhatsApp por Kanban
-        Route::get('/kanban/canais', [\App\Http\Controllers\Painel\KanbanCanalController::class, 'index']);
         Route::put('/kanban/canais', [\App\Http\Controllers\Painel\KanbanCanalController::class, 'update']);
-        // Variáveis de sorteio (spintax)
-        Route::get('/kanban/variaveis',           [SpintaxVariavelController::class, 'index']);
-        Route::get('/kanban/variaveis/listar',    [SpintaxVariavelController::class, 'listar']);
         Route::post('/kanban/variaveis',          [SpintaxVariavelController::class, 'store']);
         Route::put('/kanban/variaveis/{nome}',    [SpintaxVariavelController::class, 'update']);
         Route::delete('/kanban/variaveis/{nome}', [SpintaxVariavelController::class, 'destroy']);
     });
-
-    // Variáveis: listagem rápida para card (roles amplos, só leitura)
-    Route::get('/kanban/variaveis/listar', [SpintaxVariavelController::class, 'listar'])
-        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing');
 
     // Formulários — dono e admin
     Route::middleware('role:admin,dono')->group(function () {

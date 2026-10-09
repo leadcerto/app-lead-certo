@@ -16,7 +16,7 @@ class KanbanCanalControllerKanbanIdTest extends TestCase
     public function test_vincula_canal_no_kanban_informado_por_kanban_id(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
         $kanbanFunil = Kanban::create([
             'tenant_id' => $tenant->id, 'tipo' => 'funil_teste', 'nome' => 'Funil Teste',
             'nome_curto' => 'Funil', 'ordem' => 1,

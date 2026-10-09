@@ -19,6 +19,11 @@ class KanbanColunaObjetivoControllerTest extends TestCase
         return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
     }
 
+    private function criarUsuarioAdmin(Tenant $tenant): User
+    {
+        return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
+    }
+
     private function colunaRealEmAtendimento(Tenant $tenant): KanbanColuna
     {
         $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
@@ -44,7 +49,7 @@ class KanbanColunaObjetivoControllerTest extends TestCase
     public function test_cria_objetivo_com_ordem_incremental(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
         $colunaReal = $this->colunaRealEmAtendimento($tenant);
         KanbanColunaObjetivo::create(['tenant_id' => $tenant->id, 'coluna_kanban' => 'em_atendimento', 'kanban_coluna_id' => $colunaReal->id, 'texto' => 'Existente', 'ordem' => 1, 'ativo' => true]);
 
@@ -61,7 +66,7 @@ class KanbanColunaObjetivoControllerTest extends TestCase
     public function test_atualiza_texto_e_ativo(): void
     {
         $tenant   = Tenant::factory()->create();
-        $user     = $this->criarUsuarioDono($tenant);
+        $user     = $this->criarUsuarioAdmin($tenant);
         $objetivo = KanbanColunaObjetivo::create(['tenant_id' => $tenant->id, 'coluna_kanban' => 'em_atendimento', 'texto' => 'Antigo', 'ordem' => 1, 'ativo' => true]);
 
         $response = $this->actingAs($user)->putJson("/api/painel/kanban/coluna-objetivos/em_atendimento/{$objetivo->id}", [
@@ -76,7 +81,7 @@ class KanbanColunaObjetivoControllerTest extends TestCase
     public function test_exclui_e_reordena_os_restantes(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
         $obj1 = KanbanColunaObjetivo::create(['tenant_id' => $tenant->id, 'coluna_kanban' => 'em_atendimento', 'texto' => 'Um', 'ordem' => 1, 'ativo' => true]);
         $obj2 = KanbanColunaObjetivo::create(['tenant_id' => $tenant->id, 'coluna_kanban' => 'em_atendimento', 'texto' => 'Dois', 'ordem' => 2, 'ativo' => true]);
         $obj3 = KanbanColunaObjetivo::create(['tenant_id' => $tenant->id, 'coluna_kanban' => 'em_atendimento', 'texto' => 'Três', 'ordem' => 3, 'ativo' => true]);
@@ -92,7 +97,7 @@ class KanbanColunaObjetivoControllerTest extends TestCase
     public function test_reordenar_aplica_nova_ordem(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
         $obj1 = KanbanColunaObjetivo::create(['tenant_id' => $tenant->id, 'coluna_kanban' => 'em_atendimento', 'texto' => 'Um', 'ordem' => 1, 'ativo' => true]);
         $obj2 = KanbanColunaObjetivo::create(['tenant_id' => $tenant->id, 'coluna_kanban' => 'em_atendimento', 'texto' => 'Dois', 'ordem' => 2, 'ativo' => true]);
 
@@ -109,7 +114,7 @@ class KanbanColunaObjetivoControllerTest extends TestCase
     {
         $tenantA = Tenant::factory()->create();
         $tenantB = Tenant::factory()->create();
-        $userA   = $this->criarUsuarioDono($tenantA);
+        $userA   = $this->criarUsuarioAdmin($tenantA);
         $objetivoB = KanbanColunaObjetivo::create(['tenant_id' => $tenantB->id, 'coluna_kanban' => 'em_atendimento', 'texto' => 'De outro tenant', 'ordem' => 1, 'ativo' => true]);
 
         $response = $this->actingAs($userA)->putJson("/api/painel/kanban/coluna-objetivos/em_atendimento/{$objetivoB->id}", [

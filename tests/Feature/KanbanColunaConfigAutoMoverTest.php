@@ -17,10 +17,15 @@ class KanbanColunaConfigAutoMoverTest extends TestCase
         return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
     }
 
+    private function criarUsuarioAdmin(Tenant $tenant): User
+    {
+        return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
+    }
+
     public function test_persiste_configuracao_de_auto_mover(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/aguardando_orcamento', [
             'auto_mover_ativo'          => true,
@@ -41,7 +46,7 @@ class KanbanColunaConfigAutoMoverTest extends TestCase
     public function test_rejeita_coluna_destino_invalida(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/aguardando_orcamento', [
             'auto_mover_coluna_destino' => 'coluna_inexistente',
@@ -69,7 +74,7 @@ class KanbanColunaConfigAutoMoverTest extends TestCase
     public function test_auto_mover_coluna_destino_aceita_coluna_customizada(): void
     {
         $tenant = \App\Models\Tenant::factory()->create();
-        $user   = \App\Models\User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user   = \App\Models\User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
         $kanban = \App\Models\Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
         \App\Models\KanbanColuna::create([
             'tenant_id' => $tenant->id, 'kanban_id' => $kanban->id,
@@ -89,7 +94,7 @@ class KanbanColunaConfigAutoMoverTest extends TestCase
     public function test_persiste_configuracao_de_timeout_de_reassuncao(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/em_atendimento', [
             'timeout_reassuncao_ativo'    => true,
@@ -120,7 +125,7 @@ class KanbanColunaConfigAutoMoverTest extends TestCase
     public function test_persiste_mensagem_de_espera_de_orientacao(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/em_atendimento', [
             'aguardando_orientacao_mensagem' => 'Só um instante, já te retorno!',

@@ -18,7 +18,7 @@ class KanbanColunaObjetivoControllerKanbanIdTest extends TestCase
     public function test_objetivos_sao_isolados_por_kanban_mesmo_com_chave_repetida(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
         $kanbanFunil = Kanban::create([
             'tenant_id' => $tenant->id, 'tipo' => 'funil_teste', 'nome' => 'Funil',
             'nome_curto' => 'Funil', 'ordem' => 1,

@@ -68,7 +68,7 @@ class KanbanColunaControllerKanbanIdTest extends TestCase
     public function test_store_cria_coluna_no_kanban_informado(): void
     {
         $tenant      = Tenant::factory()->create();
-        $user        = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user        = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
         $kanbanFunil = $this->criarKanbanFunil($tenant);
 
         $response = $this->actingAs($user)->postJson('/api/painel/kanban/colunas?kanban_id=' . $kanbanFunil->id, [
@@ -95,7 +95,7 @@ class KanbanColunaControllerKanbanIdTest extends TestCase
     {
         $tenant = Tenant::factory()->create();
         app(\App\Services\TenantSetupService::class)->configurar($tenant);
-        $user = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
 
         $kanbanFunil = $this->actingAs($user)->postJson('/api/painel/kanban', [
             'nome' => 'Funil', 'nome_curto' => 'Funil',
