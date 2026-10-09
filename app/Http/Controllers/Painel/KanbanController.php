@@ -33,6 +33,34 @@ class KanbanController extends Controller
         return view('kanban.index');
     }
 
+    public function criar(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'nome'       => 'required|string|max:100',
+            'nome_curto' => 'required|string|max:20|regex:/^\S+$/',
+        ]);
+
+        $tenantId = $request->user()->tenant_id;
+        $tipoBase = Str::slug($validated['nome_curto'], '_');
+        $tipo     = $tipoBase;
+        $sufixo   = 1;
+        while (\App\Models\Kanban::where('tenant_id', $tenantId)->where('tipo', $tipo)->exists()) {
+            $tipo = "{$tipoBase}_" . (++$sufixo);
+        }
+
+        $proximaOrdem = (\App\Models\Kanban::where('tenant_id', $tenantId)->max('ordem') ?? 0) + 1;
+
+        $kanban = \App\Models\Kanban::create([
+            'tenant_id'  => $tenantId,
+            'tipo'       => $tipo,
+            'nome'       => $validated['nome'],
+            'nome_curto' => $validated['nome_curto'],
+            'ordem'      => $proximaOrdem,
+        ]);
+
+        return response()->json($kanban, 201);
+    }
+
     /**
      * Cada coluna do Kanban rola verticalmente dentro da própria altura fixa,
      * então não precisa de "carregar mais" — só um teto de segurança pra não
