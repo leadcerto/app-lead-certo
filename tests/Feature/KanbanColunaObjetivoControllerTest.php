@@ -2,6 +2,8 @@
 // tests/Feature/KanbanColunaObjetivoControllerTest.php
 namespace Tests\Feature;
 
+use App\Models\Kanban;
+use App\Models\KanbanColuna;
 use App\Models\KanbanColunaObjetivo;
 use App\Models\Tenant;
 use App\Models\User;
@@ -17,12 +19,20 @@ class KanbanColunaObjetivoControllerTest extends TestCase
         return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
     }
 
+    private function colunaRealEmAtendimento(Tenant $tenant): KanbanColuna
+    {
+        $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+
+        return KanbanColuna::where('kanban_id', $kanban->id)->where('chave', 'em_atendimento')->firstOrFail();
+    }
+
     public function test_lista_objetivos_da_coluna_em_ordem(): void
     {
         $tenant = Tenant::factory()->create();
         $user   = $this->criarUsuarioDono($tenant);
-        KanbanColunaObjetivo::create(['tenant_id' => $tenant->id, 'coluna_kanban' => 'em_atendimento', 'texto' => 'Segundo', 'ordem' => 2, 'ativo' => true]);
-        KanbanColunaObjetivo::create(['tenant_id' => $tenant->id, 'coluna_kanban' => 'em_atendimento', 'texto' => 'Primeiro', 'ordem' => 1, 'ativo' => true]);
+        $colunaReal = $this->colunaRealEmAtendimento($tenant);
+        KanbanColunaObjetivo::create(['tenant_id' => $tenant->id, 'coluna_kanban' => 'em_atendimento', 'kanban_coluna_id' => $colunaReal->id, 'texto' => 'Segundo', 'ordem' => 2, 'ativo' => true]);
+        KanbanColunaObjetivo::create(['tenant_id' => $tenant->id, 'coluna_kanban' => 'em_atendimento', 'kanban_coluna_id' => $colunaReal->id, 'texto' => 'Primeiro', 'ordem' => 1, 'ativo' => true]);
 
         $response = $this->actingAs($user)->getJson('/api/painel/kanban/coluna-objetivos/em_atendimento');
 
@@ -35,7 +45,8 @@ class KanbanColunaObjetivoControllerTest extends TestCase
     {
         $tenant = Tenant::factory()->create();
         $user   = $this->criarUsuarioDono($tenant);
-        KanbanColunaObjetivo::create(['tenant_id' => $tenant->id, 'coluna_kanban' => 'em_atendimento', 'texto' => 'Existente', 'ordem' => 1, 'ativo' => true]);
+        $colunaReal = $this->colunaRealEmAtendimento($tenant);
+        KanbanColunaObjetivo::create(['tenant_id' => $tenant->id, 'coluna_kanban' => 'em_atendimento', 'kanban_coluna_id' => $colunaReal->id, 'texto' => 'Existente', 'ordem' => 1, 'ativo' => true]);
 
         $response = $this->actingAs($user)->postJson('/api/painel/kanban/coluna-objetivos/em_atendimento', [
             'texto' => 'Novo objetivo',
