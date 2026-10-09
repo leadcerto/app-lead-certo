@@ -492,13 +492,13 @@ class KanbanController extends Controller
     public function mover(Request $request, int $ticket): JsonResponse
     {
         $tenantId = $request->user()->tenant_id;
-        $colunas  = \App\Models\KanbanColuna::chavesDoTenant($tenantId);
+        $model    = TicketAtendimento::findOrFail($ticket);
+        $colunas  = \App\Models\KanbanColuna::chavesDoTenant($tenantId, $model->kanban_id);
 
         $request->validate([
             'coluna' => ['required', 'string', Rule::in($colunas)],
         ]);
 
-        $model        = TicketAtendimento::findOrFail($ticket);
         $colunaAntes  = $model->coluna_kanban;
         $colunaDepois = $request->coluna;
 
@@ -507,8 +507,8 @@ class KanbanController extends Controller
         // Reabre o status se estava encerrado e foi movido manualmente pra fora
         // do Encerrado — sem isso a coluna muda mas o ticket continua com
         // status 'encerrado' por baixo, escondendo a caixa de mensagem inteira.
-        if (KanbanColuna::papelDe($tenantId, $colunaAntes) === PapelColunaKanban::Encerramento
-            && KanbanColuna::papelDe($tenantId, $colunaDepois) !== PapelColunaKanban::Encerramento) {
+        if (KanbanColuna::papelDe($tenantId, $colunaAntes, $model->kanban_id) === PapelColunaKanban::Encerramento
+            && KanbanColuna::papelDe($tenantId, $colunaDepois, $model->kanban_id) !== PapelColunaKanban::Encerramento) {
             $updates['status'] = 'aberto';
         }
 
@@ -711,14 +711,13 @@ class KanbanController extends Controller
 
     public function moverParaOutros(Request $request, int $ticket): JsonResponse
     {
-        $tenantId     = $request->user()->tenant_id;
-        $colunaOutros = \App\Models\KanbanColuna::primeiraChaveComPapel($tenantId, \App\Enums\PapelColunaKanban::TransferenciaHumana);
+        $tenantId = $request->user()->tenant_id;
+        $model    = TicketAtendimento::findOrFail($ticket);
+        $colunaOutros = \App\Models\KanbanColuna::primeiraChaveComPapel($tenantId, \App\Enums\PapelColunaKanban::TransferenciaHumana, $model->kanban_id);
 
         if (! $colunaOutros) {
             return response()->json(['message' => 'Nenhuma coluna de Transferência Humana configurada.'], 422);
         }
-
-        $model = TicketAtendimento::findOrFail($ticket);
 
         // Regra 13 (Bloco 4) — segundo dos dois endpoints de movimentação manual.
         $model->origemMudancaColuna = 'humano';

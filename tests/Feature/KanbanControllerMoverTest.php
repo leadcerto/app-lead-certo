@@ -56,6 +56,42 @@ class KanbanControllerMoverTest extends TestCase
         $this->assertSame('aberto', $ticket->status);
     }
 
+    /**
+     * Achado da revisão final do plano de kanban_id (08/10/2026): a validação
+     * de "coluna de destino válida" usava chavesDoTenant() sem escopo por
+     * Kanban — um ticket do Kanban geral conseguia ser movido pra uma coluna
+     * que só existe no Kanban do funil (e vice-versa), o que não faz sentido
+     * (são boards/processos diferentes).
+     */
+    public function test_nao_deixa_mover_ticket_pra_coluna_de_outro_kanban(): void
+    {
+        $tenant      = Tenant::factory()->create();
+        $kanbanGeral = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+        $kanbanFunil = Kanban::create([
+            'tenant_id' => $tenant->id, 'tipo' => 'funil_teste', 'nome' => 'Funil Teste', 'ordem' => 1,
+        ]);
+        KanbanColuna::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanbanFunil->id,
+            'chave' => 'funil_coluna_exclusiva', 'label' => 'Só do Funil',
+            'papel' => PapelColunaKanban::EmAndamento, 'ordem' => 1,
+        ]);
+
+        $user    = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $contato = Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanbanGeral->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'em_atendimento', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $response = $this->actingAs($user)->postJson("/api/painel/kanban/ticket/{$ticket->id}/mover", [
+            'coluna' => 'funil_coluna_exclusiva',
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertSame('em_atendimento', $ticket->fresh()->coluna_kanban);
+    }
+
     public function test_mover_para_fora_de_encerrado_reabre_o_status_mesmo_com_a_coluna_renomeada(): void
     {
         $tenant  = Tenant::factory()->create();

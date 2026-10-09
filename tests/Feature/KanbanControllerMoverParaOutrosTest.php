@@ -37,6 +37,39 @@ class KanbanControllerMoverParaOutrosTest extends TestCase
         $this->assertSame($user->id, $ticket->vendedor_id);
     }
 
+    /**
+     * Achado da revisão final do plano de kanban_id (08/10/2026):
+     * primeiraChaveComPapel(TransferenciaHumana) resolvia tenant-wide — um
+     * ticket do Kanban geral podia ser movido pra coluna de Transferência
+     * Humana do Kanban do funil, em vez da do próprio Kanban geral.
+     */
+    public function test_move_para_outros_do_proprio_kanban_mesmo_com_2_kanbans(): void
+    {
+        $tenant      = Tenant::factory()->create();
+        $kanbanGeral = \App\Models\Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
+        $kanbanFunil = \App\Models\Kanban::create([
+            'tenant_id' => $tenant->id, 'tipo' => 'funil_teste', 'nome' => 'Funil Teste', 'ordem' => 1,
+        ]);
+        KanbanColuna::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanbanFunil->id,
+            'chave' => 'funil_outros', 'label' => 'Outros do Funil',
+            'papel' => PapelColunaKanban::TransferenciaHumana, 'ordem' => 1,
+        ]);
+
+        $user    = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $contato = Contato::factory()->create();
+        $ticket  = TicketAtendimento::create([
+            'tenant_id' => $tenant->id, 'kanban_id' => $kanbanGeral->id, 'contato_id' => $contato->id,
+            'coluna_kanban' => 'lead_novo', 'agente_responsavel' => 'bot',
+            'status' => 'aberto', 'aberto_em' => now(),
+        ]);
+
+        $response = $this->actingAs($user)->postJson("/api/painel/kanban/ticket/{$ticket->id}/outros");
+
+        $response->assertOk();
+        $this->assertSame('outros', $ticket->fresh()->coluna_kanban);
+    }
+
     public function test_move_para_a_chave_renomeada_quando_a_coluna_de_transferencia_humana_nao_se_chama_outros(): void
     {
         $tenant  = Tenant::factory()->create();
