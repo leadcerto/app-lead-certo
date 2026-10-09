@@ -18,6 +18,7 @@ class KanbanColunaObjetivo extends Model
     protected $fillable = [
         'tenant_id',
         'coluna_kanban',
+        'kanban_coluna_id',
         'texto',
         'ordem',
         'ativo',

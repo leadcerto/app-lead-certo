@@ -3,17 +3,19 @@
 namespace App\Http\Controllers\Painel;
 
 use App\Http\Controllers\Controller;
-use App\Models\Kanban;
+use App\Http\Controllers\Painel\Concerns\ResolveKanbanDoRequest;
 use App\Models\WhatsappCanal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class KanbanCanalController extends Controller
 {
+    use ResolveKanbanDoRequest;
+
     public function index(Request $request): JsonResponse
     {
         $tenantId = $request->user()->tenant_id;
-        $kanban   = Kanban::where('tenant_id', $tenantId)->where('tipo', 'vendas')->firstOrFail();
+        $kanban   = $this->resolverKanban($request);
 
         $vinculadosIds = $kanban->canais()->pluck('whatsapp_canais.id')->all();
 
@@ -46,7 +48,7 @@ class KanbanCanalController extends Controller
         ]);
 
         $tenantId = $request->user()->tenant_id;
-        $kanban   = Kanban::where('tenant_id', $tenantId)->where('tipo', 'vendas')->firstOrFail();
+        $kanban   = $this->resolverKanban($request);
 
         $idsValidos = WhatsappCanal::where('tenant_id', $tenantId)
             ->whereIn('id', $dados['canal_ids'])

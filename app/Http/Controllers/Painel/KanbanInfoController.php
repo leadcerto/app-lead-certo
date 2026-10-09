@@ -3,17 +3,17 @@
 namespace App\Http\Controllers\Painel;
 
 use App\Http\Controllers\Controller;
-use App\Models\Kanban;
+use App\Http\Controllers\Painel\Concerns\ResolveKanbanDoRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class KanbanInfoController extends Controller
 {
+    use ResolveKanbanDoRequest;
+
     public function show(Request $request): JsonResponse
     {
-        $kanban = Kanban::where('tenant_id', $request->user()->tenant_id)
-            ->where('tipo', 'vendas')
-            ->first();
+        $kanban = $this->resolverKanban($request);
 
         return response()->json([
             'nome'                    => $kanban?->nome ?? '',
@@ -36,9 +36,7 @@ class KanbanInfoController extends Controller
             'forcar_engajamento_meta' => 'sometimes|boolean',
         ]);
 
-        $kanban = Kanban::where('tenant_id', $request->user()->tenant_id)
-            ->where('tipo', 'vendas')
-            ->firstOrFail();
+        $kanban = $this->resolverKanban($request);
 
         if (array_key_exists('nome', $validated)) {
             $kanban->nome = $validated['nome'];

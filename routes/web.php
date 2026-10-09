@@ -594,6 +594,8 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::put('/kanban/coluna-objetivos/{coluna}/{id}',          [\App\Http\Controllers\Painel\KanbanColunaObjetivoController::class, 'update']);
         Route::delete('/kanban/coluna-objetivos/{coluna}/{id}',       [\App\Http\Controllers\Painel\KanbanColunaObjetivoController::class, 'destroy']);
         Route::post('/kanban/coluna-objetivos/{coluna}/reordenar',    [\App\Http\Controllers\Painel\KanbanColunaObjetivoController::class, 'reordenar']);
+        // Criação de um novo Kanban (multi-Kanban por tenant)
+        Route::post('/kanban', [KanbanController::class, 'criar']);
         // CRUD self-service de colunas do Kanban
         Route::get('/kanban/colunas',             [KanbanColunaController::class, 'index']);
         Route::get('/kanban/papeis',              [KanbanColunaController::class, 'papeis']);

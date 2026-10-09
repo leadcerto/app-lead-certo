@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Painel;
 
 use App\Enums\PapelColunaKanban;
 use App\Http\Controllers\Controller;
-use App\Models\Kanban;
+use App\Http\Controllers\Painel\Concerns\ResolveKanbanDoRequest;
 use App\Models\KanbanColuna;
 use App\Models\TicketAtendimento;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +14,8 @@ use Illuminate\Validation\Rule;
 
 class KanbanColunaController extends Controller
 {
+    use ResolveKanbanDoRequest;
+
     public function papeis(): JsonResponse
     {
         return response()->json(collect(PapelColunaKanban::cases())->map(fn (PapelColunaKanban $papel) => [
@@ -28,8 +30,9 @@ class KanbanColunaController extends Controller
     public function index(Request $request): JsonResponse
     {
         $tenantId = $request->user()->tenant_id;
+        $kanban   = $this->resolverKanban($request);
 
-        $colunas = KanbanColuna::where('tenant_id', $tenantId)->orderBy('ordem')->get();
+        $colunas = KanbanColuna::where('tenant_id', $tenantId)->where('kanban_id', $kanban->id)->orderBy('ordem')->get();
 
         return response()->json($colunas->map(fn (KanbanColuna $c) => [
             'id'    => $c->id,
@@ -51,17 +54,25 @@ class KanbanColunaController extends Controller
         ]);
 
         $tenantId = $request->user()->tenant_id;
-        $kanban   = Kanban::where('tenant_id', $tenantId)->where('tipo', 'vendas')->firstOrFail();
+        $kanban   = $this->resolverKanban($request);
 
         if ($dados['papel'] === PapelColunaKanban::Entrada->value
             && KanbanColuna::where('kanban_id', $kanban->id)->where('papel', PapelColunaKanban::Entrada->value)->exists()) {
             return response()->json(['message' => 'Já existe uma coluna de Entrada — só pode haver 1 por Kanban.'], 422);
         }
 
+        // Unicidade por TENANT, não só por Kanban — kanban_coluna_configs tem
+        // UNIQUE(tenant_id, coluna_kanban), e os serviços em runtime (SDR,
+        // follow-up, webhooks) ainda leem config/objetivo só por
+        // tenant_id+chave, sem considerar o Kanban. Deixar 2 Kanbans do
+        // mesmo tenant compartilharem uma chave (ex: os dois com "Encerrado")
+        // faria a config/IA de um vazar pro outro, e salvar a config desse
+        // choque dava erro 500 pela constraint. Achado na revisão final de
+        // 09/10/2026.
         $chaveBase = Str::slug($dados['label'], '_');
         $chave     = $chaveBase;
         $sufixo    = 1;
-        while (KanbanColuna::where('kanban_id', $kanban->id)->where('chave', $chave)->exists()) {
+        while (KanbanColuna::where('tenant_id', $tenantId)->where('chave', $chave)->exists()) {
             $chave = "{$chaveBase}_" . (++$sufixo);
         }
 

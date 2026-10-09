@@ -3,16 +3,23 @@
 namespace App\Http\Controllers\Painel;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Painel\Concerns\ResolveKanbanDoRequest;
+use App\Models\KanbanColuna;
 use App\Models\KanbanColunaObjetivo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class KanbanColunaObjetivoController extends Controller
 {
+    use ResolveKanbanDoRequest;
+
     public function index(Request $request, string $coluna): JsonResponse
     {
+        $kanban     = $this->resolverKanban($request);
+        $colunaReal = KanbanColuna::where('kanban_id', $kanban->id)->where('chave', $coluna)->firstOrFail();
+
         $objetivos = KanbanColunaObjetivo::where('tenant_id', $request->user()->tenant_id)
-            ->where('coluna_kanban', $coluna)
+            ->where('kanban_coluna_id', $colunaReal->id)
             ->orderBy('ordem')
             ->get(['id', 'texto', 'ordem', 'ativo']);
 
@@ -23,15 +30,18 @@ class KanbanColunaObjetivoController extends Controller
     {
         $validated = $request->validate(['texto' => 'required|string|max:255']);
 
-        $tenantId = $request->user()->tenant_id;
-        $ordem    = (KanbanColunaObjetivo::where('tenant_id', $tenantId)->where('coluna_kanban', $coluna)->max('ordem') ?? 0) + 1;
+        $tenantId   = $request->user()->tenant_id;
+        $kanban     = $this->resolverKanban($request);
+        $colunaReal = KanbanColuna::where('kanban_id', $kanban->id)->where('chave', $coluna)->firstOrFail();
+        $ordem      = (KanbanColunaObjetivo::where('tenant_id', $tenantId)->where('kanban_coluna_id', $colunaReal->id)->max('ordem') ?? 0) + 1;
 
         $objetivo = KanbanColunaObjetivo::create([
-            'tenant_id'     => $tenantId,
-            'coluna_kanban' => $coluna,
-            'texto'         => $validated['texto'],
-            'ordem'         => $ordem,
-            'ativo'         => true,
+            'tenant_id'        => $tenantId,
+            'coluna_kanban'    => $coluna,
+            'kanban_coluna_id' => $colunaReal->id,
+            'texto'            => $validated['texto'],
+            'ordem'            => $ordem,
+            'ativo'            => true,
         ]);
 
         return response()->json($objetivo, 201);

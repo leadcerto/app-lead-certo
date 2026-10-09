@@ -20,6 +20,7 @@ class Kanban extends Model
         'tenant_id',
         'tipo',
         'nome',
+        'nome_curto',
         'ordem',
         'conhecimento_geral',
         'forcar_engajamento_meta',

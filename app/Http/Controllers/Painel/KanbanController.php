@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Painel;
 
 use App\Enums\PapelColunaKanban;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Painel\Concerns\ResolveKanbanDoRequest;
 use App\Jobs\ConversationQAJob;
 use App\Jobs\GerarResumoTicketJob;
 use App\Models\KanbanColuna;
@@ -25,9 +26,39 @@ use Illuminate\Validation\Rule;
 
 class KanbanController extends Controller
 {
+    use ResolveKanbanDoRequest;
+
     public function view(): View
     {
         return view('kanban.index');
+    }
+
+    public function criar(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'nome'       => 'required|string|max:100',
+            'nome_curto' => 'required|string|max:20|regex:/^\S+$/',
+        ]);
+
+        $tenantId = $request->user()->tenant_id;
+        $tipoBase = Str::slug($validated['nome_curto'], '_');
+        $tipo     = $tipoBase;
+        $sufixo   = 1;
+        while (\App\Models\Kanban::where('tenant_id', $tenantId)->where('tipo', $tipo)->exists()) {
+            $tipo = "{$tipoBase}_" . (++$sufixo);
+        }
+
+        $proximaOrdem = (\App\Models\Kanban::where('tenant_id', $tenantId)->max('ordem') ?? 0) + 1;
+
+        $kanban = \App\Models\Kanban::create([
+            'tenant_id'  => $tenantId,
+            'tipo'       => $tipo,
+            'nome'       => $validated['nome'],
+            'nome_curto' => $validated['nome_curto'],
+            'ordem'      => $proximaOrdem,
+        ]);
+
+        return response()->json($kanban, 201);
     }
 
     /**
@@ -40,7 +71,8 @@ class KanbanController extends Controller
     public function index(Request $request): JsonResponse
     {
         $tenantId = $request->user()->tenant_id;
-        $colunas  = \App\Models\KanbanColuna::chavesDoTenant($tenantId);
+        $kanban   = $this->resolverKanban($request);
+        $colunas  = \App\Models\KanbanColuna::chavesDoTenant($tenantId, $kanban->id);
 
         $todosTickets = collect();
         $totais       = [];
@@ -88,7 +120,7 @@ class KanbanController extends Controller
         ";
 
         foreach ($colunas as $coluna) {
-            $query = TicketAtendimento::where('coluna_kanban', $coluna);
+            $query = TicketAtendimento::where('coluna_kanban', $coluna)->where('kanban_id', $kanban->id);
 
             $totais[$coluna] = (clone $query)->count();
 
@@ -146,6 +178,7 @@ class KanbanController extends Controller
         // de hardcodar a lista fixa — as chaves de $resultado acima continuam
         // como estão hoje, isso só adiciona uma chave nova ao lado delas.
         $resultado['colunas'] = \App\Models\KanbanColuna::query()
+            ->where('kanban_id', $kanban->id)
             ->whereIn('chave', $colunas)
             ->orderBy('ordem')
             ->get(['chave', 'label', 'emoji', 'papel'])

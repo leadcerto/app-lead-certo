@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Painel;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Painel\Concerns\ResolveKanbanDoRequest;
 use App\Models\KanbanColuna;
 use App\Models\KanbanColunaConfig;
 use Illuminate\Http\JsonResponse;
@@ -11,10 +12,15 @@ use Illuminate\Validation\Rule;
 
 class KanbanColunaConfigController extends Controller
 {
+    use ResolveKanbanDoRequest;
+
     public function show(Request $request, string $coluna): JsonResponse
     {
+        $kanban = $this->resolverKanban($request);
+        $colunaReal = KanbanColuna::where('kanban_id', $kanban->id)->where('chave', $coluna)->firstOrFail();
+
         $config = KanbanColunaConfig::where('tenant_id', $request->user()->tenant_id)
-            ->where('coluna_kanban', $coluna)
+            ->where('kanban_coluna_id', $colunaReal->id)
             ->first();
 
         return response()->json([
@@ -47,6 +53,9 @@ class KanbanColunaConfigController extends Controller
 
     public function update(Request $request, string $coluna): JsonResponse
     {
+        $kanban = $this->resolverKanban($request);
+        $colunaReal = KanbanColuna::where('kanban_id', $kanban->id)->where('chave', $coluna)->firstOrFail();
+
         $validated = $request->validate([
             'objetivo'                    => 'nullable|string|max:1000',
             'seq_objetivo'                => 'nullable|string|max:1000',
@@ -62,7 +71,7 @@ class KanbanColunaConfigController extends Controller
             'auto_mover_ativo'            => 'sometimes|boolean',
             'auto_mover_coluna_destino'   => [
                 'sometimes', 'nullable', 'string',
-                Rule::in(KanbanColuna::chavesDoTenant($request->user()->tenant_id)),
+                Rule::in(KanbanColuna::chavesDoTenant($request->user()->tenant_id, $kanban->id)),
             ],
             'auto_mover_segundos'         => 'sometimes|integer|min:60|max:31536000',
             'auto_mover_mensagem'         => 'nullable|string|max:1000',
@@ -85,13 +94,28 @@ class KanbanColunaConfigController extends Controller
             $update['tempo_maximo_permanencia_minutos'] = $validated['tempo_maximo_permanencia_minutos'];
         }
 
-        KanbanColunaConfig::updateOrCreate(
-            [
-                'tenant_id'     => $request->user()->tenant_id,
-                'coluna_kanban' => $coluna,
-            ],
-            $update
-        );
+        $tenantId = $request->user()->tenant_id;
+
+        // Linhas gravadas antes do kanban_coluna_id existir (ou que o backfill não
+        // alcançou) ainda têm esse campo null — tratamos como a mesma linha pela
+        // chave antiga (coluna_kanban) em vez de criar uma duplicata, e já
+        // completamos o kanban_coluna_id nela (auto-cura).
+        $configExistente = KanbanColunaConfig::where('tenant_id', $tenantId)
+            ->where(function ($query) use ($colunaReal, $coluna) {
+                $query->where('kanban_coluna_id', $colunaReal->id)
+                    ->orWhere(function ($query2) use ($coluna) {
+                        $query2->whereNull('kanban_coluna_id')->where('coluna_kanban', $coluna);
+                    });
+            })
+            ->first();
+
+        $dadosFinais = array_merge($update, ['coluna_kanban' => $coluna, 'kanban_coluna_id' => $colunaReal->id]);
+
+        if ($configExistente) {
+            $configExistente->update($dadosFinais);
+        } else {
+            KanbanColunaConfig::create(array_merge($dadosFinais, ['tenant_id' => $tenantId]));
+        }
 
         return response()->json(['ok' => true]);
     }

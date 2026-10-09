@@ -31,6 +31,9 @@
     $tenantId = $user?->tenant_id;
     $eAdmin   = $user?->isAdmin();
 
+    $kanbansDoTenant = $tenantId ? \App\Models\Kanban::where('tenant_id', $tenantId)->orderBy('ordem')->get() : collect();
+    $kanbanIdAtivo   = (int) (request()->query('kanban_id') ?: $kanbansDoTenant->firstWhere('tipo', 'vendas')?->id);
+
     $pendentesCampos = ($tenantId && !$eAdmin)
         ? \App\Models\VinculoContatoTenant::where('tenant_id', $tenantId)->whereNotNull('campos_pendentes_auditoria')->get()
             ->sum(fn ($v) => count($v->campos_pendentes_auditoria ?? []))
@@ -72,12 +75,17 @@
 
         @php
             $menuAtivoPadrao = '';
-            if (
-                request()->routeIs('kanban*')
+            if (request()->routeIs('kanban') || request()->routeIs('kanban.config')) {
+                $menuAtivoPadrao = 'kanban-' . $kanbanIdAtivo;
+            } elseif (
+                request()->routeIs('kanban.variaveis')
+                || request()->routeIs('kanban.motivos-desfecho')
+                || request()->routeIs('kanban.relatorios')
+                || request()->routeIs('kanban.documentacao-botoes')
                 || request()->routeIs('admin.especificacoes*')
                 || request()->routeIs('admin.gestor-kanban')
             ) {
-                $menuAtivoPadrao = 'kanban';
+                $menuAtivoPadrao = 'kanban-geral';
             } elseif (request()->routeIs('contatos.*') || request()->routeIs('auditor*')) {
                 $menuAtivoPadrao = 'contatos';
             } elseif (request()->routeIs('equipe.*') || request()->routeIs('personas') || request()->routeIs('ia-monitor*')) {
@@ -141,45 +149,72 @@
             @if($verKanban)
             @php $verKanbanConfig = in_array($perfil, ['admin', 'dono']); @endphp
             @if($verKanbanConfig)
-            @php
-                $kanbanAtivo = request()->routeIs('kanban*')
-                    || request()->routeIs('admin.especificacoes*')
-                    || request()->routeIs('admin.gestor-kanban');
-            @endphp
+            @foreach ($kanbansDoTenant as $kanbanItem)
+                @php
+                    $menuKeyKanban   = 'kanban-' . $kanbanItem->id;
+                    $kanbanEsteAtivo = $kanbanIdAtivo === $kanbanItem->id
+                        && (request()->routeIs('kanban') || request()->routeIs('kanban.config'));
+                @endphp
+                <div>
+                    <button @click="menuAberto = (menuAberto === '{{ $menuKeyKanban }}' ? '' : '{{ $menuKeyKanban }}')"
+                            class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm w-full transition"
+                            :class="menuAberto === '{{ $menuKeyKanban }}' || {{ $kanbanEsteAtivo ? 'true' : 'false' }} ? 'bg-green-600 text-white font-semibold' : 'text-gray-300 hover:bg-gray-700'">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
+                        </svg>
+                        <span class="flex-1 text-left truncate">{{ $kanbanItem->nome_curto ?: $kanbanItem->nome }}</span>
+                        @if($kanbanEsteAtivo)
+                        <span @click.stop="$dispatch('abrir-novo-kanban')"
+                              title="Criar novo Kanban"
+                              class="flex items-center justify-center w-4 h-4 text-xs font-bold rounded hover:bg-green-700 flex-shrink-0">+</span>
+                        @endif
+                        <svg class="w-3 h-3 transition-transform duration-200 flex-shrink-0" :class="menuAberto === '{{ $menuKeyKanban }}' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div x-show="menuAberto === '{{ $menuKeyKanban }}'" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="ml-6 mt-1 space-y-0.5">
+                        <a href="{{ route('kanban', ['kanban_id' => $kanbanItem->id]) }}"
+                           class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ ($kanbanIdAtivo === $kanbanItem->id && request()->routeIs('kanban') && !request()->routeIs('kanban.*')) ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' }}">
+                            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
+                            </svg>
+                            Atendimentos
+                        </a>
+                        <a href="{{ route('kanban.config', ['kanban_id' => $kanbanItem->id]) }}"
+                           class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ ($kanbanIdAtivo === $kanbanItem->id && request()->routeIs('kanban.config')) ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' }}">
+                            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                            Configurações
+                        </a>
+                    </div>
+                </div>
+            @endforeach
+
+            {{-- Seção Geral — compartilhada entre todos os Kanbans do tenant nesta
+                 fase (Variáveis/Motivos/Relatórios/Documentação/Especificações só
+                 ficam de fato independentes por Kanban numa Fase B futura). --}}
             <div>
-                <button @click="menuAberto = (menuAberto === 'kanban' ? '' : 'kanban')"
+                <button @click="menuAberto = (menuAberto === 'kanban-geral' ? '' : 'kanban-geral')"
                         class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm w-full transition"
-                        :class="menuAberto === 'kanban' || {{ $kanbanAtivo ? 'true' : 'false' }} ? 'bg-green-600 text-white font-semibold' : 'text-gray-300 hover:bg-gray-700'">
+                        :class="menuAberto === 'kanban-geral' ? 'bg-green-600 text-white font-semibold' : 'text-gray-300 hover:bg-gray-700'">
                     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                     </svg>
-                    <span class="flex-1 text-left">Kanban</span>
-                    <svg class="w-3 h-3 transition-transform duration-200 flex-shrink-0" :class="menuAberto === 'kanban' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <span class="flex-1 text-left">Geral</span>
+                    <svg class="w-3 h-3 transition-transform duration-200 flex-shrink-0" :class="menuAberto === 'kanban-geral' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                     </svg>
                 </button>
-                <div x-show="menuAberto === 'kanban'" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="ml-6 mt-1 space-y-0.5">
-                    <a href="{{ route('kanban') }}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('kanban') && !request()->routeIs('kanban.*') ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' }}">
-                        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
-                        </svg>
-                        Atendimentos
-                    </a>
+                <div x-show="menuAberto === 'kanban-geral'" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="ml-6 mt-1 space-y-0.5">
                     <a href="{{ route('kanban.variaveis') }}"
                        class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('kanban.variaveis') ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' }}">
                         <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
                         </svg>
                         Variáveis
-                    </a>
-                    <a href="{{ route('kanban.config') }}"
-                       class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('kanban.config') ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' }}">
-                        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        </svg>
-                        Configurações
                     </a>
                     <a href="{{ route('kanban.motivos-desfecho') }}"
                        class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('kanban.motivos-desfecho') ? 'bg-green-700 text-white font-medium' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' }}">
@@ -584,6 +619,81 @@
             </form>
         </div>
     </aside>
+
+    @if($verKanban && in_array($perfil, ['admin', 'dono']))
+    <div x-data="{
+            open: false,
+            salvando: false,
+            erro: '',
+            nome: '',
+            nomeCurto: '',
+            abrir() { this.open = true; this.erro = ''; this.nome = ''; this.nomeCurto = ''; },
+            fechar() { this.open = false; },
+            async salvar() {
+                this.erro = '';
+                this.salvando = true;
+                try {
+                    const res = await fetch('/api/painel/kanban', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                        },
+                        body: JSON.stringify({ nome: this.nome, nome_curto: this.nomeCurto }),
+                    });
+                    const dados = await res.json();
+                    if (!res.ok) {
+                        this.erro = dados.message || Object.values(dados.errors || {}).flat().join(' ') || 'Não foi possível criar o Kanban.';
+                        this.salvando = false;
+                        return;
+                    }
+                    window.location.href = '{{ route('kanban') }}?kanban_id=' + dados.id;
+                } catch (e) {
+                    this.erro = 'Erro de conexão ao criar o Kanban.';
+                    this.salvando = false;
+                }
+            },
+         }"
+         x-on:abrir-novo-kanban.window="abrir()">
+        <template x-if="open">
+            <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                    <h2 class="font-semibold text-gray-800 mb-4">Novo Kanban</h2>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Nome *</label>
+                            <input type="text" x-model="nome" maxlength="100"
+                                   placeholder="Ex: Funil de Qualificação — Imersão"
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Nome curto (sem espaço, até 20 caracteres) *</label>
+                            <input type="text" x-model="nomeCurto" maxlength="20"
+                                   placeholder="Ex: Imersão"
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                            <p class="text-xs text-gray-400 mt-1">É o nome que aparece na barra lateral.</p>
+                        </div>
+                        <p x-show="erro" x-text="erro" class="text-xs text-red-600"></p>
+                    </div>
+
+                    <div class="flex gap-2 mt-5">
+                        <button @click="fechar()"
+                                class="flex-1 border border-gray-300 text-gray-600 py-2 rounded-lg text-sm hover:bg-gray-50">
+                            Cancelar
+                        </button>
+                        <button @click="salvar()"
+                                :disabled="salvando || !nome.trim() || !nomeCurto.trim()"
+                                class="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white py-2 rounded-lg text-sm transition-colors">
+                            Criar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+    @endif
 
     {{-- Conteúdo principal --}}
     <main class="flex-1 min-w-0 overflow-y-auto flex flex-col">
