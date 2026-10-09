@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Painel;
 
 use App\Enums\PapelColunaKanban;
 use App\Http\Controllers\Controller;
-use App\Models\Kanban;
+use App\Http\Controllers\Painel\Concerns\ResolveKanbanDoRequest;
 use App\Models\KanbanColuna;
 use App\Models\TicketAtendimento;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +14,8 @@ use Illuminate\Validation\Rule;
 
 class KanbanColunaController extends Controller
 {
+    use ResolveKanbanDoRequest;
+
     public function papeis(): JsonResponse
     {
         return response()->json(collect(PapelColunaKanban::cases())->map(fn (PapelColunaKanban $papel) => [
@@ -28,8 +30,9 @@ class KanbanColunaController extends Controller
     public function index(Request $request): JsonResponse
     {
         $tenantId = $request->user()->tenant_id;
+        $kanban   = $this->resolverKanban($request);
 
-        $colunas = KanbanColuna::where('tenant_id', $tenantId)->orderBy('ordem')->get();
+        $colunas = KanbanColuna::where('tenant_id', $tenantId)->where('kanban_id', $kanban->id)->orderBy('ordem')->get();
 
         return response()->json($colunas->map(fn (KanbanColuna $c) => [
             'id'    => $c->id,
@@ -51,7 +54,7 @@ class KanbanColunaController extends Controller
         ]);
 
         $tenantId = $request->user()->tenant_id;
-        $kanban   = Kanban::where('tenant_id', $tenantId)->where('tipo', 'vendas')->firstOrFail();
+        $kanban   = $this->resolverKanban($request);
 
         if ($dados['papel'] === PapelColunaKanban::Entrada->value
             && KanbanColuna::where('kanban_id', $kanban->id)->where('papel', PapelColunaKanban::Entrada->value)->exists()) {
