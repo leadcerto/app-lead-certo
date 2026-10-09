@@ -78,4 +78,48 @@ class KanbanColunaControllerKanbanIdTest extends TestCase
         $response->assertStatus(201);
         $this->assertSame($kanbanFunil->id, KanbanColuna::findOrFail($response->json('id'))->kanban_id);
     }
+
+    /**
+     * Achado da revisão final (09/10/2026): a unicidade de chave em store()
+     * checava só dentro do próprio Kanban (where('kanban_id', ...)) — um
+     * 2º Kanban com uma coluna de nome natural ("Encerrado", "Pagamento")
+     * colidia com a chave já usada pelo Kanban padrão do mesmo tenant.
+     * `kanban_coluna_configs` tem UNIQUE(tenant_id, coluna_kanban), então
+     * salvar a config dessa coluna colidida dava erro 500 — e pra chaves
+     * sem UNIQUE (objetivos), a config/objetivo de um Kanban vazava pra
+     * leitura em runtime do outro (serviços leem por tenant_id+chave, sem
+     * kanban_id). Reproduzido aqui com setup real via TenantSetupService
+     * (não TenantFactory — só esse gera as configs padrão de produção).
+     */
+    public function test_chave_de_coluna_e_unica_por_tenant_mesmo_entre_kanbans_diferentes(): void
+    {
+        $tenant = Tenant::factory()->create();
+        app(\App\Services\TenantSetupService::class)->configurar($tenant);
+        $user = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+
+        $kanbanFunil = $this->actingAs($user)->postJson('/api/painel/kanban', [
+            'nome' => 'Funil', 'nome_curto' => 'Funil',
+        ])->assertStatus(201)->json();
+
+        // "Encerrado" é exatamente o nome de uma coluna padrão do Kanban
+        // geral — o pior caso de colisão de chave.
+        $response = $this->actingAs($user)->postJson('/api/painel/kanban/colunas?kanban_id=' . $kanbanFunil['id'], [
+            'label' => 'Encerrado', 'papel' => 'encerramento',
+        ]);
+        $response->assertStatus(201);
+        $chaveNova = $response->json('chave');
+        $this->assertNotSame('encerrado', $chaveNova);
+
+        // Salvar a config dessa coluna não pode dar 500 (UNIQUE
+        // tenant_id+coluna_kanban colidindo com a config padrão de
+        // 'encerrado' que o TenantSetupService já criou pro Kanban geral).
+        $this->actingAs($user)->putJson("/api/painel/kanban/coluna-config/{$chaveNova}?kanban_id=" . $kanbanFunil['id'], [
+            'objetivo' => 'Objetivo só do funil',
+        ])->assertOk();
+
+        $configGeral = \App\Models\KanbanColunaConfig::where('tenant_id', $tenant->id)
+            ->where('coluna_kanban', 'encerrado')
+            ->first();
+        $this->assertNotSame('Objetivo só do funil', $configGeral?->objetivo);
+    }
 }

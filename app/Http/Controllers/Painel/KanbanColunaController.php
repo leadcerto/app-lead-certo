@@ -61,10 +61,18 @@ class KanbanColunaController extends Controller
             return response()->json(['message' => 'Já existe uma coluna de Entrada — só pode haver 1 por Kanban.'], 422);
         }
 
+        // Unicidade por TENANT, não só por Kanban — kanban_coluna_configs tem
+        // UNIQUE(tenant_id, coluna_kanban), e os serviços em runtime (SDR,
+        // follow-up, webhooks) ainda leem config/objetivo só por
+        // tenant_id+chave, sem considerar o Kanban. Deixar 2 Kanbans do
+        // mesmo tenant compartilharem uma chave (ex: os dois com "Encerrado")
+        // faria a config/IA de um vazar pro outro, e salvar a config desse
+        // choque dava erro 500 pela constraint. Achado na revisão final de
+        // 09/10/2026.
         $chaveBase = Str::slug($dados['label'], '_');
         $chave     = $chaveBase;
         $sufixo    = 1;
-        while (KanbanColuna::where('kanban_id', $kanban->id)->where('chave', $chave)->exists()) {
+        while (KanbanColuna::where('tenant_id', $tenantId)->where('chave', $chave)->exists()) {
             $chave = "{$chaveBase}_" . (++$sufixo);
         }
 
