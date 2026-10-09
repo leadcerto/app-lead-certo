@@ -638,7 +638,7 @@
                         headers: {
                             'Content-Type': 'application/json',
                             'Accept': 'application/json',
-                            'X-CSRF-TOKEN': document.querySelector('meta[name=\"csrf-token\"]').content,
+                            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
                         },
                         body: JSON.stringify({ nome: this.nome, nome_curto: this.nomeCurto }),
                     });

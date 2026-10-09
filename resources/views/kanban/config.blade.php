@@ -6,7 +6,7 @@
 <div class="max-w-4xl mx-auto" x-data="kanbanConfig()" x-init="carregar()">
 
     <div class="flex items-center gap-3 mb-6">
-        <a href="{{ route('kanban') }}"
+        <a href="{{ route('kanban', request()->query('kanban_id') ? ['kanban_id' => request()->query('kanban_id')] : []) }}"
            class="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
