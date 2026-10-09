@@ -294,10 +294,11 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('kanban.relatorios')
         ->middleware('role:admin,dono');
 
-    // Motivos de encerramento — dono e admin
+    // Motivos de encerramento — visualização aberta a todo mundo com acesso a Kanban,
+    // edição restrita a admin
     Route::get('/kanban/motivos-desfecho', [MotivoDesfechoController::class, 'view'])
         ->name('kanban.motivos-desfecho')
-        ->middleware('role:admin,dono');
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing');
 
     // Documentação/estratégia — dono e admin
     Route::get('/kanban/documentacao/botoes', fn () => view('kanban.documentacao-botoes'))
@@ -436,8 +437,9 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::get('/kanban/auditorias', [GestorKanbanRelatorioController::class, 'auditorias']);
     });
 
-    // Gerenciar motivos de encerramento — dono e admin apenas (ver a lista, todo mundo do Kanban pode)
-    Route::middleware('role:admin,dono')->group(function () {
+    // Gerenciar motivos de encerramento — só admin (time Lead Certo); ver a lista, todo
+    // mundo com acesso a Kanban pode (GET já aberto acima)
+    Route::middleware('role:admin')->group(function () {
         Route::post('/kanban/motivos-desfecho', [MotivoDesfechoController::class, 'store']);
         Route::put('/kanban/motivos-desfecho/{id}', [MotivoDesfechoController::class, 'update']);
         Route::delete('/kanban/motivos-desfecho/{id}', [MotivoDesfechoController::class, 'destroy']);

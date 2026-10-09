@@ -31,7 +31,7 @@ class MotivoDesfechoControllerTest extends TestCase
     public function test_dono_cria_um_motivo_novo(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
 
         $response = $this->actingAs($user)->postJson('/api/painel/kanban/motivos-desfecho', [
             'label' => 'Cliente mudou de cidade',
@@ -50,7 +50,7 @@ class MotivoDesfechoControllerTest extends TestCase
     {
         $tenant = Tenant::factory()->create();
         MotivoDesfecho::create(['tenant_id' => $tenant->id, 'chave' => 'preco_alto', 'label' => 'Preço alto', 'ordem' => 1]);
-        $user = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
 
         $response = $this->actingAs($user)->postJson('/api/painel/kanban/motivos-desfecho', [
             'label' => 'Preço alto',
@@ -63,7 +63,7 @@ class MotivoDesfechoControllerTest extends TestCase
     {
         $tenant  = Tenant::factory()->create();
         $motivo  = MotivoDesfecho::create(['tenant_id' => $tenant->id, 'chave' => 'outro', 'label' => 'Outro', 'ordem' => 1]);
-        $user    = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user    = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
 
         $response = $this->actingAs($user)->putJson("/api/painel/kanban/motivos-desfecho/{$motivo->id}", [
             'label'   => 'Não atendemos essa região',
@@ -78,7 +78,7 @@ class MotivoDesfechoControllerTest extends TestCase
     {
         $tenant = Tenant::factory()->create();
         $motivo = MotivoDesfecho::create(['tenant_id' => $tenant->id, 'chave' => 'outro', 'label' => 'Outro', 'ordem' => 1]);
-        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
 
         $response = $this->actingAs($user)->deleteJson("/api/painel/kanban/motivos-desfecho/{$motivo->id}");
 
@@ -91,7 +91,7 @@ class MotivoDesfechoControllerTest extends TestCase
         $tenantA = Tenant::factory()->create();
         $tenantB = Tenant::factory()->create();
         $motivoB = MotivoDesfecho::create(['tenant_id' => $tenantB->id, 'chave' => 'outro', 'label' => 'Outro', 'ordem' => 1]);
-        $user    = User::factory()->create(['tenant_id' => $tenantA->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user    = User::factory()->create(['tenant_id' => $tenantA->id, 'perfil' => 'admin', 'ativo' => true]);
 
         $response = $this->actingAs($user)->putJson("/api/painel/kanban/motivos-desfecho/{$motivoB->id}", [
             'label' => 'Tentativa de invasão',
