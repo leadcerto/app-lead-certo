@@ -45,6 +45,26 @@
                 <span x-show="!nomeKanbanSalvando && nomeKanbanAlterado">Salvar</span>
             </button>
         </div>
+
+        <p class="text-xs text-gray-400 mt-4 mb-1">Apelido de uma palavra — é o que aparece no botão da barra lateral.</p>
+        <div class="flex items-center gap-2">
+            <input
+                type="text"
+                @input="nomeCurto = $event.target.value; nomeCurtoAlterado = true; nomeCurtoSalvo = false"
+                :value="nomeCurto"
+                placeholder="Ex: Vendas"
+                maxlength="20"
+                class="flex-1 text-sm border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-gray-400 bg-gray-50"
+            >
+            <button @click="salvarNomeCurto()"
+                    :disabled="!nomeCurtoAlterado || !nomeCurto.trim()"
+                    class="text-sm bg-gray-700 hover:bg-gray-800 disabled:opacity-40 text-white px-4 py-3 rounded-lg transition-colors whitespace-nowrap">
+                <span x-show="nomeCurtoSalvando">Salvando...</span>
+                <span x-show="!nomeCurtoSalvando && !nomeCurtoAlterado">✓ Salvo</span>
+                <span x-show="!nomeCurtoSalvando && nomeCurtoAlterado">Salvar</span>
+            </button>
+        </div>
+        <p x-show="nomeCurtoErro" x-text="nomeCurtoErro" class="text-xs text-red-600 mt-1"></p>
     </div>
 
     {{-- Gerenciar colunas do Kanban (self-service) --}}
@@ -1663,6 +1683,11 @@ function kanbanConfig() {
         nomeKanbanAlterado: false,
         nomeKanbanSalvando: false,
         nomeKanbanSalvo: false,
+        nomeCurto: '',
+        nomeCurtoAlterado: false,
+        nomeCurtoSalvando: false,
+        nomeCurtoSalvo: false,
+        nomeCurtoErro: '',
         conhecimentoGeral: '',
         conhecimentoGeralAlterado: false,
         conhecimentoGeralSalvando: false,
@@ -1785,6 +1810,7 @@ function kanbanConfig() {
             if (res.ok) {
                 const json = await res.json();
                 this.nomeKanban = json.nome || 'Novo Kanban';
+                this.nomeCurto = json.nome_curto ?? '';
                 this.conhecimentoGeral = json.conhecimento_geral ?? '';
                 this.forcarEngajamentoMeta = json.forcar_engajamento_meta ?? true;
             }
@@ -1799,6 +1825,22 @@ function kanbanConfig() {
             if (res.ok) {
                 this.nomeKanbanAlterado = false;
                 this.nomeKanbanSalvo = true;
+            }
+        },
+
+        async salvarNomeCurto() {
+            this.nomeCurtoSalvando = true;
+            this.nomeCurtoErro = '';
+            const res = await this.api('/api/painel/kanban/info', 'PUT', {
+                nome_curto: this.nomeCurto.trim(),
+            });
+            const dados = await res.json();
+            this.nomeCurtoSalvando = false;
+            if (res.ok) {
+                this.nomeCurtoAlterado = false;
+                this.nomeCurtoSalvo = true;
+            } else {
+                this.nomeCurtoErro = dados.message || Object.values(dados.errors || {}).flat().join(' ') || 'Não foi possível salvar o apelido.';
             }
         },
 
