@@ -301,18 +301,19 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('kanban.motivos-desfecho')
         ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing');
 
-    // Documentação/estratégia — dono e admin
+    // Documentação/estratégia — visualização aberta a todo mundo com acesso a Kanban
     Route::get('/kanban/documentacao/botoes', fn () => view('kanban.documentacao-botoes'))
         ->name('kanban.documentacao-botoes')
-        ->middleware('role:admin,dono');
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing');
 
-    // Especificações técnicas (specs de design registradas com o Claude) — dono e admin
+    // Especificações técnicas (specs de design registradas com o Claude) — visualização
+    // aberta a todo mundo com acesso a Kanban
     Route::get('/admin/especificacoes', [EspecificacoesController::class, 'index'])
         ->name('admin.especificacoes')
-        ->middleware('role:admin,dono');
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing');
     Route::get('/admin/especificacoes/{arquivo}', [EspecificacoesController::class, 'show'])
         ->name('admin.especificacoes.show')
-        ->middleware('role:admin,dono');
+        ->middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing');
 
     // Gestor do Kanban — configuração do prompt global — só admin (nunca dono)
     Route::get('/admin/gestor-kanban', [GestorKanbanConfigController::class, 'view'])

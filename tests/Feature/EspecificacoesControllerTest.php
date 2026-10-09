@@ -34,7 +34,9 @@ class EspecificacoesControllerTest extends TestCase
 
     public function test_perfil_sem_permissao_recebe_403(): void
     {
-        $user = $this->criarUsuario('vendedor');
+        // vendedor (e outros perfis com acesso a Kanban) passam a ver isso —
+        // achado 09/10/2026. 'auditor' é um perfil sem nenhum acesso a Kanban.
+        $user = $this->criarUsuario('auditor');
 
         $response = $this->actingAs($user)->get(route('admin.especificacoes'));
 
