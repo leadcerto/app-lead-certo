@@ -2616,6 +2616,10 @@ function kanbanConfig() {
         },
 
         async api(url, method = 'GET', body = null) {
+            const kanbanId = new URLSearchParams(window.location.search).get('kanban_id');
+            if (kanbanId) {
+                url += (url.includes('?') ? '&' : '?') + 'kanban_id=' + encodeURIComponent(kanbanId);
+            }
             return fetch(url, {
                 method,
                 headers: {
