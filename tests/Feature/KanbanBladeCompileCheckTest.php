@@ -60,4 +60,33 @@ class KanbanBladeCompileCheckTest extends TestCase
         $this->actingAs($admin)->get('/kanban')->assertSee('Criar novo Kanban');
         $this->actingAs($dono)->get('/kanban')->assertDontSee('Criar novo Kanban');
     }
+
+    /**
+     * Achado na verificação manual (09/10/2026): o cálculo de $menuAtivoPadrao
+     * (que define qual menu já abre expandido ao carregar a página) ainda
+     * usava as chaves antigas ('kanban-{id}'/'kanban-geral') de ontem — com o
+     * menu único 'kanban' de hoje, isso deixava o bloco "Kanban" sempre
+     * fechado por padrão, mesmo estando na própria página do Kanban.
+     */
+    public function test_menu_kanban_abre_expandido_por_padrao_ao_visitar_pagina_do_kanban(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+
+        $response = $this->actingAs($user)->get('/kanban');
+
+        $response->assertOk();
+        $response->assertSee("menuAberto: 'kanban'", false);
+    }
+
+    public function test_menu_kanban_abre_expandido_por_padrao_ao_visitar_variaveis(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+
+        $response = $this->actingAs($user)->get('/kanban/variaveis');
+
+        $response->assertOk();
+        $response->assertSee("menuAberto: 'kanban'", false);
+    }
 }

@@ -75,17 +75,17 @@
 
         @php
             $menuAtivoPadrao = '';
-            if (request()->routeIs('kanban') || request()->routeIs('kanban.config')) {
-                $menuAtivoPadrao = 'kanban-' . $kanbanIdAtivo;
-            } elseif (
-                request()->routeIs('kanban.variaveis')
+            if (
+                request()->routeIs('kanban')
+                || request()->routeIs('kanban.config')
+                || request()->routeIs('kanban.variaveis')
                 || request()->routeIs('kanban.motivos-desfecho')
                 || request()->routeIs('kanban.relatorios')
                 || request()->routeIs('kanban.documentacao-botoes')
                 || request()->routeIs('admin.especificacoes*')
                 || request()->routeIs('admin.gestor-kanban')
             ) {
-                $menuAtivoPadrao = 'kanban-geral';
+                $menuAtivoPadrao = 'kanban';
             } elseif (request()->routeIs('contatos.*') || request()->routeIs('auditor*')) {
                 $menuAtivoPadrao = 'contatos';
             } elseif (request()->routeIs('equipe.*') || request()->routeIs('personas') || request()->routeIs('ia-monitor*')) {
