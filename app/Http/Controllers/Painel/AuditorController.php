@@ -26,48 +26,53 @@ class AuditorController extends Controller
     {
         $user = $request->user();
         $tenantId = $user?->tenant_id;
+        $escopadoPorTenant = $tenantId && !($user?->isAdmin());
 
         $vinculoQuery = VinculoContatoTenant::query();
-        if ($tenantId && !($user?->isAdmin())) {
+        if ($escopadoPorTenant) {
             $vinculoQuery->where('tenant_id', $tenantId);
         }
         $contatoIds = $vinculoQuery->pluck('contato_id');
 
-        $total = $contatoIds->count();
-        if ($total === 0) {
-            $total = Contato::count();
-        }
+        // Achado real 2026-10-10: um tenant sem NENHUM contato vinculado ainda
+        // (ex: empresa recém-criada) tinha $contatoIds vazio, e cada contagem
+        // abaixo pulava o filtro por tenant inteiro quando a coleção estava
+        // vazia — mostrando a base da plataforma inteira em vez de zero. A
+        // correção é sempre aplicar whereIn (mesmo com array vazio, que
+        // corretamente devolve zero linhas) quando a requisição é escopada
+        // por tenant, nunca pular o filtro.
+        $total = $escopadoPorTenant ? $contatoIds->count() : Contato::count();
 
         $pendentesQuery = VinculoContatoTenant::whereNotNull('campos_pendentes_auditoria');
-        if ($tenantId && !($user?->isAdmin())) {
+        if ($escopadoPorTenant) {
             $pendentesQuery->where('tenant_id', $tenantId);
         }
         $pendentes = $pendentesQuery->get()->sum(fn ($v) => count($v->campos_pendentes_auditoria ?? []));
 
         $telefonesErros = \App\Models\AuditoriaContato::where('status', 'pendente')
-            ->when($contatoIds->isNotEmpty() && !($user?->isAdmin()), fn($q) => $q->whereIn('contato_id', $contatoIds))
+            ->when($escopadoPorTenant, fn($q) => $q->whereIn('contato_id', $contatoIds))
             ->count();
 
         $conflitosQuery = ContatoPendente::where('status', 'aguardando');
-        if ($tenantId && !($user?->isAdmin())) {
+        if ($escopadoPorTenant) {
             $conflitosQuery->where('tenant_id', $tenantId);
         }
         $conflitos = $conflitosQuery->count();
 
         $inconsistentes = Contato::where('status_validacao', 'inconsistente')
-            ->when($contatoIds->isNotEmpty() && !($user?->isAdmin()), fn($q) => $q->whereIn('id', $contatoIds))
+            ->when($escopadoPorTenant, fn($q) => $q->whereIn('id', $contatoIds))
             ->count();
 
         $semNome = Contato::where(fn($q) => $q->whereNull('nome')->orWhere('nome', '')->orWhere('nome', 'Sem Nome'))
-            ->when($contatoIds->isNotEmpty() && !($user?->isAdmin()), fn($q) => $q->whereIn('id', $contatoIds))
+            ->when($escopadoPorTenant, fn($q) => $q->whereIn('id', $contatoIds))
             ->count();
 
         $semTelefone = Contato::where(fn($q) => $q->whereNull('telefone')->orWhere('telefone', ''))
-            ->when($contatoIds->isNotEmpty() && !($user?->isAdmin()), fn($q) => $q->whereIn('id', $contatoIds))
+            ->when($escopadoPorTenant, fn($q) => $q->whereIn('id', $contatoIds))
             ->count();
 
         $inativos = Contato::onlyTrashed()
-            ->when($contatoIds->isNotEmpty() && !($user?->isAdmin()), fn($q) => $q->whereIn('id', $contatoIds))
+            ->when($escopadoPorTenant, fn($q) => $q->whereIn('id', $contatoIds))
             ->count();
 
         return response()->json([
@@ -88,10 +93,11 @@ class AuditorController extends Controller
     {
         $user = $request->user();
         $tenantId = $user?->tenant_id;
-        $contatoIds = ($tenantId && !($user?->isAdmin())) ? VinculoContatoTenant::where('tenant_id', $tenantId)->pluck('contato_id') : collect();
+        $escopadoPorTenant = $tenantId && !($user?->isAdmin());
+        $contatoIds = $escopadoPorTenant ? VinculoContatoTenant::where('tenant_id', $tenantId)->pluck('contato_id') : collect();
 
         $registros = \App\Models\AuditoriaContato::with('contato')
-            ->when($contatoIds->isNotEmpty(), fn($q) => $q->whereIn('contato_id', $contatoIds))
+            ->when($escopadoPorTenant, fn($q) => $q->whereIn('contato_id', $contatoIds))
             ->where('status', 'pendente')
             ->orderBy('id', 'desc')
             ->get();
@@ -1073,9 +1079,10 @@ class AuditorController extends Controller
     {
         $user = $request->user();
         $tenantId = $user?->tenant_id;
+        $escopadoPorTenant = $tenantId && !($user?->isAdmin());
 
         $vinculoQuery = VinculoContatoTenant::query();
-        if ($tenantId && !($user?->isAdmin())) {
+        if ($escopadoPorTenant) {
             $vinculoQuery->where('tenant_id', $tenantId);
         }
         $contatoIds = $vinculoQuery->pluck('contato_id');
@@ -1094,7 +1101,7 @@ class AuditorController extends Controller
             }
         }
 
-        if ($contatoIds->isNotEmpty() && !($user?->isAdmin())) {
+        if ($escopadoPorTenant) {
             $query->whereIn('id', $contatoIds);
         }
 
