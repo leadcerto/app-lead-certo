@@ -26,7 +26,7 @@ class KanbanColunaConfigDuvidaTimeoutTest extends TestCase
     public function test_update_salva_o_timeout_configurado(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/em_atendimento', [
             'duvida_timeout_ativo' => true, 'duvida_timeout_segundos' => 1800,

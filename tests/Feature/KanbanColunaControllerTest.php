@@ -21,6 +21,11 @@ class KanbanColunaControllerTest extends TestCase
         return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
     }
 
+    private function usuarioAdmin(Tenant $tenant): User
+    {
+        return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
+    }
+
     public function test_lista_papeis_disponiveis(): void
     {
         $tenant = Tenant::factory()->create();
@@ -36,7 +41,7 @@ class KanbanColunaControllerTest extends TestCase
     public function test_cria_coluna_nova(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->usuarioDono($tenant);
+        $user   = $this->usuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->postJson('/api/painel/kanban/colunas', [
             'label' => 'Minha Coluna', 'emoji' => '⭐', 'papel' => 'em_andamento',
@@ -51,7 +56,7 @@ class KanbanColunaControllerTest extends TestCase
     public function test_edita_coluna_existente(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->usuarioDono($tenant);
+        $user   = $this->usuarioAdmin($tenant);
         $coluna = KanbanColuna::where('tenant_id', $tenant->id)->where('chave', 'em_atendimento')->firstOrFail();
 
         $response = $this->actingAs($user)->putJson("/api/painel/kanban/colunas/{$coluna->id}", [
@@ -65,7 +70,7 @@ class KanbanColunaControllerTest extends TestCase
     public function test_reordena_colunas(): void
     {
         $tenant  = Tenant::factory()->create();
-        $user    = $this->usuarioDono($tenant);
+        $user    = $this->usuarioAdmin($tenant);
         $colunas = KanbanColuna::where('tenant_id', $tenant->id)->orderBy('ordem')->get();
         $idsInvertidos = $colunas->pluck('id')->reverse()->values()->all();
 
@@ -80,7 +85,7 @@ class KanbanColunaControllerTest extends TestCase
     public function test_bloqueia_exclusao_de_coluna_com_ticket_ativo(): void
     {
         $tenant  = Tenant::factory()->create();
-        $user    = $this->usuarioDono($tenant);
+        $user    = $this->usuarioAdmin($tenant);
         $coluna  = KanbanColuna::where('tenant_id', $tenant->id)->where('chave', 'em_atendimento')->firstOrFail();
         $contato = Contato::factory()->create();
         TicketAtendimento::create([
@@ -97,7 +102,7 @@ class KanbanColunaControllerTest extends TestCase
     public function test_exclui_coluna_sem_ticket(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->usuarioDono($tenant);
+        $user   = $this->usuarioAdmin($tenant);
         $kanban = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
         $coluna = KanbanColuna::create([
             'tenant_id' => $tenant->id, 'kanban_id' => $kanban->id,
@@ -113,7 +118,7 @@ class KanbanColunaControllerTest extends TestCase
     public function test_bloqueia_criar_segunda_coluna_de_entrada(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->usuarioDono($tenant);
+        $user   = $this->usuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->postJson('/api/painel/kanban/colunas', [
             'label' => 'Outra Entrada', 'emoji' => '🟢', 'papel' => 'entrada',
@@ -126,7 +131,7 @@ class KanbanColunaControllerTest extends TestCase
     public function test_bloqueia_editar_coluna_para_entrada_quando_ja_existe_uma(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->usuarioDono($tenant);
+        $user   = $this->usuarioAdmin($tenant);
         $coluna = KanbanColuna::where('tenant_id', $tenant->id)->where('chave', 'em_atendimento')->firstOrFail();
 
         $response = $this->actingAs($user)->putJson("/api/painel/kanban/colunas/{$coluna->id}", [
@@ -140,7 +145,7 @@ class KanbanColunaControllerTest extends TestCase
     public function test_permite_resalvar_a_propria_coluna_de_entrada_sem_bloqueio(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->usuarioDono($tenant);
+        $user   = $this->usuarioAdmin($tenant);
         $coluna = KanbanColuna::where('tenant_id', $tenant->id)->where('chave', 'lead_novo')->firstOrFail();
 
         $response = $this->actingAs($user)->putJson("/api/painel/kanban/colunas/{$coluna->id}", [

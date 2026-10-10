@@ -15,9 +15,9 @@ class SequenciaControllerGeraVariacoesAutomaticoTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function criarUsuarioDono(Tenant $tenant): User
+    private function criarUsuarioAdmin(Tenant $tenant): User
     {
-        return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
     }
 
     /**
@@ -31,7 +31,7 @@ class SequenciaControllerGeraVariacoesAutomaticoTest extends TestCase
     public function test_storeMensagem_cria_as_6_variacoes_via_ia_inativas(): void
     {
         $tenant    = Tenant::factory()->create();
-        $user      = $this->criarUsuarioDono($tenant);
+        $user      = $this->criarUsuarioAdmin($tenant);
         $sequencia = Sequencia::create(['tenant_id' => $tenant->id, 'nome' => 'Boas-vindas', 'coluna_kanban' => 'lead_novo', 'ativo' => true]);
         $json      = json_encode(['variacoes' => [
             ['ordem' => 1, 'conteudo' => 'V1'], ['ordem' => 2, 'conteudo' => 'V2'],
@@ -58,7 +58,7 @@ class SequenciaControllerGeraVariacoesAutomaticoTest extends TestCase
     public function test_endpoint_de_regeneracao_em_lote_substitui_variacoes_ia(): void
     {
         $tenant    = Tenant::factory()->create();
-        $user      = $this->criarUsuarioDono($tenant);
+        $user      = $this->criarUsuarioAdmin($tenant);
         $sequencia = Sequencia::create(['tenant_id' => $tenant->id, 'nome' => 'Boas-vindas', 'coluna_kanban' => 'lead_novo', 'ativo' => true]);
         $msg       = SequenciaMensagem::create([
             'tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,

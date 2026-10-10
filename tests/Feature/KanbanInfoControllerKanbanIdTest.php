@@ -30,7 +30,7 @@ class KanbanInfoControllerKanbanIdTest extends TestCase
     public function test_update_com_kanban_id_atualiza_o_kanban_certo(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
         $kanbanFunil = Kanban::create([
             'tenant_id' => $tenant->id, 'tipo' => 'funil_teste', 'nome' => 'Funil',
             'nome_curto' => 'Funil', 'ordem' => 1,
@@ -63,7 +63,7 @@ class KanbanInfoControllerKanbanIdTest extends TestCase
     public function test_update_altera_nome_curto_do_kanban_certo(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
         $kanbanFunil = Kanban::create([
             'tenant_id' => $tenant->id, 'tipo' => 'funil_teste', 'nome' => 'Funil',
             'nome_curto' => 'Funil', 'ordem' => 1,
@@ -81,7 +81,7 @@ class KanbanInfoControllerKanbanIdTest extends TestCase
     public function test_update_rejeita_nome_curto_com_espaco(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
 
         $this->actingAs($user)->putJson('/api/painel/kanban/info', [
             'nome_curto' => 'Nome Com Espaço',

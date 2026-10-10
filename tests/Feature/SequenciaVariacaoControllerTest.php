@@ -15,15 +15,15 @@ class SequenciaVariacaoControllerTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function criarUsuarioDono(Tenant $tenant): User
+    private function criarUsuarioAdmin(Tenant $tenant): User
     {
-        return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
     }
 
     public function test_lista_variacoes_com_protegida_primeiro(): void
     {
         $tenant    = Tenant::factory()->create();
-        $user      = $this->criarUsuarioDono($tenant);
+        $user      = $this->criarUsuarioAdmin($tenant);
         $sequencia = Sequencia::create(['tenant_id' => $tenant->id, 'nome' => 'Boas-vindas', 'coluna_kanban' => 'lead_novo', 'ativo' => true]);
         $msg       = SequenciaMensagem::create([
             'tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,
@@ -49,7 +49,7 @@ class SequenciaVariacaoControllerTest extends TestCase
     {
         $tenantA = Tenant::factory()->create();
         $tenantB = Tenant::factory()->create();
-        $user    = $this->criarUsuarioDono($tenantA);
+        $user    = $this->criarUsuarioAdmin($tenantA);
         $sequenciaB = Sequencia::create(['tenant_id' => $tenantB->id, 'nome' => 'X', 'coluna_kanban' => 'lead_novo', 'ativo' => true]);
         $msgB = SequenciaMensagem::create([
             'tenant_id' => $tenantB->id, 'sequencia_id' => $sequenciaB->id, 'ordem' => 1,
@@ -68,7 +68,7 @@ class SequenciaVariacaoControllerTest extends TestCase
     public function test_regenerar_uma_variacao_com_ia(): void
     {
         $tenant    = Tenant::factory()->create();
-        $user      = $this->criarUsuarioDono($tenant);
+        $user      = $this->criarUsuarioAdmin($tenant);
         $sequencia = Sequencia::create(['tenant_id' => $tenant->id, 'nome' => 'Boas-vindas', 'coluna_kanban' => 'lead_novo', 'ativo' => true]);
         $msg       = SequenciaMensagem::create([
             'tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,
@@ -94,7 +94,7 @@ class SequenciaVariacaoControllerTest extends TestCase
     public function test_nao_deixa_regenerar_a_variacao_protegida(): void
     {
         $tenant    = Tenant::factory()->create();
-        $user      = $this->criarUsuarioDono($tenant);
+        $user      = $this->criarUsuarioAdmin($tenant);
         $sequencia = Sequencia::create(['tenant_id' => $tenant->id, 'nome' => 'Boas-vindas', 'coluna_kanban' => 'lead_novo', 'ativo' => true]);
         $msg       = SequenciaMensagem::create([
             'tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,
@@ -117,7 +117,7 @@ class SequenciaVariacaoControllerTest extends TestCase
     public function test_regenerar_uma_com_ia_indisponivel_retorna_erro_sem_alterar_conteudo(): void
     {
         $tenant    = Tenant::factory()->create();
-        $user      = $this->criarUsuarioDono($tenant);
+        $user      = $this->criarUsuarioAdmin($tenant);
         $sequencia = Sequencia::create(['tenant_id' => $tenant->id, 'nome' => 'Boas-vindas', 'coluna_kanban' => 'lead_novo', 'ativo' => true]);
         $msg       = SequenciaMensagem::create([
             'tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,

@@ -21,6 +21,15 @@ class KanbanColunaConfigFollowupEstagiosTest extends TestCase
         ]);
     }
 
+    private function criarUsuarioAdmin(Tenant $tenant): User
+    {
+        return User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'perfil'    => 'admin',
+            'ativo'     => true,
+        ]);
+    }
+
     public function test_show_retorna_defaults_quando_nao_configurado(): void
     {
         $tenant = Tenant::factory()->create();
@@ -39,7 +48,7 @@ class KanbanColunaConfigFollowupEstagiosTest extends TestCase
     public function test_update_persiste_os_3_thresholds_customizados(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/lead_novo', [
             'followup_estagio1_segundos' => 1800,
@@ -58,7 +67,7 @@ class KanbanColunaConfigFollowupEstagiosTest extends TestCase
     public function test_rejeita_valor_abaixo_do_minimo(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/lead_novo', [
             'followup_estagio1_segundos' => 10,

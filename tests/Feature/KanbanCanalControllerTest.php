@@ -18,6 +18,11 @@ class KanbanCanalControllerTest extends TestCase
         return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
     }
 
+    private function usuarioAdmin(Tenant $tenant): User
+    {
+        return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
+    }
+
     public function test_lista_canais_do_tenant_com_flag_vinculado(): void
     {
         $tenant = Tenant::factory()->create();
@@ -53,7 +58,7 @@ class KanbanCanalControllerTest extends TestCase
     public function test_sincroniza_canais_vinculados(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->usuarioDono($tenant);
+        $user   = $this->usuarioAdmin($tenant);
         $canalA = WhatsappCanal::factory()->create(['tenant_id' => $tenant->id]);
         $canalB = WhatsappCanal::factory()->create(['tenant_id' => $tenant->id]);
 
@@ -70,7 +75,7 @@ class KanbanCanalControllerTest extends TestCase
     public function test_nao_vincula_canal_de_outro_tenant(): void
     {
         $tenant       = Tenant::factory()->create();
-        $user         = $this->usuarioDono($tenant);
+        $user         = $this->usuarioAdmin($tenant);
         $canalDeOutro = WhatsappCanal::factory()->create(['tenant_id' => Tenant::factory()->create()->id]);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/canais', [

@@ -14,9 +14,9 @@ class SequenciaVariacaoProtecaoTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function criarUsuarioDono(Tenant $tenant): User
+    private function criarUsuarioAdmin(Tenant $tenant): User
     {
-        return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
     }
 
     private function criarMensagemComVariacaoProtegida(Tenant $tenant): array
@@ -37,7 +37,7 @@ class SequenciaVariacaoProtecaoTest extends TestCase
     public function test_cria_variacao_manual_como_origem_humano(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
         [$sequencia, $msg] = $this->criarMensagemComVariacaoProtegida($tenant);
 
         $response = $this->actingAs($user)->postJson(
@@ -57,7 +57,7 @@ class SequenciaVariacaoProtecaoTest extends TestCase
     public function test_edita_conteudo_de_variacao_ia(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
         [$sequencia, $msg] = $this->criarMensagemComVariacaoProtegida($tenant);
         $ia = SequenciaMensagemVariacao::create([
             'tenant_id' => $tenant->id, 'sequencia_mensagem_id' => $msg->id,
@@ -76,7 +76,7 @@ class SequenciaVariacaoProtecaoTest extends TestCase
     public function test_bloqueia_desativar_variacao_protegida(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
         [$sequencia, $msg, $protegida] = $this->criarMensagemComVariacaoProtegida($tenant);
 
         $response = $this->actingAs($user)->putJson(
@@ -91,7 +91,7 @@ class SequenciaVariacaoProtecaoTest extends TestCase
     public function test_bloqueia_exclusao_de_variacao_protegida(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
         [$sequencia, $msg, $protegida] = $this->criarMensagemComVariacaoProtegida($tenant);
 
         $response = $this->actingAs($user)->deleteJson(
@@ -105,7 +105,7 @@ class SequenciaVariacaoProtecaoTest extends TestCase
     public function test_exclui_variacao_nao_protegida(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
         [$sequencia, $msg] = $this->criarMensagemComVariacaoProtegida($tenant);
         $ia = SequenciaMensagemVariacao::create([
             'tenant_id' => $tenant->id, 'sequencia_mensagem_id' => $msg->id,

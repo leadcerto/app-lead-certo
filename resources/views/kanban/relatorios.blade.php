@@ -11,6 +11,7 @@
                 :class="aba === 'semanais' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'">
             Relatórios Semanais
         </button>
+        @if(auth()->user()->isDono())
         <button @click="aba = 'auditoria'"
                 class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5"
                 :class="aba === 'auditoria' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'">
@@ -18,6 +19,7 @@
             <span x-show="auditorias.length > 0" x-text="auditorias.length"
                   class="text-[10px] bg-red-100 text-red-600 rounded-full px-1.5 py-0.5 font-semibold"></span>
         </button>
+        @endif
     </div>
 
     <template x-if="aba === 'semanais'">
@@ -81,7 +83,12 @@
 
     {{-- Aba Auditoria (pedido do Leonardo 24/09): fila de tickets marcados
          manualmente pra revisão de desenvolvimento — nunca a IA analisa,
-         só nós (dev) — via botão "🔍 Auditoria" no detalhe do ticket. --}}
+         só nós (dev) — via botão "🔍 Auditoria" no detalhe do ticket.
+         Gate em Blade (não só Alpine): o marcador x-if do Alpine some do
+         DOM visualmente, mas o texto continua na página renderizada —
+         achado da revisão final de 09/10/2026 (Issue 6), API já restrita
+         a admin/dono, a aba agora segue a mesma restrição aqui. --}}
+    @if(auth()->user()->isDono())
     <template x-if="aba === 'auditoria'">
     <div>
     <h1 class="text-xl font-bold text-gray-800 mb-1">Auditoria — Tickets marcados pra revisão</h1>
@@ -121,6 +128,7 @@
     </div>
     </div>
     </template>
+    @endif
 
 </div>
 
@@ -132,14 +140,16 @@ function gestorKanbanRelatorios() {
         auditorias: [],
         aberto: null,
         copiado: null,
+        podeVerAuditoria: @json(auth()->user()->isDono()),
         async carregar() {
             const res = await fetch('/api/painel/kanban/relatorios');
             const json = await res.json();
             this.relatorios = json.data;
-            await this.carregarAuditorias();
+            if (this.podeVerAuditoria) await this.carregarAuditorias();
         },
         async carregarAuditorias() {
             const res = await fetch('/api/painel/kanban/auditorias');
+            if (!res.ok) return;
             const json = await res.json();
             this.auditorias = json.data;
         },

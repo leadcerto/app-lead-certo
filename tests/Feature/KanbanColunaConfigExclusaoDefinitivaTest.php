@@ -24,10 +24,15 @@ class KanbanColunaConfigExclusaoDefinitivaTest extends TestCase
         return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
     }
 
+    private function criarUsuarioAdmin(Tenant $tenant): User
+    {
+        return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
+    }
+
     public function test_persiste_configuracao_de_exclusao_definitiva(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/encerrado', [
             'exclusao_definitiva_ativo' => true,
@@ -58,7 +63,7 @@ class KanbanColunaConfigExclusaoDefinitivaTest extends TestCase
     public function test_desativar_exclusao_definitiva_persiste_false(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         KanbanColunaConfig::create([
             'tenant_id' => $tenant->id, 'coluna_kanban' => 'encerrado',
@@ -80,7 +85,7 @@ class KanbanColunaConfigExclusaoDefinitivaTest extends TestCase
     public function test_rejeita_dias_fora_do_intervalo_permitido(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/encerrado', [
             'exclusao_definitiva_dias' => 0,

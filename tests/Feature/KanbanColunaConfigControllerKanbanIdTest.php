@@ -18,7 +18,7 @@ class KanbanColunaConfigControllerKanbanIdTest extends TestCase
     public function test_update_com_kanban_id_grava_config_no_kanban_certo_mesmo_com_chave_repetida(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
         $kanbanGeral = Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->firstOrFail();
         $kanbanFunil = Kanban::create([
             'tenant_id' => $tenant->id, 'tipo' => 'funil_teste', 'nome' => 'Funil',
@@ -53,7 +53,7 @@ class KanbanColunaConfigControllerKanbanIdTest extends TestCase
     public function test_atualiza_no_lugar_uma_config_legada_sem_kanban_coluna_id_em_vez_de_duplicar(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
 
         KanbanColunaConfig::create([
             'tenant_id' => $tenant->id, 'coluna_kanban' => 'encerrado',

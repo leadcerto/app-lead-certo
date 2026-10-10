@@ -17,6 +17,11 @@ class KanbanInfoControllerTest extends TestCase
         return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
     }
 
+    private function criarUsuarioAdmin(Tenant $tenant): User
+    {
+        return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
+    }
+
     public function test_show_retorna_vazio_quando_nao_configurado(): void
     {
         $tenant = Tenant::factory()->create();
@@ -31,7 +36,7 @@ class KanbanInfoControllerTest extends TestCase
     public function test_update_persiste_conhecimento_geral(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/info', [
             'conhecimento_geral' => 'Atendemos só Zona Sul do Rio de Janeiro.',
@@ -60,7 +65,7 @@ class KanbanInfoControllerTest extends TestCase
     public function test_update_renomeia_o_kanban(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/info', [
             'nome' => 'Suporte',
@@ -77,7 +82,7 @@ class KanbanInfoControllerTest extends TestCase
         // Cada campo salva independente (mesmo padrão já usado no resto da tela
         // de config) — mandar só um dos dois nunca pode zerar o outro.
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
         Kanban::where('tenant_id', $tenant->id)->where('tipo', 'vendas')->update(['nome' => 'Suporte']);
 
         $this->actingAs($user)->putJson('/api/painel/kanban/info', [
@@ -91,7 +96,7 @@ class KanbanInfoControllerTest extends TestCase
     public function test_nao_aceita_nome_vazio(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/info', ['nome' => '']);
 

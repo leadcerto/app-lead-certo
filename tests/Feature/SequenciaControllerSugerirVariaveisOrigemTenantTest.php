@@ -24,7 +24,7 @@ class SequenciaControllerSugerirVariaveisOrigemTenantTest extends TestCase
     public function test_sugerir_variaveis_repassa_origem_e_tenant_id_pro_chat(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
 
         $sequencia = Sequencia::create([
             'tenant_id' => $tenant->id, 'nome' => 'Boas-vindas',

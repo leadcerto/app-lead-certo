@@ -26,7 +26,7 @@ class KanbanColunaConfigTempoMaximoPermanenciaTest extends TestCase
     public function test_update_salva_o_tempo_maximo_configurado(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/aguardando_orcamento', [
             'tempo_maximo_permanencia_minutos' => 120,
@@ -42,7 +42,7 @@ class KanbanColunaConfigTempoMaximoPermanenciaTest extends TestCase
     public function test_update_com_null_limpa_o_tempo_maximo_previamente_configurado(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
 
         $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/aguardando_orcamento', [
             'tempo_maximo_permanencia_minutos' => 120,
@@ -66,7 +66,7 @@ class KanbanColunaConfigTempoMaximoPermanenciaTest extends TestCase
     public function test_update_rejeita_valor_nao_inteiro_ou_menor_que_um(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
 
         $response = $this->actingAs($user)->putJson('/api/painel/kanban/coluna-config/aguardando_orcamento', [
             'tempo_maximo_permanencia_minutos' => 0,
