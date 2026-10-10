@@ -13,11 +13,11 @@ class SequenciaControllerButtonSettingsTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function criarUsuarioDono(Tenant $tenant): User
+    private function criarUsuarioAdmin(Tenant $tenant): User
     {
         return User::factory()->create([
             'tenant_id' => $tenant->id,
-            'perfil'    => 'dono',
+            'perfil'    => 'admin',
             'ativo'     => true,
         ]);
     }
@@ -32,7 +32,7 @@ class SequenciaControllerButtonSettingsTest extends TestCase
     public function test_store_mensagem_persiste_button_settings_e_obrigatorio(): void
     {
         $tenant    = Tenant::factory()->create();
-        $user      = $this->criarUsuarioDono($tenant);
+        $user      = $this->criarUsuarioAdmin($tenant);
         $sequencia = $this->criarSequencia($tenant);
 
         $response = $this->actingAs($user)->post("/api/painel/sequencias/{$sequencia->id}/mensagens", [
@@ -56,7 +56,7 @@ class SequenciaControllerButtonSettingsTest extends TestCase
     public function test_update_mensagem_atualiza_button_settings_e_obrigatorio(): void
     {
         $tenant    = Tenant::factory()->create();
-        $user      = $this->criarUsuarioDono($tenant);
+        $user      = $this->criarUsuarioAdmin($tenant);
         $sequencia = $this->criarSequencia($tenant);
         $msg = SequenciaMensagem::create([
             'tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,
@@ -85,7 +85,7 @@ class SequenciaControllerButtonSettingsTest extends TestCase
     public function test_button_settings_com_action_invalida_e_rejeitado(): void
     {
         $tenant    = Tenant::factory()->create();
-        $user      = $this->criarUsuarioDono($tenant);
+        $user      = $this->criarUsuarioAdmin($tenant);
         $sequencia = $this->criarSequencia($tenant);
 
         $response = $this->actingAs($user)->post("/api/painel/sequencias/{$sequencia->id}/mensagens", [
@@ -102,7 +102,7 @@ class SequenciaControllerButtonSettingsTest extends TestCase
     public function test_mais_de_3_botoes_e_rejeitado(): void
     {
         $tenant    = Tenant::factory()->create();
-        $user      = $this->criarUsuarioDono($tenant);
+        $user      = $this->criarUsuarioAdmin($tenant);
         $sequencia = $this->criarSequencia($tenant);
 
         $response = $this->actingAs($user)->post("/api/painel/sequencias/{$sequencia->id}/mensagens", [

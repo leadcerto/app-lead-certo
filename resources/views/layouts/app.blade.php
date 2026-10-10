@@ -31,7 +31,14 @@
     $tenantId = $user?->tenant_id;
     $eAdmin   = $user?->isAdmin();
 
-    $kanbansDoTenant = $tenantId ? \App\Models\Kanban::where('tenant_id', $tenantId)->orderBy('ordem')->get() : collect();
+    // Tenant ATIVO na sessão (distinto de $tenantId acima) — achado da revisão
+    // final de 09/10/2026: admin tem tenant_id=null na própria conta, então
+    // $tenantId sozinho escondia o submenu do Kanban por completo pra quem
+    // mais precisa editá-lo. EnsureTenant já resolve isso em session/request
+    // pra quem pode trocar de tenant; só reaproveitamos aqui.
+    $tenantAtualId = session('tenant_id') ?? request()->attributes->get('tenant_id') ?? $tenantId;
+
+    $kanbansDoTenant = $tenantAtualId ? \App\Models\Kanban::where('tenant_id', $tenantAtualId)->orderBy('ordem')->get() : collect();
     $kanbanIdAtivo   = (int) (request()->query('kanban_id') ?: $kanbansDoTenant->firstWhere('tipo', 'vendas')?->id);
 
     $pendentesCampos = ($tenantId && !$eAdmin)
@@ -203,7 +210,7 @@
                                 </svg>
                                 Atendimentos
                             </a>
-                            <a href="{{ route('kanban.variaveis') }}"
+                            <a href="{{ route('kanban.variaveis', ['kanban_id' => $kanbanItem->id]) }}"
                                class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('kanban.variaveis') ? 'bg-green-800 text-white font-medium' : 'text-gray-500 hover:bg-gray-700 hover:text-gray-200' }}">
                                 <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
@@ -218,28 +225,28 @@
                                 </svg>
                                 Configurações
                             </a>
-                            <a href="{{ route('kanban.motivos-desfecho') }}"
+                            <a href="{{ route('kanban.motivos-desfecho', ['kanban_id' => $kanbanItem->id]) }}"
                                class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('kanban.motivos-desfecho') ? 'bg-green-800 text-white font-medium' : 'text-gray-500 hover:bg-gray-700 hover:text-gray-200' }}">
                                 <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                                 </svg>
                                 Motivos de Encerramento
                             </a>
-                            <a href="{{ route('kanban.relatorios') }}"
+                            <a href="{{ route('kanban.relatorios', ['kanban_id' => $kanbanItem->id]) }}"
                                class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('kanban.relatorios') ? 'bg-green-800 text-white font-medium' : 'text-gray-500 hover:bg-gray-700 hover:text-gray-200' }}">
                                 <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                                 </svg>
                                 Relatórios do Gestor
                             </a>
-                            <a href="{{ route('kanban.documentacao-botoes') }}"
+                            <a href="{{ route('kanban.documentacao-botoes', ['kanban_id' => $kanbanItem->id]) }}"
                                class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('kanban.documentacao-botoes') ? 'bg-green-800 text-white font-medium' : 'text-gray-500 hover:bg-gray-700 hover:text-gray-200' }}">
                                 <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s4.332.477 5.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
                                 </svg>
                                 Documentação
                             </a>
-                            <a href="{{ route('admin.especificacoes') }}"
+                            <a href="{{ route('admin.especificacoes', ['kanban_id' => $kanbanItem->id]) }}"
                                class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('admin.especificacoes*') ? 'bg-green-800 text-white font-medium' : 'text-gray-500 hover:bg-gray-700 hover:text-gray-200' }}">
                                 <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>

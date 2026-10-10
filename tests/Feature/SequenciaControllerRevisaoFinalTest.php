@@ -22,9 +22,9 @@ class SequenciaControllerRevisaoFinalTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function criarUsuarioDono(Tenant $tenant): User
+    private function criarUsuarioAdmin(Tenant $tenant): User
     {
-        return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+        return User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
     }
 
     private function criarSequencia(Tenant $tenant): Sequencia
@@ -39,7 +39,7 @@ class SequenciaControllerRevisaoFinalTest extends TestCase
     public function test_get_mensagens_inclui_delay_jitter_segundos(): void
     {
         $tenant    = Tenant::factory()->create();
-        $user      = $this->criarUsuarioDono($tenant);
+        $user      = $this->criarUsuarioAdmin($tenant);
         $sequencia = $this->criarSequencia($tenant);
         $msg       = SequenciaMensagem::create([
             'tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,
@@ -60,7 +60,7 @@ class SequenciaControllerRevisaoFinalTest extends TestCase
     public function test_bloqueia_edicao_de_conteudo_de_variacao_protegida(): void
     {
         $tenant    = Tenant::factory()->create();
-        $user      = $this->criarUsuarioDono($tenant);
+        $user      = $this->criarUsuarioAdmin($tenant);
         $sequencia = $this->criarSequencia($tenant);
         $msg       = SequenciaMensagem::create([
             'tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,
@@ -85,7 +85,7 @@ class SequenciaControllerRevisaoFinalTest extends TestCase
     public function test_editar_conteudo_da_mensagem_sincroniza_variacao_protegida(): void
     {
         $tenant    = Tenant::factory()->create();
-        $user      = $this->criarUsuarioDono($tenant);
+        $user      = $this->criarUsuarioAdmin($tenant);
         $sequencia = $this->criarSequencia($tenant);
         $msg       = SequenciaMensagem::create([
             'tenant_id' => $tenant->id, 'sequencia_id' => $sequencia->id, 'ordem' => 1,

@@ -16,7 +16,7 @@
 
 <div class="max-w-2xl mx-auto{{ auth()->user()->isAdmin() ? '' : ' opacity-60 pointer-events-none select-none' }}" x-data="motivosDesfecho()" x-init="carregar()">
     <div class="flex items-center gap-3 mb-6">
-        <a href="{{ route('kanban.config') }}"
+        <a href="{{ route('kanban.config', request()->query('kanban_id') ? ['kanban_id' => request()->query('kanban_id')] : []) }}"
            class="pointer-events-auto relative text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>

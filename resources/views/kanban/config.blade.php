@@ -221,7 +221,7 @@
     <div class="flex gap-1 bg-gray-100 p-1 rounded-xl mb-6 overflow-x-auto">
         <template x-for="col in colunas" :key="col.key">
             <button @click="abaAtiva = col.key; carregarIa(col.key)"
-                    class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-shrink-0"
+                    class="pointer-events-auto relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-shrink-0"
                     :class="abaAtiva === col.key
                         ? 'bg-white shadow text-gray-900'
                         : 'text-gray-500 hover:text-gray-700'">
@@ -306,7 +306,7 @@
                         {{-- Cabeçalho --}}
                         <div class="px-5 py-3 flex items-center gap-3">
                             <button @click="toggleSeq(seq.id)"
-                                    class="flex-1 flex items-center gap-2 text-left min-w-0">
+                                    class="pointer-events-auto relative flex-1 flex items-center gap-2 text-left min-w-0">
                                 <svg class="w-4 h-4 text-gray-400 flex-shrink-0 transition-transform duration-150"
                                      :class="aberto === seq.id ? 'rotate-90' : ''"
                                      fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -498,7 +498,7 @@
 
                                     <div class="mt-2 pt-2 border-t border-gray-100">
                                         <button @click="toggleAbaVariacoes(seq.id, msg)"
-                                                class="text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1">
+                                                class="pointer-events-auto relative text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1">
                                             <span x-text="abaVariacaoAberta[msg.id] ? '▾' : '▸'"></span>
                                             Variações
                                             <span x-show="(variacoesPor[msg.id] || []).length"
@@ -802,7 +802,7 @@
                 <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-4">
                     <div x-data="{ dicasAbertas: false }" class="mb-3 -mx-5 -mt-5 border-b border-gray-100">
                         <button @click="dicasAbertas = !dicasAbertas"
-                                class="w-full px-5 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors rounded-t-2xl">
+                                class="pointer-events-auto relative w-full px-5 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors rounded-t-2xl">
                             <span class="text-xs font-semibold text-purple-600 flex items-center gap-1.5">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>

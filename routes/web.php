@@ -565,21 +565,26 @@ Route::prefix('api/painel')->middleware(['auth', 'tenant'])->group(function () {
         Route::post('/secretaria-eletronica/toggle',     [SecretariaEletronicaController::class, 'toggleEnvio']);
     });
 
-    // Sequências — dono e admin
-    Route::middleware('role:admin,dono')->group(function () {
-        // Sequências (pai)
+    // Sequências (dentro da Configuração do Kanban) — mesma divisão visualização
+    // aberta / edição restrita a admin do resto da tela (achado da revisão final
+    // de 09/10/2026: esse grupo tinha ficado de fora da varredura original).
+    Route::middleware('role:admin,dono,diretor,gerente,gestor,vendedor,pos_venda,diretor_marketing')->group(function () {
         Route::get('/sequencias',              [SequenciaController::class, 'index']);
+        Route::get('/sequencias/{seq}/mensagens',              [SequenciaController::class, 'mensagens']);
+        Route::get('/sequencias/{seq}/mensagens/{msgId}/variacoes',   [SequenciaController::class, 'variacoes']);
+    });
+
+    Route::middleware('role:admin')->group(function () {
+        // Sequências (pai)
         Route::post('/sequencias',             [SequenciaController::class, 'store']);
         Route::put('/sequencias/{id}',         [SequenciaController::class, 'update']);
         Route::delete('/sequencias/{id}',      [SequenciaController::class, 'destroy']);
         // Mensagens dentro de uma sequência
-        Route::get('/sequencias/{seq}/mensagens',              [SequenciaController::class, 'mensagens']);
         Route::post('/sequencias/{seq}/mensagens',             [SequenciaController::class, 'storeMensagem']);
         Route::put('/sequencias/{seq}/mensagens/{id}',         [SequenciaController::class, 'updateMensagem']);
         Route::post('/sequencias/{seq}/mensagens/{id}',        [SequenciaController::class, 'updateMensagem']); // spoofing
         Route::delete('/sequencias/{seq}/mensagens/{id}',      [SequenciaController::class, 'destroyMensagem']);
         Route::post('/sequencias/{id}/sugerir-variaveis',     [SequenciaController::class, 'sugerirVariaveis']);
-        Route::get('/sequencias/{seq}/mensagens/{msgId}/variacoes',   [SequenciaController::class, 'variacoes']);
         Route::post('/sequencias/{seq}/mensagens/{msgId}/variacoes',          [SequenciaController::class, 'storeVariacao']);
         Route::put('/sequencias/{seq}/mensagens/{msgId}/variacoes/{id}',      [SequenciaController::class, 'updateVariacao']);
         Route::delete('/sequencias/{seq}/mensagens/{msgId}/variacoes/{id}',   [SequenciaController::class, 'destroyVariacao']);

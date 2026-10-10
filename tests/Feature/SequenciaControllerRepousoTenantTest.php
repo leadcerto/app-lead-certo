@@ -12,11 +12,11 @@ class SequenciaControllerRepousoTenantTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function criarUsuarioDono(Tenant $tenant): User
+    private function criarUsuarioAdmin(Tenant $tenant): User
     {
         return User::factory()->create([
             'tenant_id' => $tenant->id,
-            'perfil'    => 'dono',
+            'perfil'    => 'admin',
             'ativo'     => true,
         ]);
     }
@@ -25,7 +25,7 @@ class SequenciaControllerRepousoTenantTest extends TestCase
     {
         $tenantA = Tenant::factory()->create();
         $tenantB = Tenant::factory()->create();
-        $userA   = $this->criarUsuarioDono($tenantA);
+        $userA   = $this->criarUsuarioAdmin($tenantA);
 
         $repousoDeB = Sequencia::create([
             'tenant_id' => $tenantB->id, 'nome' => 'Repouso B', 'coluna_kanban' => 'lead_novo', 'ativo' => true,
@@ -44,7 +44,7 @@ class SequenciaControllerRepousoTenantTest extends TestCase
     public function test_store_aceita_sequencia_repouso_do_mesmo_tenant(): void
     {
         $tenantA = Tenant::factory()->create();
-        $userA   = $this->criarUsuarioDono($tenantA);
+        $userA   = $this->criarUsuarioAdmin($tenantA);
 
         $repousoDeA = Sequencia::create([
             'tenant_id' => $tenantA->id, 'nome' => 'Repouso A', 'coluna_kanban' => 'lead_novo', 'ativo' => true,
@@ -63,7 +63,7 @@ class SequenciaControllerRepousoTenantTest extends TestCase
     {
         $tenantA = Tenant::factory()->create();
         $tenantB = Tenant::factory()->create();
-        $userA   = $this->criarUsuarioDono($tenantA);
+        $userA   = $this->criarUsuarioAdmin($tenantA);
 
         $sequenciaA = Sequencia::create([
             'tenant_id' => $tenantA->id, 'nome' => 'Sequência A', 'coluna_kanban' => 'lead_novo', 'ativo' => true,
@@ -83,7 +83,7 @@ class SequenciaControllerRepousoTenantTest extends TestCase
     public function test_update_rejeita_sequencia_repouso_igual_a_si_mesma(): void
     {
         $tenantA = Tenant::factory()->create();
-        $userA   = $this->criarUsuarioDono($tenantA);
+        $userA   = $this->criarUsuarioAdmin($tenantA);
 
         $sequenciaA = Sequencia::create([
             'tenant_id' => $tenantA->id, 'nome' => 'Sequência A', 'coluna_kanban' => 'lead_novo', 'ativo' => true,

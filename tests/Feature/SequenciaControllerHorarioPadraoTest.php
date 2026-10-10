@@ -17,11 +17,11 @@ class SequenciaControllerHorarioPadraoTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function criarUsuarioDono(Tenant $tenant): User
+    private function criarUsuarioAdmin(Tenant $tenant): User
     {
         return User::factory()->create([
             'tenant_id' => $tenant->id,
-            'perfil'    => 'dono',
+            'perfil'    => 'admin',
             'ativo'     => true,
         ]);
     }
@@ -29,7 +29,7 @@ class SequenciaControllerHorarioPadraoTest extends TestCase
     public function test_store_sem_horario_nasce_24h_por_padrao(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->postJson('/api/painel/sequencias', [
             'nome'          => 'Boas-vindas',
@@ -45,7 +45,7 @@ class SequenciaControllerHorarioPadraoTest extends TestCase
     public function test_store_com_horario_ativo_false_explicito_respeita_a_escolha(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->postJson('/api/painel/sequencias', [
             'nome'          => 'Sem restrição',
@@ -66,7 +66,7 @@ class SequenciaControllerHorarioPadraoTest extends TestCase
     public function test_store_com_janela_explicita_diferente_nao_e_sobrescrita_pelo_padrao(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->postJson('/api/painel/sequencias', [
             'nome'           => 'Horário estendido',

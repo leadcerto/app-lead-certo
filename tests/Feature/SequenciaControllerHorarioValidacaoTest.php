@@ -11,11 +11,11 @@ class SequenciaControllerHorarioValidacaoTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function criarUsuarioDono(Tenant $tenant): User
+    private function criarUsuarioAdmin(Tenant $tenant): User
     {
         return User::factory()->create([
             'tenant_id' => $tenant->id,
-            'perfil'    => 'dono',
+            'perfil'    => 'admin',
             'ativo'     => true,
         ]);
     }
@@ -23,7 +23,7 @@ class SequenciaControllerHorarioValidacaoTest extends TestCase
     public function test_store_rejeita_janela_noturna_invertida(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->postJson('/api/painel/sequencias', [
             'nome'           => 'Repouso invertido',
@@ -40,7 +40,7 @@ class SequenciaControllerHorarioValidacaoTest extends TestCase
     public function test_store_rejeita_horario_inicio_igual_a_fim(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->postJson('/api/painel/sequencias', [
             'nome'           => 'Janela zero',
@@ -57,7 +57,7 @@ class SequenciaControllerHorarioValidacaoTest extends TestCase
     public function test_store_aceita_janela_valida(): void
     {
         $tenant = Tenant::factory()->create();
-        $user   = $this->criarUsuarioDono($tenant);
+        $user   = $this->criarUsuarioAdmin($tenant);
 
         $response = $this->actingAs($user)->postJson('/api/painel/sequencias', [
             'nome'           => 'Horário comercial',
