@@ -22,7 +22,7 @@ class KanbanBladeCompileCheckTest extends TestCase
         $response->assertOk();
     }
 
-    public function test_barra_lateral_mostra_um_bloco_por_kanban_do_tenant(): void
+    public function test_barra_lateral_mostra_um_item_por_kanban_do_tenant(): void
     {
         $tenant = Tenant::factory()->create();
         $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
@@ -36,10 +36,10 @@ class KanbanBladeCompileCheckTest extends TestCase
         $response->assertOk();
         $response->assertSee('Atendimentos');
         $response->assertSee('Imersão');
-        $response->assertSee('Geral');
+        $response->assertDontSee('kanban-geral', false);
     }
 
-    public function test_pagina_kanban_renderiza_sem_erro_pra_perfil_sem_acesso_as_configuracoes(): void
+    public function test_vendedor_ve_a_lista_de_kanbans_mas_nao_ve_criar_novo_kanban(): void
     {
         $tenant = Tenant::factory()->create();
         $user   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'vendedor', 'ativo' => true]);
@@ -47,6 +47,17 @@ class KanbanBladeCompileCheckTest extends TestCase
         $response = $this->actingAs($user)->get('/kanban');
 
         $response->assertOk();
-        $response->assertDontSee('kanban-geral', false);
+        $response->assertSee('Atendimentos');
+        $response->assertDontSee('Criar novo Kanban');
+    }
+
+    public function test_admin_ve_o_botao_de_criar_novo_kanban_mas_dono_nao_ve(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $admin  = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'admin', 'ativo' => true]);
+        $dono   = User::factory()->create(['tenant_id' => $tenant->id, 'perfil' => 'dono', 'ativo' => true]);
+
+        $this->actingAs($admin)->get('/kanban')->assertSee('Criar novo Kanban');
+        $this->actingAs($dono)->get('/kanban')->assertDontSee('Criar novo Kanban');
     }
 }
