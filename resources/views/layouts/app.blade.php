@@ -208,7 +208,7 @@
                                 <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
                                 </svg>
-                                Atendimentos
+                                Colunas
                             </a>
                             <a href="{{ route('kanban.variaveis', ['kanban_id' => $kanbanItem->id]) }}"
                                class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs {{ request()->routeIs('kanban.variaveis') ? 'bg-green-800 text-white font-medium' : 'text-gray-500 hover:bg-gray-700 hover:text-gray-200' }}">
